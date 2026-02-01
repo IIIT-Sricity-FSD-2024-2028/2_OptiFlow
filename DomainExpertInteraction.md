@@ -75,14 +75,14 @@
 
 - Identify the different roles involved and what they do in practice.
 
-| Actor / Role           | Responsibilities                                                                                                                                            |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auditor                | Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
-| HR                     | Manages employee records, assigns roles and team structures, and maintains organizational hierarchy required for task and process execution.                |
-| Process Admin          | Designs and maintains organizational processes and workflows, ensures processes align with policies, and optimizes process efficiency across projects.      |
-| Project Manager        | Oversees project execution, assigns tasks, reviews task outcomes, handles escalations, and ensures project goals are met within defined processes.          |
-| Team Leader            | Breaks tasks into subtasks, assigns work to team members, reviews subtask submissions, and escalates unresolved issues to the Project Manager.              |
-| Team Member (Employee) | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
+| Actor / Role              | Responsibilities                                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auditor/Compliance Officer| Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
+| HR                        | Manages employee records, assigns roles and team structures, and maintains organizational hierarchy required for task and process execution.                |
+| Process Admin             | Designs and maintains organizational processes and workflows, ensures processes align with policies, and optimizes process efficiency across projects.      |
+| Project Manager           | Oversees project execution, assigns tasks, reviews task outcomes, handles escalations, and ensures project goals are met within defined processes.          |
+| Team Leader               | Breaks tasks into subtasks, assigns work to team members, reviews subtask submissions, and escalates unresolved issues to the Project Manager.              |
+| Team Member (Employee)    | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
 
 ---
 
@@ -203,3 +203,4 @@
   Record retention periods vary based on organizational policy and audit requirements. In the current setup, these records are often retained inconsistently due to decentralized storage and manual handling. This makes it difficult to retrieve historical information during audits or reviews and highlights the need for centralized, policy-driven record management.
 
 ---
+
