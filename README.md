@@ -1,124 +1,150 @@
-# Office & Organizational Workflow Management System
+# Office & Organisational Workflow Management System
 
-## Task, Process & Compliance Management Platform
+### Task, Process & Compliance Management Platform
 
 ---
 
 ## 1. Problem Statement
 
-Modern organizations operate through interconnected tasks and workflows that must comply with internal policies and external regulations. However, many organizations struggle with inefficient workflow execution due to the absence of a centralized system.
+Modern organizations execute their operations through structured tasks, processes, and compliance-driven activities. However, in many environments, these activities are managed using fragmented tools such as emails, spreadsheets, or messaging platforms, leading to inefficiencies, delays, and accountability gaps.
 
-### Common Challenges
+Common challenges include:
 
-- Lack of centralized task and workflow tracking
-- Poor visibility into approval status and compliance requirements
-- Delays caused by unclear responsibility and approval chains
-- Missing or incomplete audit trails for accountability
-- Difficulty in generating accurate performance and compliance reports
+- Lack of centralized task and process tracking
+- Unclear ownership and responsibility for tasks
+- Delays caused by undefined approval and escalation chains
+- Poor visibility into task progress and compliance status
+- Incomplete or missing audit trails
+- Difficulty generating accurate operational and compliance reports
 
-### Project Objective
-
-This project aims to develop a **web-based Office & Organizational Workflow Management System** that centralizes task execution, process automation, approvals, and compliance verification.  
-The system ensures:
-
-- Transparency
-- Accountability
-- Regulatory adherence
-- Efficient operational management across departments
+This project aims to develop a **centralized, web-based Office & Organisational Workflow Management System** that standardizes task execution, enforces predefined workflows, integrates compliance checks, and maintains complete audit logs. The system improves transparency, accountability, and operational control across departments.
 
 ---
 
 ## 2. Identified Actors
 
-| Actor                  | Description                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| **Admin**              | Configures the system, manages users, roles, workflows, and compliance policies |
-| **Manager**            | Assigns tasks, reviews progress, approves work, and handles escalations         |
-| **Employee**           | Executes assigned tasks, updates task status, and submits required documents    |
-| **Compliance Officer** | Reviews tasks for policy and regulatory compliance and generates audit reports  |
-| **System**             | Automatically manages notifications, deadline tracking, logging, and auditing   |
+| Actor                            | Description                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| **Process Admin**                | Configures and maintains workflows, process templates, and system-level policies  |
+| **Project Manager**              | Assigns tasks, monitors progress, performs reviews, and handles escalations       |
+| **Team Leader**                  | Breaks tasks into subtasks, assigns work to team members, and reviews submissions |
+| **Team Member (Employee)**       | Executes assigned tasks, updates status, and submits required evidence            |
+| **Auditor / Compliance Officer** | Reviews tasks for compliance, verifies documentation, and generates audit reports |
+| **HR**                           | Manages employee records, roles, and organizational hierarchy                     |
+| **System (Automated Actor)**     | Handles notifications, deadline tracking, escalations, logging, and audit trails  |
 
 ---
 
 ## 3. Planned Features for Each Actor
 
-### 3.1 Admin
+### 3.1 Process Admin
 
-**Role:** System configuration and governance
+**Role:** System configuration and process governance
 
 **Planned Features:**
 
-- Create and manage user accounts
-- Assign roles and permissions
-- Define workflow templates
-- Configure compliance rules and policies
-- Manage departments and teams
-- Enable or disable system features
-- View system-wide audit logs
+- Create and manage workflow templates
+- Define process stages and approval chains
+- Configure system-wide policies and rules
+- Manage departments and organizational structure
+- Control system feature availability
+- View high-level audit and system activity logs
 
 ---
 
-### 3.2 Manager
+### 3.2 Project Manager
 
-**Role:** Task supervision and approvals
+**Role:** Task supervision and project-level control
 
 **Planned Features:**
 
-- Create and assign tasks
+- Create and assign tasks to Team Leaders
 - Set task priorities and deadlines
-- Monitor workflow and task progress
-- Approve or reject completed tasks
-- View compliance status of processes
-- Escalate overdue or non-compliant tasks
-- Generate team performance reports
+- Monitor task and process progress
+- Review and approve completed work
+- Escalate delayed or blocked tasks
+- View compliance status of assigned projects
+- Generate basic project performance reports
 
 ---
 
-### 3.3 Employee
+### 3.3 Team Leader
 
-**Role:** Task execution and documentation
+**Role:** Task breakdown and team coordination
+
+**Planned Features:**
+
+- Decompose tasks into subtasks
+- Assign subtasks to Team Members
+- Review submitted work and evidence
+- Approve or return tasks for correction
+- Report issues and escalate when necessary
+- Track team-level progress
+
+---
+
+### 3.4 Team Member (Employee)
+
+**Role:** Task execution and reporting
 
 **Planned Features:**
 
 - View assigned tasks and deadlines
-- Update task status:
-  - Not Started
-  - In Progress
-  - Completed
-- Upload supporting documents
-- Add comments and notes
+- Update task status (Not Started, In Progress, Completed)
+- Upload documents or work evidence
+- Add comments or notes
 - Request deadline extensions
-- View workflow and compliance guidelines
+- View task-specific guidelines or instructions
 
 ---
 
-### 3.4 Compliance Officer
+### 3.5 Auditor / Compliance Officer
 
 **Role:** Compliance validation and auditing
 
 **Planned Features:**
 
-- Review completed tasks for compliance
-- Verify supporting documents
+- Define and manage compliance requirements
+- Review completed tasks for policy adherence
+- Verify submitted documents and evidence
 - Approve or reject compliance status
-- Monitor regulatory and policy deadlines
+- Flag violations and initiate corrective actions
 - Generate compliance and audit reports
-- View complete system audit trails
-- Flag violations and notify managers
+- Access complete audit trails
 
 ---
 
-### 3.5 System (Automated Functions)
+### 3.6 HR
 
-**Role:** Background processing and monitoring
+**Role:** Organizational and role management
 
 **Planned Features:**
 
-- Send task, approval, and compliance notifications
+- Manage employee profiles
+- Assign roles and permissions
+- Maintain reporting hierarchy
+- Support role-based task visibility
+- Update organizational structure as needed
+
+---
+
+### 3.7 System (Automated Actor)
+
+**Role:** Background monitoring and enforcement
+
+**Planned Features:**
+
+- Send task and approval notifications
 - Track deadlines and overdue tasks
-- Automatically escalate unresolved tasks
+- Trigger automated escalations
 - Log all user actions
 - Maintain immutable audit records
-- Generate automated reminders and alerts
+- Generate reminders and alerts
+
+---
+
+## 4. Repository Scope
+
+At the current stage, this repository focuses on **requirements analysis and system design documentation** for the proposed workflow management system.
 
 ---
