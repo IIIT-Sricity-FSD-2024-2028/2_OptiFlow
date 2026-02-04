@@ -3,7 +3,7 @@
 ## Basic information
 
 - Domain: Office and Organisational Workflow Management
-- Problem statement: Task, Process and Compliacne Management System
+- Problem statement: Task, Process and Compliance Management System
 - Date of interaction: 18th January, 2026
 - Mode of interaction: Video call (Google Meet)
 - Duration: 47:12 minutes
@@ -203,4 +203,5 @@
   Record retention periods vary based on organizational policy and audit requirements. In the current setup, these records are often retained inconsistently due to decentralized storage and manual handling. This makes it difficult to retrieve historical information during audits or reviews and highlights the need for centralized, policy-driven record management.
 
 ---
+
 
