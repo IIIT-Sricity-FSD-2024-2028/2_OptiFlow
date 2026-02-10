@@ -25,18 +25,18 @@ This project aims to develop a **centralized, web-based Office & Organisational 
 
 | Actor / Role                                   | Responsibilities                                                                                                                                            |
 | -----------------------------------------------| ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auditor/ Compliance Officer**                | Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
+| **Compliance Officer**                | Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
 | **HR**                                         | Manages employee records, assigns roles and team structures, and maintains organizational hierarchy required for task and process execution.                |
 | **Process Admin**                              | Designs and maintains organizational processes and workflows, ensures processes align with policies, and optimizes process efficiency across projects.      |
 | **Project Manager**                            | Oversees project execution, assigns tasks, reviews task outcomes, handles escalations, and ensures project goals are met within defined processes.          |
 | **Team Leader**                                | Breaks tasks into subtasks, assigns work to team members, reviews subtask submissions, and escalates unresolved issues to the Project Manager.              |
-| **Team Member (Employee)**                     | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
+| **Team Member**                     | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
 
 ---
 
 ## 3. Planned Features for Each Actor
 
-### 3.1 Auditor
+### 3.1 Compliance Officer
 
 **Planned Features:**
 
@@ -101,7 +101,7 @@ This project aims to develop a **centralized, web-based Office & Organisational 
 
 ---
 
-### 3.6 Team Member (Employee)
+### 3.6 Team Member
 
 **Planned Features:**
 
