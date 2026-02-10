@@ -77,12 +77,12 @@
 
 | Actor / Role              | Responsibilities                                                                                                                                            |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auditor/Compliance Officer| Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
+| Compliance Officer| Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
 | HR                        | Manages employee records, assigns roles and team structures, and maintains organizational hierarchy required for task and process execution.                |
 | Process Admin             | Designs and maintains organizational processes and workflows, ensures processes align with policies, and optimizes process efficiency across projects.      |
 | Project Manager           | Oversees project execution, assigns tasks, reviews task outcomes, handles escalations, and ensures project goals are met within defined processes.          |
 | Team Leader               | Breaks tasks into subtasks, assigns work to team members, reviews subtask submissions, and escalates unresolved issues to the Project Manager.              |
-| Team Member (Employee)    | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
+| Team Member   | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
 
 ---
 
@@ -114,10 +114,10 @@
 
 - _Trigger / Start Condition:_ Compliance deadline, audit requirement, or policy enforcement event
 - _Steps Involved:_
-  1. Auditor identifies applicable compliance rules and required actions
+  1. Compliance Officer identifies applicable compliance rules and required actions
   2. Compliance-related tasks are assigned to responsible Project Managers or Team Leaders
   3. Team Members submit required evidence and records
-  4. Auditor reviews evidence and validates compliance status
+  4. Compliance Officer reviews evidence and validates compliance status
   5. Non-compliance issues are flagged and corrective actions are initiated
 - _Outcome / End Condition:_ Compliance requirement is fulfilled, or violation is reported and tracked.
 
@@ -126,7 +126,7 @@
 ## Rules, Constraints, and Exceptions
 
 - Mandatory Rules or Policies:
-  - Employees must complete assigned tasks within agreed timelines
+  - Team members must complete assigned tasks within agreed timelines
   - Certain tasks require approval from the team leader or manager before proceeding
   - Standard processes defined by the process admin must be followed
   - Compliance-related records must be maintained as required by the compliance officer
@@ -135,7 +135,7 @@
 - Constraints or Limitations:
   - Visibility of work is limited across teams and departments
   - Task and process tracking is often done using emails or spreadsheets
-  - Managers and team leaders depend on employees to update task status
+  - Managers and team leaders depend on team members to update task status
   - Process updates are not always communicated immediately to all teams
 
 - Common Exceptions or Edge Cases:
@@ -145,7 +145,7 @@
   - Missing or delayed compliance documentation
 
 - Situations Where Things Usually Go Wrong:
-  - Employees forget to update task status after completion
+  - Team members forget to update task status after completion
   - Team leaders are not informed early about delays
   - Processes are bypassed under time pressure
   - Compliance requirements are noticed close to audit deadlines
@@ -185,7 +185,7 @@
 
 - Not all organizational processes are clearly documented or consistently maintained by the Process Manager
 - HR policies related to roles and responsibilities are not always fully understood by Team Members
-- Compliance enforcement is not proactive and often depends on manual checks by the Auditor
+- Compliance enforcement is not proactive and often depends on manual checks by the Compliance Officer
 - Escalations are frequently handled informally rather than through structured mechanisms
 
 ### Open Questions (Addressed)
@@ -194,7 +194,7 @@
 
   Task escalation can be from two sources:
   - Some event happens. Example: employee joins, employee asks for a leave. If an employee asks for a leave, the HR has to do proper checking when they are asking for a leave and then they have to give the approval or dismissal. So there is some event some event happens that event will automatically create a task or some human has to create a task. That's our task escalation.
-  - If somebody fails to do something then it should be automatically detected. Let's say there is a deadline and an employee fails to complete the task within a deadline. Then automatically the manager will get a task to check why this task was not completed. Through different event triggers new tasks can be created and let's say if a task is failed to be done within a deadline that has to be escalated to the manager.
+  - If somebody fails to do something then it should be automatically detected. Let's say there is a deadline and an team member fails to complete the task within a deadline. Then automatically the manager will get a task to check why this task was not completed. Through different event triggers new tasks can be created and let's say if a task is failed to be done within a deadline that has to be escalated to the manager.
 
 - **How are compliance violations detected and communicated within the system?**  
   When some violation happens - let's say the HR did not send the NDA (Non-Disclosure Agreement), or let's say the employee did not comply to the security training- then that's a violation. Whenever there is a violation, there has to be an alert that has to be sent.
@@ -203,5 +203,6 @@
   Record retention periods vary based on organizational policy and audit requirements. In the current setup, these records are often retained inconsistently due to decentralized storage and manual handling. This makes it difficult to retrieve historical information during audits or reviews and highlights the need for centralized, policy-driven record management.
 
 ---
+
 
 
