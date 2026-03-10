@@ -26,29 +26,6 @@ CREATE TABLE Role_Permissions (
     PRIMARY KEY (role_id, permission_id)
 );
 
--- 4. USER_ROLES: Assigns a user to one or multiple roles.
-CREATE TABLE User_Roles (
-    user_id INT REFERENCES Users(user_id) ON DELETE CASCADE,
-    role_id INT REFERENCES Roles(role_id) ON DELETE CASCADE,
-    assigned_by INT REFERENCES Users(user_id), -- Audit trail of who granted the role
-    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, role_id)
-);
-
--- 5. USER_PERMISSIONS (The PBAC Engine): Direct overrides for a specific user.
-CREATE TABLE User_Permissions (
-    user_id INT REFERENCES Users(user_id) ON DELETE CASCADE,
-    permission_id INT REFERENCES Permissions(permission_id) ON DELETE CASCADE,
-    -- If TRUE, grants the permission. If FALSE, explicitly revokes a permission 
-    -- they would otherwise inherit from their role.
-    is_granted BOOLEAN NOT NULL DEFAULT TRUE, 
-    granted_by INT REFERENCES Users(user_id), -- Audit trail
-    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP NULL, -- CRITICAL: Allows for temporary access (e.g., covering for someone on leave)
-    PRIMARY KEY (user_id, permission_id)
-);
-
-
 
 CREATE TABLE Departments (
     department_id SERIAL PRIMARY KEY,
@@ -74,6 +51,27 @@ CREATE TABLE Users (
 ALTER TABLE Departments 
 ADD CONSTRAINT fk_dept_manager FOREIGN KEY (manager_id) REFERENCES Users(user_id);
 
+-- 4. USER_ROLES: Assigns a user to one or multiple roles.
+CREATE TABLE User_Roles (
+    user_id INT REFERENCES Users(user_id) ON DELETE CASCADE,
+    role_id INT REFERENCES Roles(role_id) ON DELETE CASCADE,
+    assigned_by INT REFERENCES Users(user_id), -- Audit trail of who granted the role
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_id)
+);
+
+-- 5. USER_PERMISSIONS (The PBAC Engine): Direct overrides for a specific user.
+CREATE TABLE User_Permissions (
+    user_id INT REFERENCES Users(user_id) ON DELETE CASCADE,
+    permission_id INT REFERENCES Permissions(permission_id) ON DELETE CASCADE,
+    -- If TRUE, grants the permission. If FALSE, explicitly revokes a permission 
+    -- they would otherwise inherit from their role.
+    is_granted BOOLEAN NOT NULL DEFAULT TRUE, 
+    granted_by INT REFERENCES Users(user_id), -- Audit trail
+    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NULL, -- CRITICAL: Allows for temporary access (e.g., covering for someone on leave)
+    PRIMARY KEY (user_id, permission_id)
+);
 
 
 
@@ -327,4 +325,5 @@ CREATE TABLE Audit_Logs (
 
 -- Creating indexes is critical for an Audit table, otherwise tracking history becomes terribly slow
 CREATE INDEX idx_audit_entity ON Audit_Logs (entity_type, entity_id);
+
 CREATE INDEX idx_audit_performed_by ON Audit_Logs (performed_by);
