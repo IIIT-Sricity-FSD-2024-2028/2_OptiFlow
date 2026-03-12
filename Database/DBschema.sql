@@ -1,3 +1,5 @@
+CREATE DATABASE IF NOT EXISTS office;
+USE office;
 -- 1. PERMISSIONS: The foundational building blocks of what can be done.
 CREATE TABLE Permissions (
     permission_id SERIAL PRIMARY KEY,
@@ -327,3 +329,4 @@ CREATE TABLE Audit_Logs (
 CREATE INDEX idx_audit_entity ON Audit_Logs (entity_type, entity_id);
 
 CREATE INDEX idx_audit_performed_by ON Audit_Logs (performed_by);
+
