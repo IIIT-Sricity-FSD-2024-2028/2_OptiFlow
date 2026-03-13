@@ -330,3 +330,8 @@ CREATE INDEX idx_audit_entity ON Audit_Logs (entity_type, entity_id);
 
 CREATE INDEX idx_audit_performed_by ON Audit_Logs (performed_by);
 
+CREATE INDEX idx_user_roles_user ON User_Roles(user_id);
+CREATE INDEX idx_tasks_assigned_to ON Tasks(assigned_to);
+CREATE INDEX idx_tasks_project ON Tasks(project_id);
+
+
