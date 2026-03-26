@@ -1,0 +1,9 @@
+:root {
+  --primary-blue: #0a192f; /* Dark navy for text and dark buttons */
+  --accent-blue: #1e40af; /* Royal blue for primary buttons */
+  --light-blue: #eef2ff; /* Background highlights */
+  --white: #ffffff;
+  --text-main: #333333;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+}

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>OfficeSync - Register</title>
+    <link rel="stylesheet" href="css/auth.css" />
+  </head>
+  <body>
+    <header class="auth-header">
+      <img src="assets/images/logo.svg" alt="OfficeSync" height="30" />
+      <nav>
+        <a href="index.html">Home</a><a href="#">Features</a
+        ><a href="#">About Us</a><a href="#">Contact</a>
+      </nav>
+    </header>
+
+    <main class="auth-main">
+      <div class="auth-card wide">
+        <div class="auth-header-text" style="text-align: left">
+          <h1>Create your organization</h1>
+          <p>
+            Set up your company workspace to manage tasks, workflows and
+            compliance.
+          </p>
+        </div>
+        <form id="registerForm">
+          <div class="form-section-title">Company Information</div>
+          <div class="input-row">
+            <div class="input-group">
+              <label>Company Name</label>
+              <input
+                type="text"
+                id="regCompany"
+                placeholder="Acme Corp"
+                required
+              />
+            </div>
+            <div class="input-group">
+              <label>Organization Domain</label>
+              <input
+                type="text"
+                id="regDomain"
+                placeholder="acme.com"
+                required
+              />
+            </div>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label>Company Size</label>
+              <select id="regSize" required>
+                <option value="">Select size</option>
+                <option>Startup (1-10)</option>
+                <option>Small Team (11-50)</option>
+                <option>Growing (51-200)</option>
+                <option>Enterprise (500+)</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Industry</label>
+              <select id="regIndustry" required>
+                <option value="">Select industry</option>
+                <option>Technology / Software</option>
+                <option>Finance / Banking</option>
+                <option>Consulting</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-section-title">Administrator Account</div>
+          <div class="input-group">
+            <label>Admin Full Name</label>
+            <input type="text" id="regName" placeholder="John Doe" required />
+          </div>
+          <div class="input-group">
+            <label>Work Email</label>
+            <input
+              type="email"
+              id="regEmail"
+              placeholder="admin@company.com"
+              required
+            />
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label>Password</label>
+              <div class="password-wrapper">
+                <input
+                  type="password"
+                  id="regPassword"
+                  placeholder="••••••••"
+                  required
+                  minlength="6"
+                />
+                <button
+                  type="button"
+                  class="toggle-password"
+                  onclick="toggleVisibility('regPassword')"
+                >
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="input-group">
+              <label>Confirm Password</label>
+              <input
+                type="password"
+                id="regConfirm"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          </div>
+
+          <button type="submit" class="auth-btn">Create Organization</button>
+          <p
+            style="
+              text-align: center;
+              font-size: 0.75rem;
+              color: var(--text-muted);
+              margin-top: 1rem;
+            "
+          >
+            By clicking "Create Organization", you agree to our Terms of Service
+            and Privacy Policy.
+          </p>
+        </form>
+        <div class="bottom-text">
+          Already have an account? <a href="login.html">Sign in</a>
+        </div>
+      </div>
+    </main>
+
+    <footer class="auth-footer">
+      <div>© 2026 OfficeSync Inc. All rights reserved.</div>
+      <div class="auth-footer-links">
+        <a href="#">Privacy Policy</a><a href="#">Terms of Service</a
+        ><a href="#">Cookie Settings</a>
+      </div>
+    </footer>
+
+    <script src="js/data/db.js"></script>
+    <script src="js/pages/auth-flows.js"></script>
+  </body>
+</html>
