@@ -72,6 +72,9 @@ h2 {
 }
 .btn-primary.full-width {
   width: 100%;
+  padding: 0.7rem 1.6rem;
+  font-size: 18px;
+  font-family: "Space Grotesk", sans-serif;
 }
 
 .btn-outline {
@@ -89,24 +92,36 @@ h2 {
   background-color: #c1c8d5;
 }
 .btn-outline-blue {
-  background: transparent;
+  background: var(--light-blue);
   color: var(--accent-blue);
   border: 1px solid var(--accent-blue);
   padding: 0.75rem 1.5rem;
   border-radius: 6px;
   text-decoration: none;
 }
-
+.btn-outline-blue:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.15);
+  background-color: #c8d6f0;
+}
 .badge {
-  background: var(--accent-blue);
+  background: #3b82f6;
   color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.875rem;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 35px;
+  color: var(--primary-blue);
+  font-weight: 650;
   display: inline-block;
 }
 .badge.dark {
   background: var(--primary-blue);
+}
+.badge.light {
+  background: var(--light-blue);
+  font-size: 20px;
+  margin: 10px 0;
+  margin-top: 40px;
 }
 
 /* --- Navbar --- */
@@ -203,7 +218,7 @@ section {
 .trusted-banner p {
   margin: 0;
   font-family: "Plus Jakarta Sans", sans-serif;
-  font-size: 16px;
+  font-size: 20px;
   color: #6b7280; /* A softer gray for "Built for" */
 }
 
@@ -214,7 +229,7 @@ section {
 }
 
 .problem-section {
-  padding: 0px 7%;
+  padding: 15px 7%;
   background-color: rgba(193, 214, 255, 0.4);
   border: 4px solid white;
   border-right: 7px solid white;
@@ -226,6 +241,7 @@ section {
   font-family: "Plus Jakarta Sans", sans-serif;
   font-weight: 700;
   line-height: 1.4;
+  margin-top: 20px;
   margin-bottom: 2rem;
   line-height: 1;
   background: linear-gradient(to right, #0f172a 0%, #2563eb 100%);
@@ -298,85 +314,252 @@ section {
   margin-top: auto; /* Snaps the image to the bottom of the card */
   align-self: center; /* Keeps the image locked to the left side */
 }
+.features-label {
+  display: flex;
+  padding-left: 200px;
+  justify-content: flex-start;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  gap: 40px;
+}
+.fheading {
+  font-family: "Space Grotesk", sans-serif;
+}
+.fcontent {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 18px;
+}
 /* --- Accordion --- */
+
 .accordion-container {
   max-width: 800px;
   margin: 2rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* Space between the separate accordion items */
+  padding: 20px;
 }
+
+/* The Wrapper (Holds the border and shadow) */
+.accordion-item {
+  background-color: var(--light-blue);
+  border: 2px solid #111827; /* Dark almost-black border */
+  box-shadow: 4px 6px 0px #111827; /* Hard offset shadow */
+  border-radius: 24px;
+  overflow: hidden;
+  transition: background-color 0.3s ease;
+}
+
+/* When active, the whole wrapper turns bright blue */
+.accordion-item.active {
+  background-color: #3b82f6; /* Adjust this hex to match your exact bright blue */
+}
+
+/* The Button */
 .accordion {
-  background-color: var(--accent-blue);
-  color: white;
+  background-color: transparent;
+  color: #111827;
   cursor: pointer;
-  padding: 1.2rem;
+  padding: 1.5rem 2rem;
   width: 100%;
   border: none;
   text-align: left;
   outline: none;
-  font-size: 1.1rem;
-  border-radius: 8px;
-  margin-top: 0.5rem;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+}
+
+/* Title and Number Alignment */
+.acc-title {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.acc-num {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The Circular +/- Icon */
+.acc-icon {
+  width: 36px;
+  height: 36px;
+  border: 2px solid #111827;
+  border-radius: 50%;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
   font-weight: bold;
+  color: #111827;
+  transition: transform 0.3s ease;
+  font-family: "Space Grotesk", sans-serif;
 }
-.accordion.active {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
+
+/* The Hidden Panel */
 .panel {
-  padding: 0 1.2rem;
-  background-color: var(--light-blue);
+  background-color: transparent;
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s ease-out;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
 }
-.panel p {
-  padding: 1rem 0;
-  margin: 0;
+
+/* The Text inside the Panel */
+.panel-content {
+  padding: 0 2rem 2rem 2rem; /* Left/Right padding matches the button */
+  color: #111827;
+  font-size: 1.1rem;
+  font-family: "Space Grotesk", sans-serif;
+  line-height: 1.5;
+}
+
+/* The Thin Separator Line */
+.panel-content::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 1px;
+  background-color: rgba(17, 24, 39, 0.2); /* Semi-transparent dark line */
+  margin-bottom: 1.5rem;
 }
 
 /* --- Bento CTA --- */
 .bento-cta {
   display: flex;
-  gap: 2rem;
+  gap: 8px;
+  padding: 0 100px;
+  height: 419.18px;
 }
 .bento-left {
   flex: 2;
-  background: var(--light-blue);
-  padding: 3rem;
+  background: linear-gradient(to bottom, #dbeafe 0%, #f3e8ff 100%);
+  padding: 1.4rem 2rem;
   border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.bento-left h3,
+.bento-left p {
+  color: var(--primary-blue);
+  font-size: 30px;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+  line-height: 1;
+  padding-right: 200px;
 }
 .bento-right {
   flex: 1;
   background: var(--primary-blue);
   color: white;
-  padding: 3rem;
+  padding: 1.4rem 2rem;
   border-radius: 16px;
 }
-.bento-right h3 {
+.bento-right h3,
+.bento-right p {
   color: white;
+  font-size: 30px;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 400;
+  line-height: 1;
 }
+
 .learn-more {
-  font-weight: bold;
-  color: var(--primary-blue);
+  margin-top: auto;
+  display: inline-flex; /* Keeps it inline like a link, but lets us use flexbox */
+  align-items: center; /* Vertically centers the circle and the text */
+  gap: 10px; /* Adds space between the circle and the text */
+  font-weight: 700; /* Slightly bold, but not too heavy */
+  color: var(--primary-blue); /* Dark text instead of blue */
   text-decoration: none;
+  font-size: 20px;
+  transition: opacity 0.2s ease; /* Smooth hover effect */
+}
+
+/* --- The Dark Circle --- */
+.learn-more span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px; /* Width of the circle */
+  height: 48px; /* Height of the circle */
+  background-color: var(--primary-blue); /* Dark background */
+  color: #ffffff; /* White arrow */
+  border-radius: 50%;
+}
+
+/* Optional: Slight fade when they hover over the link */
+.learn-more:hover {
+  opacity: 0.8;
+}
+.learn-more p {
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.final-cta {
+  background-color: rgba(193, 214, 255, 0.4);
+  color: white;
+  padding: 30px;
+  margin-top: 4rem;
+  text-align: center;
+  margin-bottom: 3rem;
+}
+.final-cta h2 {
+  font-size: 40px;
 }
 
 /* --- Contact & Footer --- */
 .contact-section {
   display: flex;
+  align-items: center;
   gap: 4rem;
-  background: #fafafa;
+  background: #eaeaea;
   border-radius: 24px;
+  padding: 30px 0 30px 40px;
+  padding-right: 0;
+  margin: 50px 150px;
+  overflow: hidden;
 }
 .contact-form-container {
   flex: 1;
   background: white;
-  padding: 3rem;
+  margin: 1.5rem 4rem;
+  padding: 30px 30px;
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+.contact-header {
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  font-size: 18px;
+  font-family: "Space Grotesk", sans-serif;
+  margin: 10px 150px;
+}
+.contact-title {
+  font-size: 40px;
+  color: white;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+}
+.contact-graphics {
+  flex: 1; /* Makes the graphics container take up the remaining space */
+  display: flex;
+  justify-content: flex-end;
+}
+.contact-graphics img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin-right: -149px;
 }
 .input-group {
   margin-bottom: 1.5rem;
@@ -396,49 +579,150 @@ section {
   gap: 1rem;
 }
 
+/* --- Footer Styling --- */
 footer {
   background: var(--primary-blue);
   color: white;
   padding: 4rem 5% 2rem;
   margin-top: 4rem;
+  border-top-left-radius: 50px;
+  border-top-right-radius: 50px;
 }
-footer a,
+
+footer a {
+  color: white;
+  text-decoration: underline;
+  text-underline-offset: 6px; /* Pushes the underline down perfectly */
+  font-weight: 400;
+}
+
 footer p {
-  color: #a0aec0;
-  text-decoration: none;
+  color: #e2e8f0;
+  margin: 0.5rem 0;
+  line-height: 1.6;
 }
+
+/* --- Row 1: Top --- */
 .footer-top {
   display: flex;
   justify-content: space-between;
-  border-bottom: 1px solid #2d3748;
-  padding-bottom: 2rem;
+  align-items: center;
+  margin-bottom: 4rem;
 }
-.footer-links {
+
+.footer-nav {
+  display: flex;
+  gap: 2.5rem;
+  font-size: 1.1rem;
+}
+
+.footer-social {
+  display: flex;
+  gap: 1rem;
+}
+
+.social-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: white;
+  color: var(--primary-blue);
+  border-radius: 50%;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.social-icon:hover {
+  opacity: 0.8;
+}
+
+/* --- Row 2: Middle --- */
+.footer-middle {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4rem;
+}
+
+.contact-info .badge.light {
+  background: white;
+  color: #0f172a;
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  display: inline-block;
+  margin-bottom: 1.5rem;
+}
+
+.contact-info p {
+  margin-bottom: 1.2rem;
+  font-size: 1rem;
+}
+
+/* Big Blue Newsletter Box */
+.footer-newsletter {
+  background: #3b82f6; /* Adjust this hex to match your blue */
+  padding: 3rem 4rem;
+  border-radius: 16px;
+  width: 55%; /* Keeps it contained on the right side */
+}
+
+#newsletterForm {
+  display: flex;
+  gap: 1.5rem;
+}
+
+#newsletterForm input {
+  flex: 1;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 8px;
+  padding: 16px 20px;
+  color: white;
+  font-size: 1rem;
+  outline: none;
+}
+
+#newsletterForm input::placeholder {
+  color: white;
+  opacity: 0.9;
+}
+
+#newsletterForm button {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: none;
+  border-radius: 8px;
+  padding: 16px 32px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+#newsletterForm button:hover {
+  transform: translateY(-2px);
+}
+
+/* --- Row 3: Bottom --- */
+.footer-bottom {
+  display: flex;
+  gap: 3rem;
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.2); /* The thin gray line */
+  padding-top: 2rem;
+  font-size: 0.9rem;
+}
+
+.footer-bottom p {
+  margin: 0;
+  color: #e2e8f0;
+}
+
+.legal-links {
   display: flex;
   gap: 2rem;
-}
-.footer-newsletter {
-  display: flex;
-  justify-content: center;
-  padding: 2rem 0;
-}
-.footer-newsletter input {
-  padding: 0.75rem;
-  border-radius: 6px 0 0 6px;
-  border: none;
-  width: 300px;
-}
-.footer-newsletter button {
-  padding: 0.75rem 1.5rem;
-  background: var(--light-blue);
-  color: var(--primary-blue);
-  border: none;
-  border-radius: 0 6px 6px 0;
-  cursor: pointer;
-  font-weight: bold;
-}
-.footer-bottom {
-  text-align: center;
-  font-size: 0.875rem;
-  margin-top: 1rem;
 }

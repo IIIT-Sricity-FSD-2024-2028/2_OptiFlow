@@ -8,7 +8,7 @@ function initializeDatabase() {
     const mockUsers = [
       // --- Your Original Users ---
       {
-        id: 1,
+        id: "u1",
         email: "superuser@test.com",
         password: "123",
         role: "superuser",
@@ -18,7 +18,7 @@ function initializeDatabase() {
         joined: "Jan 01, 2024",
       },
       {
-        id: 2,
+        id: "u2",
         email: "pm@test.com",
         password: "123",
         role: "admin",
@@ -28,7 +28,7 @@ function initializeDatabase() {
         joined: "Jan 15, 2024",
       },
       {
-        id: 3,
+        id: "u3",
         email: "hr@test.com",
         password: "123",
         role: "admin",
@@ -38,7 +38,7 @@ function initializeDatabase() {
         joined: "Feb 01, 2024",
       },
       {
-        id: 4,
+        id: "u4",
         email: "user@test.com",
         password: "123",
         role: "enduser",
@@ -48,7 +48,7 @@ function initializeDatabase() {
         joined: "Feb 15, 2024",
       },
       {
-        id: 5,
+        id: "u5",
         email: "co@app.com",
         password: "co123",
         role: "admin",
@@ -60,7 +60,7 @@ function initializeDatabase() {
 
       // --- Soham's Users (Now with passwords added so they can log in!) ---
       {
-        id: "u1",
+        id: "u6",
         email: "vikram@officesync.com",
         password: "123",
         role: "superuser",
@@ -70,17 +70,17 @@ function initializeDatabase() {
         joined: "Oct 01, 2024",
       },
       {
-        id: "u2",
+        id: "u7",
         email: "arjun@officesync.com",
         password: "123",
-        role: "admin",
+        role: "team_leader",
         name: "Arjun Mehta",
         department: "Operations",
         status: "Active",
         joined: "Nov 12, 2024",
       },
       {
-        id: "u3",
+        id: "u8",
         email: "sunita@officesync.com",
         password: "123",
         role: "enduser",
