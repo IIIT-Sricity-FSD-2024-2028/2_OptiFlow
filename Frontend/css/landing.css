@@ -3,6 +3,15 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Space+Grotesk:wght@300..700&display=swap");
 
+:root {
+  --primary-blue: #0b1f4d; /* Dark navy for text and dark buttons */
+  --accent-blue: #2563eb; /* Royal blue for primary buttons */
+  --light-blue: #e8f0ff; /* Background highlights */
+  --white: #ffffff;
+  --text-main: #333333;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+}
 *,
 *::before,
 *::after {

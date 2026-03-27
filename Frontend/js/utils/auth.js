@@ -16,6 +16,10 @@ function handleLogin(event) {
   );
 
   if (validUser) {
+    if (validUser.status === "Inactive") {
+      alert("Your account has been deactivated. Please contact HR.");
+      return; // Stops the login process entirely
+    }
     // Save the logged-in user to sessionStorage (clears when browser closes)
     sessionStorage.setItem("currentUser", JSON.stringify(validUser));
 
