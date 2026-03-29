@@ -1,16 +1,16 @@
 // js/data/db.js
 
-const MASTER_DB_VERSION = 3; // Change this number to 3, 4, etc. to force a database reset!
+const MASTER_DB_VERSION = 4; // 🚀 Bumped to 4 to force the ultimate wipe!
 
 // Run this function when the app loads to seed the mock database
 function initializeDatabase() {
   const currentVersion = localStorage.getItem("master_db_version");
+  const parsedVersion = parseInt(currentVersion, 10);
 
-  // 1. Check if users exist OR if we need to force an update because the version changed
-  if (
-    !localStorage.getItem("users") ||
-    parseInt(currentVersion) < MASTER_DB_VERSION
-  ) {
+  // ✅ BUG FIX: If version is missing (NaN) OR older than current, force an update!
+  const needsUpdate = isNaN(parsedVersion) || parsedVersion < MASTER_DB_VERSION;
+
+  if (!localStorage.getItem("users") || needsUpdate) {
     // Combined Data Structure: Everyone gets a password AND table data
     const mockUsers = [
       {
@@ -97,10 +97,8 @@ function initializeDatabase() {
 
     // Save the combined list to browser storage
     localStorage.setItem("users", JSON.stringify(mockUsers));
-    localStorage.setItem("master_db_version", MASTER_DB_VERSION); // Save the new version number
-    console.log(
-      "Master Database initialized/updated to version " + MASTER_DB_VERSION,
-    );
+    localStorage.setItem("master_db_version", MASTER_DB_VERSION);
+    console.log("Master Database updated to version " + MASTER_DB_VERSION);
   }
 
   // 2. Check if tasks exist
@@ -128,5 +126,4 @@ function saveUsers(usersArray) {
   localStorage.setItem("users", JSON.stringify(usersArray));
 }
 
-// Call it immediately so the database is always ready
 initializeDatabase();
