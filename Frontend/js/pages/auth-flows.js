@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Route based on specific role
         if (validUser.role === "superuser") {
           // Process Admin goes to superuser dashboard
-          window.location.href = "admin/superuser/dashboard.html";
+          window.location.href = "superuser/dashboard.html";
         } else if (
           validUser.role === "hr_manager" ||
           validUser.role === "hr_ops"
@@ -41,13 +41,16 @@ document.addEventListener("DOMContentLoaded", () => {
           window.location.href = "admin/hr/dashboard.html";
         } else if (validUser.role === "project_manager") {
           // PM goes to PM dashboard
-          window.location.href = "admin/pm-dashboard.html";
+          window.location.href = "admin/pm/dashboard.html";
         } else if (validUser.role === "compliance_officer") {
           // Compliance Officer goes to their dashboard
-          window.location.href = "admin/co-dashboard.html"; // Adjust this path if your CO folder is different
+          window.location.href = "admin/compliance/dashboard.html"; // Adjust this path if your CO folder is different
+        } else if (validUser.role === "team_leader") {
+          // Team Leader goes to their dashboard
+          window.location.href = "enduser/leader/dashboard.html"; // Adjust this path if your CO folder is different
         } else {
           // Fallback for team_member, team_leader, enduser, etc.
-          window.location.href = "enduser/member-dashboard.html";
+          window.location.href = "enduser/member/dashboard.html";
         }
       } else {
         alert("Invalid email or password. Please try again.");
