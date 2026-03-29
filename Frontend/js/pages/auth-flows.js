@@ -1,12 +1,23 @@
 // js/pages/auth-flows.js
 
-// --- Utility: Toggle Password Visibility ---
-function toggleVisibility(inputId) {
-  const input = document.getElementById(inputId);
-  if (input.type === "password") {
-    input.type = "text";
+// --- Utility: Smart Toggle Password Visibility ---
+function togglePassword(inputId, buttonElement) {
+  // 1. Find the specific input we want to toggle (e.g., 'resetNew' or 'resetConfirm')
+  const passwordInput = document.getElementById(inputId);
+
+  // 2. Find the SVGs specifically inside the button that was just clicked
+  const iconEyeOff = buttonElement.querySelector("svg:first-child"); // Crossed-out eye
+  const iconEye = buttonElement.querySelector("svg:last-child"); // Open eye
+
+  // 3. Swap the types and icons
+  if (passwordInput.type === "password") {
+    passwordInput.type = "text";
+    if (iconEyeOff) iconEyeOff.style.display = "none";
+    if (iconEye) iconEye.style.display = "block";
   } else {
-    input.type = "password";
+    passwordInput.type = "password";
+    if (iconEye) iconEye.style.display = "none";
+    if (iconEyeOff) iconEyeOff.style.display = "block";
   }
 }
 
