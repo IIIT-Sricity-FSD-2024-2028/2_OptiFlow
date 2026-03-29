@@ -26,14 +26,29 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
       if (validUser) {
+        // Save session
         sessionStorage.setItem("currentUser", JSON.stringify(validUser));
 
-        // Route based on role
-        if (validUser.role === "superuser")
-          window.location.href = "superuser/dashboard.html";
-        else if (validUser.role === "admin")
+        // Route based on specific role
+        if (validUser.role === "superuser") {
+          // Process Admin goes to superuser dashboard
+          window.location.href = "admin/superuser/dashboard.html";
+        } else if (
+          validUser.role === "hr_manager" ||
+          validUser.role === "hr_ops"
+        ) {
+          // HR staff go to the HR folder
+          window.location.href = "admin/hr/dashboard.html";
+        } else if (validUser.role === "project_manager") {
+          // PM goes to PM dashboard
           window.location.href = "admin/pm-dashboard.html";
-        else window.location.href = "enduser/member-dashboard.html";
+        } else if (validUser.role === "compliance_officer") {
+          // Compliance Officer goes to their dashboard
+          window.location.href = "admin/co-dashboard.html"; // Adjust this path if your CO folder is different
+        } else {
+          // Fallback for team_member, team_leader, enduser, etc.
+          window.location.href = "enduser/member-dashboard.html";
+        }
       } else {
         alert("Invalid email or password. Please try again.");
       }

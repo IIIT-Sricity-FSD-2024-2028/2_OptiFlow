@@ -230,6 +230,14 @@
   background-color: #f3e8ff;
   color: #7e22ce;
 }
+.badge.red {
+  background-color: #ffe8e8;
+  color: rgb(179, 0, 0);
+}
+.badge.blue {
+  background-color: #e0e7ff;
+  color: #294d9a;
+}
 .badge.green {
   background-color: #dcfce7;
   color: #166534;
@@ -261,6 +269,8 @@
   cursor: pointer;
   border: 1px solid transparent;
   background: none;
+  font-weight: 500;
+  transition: filter 0.15s;
 }
 .action-btn.view {
   color: var(--primary-color);
@@ -269,6 +279,12 @@
 .action-btn.edit {
   border-color: var(--border-color);
   color: var(--text-main);
+  background-color: white;
+}
+.action-btn.delete {
+  color: #dc2626;
+  border-color: #fca5a5;
+  background-color: #fff5f5;
 }
 .action-btn:hover {
   filter: brightness(0.95);

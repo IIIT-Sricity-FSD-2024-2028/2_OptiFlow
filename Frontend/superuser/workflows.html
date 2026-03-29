@@ -139,12 +139,14 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <header class="top-header" style="justify-content: flex-end;">
+            <header class="top-header">
+                <div class="page-title" id="processesPageTitle">Processes</div>
                 <div class="header-actions" style="display: flex; align-items: center; gap: 16px;">
                     <button class="btn-icon" style="position: relative;" aria-label="Notifications">
                         <img src="../assets/images/bell.svg" alt="Notifications" style="width: 20px; height: 20px;">
                         <span style="position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; background: #EF4444; border-radius: 50%; border: 2px solid white;"></span>
                     </button>
+                    <button class="btn btn-primary" id="listHeaderActionNew" onclick="openNewProcessModal()" style="display:none;">+ New Process</button>
                     <div id="detailHeaderActions" style="display:none;">
                         <button class="btn btn-primary" id="editProcessBtn">Edit Process</button>
                     </div>

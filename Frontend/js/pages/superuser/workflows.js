@@ -1,65 +1,78 @@
 // js/pages/workflows.js
 
-document.addEventListener('DOMContentLoaded', () => {
-    const params = new URLSearchParams(window.location.search);
-    const wfId = params.get('id');
-    const workflows = getWorkflows();
-    
-    if (wfId) {
-        let wf = workflows.find(w => w.id === wfId);
-        if (wf) {
-            document.getElementById('processListView').style.display = 'none';
-            document.getElementById('processDetailView').style.display = 'flex';
-            document.getElementById('detailHeaderActions').style.display = 'flex';
-            
-            renderProcessHeader(wf);
-            renderProcessStages(wf);
-            
-            document.getElementById('editProcessBtn').onclick = () => {
-                window.location.href = `workflow-builder.html?id=${wf.id}`;
-            }
-        } else {
-            renderLibraryTable(workflows);
-        }
+document.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(window.location.search);
+  const wfId = params.get("id");
+  const workflows = getWorkflows();
+
+  if (wfId) {
+    let wf = workflows.find((w) => w.id === wfId);
+    if (wf) {
+      document.getElementById("processListView").style.display = "none";
+      document.getElementById("processDetailView").style.display = "flex";
+      document.getElementById("detailHeaderActions").style.display = "flex";
+      const newBtn = document.getElementById("listHeaderActionNew");
+      if (newBtn) newBtn.style.display = "none";
+      const pageTitle = document.getElementById("processesPageTitle");
+      if (pageTitle) pageTitle.style.display = "none";
+
+      renderProcessHeader(wf);
+      renderProcessStages(wf);
+
+      document.getElementById("editProcessBtn").onclick = () => {
+        window.location.href = `workflow-builder.html?id=${wf.id}`;
+      };
     } else {
-        renderLibraryTable(workflows);
+      renderLibraryTable(workflows);
     }
+  } else {
+    renderLibraryTable(workflows);
+  }
 });
 
 function renderLibraryTable(workflows) {
-    document.getElementById('processDetailView').style.display = 'none';
-    document.getElementById('detailHeaderActions').style.display = 'none';
-    document.getElementById('processListView').style.display = 'block';
-    
-    const tbody = document.getElementById('libraryTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    workflows.forEach(wf => {
-        const tr = document.createElement('tr');
-        const statusBadge = wf.status === 'Active' ? 'green' : (wf.status === 'Draft' ? 'gray' : 'yellow');
-        
-        tr.innerHTML = `
+  document.getElementById("processDetailView").style.display = "none";
+  document.getElementById("detailHeaderActions").style.display = "none";
+  document.getElementById("processListView").style.display = "block";
+  const newBtn = document.getElementById("listHeaderActionNew");
+  if (newBtn) newBtn.style.display = "block";
+  const pageTitle = document.getElementById("processesPageTitle");
+  if (pageTitle) pageTitle.style.display = "block";
+
+  const tbody = document.getElementById("libraryTableBody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  workflows.forEach((wf) => {
+    const tr = document.createElement("tr");
+    const statusBadge =
+      wf.status === "Active"
+        ? "green"
+        : wf.status === "Draft"
+          ? "gray"
+          : "yellow";
+
+    tr.innerHTML = `
             <td>
                 <div class="td-title">${wf.name}</div>
                 <div class="td-subtitle" style="font-size:12px; color:var(--text-muted);">${wf.totalStages} Stages</div>
             </td>
             <td>${wf.department}</td>
             <td><span class="badge ${statusBadge}">${wf.status}</span></td>
-            <td style="color:var(--text-muted)">Oct 24, 2024</td>
+            <td style="color:var(--text-muted)">${wf.lastModified}</td>
             <td>
-                <button class="action-btn" onclick="window.location.href='workflows.html?id=${wf.id}'">View</button>
+                <button class="action-btn view" onclick="window.location.href='workflows.html?id=${wf.id}'">View</button>
             </td>
         `;
-        tbody.appendChild(tr);
-    });
+    tbody.appendChild(tr);
+  });
 }
 
 function renderProcessHeader(wf) {
-    const header = document.getElementById('processHeader');
-    if (!header) return;
+  const header = document.getElementById("processHeader");
+  if (!header) return;
 
-    header.innerHTML = `
+  header.innerHTML = `
         <div class="breadcrumb">
             <a href="workflows.html" class="breadcrumb-link">Processes</a> › ${wf.name}
         </div>
@@ -70,7 +83,7 @@ function renderProcessHeader(wf) {
             ${renderStatusTag(wf.status)} 
             <span style="color:var(--text-main)">${wf.department}</span> · 
             ${wf.totalStages} Stages · 
-            Compliance: ${wf.compliance.join(' · ')}
+            Compliance: ${wf.compliance.join(" · ")}
         </div>
         
         <div class="metrics-grid" style="margin-top: 24px;">
@@ -97,46 +110,56 @@ function renderProcessHeader(wf) {
         </div>
     `;
 
-    document.title = `${wf.name} - OfficeSync`;
+  document.title = `${wf.name} - OfficeSync`;
 }
 
 function renderProcessStages(wf) {
-    const container = document.getElementById('stagesContainer');
-    if (!container) return;
-    
-    // Abstracting roles for demo purposes based on Figma
-    const mockRoles = ['Team Member', 'Team Member', 'Team Leader', 'Compliance Officer'];
-    const mockTags = [
-        ['Evidence', 'SOX'],
-        ['Evidence', 'Approval'],
-        ['Approval'],
-        ['Evidence', 'SOX', 'IFRS']
-    ];
+  const container = document.getElementById("stagesContainer");
+  if (!container) return;
 
-    let html = '';
-    
-    wf.stages.forEach((stageName, idx) => {
-        const isFirst = idx === 0;
-        const isActive = idx === 1; // Stage 2 active for demo
-        
-        if (!isFirst) {
-            html += `<div class="connector"></div>`;
-        }
-        
-        const tagsHtml = (mockTags[idx] || []).map(tag => {
-            if (tag === 'Evidence') return `<span class="badge" style="background:#EFF6FF; color:#3B82F6;">${tag}</span>`;
-            if (tag === 'Approval') return `<span class="badge" style="background:#DCFCE7; color:#166534;">${tag}</span>`;
-            if (tag === 'SOX') return `<span class="badge" style="background:#FEE2E2; color:#DC2626;">${tag}</span>`;
-            return createBadge(tag, 'gray');
-        }).join('');
+  // Abstracting roles for demo purposes based on Figma
+  const mockRoles = [
+    "Team Member",
+    "Team Member",
+    "Team Leader",
+    "Compliance Officer",
+  ];
+  const mockTags = [
+    ["Evidence", "SOX"],
+    ["Evidence", "Approval"],
+    ["Approval"],
+    ["Evidence", "SOX", "IFRS"],
+  ];
 
-        const role = mockRoles[idx] || 'System';
+  let html = "";
 
-        html += `
-            <div class="stage-node ${isActive ? 'is-active' : 'is-default'}">
+  wf.stages.forEach((stageName, idx) => {
+    const isFirst = idx === 0;
+    const isActive = idx === 1; // Stage 2 active for demo
+
+    if (!isFirst) {
+      html += `<div class="connector"></div>`;
+    }
+
+    const tagsHtml = (mockTags[idx] || [])
+      .map((tag) => {
+        if (tag === "Evidence")
+          return `<span class="badge" style="background:#EFF6FF; color:#3B82F6;">${tag}</span>`;
+        if (tag === "Approval")
+          return `<span class="badge" style="background:#DCFCE7; color:#166534;">${tag}</span>`;
+        if (tag === "SOX")
+          return `<span class="badge" style="background:#FEE2E2; color:#DC2626;">${tag}</span>`;
+        return createBadge(tag, "gray");
+      })
+      .join("");
+
+    const role = mockRoles[idx] || "System";
+
+    html += `
+            <div class="stage-node ${isActive ? "is-active" : "is-default"}">
                 <div class="node-number">${idx + 1}</div>
                 <div class="node-content">
-                    <div class="node-title">${stageName.replace('+2', 'Optional Step').replace('+3', 'Cleanup')}</div>
+                    <div class="node-title">${stageName.replace("+2", "Optional Step").replace("+3", "Cleanup")}</div>
                     <div class="node-role">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                         ${role}
@@ -147,7 +170,7 @@ function renderProcessStages(wf) {
                 </div>
             </div>
         `;
-    });
-    
-    container.innerHTML = html;
+  });
+
+  container.innerHTML = html;
 }

@@ -1,12 +1,18 @@
 // js/data/db.js
 
+const MASTER_DB_VERSION = 3; // Change this number to 3, 4, etc. to force a database reset!
+
 // Run this function when the app loads to seed the mock database
 function initializeDatabase() {
-  // 1. Check if users exist in localStorage under the master key "users"
-  if (!localStorage.getItem("users")) {
-    // Combined Data Structure: Everyone gets a password AND table data (department, status, etc.)
+  const currentVersion = localStorage.getItem("master_db_version");
+
+  // 1. Check if users exist OR if we need to force an update because the version changed
+  if (
+    !localStorage.getItem("users") ||
+    parseInt(currentVersion) < MASTER_DB_VERSION
+  ) {
+    // Combined Data Structure: Everyone gets a password AND table data
     const mockUsers = [
-      // --- Your Original Users ---
       {
         id: "u1",
         email: "superuser@test.com",
@@ -21,7 +27,7 @@ function initializeDatabase() {
         id: "u2",
         email: "pm@test.com",
         password: "123",
-        role: "admin",
+        role: "project_manager",
         name: "Aishwary",
         department: "Operations",
         status: "Active",
@@ -31,7 +37,7 @@ function initializeDatabase() {
         id: "u3",
         email: "hr@test.com",
         password: "123",
-        role: "admin",
+        role: "hr_manager",
         name: "Uday",
         department: "HR",
         status: "Active",
@@ -41,7 +47,7 @@ function initializeDatabase() {
         id: "u4",
         email: "user@test.com",
         password: "123",
-        role: "enduser",
+        role: "team_member",
         name: "Team Member",
         department: "Engineering",
         status: "Active",
@@ -51,14 +57,12 @@ function initializeDatabase() {
         id: "u5",
         email: "co@app.com",
         password: "co123",
-        role: "admin",
+        role: "compliance_officer",
         name: "Jason C",
         department: "Compliance",
         status: "Active",
         joined: "Mar 01, 2024",
       },
-
-      // --- Soham's Users (Now with passwords added so they can log in!) ---
       {
         id: "u6",
         email: "vikram@officesync.com",
@@ -93,6 +97,10 @@ function initializeDatabase() {
 
     // Save the combined list to browser storage
     localStorage.setItem("users", JSON.stringify(mockUsers));
+    localStorage.setItem("master_db_version", MASTER_DB_VERSION); // Save the new version number
+    console.log(
+      "Master Database initialized/updated to version " + MASTER_DB_VERSION,
+    );
   }
 
   // 2. Check if tasks exist
@@ -110,9 +118,7 @@ function initializeDatabase() {
   }
 }
 
-// --- GLOBAL HELPER FUNCTIONS (Adapted from Soham's code) ---
-// The whole team can now use these functions in their page logic!
-
+// --- GLOBAL HELPER FUNCTIONS ---
 function getUsers() {
   const data = localStorage.getItem("users");
   return data ? JSON.parse(data) : [];

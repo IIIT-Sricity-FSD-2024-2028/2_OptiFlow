@@ -1,34 +1,38 @@
 // js/utils/helpers.js
 
 function createBadge(text, colorClass) {
-    return `<span class="badge ${colorClass}">${text}</span>`;
+  return `<span class="badge ${colorClass}">${text}</span>`;
 }
 
 function processComplianceTags(compliances) {
-    return compliances.map(c => {
-        if (c.includes('SOX')) return createBadge(c, 'purple');
-        if (c.includes('ISO')) return createBadge(c, 'yellow');
-        return createBadge(c, 'green');
-    }).join('');
+  return compliances
+    .map((c) => {
+      if (c.includes("SOX")) return createBadge(c, "purple");
+      if (c.includes("ISO")) return createBadge(c, "yellow");
+      return createBadge(c, "green");
+    })
+    .join("");
 }
 
 function processStageTags(stages) {
-    return stages.map(s => {
-        if (s.startsWith('+')) return createBadge(s, 'gray');
-        return createBadge(s, 'gray');
-    }).join('');
+  return stages
+    .map((s) => {
+      if (s.startsWith("+")) return createBadge(s, "gray");
+      return createBadge(s, "gray");
+    })
+    .join("");
 }
 
 function renderStatusTag(status) {
-    if (status === 'Active') return createBadge(status, 'green');
-    if (status === 'Draft') return createBadge(status, 'gray');
-    return createBadge(status, 'gray');
+  if (status === "Active") return createBadge(status, "green");
+  if (status === "Draft") return createBadge(status, "gray");
+  return createBadge(status, "gray");
 }
 
 function renderUsageBar(runs) {
-    const max = 15;
-    const pct = Math.min((runs / max) * 100, 100);
-    return `
+  const max = 15;
+  const pct = Math.min((runs / max) * 100, 100);
+  return `
         <div class="progress-container">
             <div class="progress-bar" style="width: ${pct}%"></div>
         </div>
@@ -37,32 +41,32 @@ function renderUsageBar(runs) {
 }
 
 function logout() {
-    // In a real app this clears tokens
-    alert('Logging out...');
-    window.location.href = '../login.html';
+  // In a real app this clears tokens
+  alert("Logging out...");
+  window.location.href = "../login.html";
 }
 
 function openNewProcessModal() {
-    window.location.href = 'workflow-builder.html';
+  window.location.href = "workflow-builder.html";
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initNotifications();
+document.addEventListener("DOMContentLoaded", () => {
+  initNotifications();
 });
 
 function initNotifications() {
-    const bell = document.querySelector('button[aria-label="Notifications"]');
-    if (!bell) return;
+  const bell = document.querySelector('button[aria-label="Notifications"]');
+  if (!bell) return;
 
-    const dropdown = document.createElement('div');
-    dropdown.id = 'globalNotificationPanel';
-    dropdown.style.cssText = `
+  const dropdown = document.createElement("div");
+  dropdown.id = "globalNotificationPanel";
+  dropdown.style.cssText = `
         position: absolute; width: 380px; background: var(--card-bg); border: 1px solid var(--border-color);
         border-radius: 8px; box-shadow: 0 12px 30px rgba(0,0,0,0.1); z-index: 9999; display: none;
         flex-direction: column; overflow: hidden; cursor: default;
     `;
 
-    dropdown.innerHTML = `
+  dropdown.innerHTML = `
         <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-color);">
             <span style="font-weight: 600; font-size: 14px; color: var(--text-main);">Notifications</span>
             <span id="markAllReadBtn" style="font-size: 12px; color: var(--primary-color); cursor: pointer; font-weight: 500;">Mark all as read</span>
@@ -98,41 +102,43 @@ function initNotifications() {
         </div>
     `;
 
-    document.body.appendChild(dropdown);
+  document.body.appendChild(dropdown);
 
-    document.getElementById('markAllReadBtn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const dots = document.querySelectorAll('#notifyList > div > div:first-child');
-        dots.forEach(d => d.style.background = 'transparent');
-        
-        const bellDot = bell.querySelector('span');
-        if(bellDot) bellDot.style.display = 'none';
-        
-        const items = document.querySelectorAll('#notifyList > div');
-        items.forEach(i => i.style.opacity = '0.6');
-    });
+  document.getElementById("markAllReadBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const dots = document.querySelectorAll(
+      "#notifyList > div > div:first-child",
+    );
+    dots.forEach((d) => (d.style.background = "transparent"));
 
-    document.getElementById('viewAllAlertsBtn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        window.location.href = 'audit.html';
-    });
+    const bellDot = bell.querySelector("span");
+    if (bellDot) bellDot.style.display = "none";
 
-    bell.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (dropdown.style.display === 'flex') {
-            dropdown.style.display = 'none';
-        } else {
-            const rect = bell.getBoundingClientRect();
-            // Dropdown aligns to right edge of button and renders downwards
-            dropdown.style.top = (rect.bottom + 12) + 'px';
-            dropdown.style.right = (window.innerWidth - rect.right) + 'px';
-            dropdown.style.display = 'flex';
-        }
-    });
+    const items = document.querySelectorAll("#notifyList > div");
+    items.forEach((i) => (i.style.opacity = "0.6"));
+  });
 
-    document.addEventListener('click', (e) => {
-        if (dropdown.style.display === 'flex' && !dropdown.contains(e.target)) {
-            dropdown.style.display = 'none';
-        }
-    });
+  document.getElementById("viewAllAlertsBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    window.location.href = "audit.html";
+  });
+
+  bell.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (dropdown.style.display === "flex") {
+      dropdown.style.display = "none";
+    } else {
+      const rect = bell.getBoundingClientRect();
+      // Dropdown aligns to right edge of button and renders downwards
+      dropdown.style.top = rect.bottom + 12 + "px";
+      dropdown.style.right = window.innerWidth - rect.right + "px";
+      dropdown.style.display = "flex";
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (dropdown.style.display === "flex" && !dropdown.contains(e.target)) {
+      dropdown.style.display = "none";
+    }
+  });
 }

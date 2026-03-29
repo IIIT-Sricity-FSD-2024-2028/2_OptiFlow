@@ -1,4 +1,5 @@
 // js/pages/superuser/users.js
+
 document.addEventListener("DOMContentLoaded", () => {
   refreshTable();
 
@@ -16,9 +17,9 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function refreshTable() {
-  let users = getUsers();
+  let users = getUsers(); // Pulls from master db.js
   const search = document.getElementById("searchInput").value.toLowerCase();
-  const role = document.getElementById("roleFilter").value;
+  const role = document.getElementById("roleFilter").value; // e.g., "hr_manager"
 
   if (search) {
     users = users.filter(
@@ -28,34 +29,12 @@ function refreshTable() {
     );
   }
   if (role) {
-    // ✅ FIX: Ensure the filter matches exactly. If roleFilter value is "Admin",
-    // but db is "admin", we need to convert to lowercase for the check.
-    users = users.filter((u) => u.role.toLowerCase() === role.toLowerCase());
+    users = users.filter((u) => u.role === role);
   }
 
   renderUserTable(users);
 }
-// This translates ugly backend code into pretty UI text
-function formatRoleName(roleKey) {
-  // Super Users
-  if (roleKey === "superuser") return "Process Admin";
 
-  // Admins
-  if (
-    roleKey === "admin" ||
-    roleKey === "pm" ||
-    roleKey === "hr_admin" ||
-    roleKey === "compliance"
-  )
-    return "Department Admin";
-
-  // End Users
-  if (roleKey === "team_leader") return "Team Leader";
-  if (roleKey === "enduser" || roleKey === "member") return "Team Member";
-
-  // Fallback just in case
-  return roleKey;
-}
 function renderUserTable(data) {
   const tbody = document.getElementById("userTableBody");
   if (!tbody) return;
@@ -67,16 +46,26 @@ function renderUserTable(data) {
     return;
   }
 
+  // ✅ 1. The Perfect Dictionary Map
+  // This forces the exact text you want and strictly uses safe CSS colors
+  const roleMap = {
+    superuser: { name: "Process Admin", color: "purple" },
+    hr_manager: { name: "HR Manager", color: "blue" },
+    compliance_officer: { name: "Compliance Officer", color: "red" },
+    project_manager: { name: "Project Manager", color: "blue" },
+    team_leader: { name: "Team Leader", color: "yellow" },
+    enduser: { name: "Team Member", color: "gray" },
+  };
+
   data.forEach((u) => {
     const tr = document.createElement("tr");
 
-    // ✅ FIX: Updated to match db.js lowercase role names
-    let roleBadge = "gray"; // Default for members/endusers
-    if (u.role === "superuser") roleBadge = "purple";
-    if (u.role === "admin" || u.role === "pm" || u.role === "hr_admin")
-      roleBadge = "blue";
-    if (u.role === "team_leader") roleBadge = "yellow";
+    // 2. Look up the role in our dictionary (fallback to gray if it's something weird)
+    const roleData = roleMap[u.role] || { name: u.role, color: "gray" };
 
+    // 3. Set the variables for the HTML
+    const readableRole = u.displayRole || roleData.name;
+    const roleBadge = roleData.color;
     const statusBadge = u.status === "Active" ? "green" : "gray";
 
     tr.innerHTML = `
@@ -84,63 +73,52 @@ function renderUserTable(data) {
                 <div class="td-title">${u.name}</div>
                 <div class="td-subtitle">${u.email}</div>
             </td>
-            <td><span class="badge ${roleBadge}">${formatRoleName(u.role)}</span></td>
-            <td>${u.department || "N/A"}</td>
-            <td><span class="badge ${statusBadge}">${u.status || "Active"}</span></td>
-            <td style="color: var(--text-muted);">${u.joined || "N/A"}</td>
+            <td><span class="badge ${roleBadge}">${readableRole}</span></td>
+            <td>${u.department}</td>
+            <td><span class="badge ${statusBadge}">${u.status}</span></td>
+            <td style="color: var(--text-muted);">${u.joined}</td>
             <td>
                 <button class="action-btn edit" onclick="openUserModal('${u.id}')">Edit</button>
-                <button class="action-btn" style="color: #DC2626; border: 1px solid #DC2626;" onclick="deleteUser('${u.id}')">Delete</button>
+                <button class="action-btn delete" onclick="deleteUser('${u.id}')">Delete</button>
             </td>
         `;
     tbody.appendChild(tr);
   });
 }
-
 function openUserModal(id = null) {
   const modal = document.getElementById("userModal");
   const title = document.getElementById("modalTitle");
 
-  // Reset scroll
   const content = modal.querySelector(".modal-body");
   if (content) content.scrollTop = 0;
 
-  // Clear validation
-  if (typeof showError === "function") {
-    showError("userName", true);
-    showError("userEmail", true);
-  }
+  showError("userName", true);
+  showError("userEmail", true);
 
   if (id) {
     const users = getUsers();
-    // ✅ FIX: Use loose equality (==) just in case ID is a number in DB but string in HTML
-    const u = users.find((x) => x.id == id);
+    const u = users.find((x) => x.id === id);
     if (u) {
       document.getElementById("userId").value = u.id;
       document.getElementById("userName").value = u.name;
       document.getElementById("userEmail").value = u.email;
-      document.getElementById("userRole").value = u.role;
-      document.getElementById("userDept").value = u.department || "";
 
-      // Advanced Preview
-      if (document.getElementById("userTeams"))
-        document.getElementById("userTeams").value = u.teams || "";
-      if (document.getElementById("userResp"))
-        document.getElementById("userResp").value = u.responsibilities || "";
-      if (document.getElementById("userTasks"))
-        document.getElementById("userTasks").value = u.tasks || 0;
-      if (document.getElementById("userProcesses"))
-        document.getElementById("userProcesses").value = u.processes || 0;
+      // ✅ This perfectly matches the <option value="hr_manager"> in your HTML
+      document.getElementById("userRole").value = u.role;
+
+      document.getElementById("userDept").value = u.department;
+      document.getElementById("userTeams").value = u.teams || "";
+      document.getElementById("userResp").value = u.responsibilities || "";
+      document.getElementById("userTasks").value = u.tasks || 0;
+      document.getElementById("userProcesses").value = u.processes || 0;
 
       title.innerText = "Edit User";
     }
   } else {
     document.getElementById("userForm").reset();
     document.getElementById("userId").value = "";
-    if (document.getElementById("userTasks"))
-      document.getElementById("userTasks").value = "0";
-    if (document.getElementById("userProcesses"))
-      document.getElementById("userProcesses").value = "0";
+    document.getElementById("userTasks").value = "0";
+    document.getElementById("userProcesses").value = "0";
     title.innerText = "Add New User";
   }
 
@@ -154,52 +132,37 @@ function closeUserModal() {
 }
 
 function saveUser() {
-  // 🛑 REQUIREMENT 4: Prevent page reload!
-  // Make sure your HTML form has onsubmit="event.preventDefault(); saveUser();"
-
   const id = document.getElementById("userId").value;
   const name = document.getElementById("userName").value;
   const email = document.getElementById("userEmail").value;
-  const role = document.getElementById("userRole").value;
+  const rawRole = document.getElementById("userRole").value; // e.g. "hr_manager"
   const dept = document.getElementById("userDept").value;
 
-  // Advanced fields
-  const teams = document.getElementById("userTeams")
-    ? document.getElementById("userTeams").value
-    : "";
-  const responsibilities = document.getElementById("userResp")
-    ? document.getElementById("userResp").value
-    : "";
-  const tasks = document.getElementById("userTasks")
-    ? document.getElementById("userTasks").value
-    : 0;
-  const processes = document.getElementById("userProcesses")
-    ? document.getElementById("userProcesses").value
-    : 0;
+  const teams = document.getElementById("userTeams").value;
+  const responsibilities = document.getElementById("userResp").value;
+  const tasks = document.getElementById("userTasks").value;
+  const processes = document.getElementById("userProcesses").value;
 
-  // Validate
-  if (
-    typeof showError === "function" &&
-    typeof validateRequired === "function" &&
-    typeof validateEmail === "function"
-  ) {
-    const isNameValid = showError("userName", validateRequired(name));
-    const isEmailValid = showError("userEmail", validateEmail(email));
-    if (!isNameValid || !isEmailValid) return;
-  }
+  const isNameValid = showError("userName", validateRequired(name));
+  const isEmailValid = showError("userEmail", validateEmail(email));
+
+  if (!isNameValid || !isEmailValid) return;
 
   const users = getUsers();
 
+  // Grab the human-readable text from the dropdown (e.g. "HR Manager")
+  const roleSelect = document.getElementById("userRole");
+  const displayRole = roleSelect.options[roleSelect.selectedIndex].text;
+
   if (id) {
-    // ✅ FIX: Loose equality again
-    const idx = users.findIndex((u) => u.id == id);
+    const idx = users.findIndex((u) => u.id === id);
     if (idx > -1) {
-      // We use spread operator ...users[idx] to keep their existing password!
       users[idx] = {
         ...users[idx],
         name,
         email,
-        role,
+        role: rawRole, // e.g. "hr_manager"
+        displayRole: displayRole, // e.g. "HR Manager"
         department: dept,
         teams,
         responsibilities,
@@ -217,8 +180,9 @@ function saveUser() {
       id: "u" + Date.now(),
       name,
       email,
-      password: "123", // ✅ FIX: Give new users a default password so they can log in!
-      role,
+      password: "123", // ✅ DEFAULT PASSWORD
+      role: rawRole,
+      displayRole: displayRole,
       department: dept,
       status: "Active",
       joined: newDate,
@@ -229,17 +193,41 @@ function saveUser() {
     });
   }
 
-  saveUsers(users);
+  saveUsers(users); // Saves to master db.js
   closeUserModal();
   refreshTable();
 }
 
 function deleteUser(id) {
-  if (confirm("Are you sure you want to delete this user?")) {
-    let users = getUsers();
-    // ✅ FIX: Loose equality to handle ID types
-    users = users.filter((u) => u.id != id);
-    saveUsers(users);
-    refreshTable();
+  if (
+    confirm(
+      "Are you sure you want to deactivate this user? They will be unable to log in, and their HR profile will be marked inactive.",
+    )
+  ) {
+    let users = getUsers(); // Get master db list
+
+    // 1. Find the user so we know their email/details before deleting
+    const userToDelete = users.find((u) => u.id === id);
+
+    if (userToDelete) {
+      // 2. REVERSE INTEGRATION HOOK: Tell HRStore to deactivate this person
+      // We look them up by email in the HR store, since the IDs might not match perfectly
+      if (typeof HRStore !== "undefined") {
+        const hrEmps = HRStore.getAll();
+        const hrProfile = hrEmps.find(
+          (e) => e.email.toLowerCase() === userToDelete.email.toLowerCase(),
+        );
+
+        if (hrProfile) {
+          HRStore.setStatus(hrProfile.id, "inactive");
+          console.log(`[HR Sync] Deactivated ${hrProfile.email} in HR system.`);
+        }
+      }
+
+      // 3. Remove them from the Master Login DB
+      users = users.filter((u) => u.id !== id);
+      saveUsers(users);
+      refreshTable();
+    }
   }
 }

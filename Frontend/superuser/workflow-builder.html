@@ -518,19 +518,10 @@
             <button class="btn btn-secondary" onclick="window.history.back()">
               Discard
             </button>
-            <button
-              class="btn btn-secondary"
-              onclick="alert('Draft successfully saved to local storage.')"
-            >
+            <button class="btn btn-secondary" onclick="saveProcessDraft()">
               Save Draft
             </button>
-            <button
-              class="btn btn-green"
-              onclick="
-                alert('Process Published!');
-                window.location.href = 'workflows.html';
-              "
-            >
+            <button class="btn btn-green" onclick="publishProcess()">
               Publish Process
             </button>
           </div>
@@ -538,11 +529,53 @@
 
         <div class="builder-body">
           <div class="timeline-container">
-            <div class="process-meta">
-              PROCESS <span>Finance Q4 Reporting</span> &nbsp;&nbsp; DEPARTMENT
-              <span>Finance</span> &nbsp;&nbsp; COMPLIANCE
-              <span>SOX · IFRS</span> &nbsp;&nbsp; STAGES
-              <span id="stgCount">4</span>
+            <div
+              id="processHeaderEdit"
+              style="
+                display: none;
+                background: white;
+                padding: 24px;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                margin-bottom: 24px;
+                width: 100%;
+              "
+            >
+              <div class="form-row">
+                <div class="form-group">
+                  <label>PROCESS NAME</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="newProcessName"
+                    placeholder="e.g., Q3 Marketing Campaign"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>DEPARTMENT</label>
+                  <select class="form-control" id="newProcessDept">
+                    <option value="Finance">Finance</option>
+                    <option value="HR">HR</option>
+                    <option value="IT">IT</option>
+                    <option value="Operations">Operations</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom: 0px">
+                <label>COMPLIANCE TAGS (Comma separated)</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="newProcessCompliance"
+                  placeholder="e.g., SOX, IFRS"
+                />
+              </div>
+            </div>
+            <div class="process-meta" id="processMetaDisplay">
+              PROCESS <span id="metaProcessName"></span> &nbsp;&nbsp; DEPARTMENT
+              <span id="metaProcessDept"></span> &nbsp;&nbsp; COMPLIANCE
+              <span id="metaProcessCompliance"></span> &nbsp;&nbsp; STAGES
+              <span id="stgCount">0</span>
             </div>
 
             <div

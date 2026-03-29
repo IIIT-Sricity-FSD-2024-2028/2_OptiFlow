@@ -258,7 +258,9 @@
               <select class="dropdown-select" id="roleFilter">
                 <option value="">All Roles</option>
                 <option value="superuser">Process Admin</option>
-                <option value="admin">Department Admin</option>
+                <option value="hr_manager">HR Manager</option>
+                <option value="compliance_officer">Compliance Officer</option>
+                <option value="project_manager">Project Manager</option>
                 <option value="team_leader">Team Leader</option>
                 <option value="enduser">Team Member</option>
               </select>
@@ -320,9 +322,11 @@
               <label class="form-label">System Role</label>
               <select class="form-control" id="userRole">
                 <option value="enduser">Team Member</option>
-                <option value="admin">Department Admin</option>
-                <option value="superuser">Process Admin</option>
                 <option value="team_leader">Team Leader</option>
+                <option value="project_manager">Project Manager</option>
+                <option value="hr_manager">HR Manager</option>
+                <option value="compliance_officer">Compliance Officer</option>
+                <option value="superuser">Process Admin</option>
               </select>
             </div>
             <div class="form-group">
@@ -407,6 +411,8 @@
     <script src="../js/utils/helpers.js"></script>
     <script src="../js/utils/validator.js"></script>
     <script src="../js/data/db.js"></script>
+    <script src="../js/data/hr-data-store.js"></script>
+    <script src="../js/utils/auth.js"></script>
     <script src="../js/pages/superuser/users.js"></script>
   </body>
 </html>
