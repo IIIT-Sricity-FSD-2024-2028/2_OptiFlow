@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
           window.location.href = "admin/hr/dashboard.html";
         } else if (validUser.role === "project_manager") {
           // PM goes to PM dashboard
-          window.location.href = "admin/pm/dashboard.html";
+          window.location.href = "admin/pm/pm-dashboard.html";
         } else if (validUser.role === "compliance_officer") {
           // Compliance Officer goes to their dashboard
           window.location.href = "admin/compliance/dashboard.html"; // Adjust this path if your CO folder is different

@@ -1,48 +1,15 @@
 // js/utils/auth.js
 
-// Function to handle the login form submission
-function handleLogin(event) {
-  event.preventDefault(); // STOPS THE PAGE FROM RELOADING! (Crucial for Evaluation Req #4)
+// ─────────────────────────────────────────
+// PART 1: Standard Auth Guards (For your core pages)
+// ─────────────────────────────────────────
 
-  const emailInput = document.getElementById("email").value;
-  const passwordInput = document.getElementById("password").value;
-
-  // Get users from our mock database
-  const users = JSON.parse(localStorage.getItem("users"));
-
-  // Find if a user matches the email and password
-  const validUser = users.find(
-    (u) => u.email === emailInput && u.password === passwordInput,
-  );
-
-  if (validUser) {
-    if (validUser.status === "Inactive") {
-      alert("Your account has been deactivated. Please contact HR.");
-      return; // Stops the login process entirely
-    }
-    // Save the logged-in user to sessionStorage (clears when browser closes)
-    sessionStorage.setItem("currentUser", JSON.stringify(validUser));
-
-    // Redirect based on role (Requirement #2 & #8)
-    if (validUser.role === "superuser") {
-      window.location.href = "superuser/dashboard.html";
-    } else if (validUser.role === "admin") {
-      window.location.href = "admin/pm-dashboard.html";
-    } else {
-      window.location.href = "enduser/member-dashboard.html";
-    }
-  } else {
-    alert("Invalid email or password!"); // You can replace this with your toast.js later
-  }
-}
-
-// Function to protect pages. Add this to the top of EVERY dashboard/inner page.
 function protectPage(allowedRoles) {
   const currentUserStr = sessionStorage.getItem("currentUser");
 
   // If no one is logged in, kick them to login
   if (!currentUserStr) {
-    window.location.href = "../index.html";
+    window.location.replace("../login.html");
     return;
   }
 
@@ -51,12 +18,101 @@ function protectPage(allowedRoles) {
   // If the user's role isn't in the allowed list, kick them out
   if (!allowedRoles.includes(currentUser.role)) {
     alert("You do not have permission to view this page.");
-    window.location.href = "../index.html";
+    window.location.replace("../../login.html");
   }
 }
 
-// Function to safely logout
 function logout() {
   sessionStorage.removeItem("currentUser");
-  window.location.href = "../index.html";
+  window.location.href = "../../login.html";
 }
+
+// ─────────────────────────────────────────
+// PART 2: The PM Integration Bridge
+// ─────────────────────────────────────────
+// Your teammate's PM files are expecting a 'window.Auth' object.
+// This adapter seamlessly translates your master session into the format they need!
+
+window.Auth = {
+  logout() {
+    // 1. Clear the session
+    sessionStorage.removeItem("currentUser");
+
+    // 2. Smart redirect back to the login page
+    const path = window.location.pathname.toLowerCase();
+    if (
+      path.includes("/admin/pm/") ||
+      path.includes("/admin/hr/") ||
+      path.includes("/enduser/member/") ||
+      path.includes("/enduser/leader/")
+    ) {
+      window.location.replace("../../login.html");
+    } else {
+      window.location.replace("../login.html");
+    }
+  },
+  getSession() {
+    const raw = sessionStorage.getItem("currentUser");
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+
+    // 1. Translate string roles to exactly what the PM module wants
+    let rId = 5;
+    let pmRoleName = "Team_Member";
+
+    if (u.role === "superuser") {
+      rId = 1;
+      pmRoleName = "SuperUser";
+    }
+    if (u.role === "project_manager") {
+      rId = 2;
+      pmRoleName = "Project_Manager";
+    }
+    if (u.role === "compliance_officer") {
+      rId = 3;
+      pmRoleName = "Compliance_Officer";
+    }
+    if (u.role === "team_leader") {
+      rId = 4;
+      pmRoleName = "Team_Leader";
+    }
+
+    // 2. Generate Avatar Initials (e.g. "Aishwary" -> "AI")
+    const initials = u.name ? u.name.substring(0, 2).toUpperCase() : "??";
+
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      roleId: rId,
+      roleName: pmRoleName, // ✅ Now the sidebar will find the correct links!
+      subRole: u.role === "team_leader" ? "team_leader" : "member",
+      avatar: initials, // ✅ Fixes the "UNDEFINED" text
+      avatarColor: "blue",
+    };
+  },
+
+  requireRole(roleGroup) {
+    const session = this.getSession();
+    if (!session) {
+      window.location.replace("../../login.html");
+      return null;
+    }
+    return session;
+  },
+
+  // The PM module uses this to show/hide action buttons (like "+ Create Task")
+  can(slug) {
+    const session = this.getSession();
+    if (!session) return false;
+
+    // Superusers (1) and Project Managers (2) can do everything in the PM module
+    if (session.roleId === 1 || session.roleId === 2) return true;
+
+    // Team Leaders (4) can only do task-related actions
+    if (session.roleId === 4 && slug.startsWith("task:")) return true;
+
+    // Everyone else is restricted
+    return false;
+  },
+};
