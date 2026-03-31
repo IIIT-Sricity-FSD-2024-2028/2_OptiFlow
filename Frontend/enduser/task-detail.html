@@ -697,34 +697,36 @@
       let session, state, task, project, manager;
 
       document.addEventListener("DOMContentLoaded", () => {
-        // ✅ 2. Security Guard & Session Adapter
         if (!sessionStorage.getItem("currentUser")) {
           window.location.replace("../login.html");
           return;
         }
-        session = window.Auth.getSession(); // Grabs the perfectly formatted user data!
+        session = window.Auth.getSession();
         window.Sidebar.render("tasks");
         window.Toast.init();
 
         state = window.Helpers.getState();
         const params = new URLSearchParams(window.location.search);
-        const taskId = parseInt(params.get("id"));
+        const taskId = params.get("id"); // Keep as string for better matching
 
-        if (!taskId) {
-          if (state.tasks.find((t) => t.assignedUserId === session.id)) {
-            window.location.href = `?id=${state.tasks.find((t) => t.assignedUserId === session.id).id}`;
-            return;
-          }
+        // Fix: Find task using String comparison to be safe
+        task = state.tasks.find((t) => String(t.id) === String(taskId));
+
+        if (!task) {
+          // If no ID in URL, default to the first task assigned to this user
+          task = state.tasks.find(
+            (t) => String(t.assignedUserId) === String(session.id),
+          );
         }
 
-        task = state.tasks.find((t) => String(t.id) === String(taskId));
         if (!task) {
           document.getElementById("alert-container").innerHTML =
-            "<div class='banner-alert'>Task not found in the database.</div>";
+            "<div class='banner-alert'>Task not found. Please go back to My Tasks.</div>";
+          document.getElementById("bc-task-name").textContent = "Not Found";
           return;
         }
 
-        // ✅ FIXED: Force strict string matching so it doesn't crash on "u4" vs 4 or "1" vs 1
+        // Fix: Ensure project matching is also string-safe
         project = state.projects.find(
           (p) => String(p.id) === String(task.projectId),
         ) || { name: "General Process", createdBy: "u2" };
@@ -738,121 +740,97 @@
 
         renderPage();
       });
-
       function renderPage() {
-        document.getElementById("bc-task-name").textContent = task.name;
+        try {
+          document.getElementById("bc-task-name").textContent =
+            task.name || "Untitled Task";
 
-        let isPending =
-          task.status === "not_started" &&
-          !task.overdue &&
-          !task.blocked &&
-          task.name.toLowerCase().includes("report");
+          // Use a safe date string to prevent .split() crashes
+          const safeDate =
+            task.deadlineLabel || task.deadline || "Pending, N/A";
+          const displayDate = safeDate.split(",")[0];
 
-        if (isPending) {
-          document.getElementById("alert-container").innerHTML = `
-      <div class="banner-alert" style="background:#fffbeb; border-color:#fed7aa; border-radius:12px; padding:16px 20px; margin-bottom:24px; display:flex; gap:16px; align-items:flex-start">
-        <div style="color:#d97706; margin-top:2px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-        <div>
-          <div style="font-size:14px; font-weight:700; color:#b45309; margin-bottom:4px">Action Required — Subtask Assigned to You</div>
-          <div style="font-size:13px; color:#92400e; line-height:1.5">${manager.name} has assigned you this subtask on Dec 14, 2024. Please review the details below and either accept to begin work, or decline with a valid reason. Declining will notify your Team Leader immediately.</div>
-        </div>
-      </div>
-    `;
-          document.getElementById("accept-row").style.display = "flex";
-          document.getElementById("accept-row").innerHTML = `
-      <div style="font-size:13px; color:var(--text-secondary)">Do you accept this subtask?</div>
-      <div style="display:flex; gap:12px">
-        <button class="btn btn-danger" style="background:#be123c; border-radius:24px; padding:8px 20px; font-weight:600" onclick="declineTask()">Decline Task</button>
-        <button class="btn btn-success" style="background:#15803d; border-radius:24px; padding:8px 20px; font-weight:600" onclick="acceptTask()">Accept Task</button>
-      </div>
-    `;
-          document.getElementById("decline-warning").style.display = "flex";
+          let isPending =
+            task.status === "not_started" &&
+            (task.name || "").toLowerCase().includes("report");
 
-          document.getElementById("stage-current").innerHTML = `
-      <div class="stage-dot active">2</div>
-      <div class="stage-info">
-        <div class="stage-name">Document Preparation</div>
-        <div class="stage-sub" style="color:#d97706; font-weight:500">Awaiting your acceptance</div>
-      </div>
-    `;
-        } else {
-          document.getElementById("alert-container").innerHTML = "";
-          document.getElementById("accept-row").style.display = "none";
-          document.getElementById("decline-warning").style.display = "none";
+          if (isPending) {
+            document.getElementById("alert-container").innerHTML = `
+          <div class="banner-alert" style="background:#fffbeb; border-color:#fed7aa; border-radius:12px; padding:16px 20px; margin-bottom:24px; display:flex; gap:16px; align-items:flex-start">
+            <div style="color:#d97706; margin-top:2px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <div>
+              <div style="font-size:14px; font-weight:700; color:#b45309; margin-bottom:4px">Action Required — Subtask Assigned to You</div>
+              <div style="font-size:13px; color:#92400e; line-height:1.5">${manager.name} has assigned you this subtask. Please review and accept to begin work.</div>
+            </div>
+          </div>`;
+            document.getElementById("accept-row").style.display = "flex";
+            document.getElementById("accept-row").innerHTML = `
+          <div style="font-size:13px; color:var(--text-secondary)">Do you accept this subtask?</div>
+          <div style="display:flex; gap:12px">
+            <button class="btn btn-danger" style="background:#be123c; border-radius:24px; padding:8px 20px; font-weight:600" onclick="declineTask()">Decline</button>
+            <button class="btn btn-success" style="background:#15803d; border-radius:24px; padding:8px 20px; font-weight:600" onclick="acceptTask()">Accept Task</button>
+          </div>`;
+            document.getElementById("decline-warning").style.display = "flex";
+            document.getElementById("stage-current").innerHTML = `
+          <div class="stage-dot active">2</div>
+          <div class="stage-info"><div class="stage-name">Document Preparation</div><div class="stage-sub" style="color:#d97706">Awaiting acceptance</div></div>`;
+          } else {
+            document.getElementById("alert-container").innerHTML = "";
+            document.getElementById("accept-row").style.display = "none";
+            document.getElementById("decline-warning").style.display = "none";
+            document.getElementById("stage-current").innerHTML = `
+          <div class="stage-dot active-blue">2</div>
+          <div class="stage-info"><div class="stage-name">Document Preparation</div><div class="stage-sub" style="color:var(--blue)">In Progress</div></div>`;
+          }
 
-          document.getElementById("stage-current").innerHTML = `
-      <div class="stage-dot active-blue">2</div>
-      <div class="stage-info">
-        <div class="stage-name">Document Preparation</div>
-        <div class="stage-sub" style="color:var(--blue); font-weight:500">In Progress · Current</div>
-      </div>
-    `;
-        }
+          // Safe Status Labeling
+          let statLabel = isPending
+            ? "Pending Acceptance"
+            : task.statusLabel || task.status || "Unknown";
+          let statStyle =
+            "background:#f1f5f9; color:#64748b; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
 
-        // Header
-        let statStyle =
-          "background:#f1f5f9; color:#64748b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
-        let statLabel = isPending ? "Pending Acceptance" : task.statusLabel;
-        if (task.status === "done")
-          statStyle =
-            "background:#dcfce7; color:#15803d; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
-        else if (isPending)
-          statStyle =
-            "background:#ffedd5; color:#c2410c; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
-        else if (task.status === "blocked")
-          statStyle =
-            "background:#fef3c7; color:#b45309; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
-        else if (task.status === "in_progress")
-          statStyle =
-            "background:#e0f2fe; color:#0369a1; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+          if (task.status === "done")
+            statStyle =
+              "background:#dcfce7; color:#15803d; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+          else if (isPending)
+            statStyle =
+              "background:#ffedd5; color:#c2410c; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
 
-        let actionsHTML = "";
-        if (!isPending && task.status !== "done") {
-          actionsHTML = `
-      <div style="display:flex; gap:12px; align-items:center">
-        <button class="btn btn-secondary" style="border-radius:8px; padding:8px 16px; font-weight:500" onclick="openModal('blocker')">Report Blocker</button>
-        <button class="btn btn-secondary" style="border-radius:8px; padding:8px 16px; font-weight:500" onclick="openModal('extension')">Request Extension</button>
-        <button class="btn btn-primary" style="border-radius:8px; padding:8px 20px; font-weight:600; background:var(--blue)" onclick="openModal('submit')">Submit Work</button>
-      </div>
-    `;
-        }
+          let actionsHTML =
+            !isPending && task.status !== "done"
+              ? `
+        <div style="display:flex; gap:12px; align-items:center">
+          <button class="btn btn-secondary" onclick="openModal('blocker')">Report Blocker</button>
+          <button class="btn btn-primary" onclick="openModal('submit')">Submit Work</button>
+        </div>`
+              : "";
 
-        document.getElementById("detail-header").style.marginBottom = "20px";
-        document.getElementById("detail-header").style.paddingBottom = "0";
-        document.getElementById("detail-header").style.borderBottom = "none";
-        document.getElementById("detail-header").innerHTML = `
-    <div style="width:100%; display:flex; justify-content:space-between; align-items:flex-start">
-      <div>
-        <h2 class="detail-title" style="font-size:22px; font-weight:700; color:var(--text-primary); margin-bottom:12px">${task.name}</h2>
-        <div class="detail-meta-row" style="color:var(--text-muted); font-size:13px">
-          <span style="${statStyle}">${statLabel}</span>
-          <span class="meta-divider" style="margin:0 4px">•</span>
-          <span style="display:flex; align-items:center; gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="color:#94a3b8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Due ${task.deadlineLabel.split(",")[0]}</span>
-          <span class="meta-divider" style="margin:0 4px">•</span>
-          <span>Assigned by ${manager.name.split(" ")[0]} ${manager.name.split(" ")[1]?.[0] + "." || ""}</span>
-          <span class="meta-divider" style="margin:0 4px">•</span>
-          <span>${project.name}</span>
-        </div>
-      </div>
-      ${actionsHTML}
-    </div>
-  `;
+          document.getElementById("detail-header").innerHTML = `
+        <div style="width:100%; display:flex; justify-content:space-between; align-items:flex-start">
+          <div>
+            <h2 class="detail-title">${task.name}</h2>
+            <div class="detail-meta-row">
+              <span style="${statStyle}">${statLabel}</span>
+              <span class="meta-divider">•</span>
+              <span>Due ${displayDate}</span>
+              <span class="meta-divider">•</span>
+              <span>${project.name}</span>
+            </div>
+          </div>
+          ${actionsHTML}
+        </div>`;
 
-        document.getElementById("task-info").innerHTML = `
-    <div><div class="lbl">PRIORITY</div><div class="val" style="display:flex;align-items:center;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:var(--${task.priority === "high" ? "red" : task.priority === "medium" ? "orange" : "green"})"></div> ${task.priorityLabel}</div></div>
-    <div><div class="lbl">ASSIGNED BY</div><div class="val" style="color:var(--text-primary); font-weight:600">${manager.name} (Team Leader)</div></div>
-    <div><div class="lbl">PROCESS</div><div class="val">${project.name}</div></div>
-    <div><div class="lbl">STAGE</div><div class="val">Document Preparation</div></div>
-    <div><div class="lbl">SUBTASK</div><div class="val">2 of 4 (current)</div></div>
-    <div><div class="lbl">COMPLIANCE POLICY</div><div class="val">SOX Compliance · IFRS</div></div>
-    <div class="desc-box" style="background:#f8fafc; border-radius:12px; border:none; padding:20px; margin-top:8px">
-      <div class="lbl" style="margin-bottom:8px">DESCRIPTION</div>
-      <div style="color:#475569; font-size:13px; line-height:1.6">${task.description || "Compile and draft the Q4 compliance report covering all finance operations from October to December 2024. Include variance analysis, policy adherence status, and flagged exceptions. Attach all supporting evidence as per the SOX documentation guidelines."}</div>
-    </div>
-  `;
+          document.getElementById("task-info").innerHTML = `
+        <div><div class="lbl">PRIORITY</div><div class="val">${task.priorityLabel || task.priority || "Medium"}</div></div>
+        <div><div class="lbl">ASSIGNED BY</div><div class="val">${manager.name}</div></div>
+        <div class="desc-box">
+          <div class="lbl">DESCRIPTION</div>
+          <div style="color:#475569">${task.description || "No description provided."}</div>
+        </div>`;
 
-        // Activity
-        document.getElementById("activity-log").innerHTML = `
+          // Activity
+          document.getElementById("activity-log").innerHTML = `
     <div style="display:flex; gap:12px; align-items:flex-start">
       <div style="width:32px; height:32px; border-radius:50%; background:var(--blue); color:white; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0">RK</div>
       <div>
@@ -875,6 +853,11 @@
       </div>
     </div>
   `;
+        } catch (e) {
+          console.error("Render Error:", e);
+          document.getElementById("alert-container").innerHTML =
+            `<div class='banner-alert'>UI Rendering Error: ${e.message}</div>`;
+        }
       }
 
       function acceptTask() {

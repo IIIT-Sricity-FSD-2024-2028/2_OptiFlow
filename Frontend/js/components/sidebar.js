@@ -1,5 +1,5 @@
 /**
- * Sidebar component — updated for new role names and consistency
+ * Sidebar component — updated for new role names, consistency, and Compliance Officer
  */
 window.Sidebar = {
   navConfig: {
@@ -73,6 +73,45 @@ window.Sidebar = {
       { id: "tasks", label: "My Tasks", icon: "tasks", href: "my-tasks.html" },
       { id: "evidence", label: "Evidence", icon: "doc", href: "evidence.html" },
     ],
+    // ✅ ADDED COMPLIANCE OFFICER CONFIGURATION
+    Compliance_Officer: [
+      {
+        id: "dashboard",
+        label: "Dashboard",
+        icon: "grid",
+        href: "compliance_dashboard.html",
+      },
+      {
+        id: "evidence",
+        label: "Evidence",
+        icon: "doc",
+        href: "compliance_evidence.html",
+      },
+      {
+        id: "violations",
+        label: "Violations",
+        icon: "alert",
+        href: "compliance_violations.html",
+      },
+      {
+        id: "rules",
+        label: "Rules",
+        icon: "shield",
+        href: "compliance_rules.html",
+      },
+      {
+        id: "reports",
+        label: "Reports",
+        icon: "folder",
+        href: "compliance_reports.html",
+      },
+      {
+        id: "audit",
+        label: "Audit Log",
+        icon: "audit",
+        href: "compliance_audit_log.html",
+      },
+    ],
   },
 
   icons: {
@@ -132,10 +171,11 @@ window.Sidebar = {
     let prefix = "./";
     const path = window.location.pathname.toLowerCase();
 
-    // Are we TWO folders deep? (e.g., /admin/pm/, /admin/hr/)
+    // ✅ ADDED: /admin/compliance/ to the 2-folders deep check!
     if (
       path.includes("/admin/pm/") ||
       path.includes("/admin/hr/") ||
+      path.includes("/admin/compliance/") ||
       path.includes("/enduser/member/") ||
       path.includes("/enduser/leader/")
     ) {
@@ -169,7 +209,8 @@ window.Sidebar = {
           ${this.icons.settings}
           <span>Settings</span>
         </div>
-        <div class="sidebar-user" style="align-items:flex-start">          <div class="avatar avatar-sm avatar-${session.avatarColor}" style="margin-top:2px">${session.avatar}</div>
+        <div class="sidebar-user" style="align-items:flex-start">
+          <div class="avatar avatar-sm avatar-${session.avatarColor}" style="margin-top:2px">${session.avatar}</div>
           <div class="sidebar-user-info">
             <div class="sidebar-user-name">${session.name}</div>
             <div class="sidebar-user-role">${displayRole}</div>
@@ -185,3 +226,94 @@ window.Sidebar = {
     if (container) container.innerHTML = html;
   },
 };
+// --- GLOBAL NOTIFICATION BELL SYSTEM ---
+// This wires up the #btn-notifications icon on the top header of every page
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    const bellBtn = document.getElementById("btn-notifications");
+    if (!bellBtn) return;
+
+    const session = window.Auth ? window.Auth.getSession() : null;
+    const state = window.Helpers ? window.Helpers.getState() : null;
+    if (!session || !state) return;
+
+    // Ensure notifications array exists
+    if (!state.notifications) {
+      state.notifications = [];
+      window.Helpers.saveState(state);
+    }
+
+    // Filter for ONLY this user's notifications and sort newest to oldest
+    const myNotifs = state.notifications
+      .filter((n) => String(n.userId) === String(session.id))
+      .sort((a, b) => b.id - a.id); // Sorts by timestamp, newest first
+    const unreadCount = myNotifs.filter((n) => !n.isRead).length;
+
+    // 1. Add Red Dot if there are unread notifications
+    if (unreadCount > 0) {
+      const redDot = document.createElement("span");
+      redDot.style.cssText =
+        "position:absolute; top:-2px; right:-2px; width:10px; height:10px; background:#ef4444; border-radius:50%; border:2px solid white;";
+      bellBtn.appendChild(redDot);
+    }
+
+    // 2. Click to open Notification Dropdown
+    bellBtn.addEventListener("click", (e) => {
+      e.stopPropagation(); // Prevent immediate closing
+
+      // Toggle off if already open
+      let existingDropdown = document.getElementById("notif-dropdown");
+      if (existingDropdown) {
+        existingDropdown.remove();
+        return;
+      }
+
+      // Build the dropdown UI
+      const dropdown = document.createElement("div");
+      dropdown.id = "notif-dropdown";
+      dropdown.style.cssText =
+        "position:absolute; top:60px; right:32px; width:320px; background:white; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.1); z-index:9999; overflow:hidden; font-family:var(--font-family);";
+
+      let html = `<div style="padding:14px 16px; border-bottom:1px solid #e2e8f0; background:#f8fafc; font-weight:700; font-size:13px; color:#0f172a; display:flex; justify-content:space-between;">
+                    <span>Notifications</span>
+                    <span style="color:#2563eb; font-weight:500; font-size:11px; cursor:pointer;" onclick="document.getElementById('notif-dropdown').remove()">Close</span>
+                  </div>`;
+
+      if (myNotifs.length === 0) {
+        html += `<div style="padding:30px 20px; text-align:center; color:#64748b; font-size:13px;">You're all caught up!</div>`;
+      } else {
+        html += `<div style="max-height:350px; overflow-y:auto;">`;
+        myNotifs.forEach((n) => {
+          html += `
+            <div style="padding:14px 16px; border-bottom:1px solid #f1f5f9; background:${n.isRead ? "white" : "#eff6ff"};">
+              <div style="font-size:13px; font-weight:600; color:#0f172a; margin-bottom:4px;">${n.title}</div>
+              <div style="font-size:12px; color:#475569; line-height:1.5;">${n.message}</div>
+              <div style="font-size:10px; color:#94a3b8; margin-top:8px; text-transform:uppercase; letter-spacing:0.5px;">${n.time}</div>
+            </div>`;
+        });
+        html += `</div>`;
+      }
+
+      dropdown.innerHTML = html;
+      document.body.appendChild(dropdown);
+
+      // 3. Mark as read in the database
+      if (unreadCount > 0) {
+        state.notifications.forEach((n) => {
+          if (String(n.userId) === String(session.id)) n.isRead = true;
+        });
+        window.Helpers.saveState(state);
+
+        // Remove the red dot visually
+        const dot = bellBtn.querySelector("span");
+        if (dot) dot.remove();
+      }
+    });
+
+    // Close dropdown when clicking anywhere else on the page
+    document.addEventListener("click", () => {
+      const drop = document.getElementById("notif-dropdown");
+      if (drop) drop.remove();
+    });
+  }, 200); // Small delay ensures HTML buttons exist before we attach code
+});

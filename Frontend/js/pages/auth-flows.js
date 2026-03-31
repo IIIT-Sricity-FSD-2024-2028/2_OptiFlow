@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (validUser.role === "project_manager") {
           window.location.href = "admin/pm/pm-dashboard.html";
         } else if (validUser.role === "compliance_officer") {
-          window.location.href = "admin/compliance/dashboard.html";
+          window.location.href = "admin/compliance/compliance_dashboard.html";
         } else if (validUser.role === "team_leader") {
           window.location.href = "enduser/tl-dashboard.html"; // ✅ Fixed!
         } else {

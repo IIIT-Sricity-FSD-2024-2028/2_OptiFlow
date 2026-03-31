@@ -406,16 +406,30 @@
 
         const idx = state.evidence.findIndex((e) => e.id === evId);
         if (idx === -1) return;
-        state.evidence[idx].title = window.Helpers.getVal("eev-title");
-        state.evidence[idx].type = window.Helpers.getVal("eev-type");
-        state.evidence[idx].notes = window.Helpers.getVal("eev-notes");
+
+        const ev = state.evidence[idx];
+        ev.title = window.Helpers.getVal("eev-title");
+        ev.type = window.Helpers.getVal("eev-type");
+        ev.notes = window.Helpers.getVal("eev-notes");
+
+        // ✅ FIXED: Corrected variable names for notifications
+        if (!state.notifications) state.notifications = [];
+
+        state.notifications.unshift({
+          id: Date.now(),
+          userId: "u5", // Compliance Officer
+          type: "info",
+          title: "Evidence Updated",
+          message: `${session.name} updated the evidence: "${ev.title}"`,
+          time: "Just now",
+          isRead: false,
+        });
 
         window.Helpers.saveState(state);
         window.Modal.close("modal-ev-edit");
         window.Toast.success("Evidence Updated");
         render();
       }
-
       function deleteEvidence(evId) {
         window.Modal.confirm({
           title: "Delete Evidence",

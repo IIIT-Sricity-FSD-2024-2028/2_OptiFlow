@@ -1,6 +1,6 @@
 // js/data/pm-data-store.js
 
-const PM_DB_VERSION = 5; // 🚀 Bumped to 5 to sync task assignments
+const PM_DB_VERSION = 6; // 🚀 Bumped to 6 to establish full Compliance Integration
 
 function initializePMDatabase() {
   const currentVersion = localStorage.getItem("pm_db_version");
@@ -8,6 +8,7 @@ function initializePMDatabase() {
   const needsUpdate = isNaN(parsedVersion) || parsedVersion < PM_DB_VERSION;
 
   if (!localStorage.getItem("pm_projects") || needsUpdate) {
+    // --- 1. PROJECTS ---
     const projects = [
       {
         id: 1,
@@ -54,24 +55,9 @@ function initializePMDatabase() {
         overdue: 0,
         createdBy: "u2",
       },
-      {
-        id: 4,
-        name: "Cloud Migration Prep",
-        description: "Pre-flight checks for AWS server migration.",
-        departmentId: 2,
-        status: "Planning",
-        statusLabel: "Planning",
-        endDate: "2026-08-20",
-        progress: 10,
-        totalTasks: 12,
-        inProgress: 1,
-        completed: 0,
-        overdue: 0,
-        createdBy: "u2",
-      },
     ];
 
-    // ✅ Tasks perfectly assigned to "u7" (Kiran), "u4" (Ravi), and "u8" (Priya)
+    // --- 2. TASKS ---
     const tasks = [
       {
         id: 101,
@@ -80,12 +66,9 @@ function initializePMDatabase() {
         category: "Audit",
         assignedUserId: "u4",
         priority: "high",
-        priorityLabel: "High",
         status: "done",
         statusLabel: "Completed",
         deadline: "2026-02-15",
-        deadlineLabel: "Feb 15, 2026",
-        overdue: false,
       },
       {
         id: 102,
@@ -94,27 +77,9 @@ function initializePMDatabase() {
         category: "Compliance",
         assignedUserId: "u4",
         priority: "medium",
-        priorityLabel: "Medium",
         status: "in_progress",
         statusLabel: "In Progress",
         deadline: "2026-04-10",
-        deadlineLabel: "Apr 10, 2026",
-        overdue: false,
-      },
-      {
-        id: 103,
-        projectId: 1,
-        name: "Client Data Cross-verification",
-        category: "Data",
-        assignedUserId: "u8",
-        priority: "high",
-        priorityLabel: "High",
-        status: "blocked",
-        statusLabel: "Blocked",
-        deadline: "2026-03-25",
-        deadlineLabel: "Mar 25, 2026",
-        overdue: true,
-        blocked: true,
       },
       {
         id: 201,
@@ -123,151 +88,143 @@ function initializePMDatabase() {
         category: "Finance",
         assignedUserId: "u4",
         priority: "high",
-        priorityLabel: "High",
         status: "in_progress",
         statusLabel: "In Progress",
         deadline: "2026-03-20",
-        deadlineLabel: "Mar 20, 2026",
         overdue: true,
-        blocked: false,
-      },
-      {
-        id: 202,
-        projectId: 2,
-        name: "SOX Policy Review Report",
-        category: "Compliance",
-        assignedUserId: "u7",
-        priority: "high",
-        priorityLabel: "High",
-        status: "not_started",
-        statusLabel: "Not Started",
-        deadline: "2026-04-05",
-        deadlineLabel: "Apr 05, 2026",
-        overdue: false,
-        blocked: false,
-      },
-      {
-        id: 203,
-        projectId: 2,
-        name: "Expense Ledger Formatting",
-        category: "Finance",
-        assignedUserId: "u8",
-        priority: "low",
-        priorityLabel: "Low",
-        status: "not_started",
-        statusLabel: "Not Started",
-        deadline: "2026-04-12",
-        deadlineLabel: "Apr 12, 2026",
-        overdue: false,
-        blocked: false,
       },
       {
         id: 301,
         projectId: 3,
-        name: "Firewall Configuration Check",
+        name: "Firewall Check",
         category: "IT",
         assignedUserId: "u7",
         priority: "critical",
-        priorityLabel: "Critical",
         status: "done",
         statusLabel: "Completed",
         deadline: "2026-03-01",
-        deadlineLabel: "Mar 01, 2026",
-        overdue: false,
-      },
-      {
-        id: 302,
-        projectId: 3,
-        name: "Penetration Testing Results",
-        category: "Security",
-        assignedUserId: "u8",
-        priority: "high",
-        priorityLabel: "High",
-        status: "in_progress",
-        statusLabel: "In Progress",
-        deadline: "2026-04-20",
-        deadlineLabel: "Apr 20, 2026",
-        overdue: false,
       },
     ];
 
+    // --- 3. COMPLIANCE RULES (Created by CO) ---
+    const complianceRules = [
+      {
+        id: "rule1",
+        name: "SOX Section 404",
+        policy: "SOX",
+        dept: "Finance Dept",
+        evidence: "Yes",
+        status: "Active",
+        desc: "Internal financial controls requiring annual sign-offs on all variance reports above $50k.",
+      },
+      {
+        id: "rule2",
+        name: "GDPR Client Verification",
+        policy: "GDPR",
+        dept: "All dept",
+        evidence: "Yes",
+        status: "Active",
+        desc: "Requires multi-factor verification of data subject identity before processing any data export requests.",
+      },
+      {
+        id: "rule3",
+        name: "ISO 27001 Controls",
+        policy: "ISO 27001",
+        dept: "IT Dept",
+        evidence: "Yes",
+        status: "Active",
+        desc: "Enforces mandatory monthly access log reviews and server hardening audits across all production infrastructure.",
+      },
+    ];
+
+    // --- 4. EVIDENCE (Submitted by TM/TL, Reviewed by CO) ---
+    // Notice how these link a Task (TM) to a Rule (CO)
+    const evidence = [
+      {
+        id: "ev1",
+        title: "GDPR Data Audit Results",
+        taskName: "Initial Data Audit",
+        projectId: 1,
+        userId: "u4", // Ravi (TM) submitted this
+        type: "GDPR",
+        status: "pending",
+        statusLabel: "Pending",
+        submittedOn: "Mar 30, 2026",
+        notes: "Attached the raw logs for client data.",
+        file: "audit_logs_raw.xlsx",
+      },
+      {
+        id: "ev2",
+        title: "Firewall Config Logs",
+        taskName: "Firewall Check",
+        projectId: 3,
+        userId: "u7", // Kiran (TL) submitted this
+        type: "ISO 27001",
+        status: "approved",
+        statusLabel: "Approved",
+        submittedOn: "Mar 02, 2026",
+        notes: "All ports verified against security policy.",
+        file: "firewall_config_mar.pdf",
+      },
+    ];
+
+    // --- 5. COMPLIANCE VIOLATIONS (Flagged by CO, fixed by PM) ---
+    const complianceViolations = [
+      {
+        id: "viol1",
+        title: "Variance Report Sign-off Missing",
+        projectId: 2,
+        projectName: "Financial Q1 Reporting",
+        detail:
+          "Overdue by 5 days. Blocks Q1 submission. Needs immediate VP approval.",
+        status: "Open",
+        statusLabel: "Open",
+        severity: "critical",
+        dateFlagged: "Mar 26, 2026",
+        resolutionNotes: "",
+      },
+    ];
+
+    // --- 6. COMPLIANCE REPORTS (Generated by CO) ---
+    const complianceReports = [
+      {
+        id: "rep1",
+        title: "Compliance Summary — Q1 2026",
+        meta: "All Projects · All Policies · Generated Mar 25 · PDF · 2.1 MB",
+        iconClass: "rtic-blue",
+        tags: [
+          { cls: "filetype", txt: "PDF" },
+          { cls: "gray", txt: "All Projects" },
+        ],
+      },
+    ];
+
+    // --- 7. ESCALATIONS (Raised by TM to PM) ---
     const escalations = [
       {
         id: 1,
         from: "Ravi Kumar (TM)",
         title: "Client Data Verification — Blocked",
-        description:
-          "Awaiting IT to grant access to the legacy client database.",
+        description: "Awaiting IT to grant access.",
         projectId: 1,
         projectName: "Project Atlas",
-        blocker: "Access Issue",
-        priority: "high",
-        priorityLabel: "High",
         status: "open",
-        statusLabel: "Open",
-        date: "Mar 28",
-      },
-      {
-        id: 2,
-        from: "Kiran Rao (TL)",
-        title: "Q1 Report Sign-off — Awaiting",
-        description: "Pending VP approval for 5 days.",
-        projectId: 2,
-        projectName: "Financial Q1 Reporting",
-        blocker: "Approval",
-        priority: "high",
-        priorityLabel: "High",
-        status: "open",
-        statusLabel: "Open",
-        date: "Mar 29",
       },
     ];
 
-    const complianceItems = [
-      {
-        id: 1,
-        projectName: "Project Atlas",
-        projectSub: "Finance & Compliance",
-        policy: "GDPR",
-        status: "at_risk",
-        statusLabel: "At Risk",
-        evidenceLabel: "Pending",
-        lastAudited: "Mar 10, 2026",
-        hasWarning: true,
-      },
-      {
-        id: 2,
-        projectName: "Financial Q1 Reporting",
-        projectSub: "Finance",
-        policy: "SOX",
-        status: "violation",
-        statusLabel: "Violation",
-        evidenceLabel: "Missing",
-        lastAudited: "Mar 01, 2026",
-        hasWarning: true,
-      },
-    ];
-
-    const complianceViolations = [
-      {
-        id: 1,
-        title: "Variance Report Sign-off Missing",
-        detail: "Overdue by 5 days. Blocks Q1 submission.",
-        status: "Open",
-        statusLabel: "Open",
-        severity: "overdue",
-        severityLabel: "Overdue",
-        action: "take_action",
-      },
-    ];
-
+    // Save everything to localStorage so all users share the same data
     localStorage.setItem("pm_projects", JSON.stringify(projects));
     localStorage.setItem("pm_tasks", JSON.stringify(tasks));
     localStorage.setItem("pm_escalations", JSON.stringify(escalations));
-    localStorage.setItem("pm_complianceItems", JSON.stringify(complianceItems));
+    localStorage.setItem("pm_complianceRules", JSON.stringify(complianceRules));
+    localStorage.setItem("pm_evidence", JSON.stringify(evidence));
     localStorage.setItem(
       "pm_complianceViolations",
       JSON.stringify(complianceViolations),
+    );
+    localStorage.setItem(
+      "pm_complianceReports",
+      JSON.stringify(complianceReports),
     );
     localStorage.setItem("pm_db_version", PM_DB_VERSION);
   }
