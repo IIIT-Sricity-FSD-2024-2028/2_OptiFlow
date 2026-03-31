@@ -476,3 +476,90 @@
   flex-shrink: 0;
 }
 .ne-close:hover { background: #f8fafc; color: var(--text-main); }
+
+/* ── FIX: Notification panel styles ────────────────────────────
+   These were missing from dashboard.css, which is why the
+   notification button appeared to do nothing — the panel existed
+   in the DOM (dashboard.html) and the JS (setupNotifications) was
+   correct, but without these rules the panel had no positioning,
+   size, or visibility transitions to work with.
+──────────────────────────────────────────────────────────────── */
+
+/* Dim backdrop that closes the panel on click */
+.notif-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: none;         /* shown by JS adding class .open */
+}
+.notif-backdrop.open {
+  display: block;
+}
+
+/* The sliding panel itself */
+.notif-panel {
+  position: fixed;
+  top: 70px;             /* sits just below the top-header */
+  right: 24px;
+  width: 320px;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  z-index: 600;
+  overflow: hidden;
+  /* closed state */
+  transform: translateY(-8px) scale(0.97);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.notif-panel.open {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Panel header row */
+.notif-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.notif-panel-header i {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+.notif-panel-header i:hover {
+  color: var(--text-main);
+}
+
+/* Empty state inside the panel */
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.notif-empty i {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.35;
+}
+.notif-empty p {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.notif-empty span {
+  font-size: 12px;
+}

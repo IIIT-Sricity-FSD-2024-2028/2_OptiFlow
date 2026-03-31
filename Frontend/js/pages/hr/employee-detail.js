@@ -76,14 +76,20 @@ function fmtDateLong(isoStr) {
   });
 }
 
-// Readable permission label → tag colour
-function permTagColor(permId) {
-  if (permId.includes("create") || permId.includes("crud")) return "pm";
-  if (permId.includes("manage") || permId.includes("approve")) return "purple";
-  if (permId.includes("view")) return ""; // default blue
-  if (permId.includes("submit") || permId.includes("review")) return "green";
-  return "orange";
-}
+// Permission group id → tag colour class
+// Each category always gets the same colour regardless of the specific permission.
+//   tasks       → blue   (default, no extra class)
+//   escalation  → orange
+//   projects    → purple
+//   compliance  → green
+//   settings    → red
+const PERM_GROUP_COLOR = {
+  tasks:      "",        // .ed-perm-tag default → blue
+  escalation: "orange",
+  projects:   "purple",
+  compliance: "green",
+  settings:   "red",
+};
 
 // Convert a permission id → readable label for display
 function permLabel(permId) {
@@ -96,7 +102,14 @@ function renderHeaderActions() {
   const isActive = emp.status === "active";
   const isInactive = emp.status === "inactive";
 
-  let buttonsHtml = `<button class="btn-icon" title="Notifications"><i class="ri-notification-3-line"></i></button>`;
+  // FIX: added id="notifBtn" to the dynamically-rendered notification button.
+  // renderHeaderActions() replaces #headerActions innerHTML entirely, which
+  // destroys the static #notifBtn from the HTML and creates this new button
+  // in its place — but without an id. setupNotifications() then called
+  // getElementById("notifBtn") and got null, so no click listener was ever
+  // attached. Adding the id here makes the button discoverable after
+  // renderPage() has run.
+  let buttonsHtml = `<button class="btn-icon" id="notifBtn" title="Notifications"><i class="ri-notification-3-line"></i></button>`;
 
   if (canEdit) {
     if (isActive) {
@@ -219,21 +232,20 @@ function renderRolePermissions() {
   const groups = RolesStore.getPermissionGroups();
   const effective = RolesStore.getEmployeePermissions(emp.id, emp.role);
 
-  // Collect enabled permission labels
+  // Collect enabled permissions, tagging each with its group id for colour lookup
   const enabledPerms = [];
   groups.forEach((g) => {
     const items = g.type === "checkbox" ? g.columns.flat() : g.items;
     items.forEach((p) => {
-      if (effective[p.id]) enabledPerms.push({ id: p.id, label: p.label });
+      if (effective[p.id]) enabledPerms.push({ id: p.id, label: p.label, groupId: g.id });
     });
   });
 
-  const tagColors = ["", "green", "purple", "orange", "red"];
   const tagsHtml = enabledPerms.length
     ? enabledPerms
         .map(
-          (p, i) =>
-            `<span class="ed-perm-tag ${tagColors[i % tagColors.length]}">${p.label}</span>`,
+          (p) =>
+            `<span class="ed-perm-tag ${PERM_GROUP_COLOR[p.groupId] ?? ""}">${p.label}</span>`,
         )
         .join("")
     : `<span style="font-size:13px;color:var(--text-muted);">No permissions assigned.</span>`;
@@ -648,8 +660,33 @@ function setupModals() {
   });
 }
 
+// ─── 9. NOTIFICATION PANEL ───────────────────────────────
+function setupNotifications() {
+  const btn = document.getElementById("notifBtn");
+  const panel = document.getElementById("notifPanel");
+  const backdrop = document.getElementById("notifBackdrop");
+  const closeBtn = document.getElementById("closeNotif");
+
+  const open = () => {
+    panel.classList.add("open");
+    backdrop.classList.add("open");
+  };
+  const close = () => {
+    panel.classList.remove("open");
+    backdrop.classList.remove("open");
+  };
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    panel.classList.contains("open") ? close() : open();
+  });
+  closeBtn.addEventListener("click", close);
+  backdrop.addEventListener("click", close);
+}
+
+
 // ─── Init ─────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded",async () => {
   empId = getEmpId();
   canEdit = HRStore.canEdit();
 
@@ -678,8 +715,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Offset content to not sit under banner
     document.querySelector(".main-content").style.paddingTop = "42px";
   }
-
+  
   setupLogout();
   setupModals();
+  
   renderPage();
+  setupNotifications();
+
 });

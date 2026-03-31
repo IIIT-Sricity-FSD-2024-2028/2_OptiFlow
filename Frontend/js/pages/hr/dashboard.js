@@ -162,14 +162,41 @@ function closeModal(id) {
   document.getElementById(id).classList.remove("active");
 }
 
+
+// ─── 9. NOTIFICATION PANEL ───────────────────────────────
+function setupNotifications() {
+  const btn = document.getElementById("notifBtn");
+  const panel = document.getElementById("notifPanel");
+  const backdrop = document.getElementById("notifBackdrop");
+  const closeBtn = document.getElementById("closeNotif");
+
+  const open = () => {
+    panel.classList.add("open");
+    backdrop.classList.add("open");
+  };
+  const close = () => {
+    panel.classList.remove("open");
+    backdrop.classList.remove("open");
+  };
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    panel.classList.contains("open") ? close() : open();
+  });
+  closeBtn.addEventListener("click", close);
+  backdrop.addEventListener("click", close);
+}
+
+
 // ─────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded",async () => {
   // Read from store — nothing hardcoded
   renderMetrics();
   populateFilters();
   renderRows(HRStore.getAll());
+  setupNotifications();
 
   // Live search & filter
   document
@@ -216,3 +243,4 @@ document.addEventListener("DOMContentLoaded", () => {
       item.classList.add("active");
   });
 });
+
