@@ -1,0 +1,129 @@
+// js/pages/dashboard.js
+
+document.addEventListener("DOMContentLoaded", () => {
+  updateTabCounts();
+  refreshProcessTable();
+
+  const searchInput = document.getElementById("searchInput");
+  const deptFilter = document.getElementById("deptFilter");
+  const statusTabs = document.getElementById("statusTabs");
+
+  if (searchInput) searchInput.addEventListener("input", refreshProcessTable);
+  if (deptFilter) deptFilter.addEventListener("change", refreshProcessTable);
+
+  if (statusTabs) {
+    statusTabs.addEventListener("click", (e) => {
+      if (e.target.classList.contains("pill-tab")) {
+        // Remove active from all
+        statusTabs
+          .querySelectorAll(".pill-tab")
+          .forEach((tab) => tab.classList.remove("active"));
+        // Add active to clicked
+        e.target.classList.add("active");
+        refreshProcessTable();
+      }
+    });
+  }
+});
+
+function updateTabCounts() {
+  const all = getWorkflows();
+  const counts = {
+    "": all.length,
+    Active: all.filter((w) => w.status === "Active").length,
+    Draft: all.filter((w) => w.status === "Draft").length,
+    Archived: all.filter((w) => w.status === "Archived").length,
+  };
+
+  const labels = {
+    "": "All",
+    Active: "Active",
+    Draft: "Draft",
+    Archived: "Archived",
+  };
+
+  document.querySelectorAll("#statusTabs .pill-tab").forEach((tab) => {
+    const status = tab.getAttribute("data-status");
+    const count = counts[status] ?? 0;
+    tab.textContent = `${labels[status]} (${count})`;
+  });
+}
+
+function refreshProcessTable() {
+  let workflows = getWorkflows();
+
+  // Search Term
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput && searchInput.value) {
+    const term = searchInput.value.toLowerCase();
+    workflows = workflows.filter(
+      (wf) =>
+        wf.name.toLowerCase().includes(term) ||
+        wf.department.toLowerCase().includes(term),
+    );
+  }
+
+  // Department Filter
+  const deptFilter = document.getElementById("deptFilter");
+  if (deptFilter && deptFilter.value) {
+    workflows = workflows.filter((wf) =>
+      wf.department.toLowerCase().includes(deptFilter.value.toLowerCase()),
+    );
+  }
+
+  // Status Filter (Tabs)
+  const activeTab = document.querySelector(".pill-tab.active");
+  if (activeTab) {
+    const status = activeTab.getAttribute("data-status");
+    if (status) {
+      // if not empty
+      workflows = workflows.filter((wf) => wf.status === status);
+    }
+  }
+
+  renderProcessTable(workflows);
+}
+
+function renderProcessTable(data) {
+  const tbody = document.getElementById("processTableBody");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  if (data.length === 0) {
+    tbody.innerHTML =
+      '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No processes found</td></tr>';
+    return;
+  }
+
+  data.forEach((wf) => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+            <td>
+                <div class="td-title">${wf.name}</div>
+                <div class="td-subtitle">${wf.department} · ${wf.totalStages} stages</div>
+            </td>
+            <td>${processStageTags(wf.stages)}</td>
+            <td>${processComplianceTags(wf.compliance)}</td>
+            <td>${renderStatusTag(wf.status)}</td>
+            <td>${renderUsageBar(wf.runs)}</td>
+            <td style="color: var(--text-muted);">${wf.lastModified}</td>
+            <td>
+                <button class="action-btn view" onclick="viewProcess('${wf.id}')">View</button>
+                <button class="action-btn edit" onclick="editProcess('${wf.id}')">Edit</button>
+            </td>
+        `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+function viewProcess(id) {
+  // Redirect to the Process detail view or workflow builder
+  window.location.href = `workflows.html?id=${id}`;
+}
+
+function editProcess(id) {
+  window.location.href = `workflows.html?id=${id}&edit=true`;
+}

@@ -1,0 +1,227 @@
+/* employee-detail.css */
+
+/* ── Loading state ── */
+.ed-loading {
+  display: flex; align-items: center; justify-content: center;
+  height: 300px; font-size: 15px; color: var(--text-muted); gap: 10px;
+}
+.ed-spin { animation: edSpin 1s linear infinite; display:inline-block; font-size:22px; }
+@keyframes edSpin { to { transform: rotate(360deg); } }
+
+/* ── Hero card ── */
+.ed-hero {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+  position: relative;
+}
+.ed-hero-avatar {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 700; color: white;
+  flex-shrink: 0;
+}
+.ed-hero-info { flex: 1; min-width: 0; }
+.ed-hero-name {
+  font-size: 22px; font-weight: 700; color: var(--text-main);
+  margin-bottom: 4px;
+}
+.ed-hero-meta {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text-muted);
+  flex-wrap: wrap; margin-bottom: 10px;
+}
+.ed-hero-meta .sep { opacity: 0.4; }
+.ed-role-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 5px;
+  font-size: 12px; font-weight: 600; margin-right: 4px;
+}
+.ed-role-badge.pm  { background:#dbeafe; color:#1e40af; }
+.ed-role-badge.tl  { background:#f3e8ff; color:#6b21a8; }
+.ed-role-badge.tm  { background:#f1f5f9; color:#475569; }
+.ed-role-badge.co  { background:#fce7f3; color:#9d174d; }
+.ed-role-badge.pa  { background:#fef9c3; color:#854d0e; }
+.ed-role-badge.hr  { background:#dcfce7; color:#166534; }
+.ed-role-badge.def { background:#f1f5f9; color:#475569; }
+
+.ed-status-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+}
+.ed-status-badge::before {
+  content:''; width:6px; height:6px; border-radius:50%; flex-shrink:0;
+}
+.ed-status-badge.active   { background:#dcfce7; color:#166534; }
+.ed-status-badge.active::before   { background:#16a34a; }
+.ed-status-badge.inactive { background:#fee2e2; color:#991b1b; }
+.ed-status-badge.inactive::before { background:#ef4444; }
+.ed-status-badge.pending  { background:#fef9c3; color:#854d0e; }
+.ed-status-badge.pending::before  { background:#ca8a04; }
+
+/* ── Two-column main grid ── */
+.ed-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1024px) { .ed-grid { grid-template-columns: 1fr; } }
+
+/* ── Section card ── */
+.ed-card {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ed-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+.ed-card-title { font-size: 15px; font-weight: 600; color: var(--text-main); }
+.ed-card-link {
+  font-size: 13px; color: var(--primary-color); font-weight: 500;
+  cursor: pointer; text-decoration: none;
+  display: flex; align-items: center; gap: 4px;
+}
+.ed-card-link:hover { text-decoration: underline; }
+
+/* ── Details grid inside card ── */
+.ed-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.ed-detail-field {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #f1f5f9;
+}
+.ed-detail-field:nth-child(even) { border-right: none; }
+.ed-detail-field:nth-last-child(-n+2) { border-bottom: none; }
+.ed-detail-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px;
+}
+.ed-detail-value {
+  font-size: 14px; color: var(--text-main); font-weight: 400;
+  word-break: break-word;
+}
+.ed-detail-value a { color: var(--primary-color); }
+
+/* ── Role & Permissions card ── */
+.ed-perms-body { padding: 20px 24px; }
+.ed-perms-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  margin-bottom: 16px; padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.ed-perms-label { font-size: 10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--text-muted); margin-bottom:5px; }
+.ed-perms-value { font-size: 14px; color: var(--text-main); font-weight: 500; }
+.ed-perm-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.ed-perm-tag {
+  font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 5px;
+  background: #dbeafe; color: #1e40af;
+}
+.ed-perm-tag.green  { background:#dcfce7; color:#166534; }
+.ed-perm-tag.purple { background:#f3e8ff; color:#6b21a8; }
+.ed-perm-tag.orange { background:#fef9c3; color:#854d0e; }
+.ed-perm-tag.red    { background:#fce7f3; color:#9d174d; }
+
+/* ── Activity card ── */
+.ed-activity-body { padding: 8px 0; }
+.ed-activity-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.12s;
+}
+.ed-activity-item:hover { background: #fafbfc; }
+.ed-activity-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--primary-color); flex-shrink: 0; margin-top: 4px;
+}
+.ed-activity-text { font-size: 13px; color: var(--text-main); line-height: 1.45; }
+.ed-activity-date { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.ed-activity-empty { padding: 32px 24px; text-align:center; color: var(--text-muted); font-size:13px; }
+
+/* ── Header action buttons ── */
+.btn-deactivate {
+  padding: 7px 16px; font-size: 13px; font-weight: 500;
+  border-radius: 6px; cursor: pointer; transition: all .15s;
+  border: 1.5px solid #ef4444; color: #ef4444; background: white;
+}
+.btn-deactivate:hover { background: #fff1f2; }
+.btn-deactivate.activate { border-color: #16a34a; color: #16a34a; }
+.btn-deactivate.activate:hover { background: #f0fdf4; }
+
+/* ── Edit form inside modal ── */
+.ed-form-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.ed-form-row.single { grid-template-columns: 1fr; }
+.ed-form-group { margin-bottom: 16px; }
+.ed-form-label {
+  display: block; font-size: 11px; font-weight: 600; letter-spacing: .7px;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+}
+.ed-form-control {
+  width: 100%; padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px; font-size: 14px; font-family: inherit; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.ed-form-control:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(37,99,235,.1);
+}
+.ed-form-control.is-invalid { border-color: #dc2626; box-shadow: 0 0 0 2px rgba(220,38,38,.1); }
+.ed-form-error { font-size:12px; color:#dc2626; margin-top:4px; display:none; }
+.ed-form-control.is-invalid ~ .ed-form-error { display:block; }
+select.ed-form-control {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; cursor: pointer;
+}
+
+/* ── Toast ── */
+.ed-toast {
+  position:fixed; bottom:28px; right:28px;
+  background:#166534; color:white;
+  padding:12px 18px; border-radius:8px;
+  font-size:13px; font-weight:500;
+  display:flex; align-items:center; gap:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+  transform:translateY(14px); opacity:0; pointer-events:none;
+  transition:all .25s ease; z-index:9999; min-width:220px;
+}
+.ed-toast.show { transform:none; opacity:1; }
+.ed-toast i { font-size:18px; }
+
+/* ── View-only banner ── */
+.ed-viewonly-banner {
+  position:fixed; top:0; left:260px; right:0;
+  background:#fef9c3; border-bottom:1px solid #fde68a;
+  padding:10px 32px; font-size:13px; color:#854d0e;
+  display:flex; align-items:center; gap:8px; z-index:100;
+}
+.ed-viewonly-banner i { font-size:16px; }
+
+/* ── Right column stack ── */
+.ed-right-col { display:flex; flex-direction:column; gap:24px; }
+
+/* ── Inactive overlay on hero ── */
+.ed-hero.inactive-emp {
+  border-color: #fca5a5;
+  background: #fff8f8;
+}
+.ed-hero.inactive-emp .ed-hero-avatar {
+  opacity: 0.6;
+}

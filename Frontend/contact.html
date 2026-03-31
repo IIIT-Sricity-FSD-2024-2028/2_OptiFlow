@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <link rel="stylesheet" href="css/base.css" />
+  </head>
+  <body class="marketing-page">
+    <header class="navbar">
+      <div class="logo">
+        <img src="assets/images/logo.svg" alt="OfficeSync Logo" />
+      </div>
+      <nav class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="index.html#features">Features</a>
+        <a href="about.html">About Us</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="nav-auth">
+        <a href="login.html" class="btn-outline">Login</a>
+        <a href="register.html" class="btn-primary">Register</a>
+      </div>
+    </header>
+    <section class="split-hero">
+      <div class="hero-left">
+        <span class="hero-badge">● We're here to help</span>
+
+        <h1 class="hero-title">
+          Get in Touch.<br />
+          <span class="text-blue">Stay<br />Connected.</span>
+        </h1>
+
+        <p class="hero-desc">
+          Whether you have a question about our compliance platform, need a
+          demo, or require technical support, our team is ready to assist you.
+        </p>
+
+        <div class="contact-info-list">
+          <div class="info-item">
+            <h4>Sales Inquiries</h4>
+            <a href="mailto:sales@officesuite.com">sales@officesuite.com</a>
+          </div>
+          <div class="info-item">
+            <h4>Technical Support</h4>
+            <a href="mailto:support@officesuite.com">support@officesuite.com</a>
+          </div>
+          <div class="info-item">
+            <h4>Office Location</h4>
+            <p>
+              123 Enterprise Way, Tech District<br />San Francisco, CA 94105
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="hero-card" style="padding: 2.5rem">
+          <h3 style="margin-bottom: 1.5rem">Send us a message</h3>
+
+          <form
+            onsubmit="
+              event.preventDefault();
+              alert('Message sent!');
+              this.reset();
+            "
+          >
+            <div class="input-group">
+              <label>Full Name</label>
+              <input type="text" placeholder="John Doe" required />
+            </div>
+
+            <div class="input-group">
+              <label>Work Email</label>
+              <div class="input-with-icon">
+                <span>@</span>
+                <input type="email" placeholder="admin@company.com" required />
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label>Message</label>
+              <textarea
+                placeholder="How can we help you?"
+                rows="4"
+                required
+              ></textarea>
+            </div>
+
+            <button type="submit" class="btn-primary full-width">
+              Send Message
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

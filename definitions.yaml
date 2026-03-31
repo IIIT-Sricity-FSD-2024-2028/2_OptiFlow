@@ -1,0 +1,113 @@
+# Domain: Office Management
+# Problem Statement: Task, Process, and Compliance Management System
+# Last Updated: 2026-02-01
+
+Task:
+  definition: >
+    A unit of work that is part of a process step and is assigned to a user (employee)
+    or role. Tasks represent actionable items that must be completed to move the process forward.
+  examples:
+    - Upload identity documents
+    - Review onboarding request
+  aliases:
+    - Work Item
+    - Activity
+
+TaskLifecycle:
+  definition: >
+    The set of states through which a task progresses from creation to completion,
+    including assignment, execution, escalation, and closure.
+  examples:
+    - Task created → assigned → in progress → escalated → completed
+  aliases:
+    - Task Flow
+    - Task State Model
+
+Process:
+  definition: >
+    A structured sequence of business steps involving multiple departments to achieve
+    a specific organizational goal, such as employee onboarding or leave approval.
+    A process consists of tasks, decision points, approvals, and compliance checks.
+  examples:
+    - Employee onboarding process involving document verification and approvals
+    - Leave approval process with managerial review and policy validation
+  aliases:
+    - Business Process
+    - Workflow
+
+Policy:
+  definition: >
+    A set of organizational rules and guidelines that govern how processes and tasks
+    should be executed, including compliance requirements, approval hierarchies,
+    and escalation procedures.
+  examples:
+    - Company leave policy defining maximum leave days
+    - Onboarding policy specifying mandatory documents
+  aliases:
+    - Organizational Policy
+    - Governance Policy
+
+ProcessInstance:
+  definition: >
+    A runtime execution of a process template triggered by a specific request.
+    Each process instance maintains its own state, progress, tasks, and audit trail.
+  examples:
+    - An onboarding request initiated for a new employee
+    - A leave request submitted by an employee
+  aliases:
+    - Workflow Instance
+    - Process Execution
+
+Approval:
+  definition: >
+    A decision-making step within a task or process where an authorized user evaluates
+    a request and approves or rejects it based on organizational and compliance rules.
+  examples:
+    - Manager approving a leave request
+    - Compliance officer approving an exception
+  aliases:
+    - Decision Step
+
+ComplianceViolation:
+  definition: >
+    A condition triggered when a task or process fails to satisfy one or more
+    compliance rules, requiring review or corrective action.
+  examples:
+    - Missing mandatory documents
+    - Approval bypassing required authority
+  aliases:
+    - Policy Breach
+    - Non-Compliance Event
+
+Escalation:
+  definition: >
+    An automated mechanism in which a task or approval is reassigned or elevated
+    to a higher authority when predefined conditions such as time limits or SLA breaches occur.
+  examples:
+    - Task escalated to a manager due to missed deadline
+    - Approval forwarded to a senior authority
+  aliases:
+    - Task Escalation
+    - SLA Breach Handling
+
+AuditTrail:
+  definition: >
+    A chronological and immutable record of all actions, decisions, and state changes
+    within a process instance, used for monitoring, auditing, and compliance purposes.
+  examples:
+    - Log of task assignments, approvals, and compliance checks
+  aliases:
+    - Activity Log
+    - Process Log
+
+ProcessEngine:
+  definition: >
+    The core system component responsible for executing process templates,
+    generating tasks, coordinating approvals, enforcing compliance rules,
+    and tracking process state.
+  examples:
+    - Automatic task generation based on process steps
+    - Monitoring SLA timers and triggering escalations
+  aliases:
+    - Workflow Engine
+    - Orchestration Engine

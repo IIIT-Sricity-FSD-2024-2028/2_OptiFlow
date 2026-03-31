@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>My Tasks — OfficeSync</title>
+    <meta name="description" content="My Tasks — OfficeSync" />
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+    <style>
+      .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--r-full);
+        cursor: pointer;
+        transition: var(--t);
+      }
+      .filter-pill:hover {
+        background: var(--main-bg);
+        color: var(--text-primary);
+      }
+      .filter-pill.active {
+        background: var(--blue-light);
+        color: var(--blue);
+        border-color: var(--blue-light);
+        font-weight: 600;
+      }
+      .filter-select {
+        appearance: none;
+        padding: 6px 30px 6px 14px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: var(--card-bg)
+          url('data:image/svg+xml;utf8,<svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="%2364748B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>')
+          no-repeat right 12px center;
+        border: 1px solid var(--border);
+        border-radius: var(--r-full);
+        cursor: pointer;
+        outline: none;
+      }
+      .search-input-pill {
+        padding: 6px 14px 6px 32px;
+        font-size: 13px;
+        color: var(--text-primary);
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        width: 240px;
+        outline: none;
+        transition: var(--t);
+      }
+      .search-input-pill:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 2px var(--blue-light);
+      }
+      .search-wrap-pill {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .search-wrap-pill svg {
+        position: absolute;
+        left: 10px;
+        width: 14px;
+        height: 14px;
+        color: var(--text-muted);
+      }
+
+      .view-btn {
+        padding: 6px 12px;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div class="main-area">
+        <header
+          class="top-header"
+          style="border-bottom: none; margin-bottom: 8px"
+        >
+          <div style="font-size: 13px; color: var(--text-muted)">
+            <a
+              href="member-dashboard.html"
+              style="color: var(--text-muted); text-decoration: none"
+              >Dashboard</a
+            >
+            <span style="margin: 0 4px">›</span>
+            <span style="color: var(--text-primary); font-weight: 600"
+              >My Tasks</span
+            >
+          </div>
+        </header>
+
+        <main class="page-content" style="padding-top: 0">
+          <!-- Filter Bar -->
+          <div
+            class="filter-bar"
+            id="filters-container"
+            style="justify-content: space-between; margin-bottom: 24px"
+          >
+            <div style="display: flex; gap: 12px; align-items: center">
+              <div class="search-wrap-pill">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  id="task-search"
+                  class="search-input-pill"
+                  placeholder="Search tasks..."
+                />
+              </div>
+
+              <div id="status-pills" style="display: flex; gap: 8px"></div>
+            </div>
+
+            <div style="display: flex; gap: 12px; align-items: center">
+              <select
+                class="filter-select"
+                id="priority-filter"
+                style="width: 140px"
+              >
+                <option value="">All Priorities</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+
+              <select
+                class="filter-select"
+                id="process-filter"
+                style="width: 140px"
+              >
+                <option value="">All Processes</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tasks Table -->
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>TASK</th>
+                    <th>PROCESS</th>
+                    <th>PRIORITY</th>
+                    <th>STATUS</th>
+                    <th>DEADLINE</th>
+                    <th>ASSIGNED BY</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="my-tasks-body"></tbody>
+              </table>
+            </div>
+            <div
+              id="table-footer"
+              style="
+                padding: 16px 20px;
+                font-size: 12px;
+                color: var(--text-muted);
+                border-top: 1px solid var(--border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <!-- JS fills this -->
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/data/pm-data-store.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/utils/validator.js"></script>
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      let session, state, allMyTasks;
+      let currentStatus = "all";
+
+      document.addEventListener("DOMContentLoaded", () => {
+        // ✅ 2. Security Guard & Session Adapter
+        if (!sessionStorage.getItem("currentUser")) {
+          window.location.replace("../login.html");
+          return;
+        }
+        session = window.Auth.getSession(); // Grabs the perfectly formatted user data!
+        window.Sidebar.render("tasks");
+        window.Toast.init();
+
+        state = window.Helpers.getState();
+        allMyTasks = state.tasks.filter((t) => t.assignedUserId === session.id);
+
+        populateProcessFilter();
+        renderFilters();
+        renderTable();
+
+        document
+          .getElementById("task-search")
+          .addEventListener("input", renderTable);
+        document
+          .getElementById("priority-filter")
+          .addEventListener("change", renderTable);
+        document
+          .getElementById("process-filter")
+          .addEventListener("change", renderTable);
+      });
+
+      function populateProcessFilter() {
+        const select = document.getElementById("process-filter");
+        const projs = new Set(allMyTasks.map((t) => t.projectId));
+        projs.forEach((pid) => {
+          const p = state.projects.find((p) => p.id === pid);
+          if (p) {
+            const opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = p.name;
+            select.appendChild(opt);
+          }
+        });
+      }
+
+      function renderFilters() {
+        const counts = {
+          all: allMyTasks.length,
+          in_progress: allMyTasks.filter((t) => t.status === "in_progress")
+            .length,
+          not_started: allMyTasks.filter((t) => t.status === "not_started")
+            .length,
+          done: allMyTasks.filter((t) => t.status === "done").length,
+        };
+
+        const pills = [
+          { label: "All", key: "all" },
+          { label: "In Progress", key: "in_progress" },
+          { label: "Not Started", key: "not_started" },
+          { label: "Completed", key: "done" },
+        ];
+
+        document.getElementById("status-pills").innerHTML = pills
+          .map(
+            (p) =>
+              `<div class="filter-pill ${currentStatus === p.key ? "active" : ""}" onclick="setStatusFilter('${p.key}')">${p.label} (${counts[p.key]})</div>`,
+          )
+          .join("");
+      }
+
+      function setStatusFilter(status) {
+        currentStatus = status;
+        renderFilters();
+        renderTable();
+      }
+
+      function renderTable() {
+        const query = document
+          .getElementById("task-search")
+          .value.toLowerCase();
+        const priority = document.getElementById("priority-filter").value;
+        const processId = document.getElementById("process-filter").value;
+
+        const filtered = allMyTasks.filter((t) => {
+          const matchStatus =
+            currentStatus === "all" || t.status === currentStatus;
+          const matchPrior = !priority || t.priority === priority;
+          const matchProc = !processId || t.projectId == processId;
+          const matchSearch =
+            !query ||
+            t.name.toLowerCase().includes(query) ||
+            (t.category || "").toLowerCase().includes(query);
+          return matchStatus && matchPrior && matchProc && matchSearch;
+        });
+
+        const tbody = document.getElementById("my-tasks-body");
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-text">No tasks found</div></div></td></tr>`;
+          document.getElementById("table-footer").innerHTML =
+            "Showing 0 of 0 tasks";
+          return;
+        }
+
+        tbody.innerHTML = filtered
+          .map((t) => {
+            const proj = state.projects.find((p) => p.id === t.projectId) || {
+              name: "Process",
+            };
+            const assigner = state.users.find(
+              (u) => u.id === (t.assignedBy || proj.managerId),
+            ) || { name: "Manager" };
+
+            let statStyle =
+              "background:#f1f5f9; color:#64748b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+            let statLabel = "Not Started";
+            if (t.status === "done") {
+              statStyle =
+                "background:#dcfce7; color:#15803d; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+              statLabel = "Completed";
+            } else if (t.status === "in_progress") {
+              statStyle =
+                "background:#e0f2fe; color:#0369a1; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+              statLabel = "In Progress";
+            } else if (t.status === "blocked") {
+              statStyle =
+                "background:#fef3c7; color:#b45309; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+              statLabel = "At Risk";
+            }
+
+            if (t.overdue && t.status !== "done") {
+              statStyle =
+                "background:#fee2e2; color:#be123c; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+              statLabel = "Overdue";
+            } else if (t.status === "not_started" && !t.overdue && !t.blocked) {
+              if (t.name.toLowerCase().includes("report")) {
+                statLabel = "Pending Acceptance";
+                statStyle =
+                  "background:#ffedd5; color:#c2410c; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+              }
+            }
+
+            const subtaskLabel = t.workflowStepId
+              ? "Subtask 1 of 2"
+              : "Standalone task";
+
+            return `
+    <tr onclick="window.location.href='task-detail.html?id=${t.id}'" style="cursor:pointer; border-bottom:1px solid var(--border)">
+      <td style="padding:16px 20px">
+        <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px">${t.name}</div>
+        <div style="font-size:11px; color:var(--text-muted)">${subtaskLabel}</div>
+      </td>
+      <td style="font-size:13px; color:var(--text-primary)">${proj.name}</td>
+      <td><div style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:500; color:var(--text-primary)"><div style="width:10px; height:10px; border-radius:50%; background:var(--${t.priority === "high" ? "red" : t.priority === "medium" ? "orange" : "green"})"></div> ${t.priorityLabel}</div></td>
+      <td><span style="${statStyle}">${statLabel}</span></td>
+      <td style="font-size:13px; font-weight:500; color:${t.overdue && t.status !== "done" ? "var(--red)" : "var(--text-secondary)"}">${t.deadlineLabel.split(",")[0]}</td>
+      <td style="font-size:13px; color:var(--text-primary)">${assigner.name.split(" ")[0]} ${assigner.name.split(" ")[1]?.[0] + "." || ""}</td>
+      <td style="text-align:right">
+        <button class="btn btn-secondary view-btn" style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:6px 16px; border-radius:6px; font-weight:600" onclick="event.stopPropagation(); window.location.href='task-detail.html?id=${t.id}'">View →</button>
+      </td>
+    </tr>`;
+          })
+          .join("");
+
+        document.getElementById("table-footer").innerHTML = `
+    <span>Showing ${filtered.length} of ${filtered.length} tasks</span>
+    <div style="width:24px;height:24px;background:var(--blue);color:white;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:600">1</div>
+  `;
+      }
+    </script>
+  </body>
+</html>
