@@ -450,6 +450,31 @@ function setupLogout() {
   });
 }
 
+// ─── 9. NOTIFICATION PANEL ───────────────────────────────
+function setupNotifications() {
+  const btn = document.getElementById("notifBtn");
+  const panel = document.getElementById("notifPanel");
+  const backdrop = document.getElementById("notifBackdrop");
+  const closeBtn = document.getElementById("closeNotif");
+
+  const open = () => {
+    panel.classList.add("open");
+    backdrop.classList.add("open");
+  };
+  const close = () => {
+    panel.classList.remove("open");
+    backdrop.classList.remove("open");
+  };
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    panel.classList.contains("open") ? close() : open();
+  });
+  closeBtn.addEventListener("click", close);
+  backdrop.addEventListener("click", close);
+}
+
+
 // ─── Init ─────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   // Inject info-row styles inline (reused only here)
@@ -465,6 +490,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLogout();
   populateDeptFilter();
   renderEmpList();
+  setupNotifications();
 
   document
     .getElementById("deptFilterInd")

@@ -83,7 +83,12 @@
             >
           </div>
           <div class="header-actions" id="headerActions">
-            <button class="btn-icon" title="Notifications">
+            <button
+              class="btn-icon"
+              id="notifBtn"
+              title="Notifications"
+              style="position: relative"
+            >
               <i class="ri-notification-3-line"></i>
             </button>
             <!-- Deactivate / Activate + Edit Profile rendered by JS -->
@@ -152,6 +157,20 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Notification Panel ── -->
+    <div class="notif-panel" id="notifPanel">
+      <div class="notif-panel-header">
+        <span>Notifications</span>
+        <i class="ri-close-line" id="closeNotif"></i>
+      </div>
+      <div class="notif-empty">
+        <i class="ri-notification-off-line"></i>
+        <p>No notifications right now</p>
+        <span>You're all caught up!</span>
+      </div>
+    </div>
+    <div class="notif-backdrop" id="notifBackdrop"></div>
 
     <!-- ── Logout Modal ── -->
     <div class="modal-overlay" id="logoutModal">
