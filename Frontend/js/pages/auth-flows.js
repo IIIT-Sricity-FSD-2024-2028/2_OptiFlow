@@ -2,7 +2,7 @@
 
 // --- Utility: Smart Toggle Password Visibility ---
 function togglePassword(inputId, buttonElement) {
-  // 1. Find the specific input we want to toggle (e.g., 'resetNew' or 'resetConfirm')
+  // 1. Find the specific input we want to toggle
   const passwordInput = document.getElementById(inputId);
 
   // 2. Find the SVGs specifically inside the button that was just clicked
@@ -40,28 +40,23 @@ document.addEventListener("DOMContentLoaded", () => {
         // Save session
         sessionStorage.setItem("currentUser", JSON.stringify(validUser));
 
-        // Route based on specific role
+        // ✅ PERFECTED ROUTING: These now exactly match your folder structure!
         if (validUser.role === "superuser") {
-          // Process Admin goes to superuser dashboard
           window.location.href = "superuser/dashboard.html";
         } else if (
           validUser.role === "hr_manager" ||
           validUser.role === "hr_ops"
         ) {
-          // HR staff go to the HR folder
           window.location.href = "admin/hr/dashboard.html";
         } else if (validUser.role === "project_manager") {
-          // PM goes to PM dashboard
           window.location.href = "admin/pm/pm-dashboard.html";
         } else if (validUser.role === "compliance_officer") {
-          // Compliance Officer goes to their dashboard
-          window.location.href = "admin/compliance/dashboard.html"; // Adjust this path if your CO folder is different
+          window.location.href = "admin/compliance/dashboard.html";
         } else if (validUser.role === "team_leader") {
-          // Team Leader goes to their dashboard
-          window.location.href = "enduser/tl-dashboard.html"; // Adjust this path if your CO folder is different
+          window.location.href = "enduser/tl-dashboard.html"; // ✅ Fixed!
         } else {
-          // Fallback for team_member, team_leader, enduser, etc.
-          window.location.href = "enduser/member-dashboard.html";
+          // Fallback for team_member, enduser, etc.
+          window.location.href = "enduser/member-dashboard.html"; // ✅ Fixed!
         }
       } else {
         alert("Invalid email or password. Please try again.");
@@ -78,25 +73,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const password = document.getElementById("regPassword").value;
       const confirm = document.getElementById("regConfirm").value;
 
-      // Front-end Validation (Requirement #5)
       if (password !== confirm) {
         alert("Passwords do not match!");
         return;
       }
 
       const newUser = {
-        id: Date.now(), // Generate a random ID
+        id: Date.now(),
         name: document.getElementById("regName").value,
         email: document.getElementById("regEmail").value,
         password: password,
-        role: "superuser", // By default, the creator of the org is a superuser
+        role: "superuser",
         company: document.getElementById("regCompany").value,
       };
 
-      // Save to mock database
       const users = JSON.parse(localStorage.getItem("users")) || [];
 
-      // Check if email already exists
       if (users.find((u) => u.email === newUser.email)) {
         alert("This email is already registered.");
         return;
@@ -116,9 +108,8 @@ document.addEventListener("DOMContentLoaded", () => {
     forgotForm.addEventListener("submit", (e) => {
       e.preventDefault();
       const email = document.getElementById("forgotEmail").value;
-      // Simulate sending an email
       alert(`A password reset link has been sent to ${email}`);
-      window.location.href = "reset-password.html"; // Simulate clicking the link in the email
+      window.location.href = "reset-password.html";
     });
   }
 
@@ -135,7 +126,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // In a real app, we would update the DB here. For the mock, we just redirect.
       alert("Password successfully reset! You can now log in.");
       window.location.href = "login.html";
     });

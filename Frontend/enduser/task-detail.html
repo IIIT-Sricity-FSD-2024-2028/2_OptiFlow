@@ -717,18 +717,24 @@
           }
         }
 
-        task = state.tasks.find((t) => t.id === taskId);
+        task = state.tasks.find((t) => String(t.id) === String(taskId));
         if (!task) {
-          document.body.innerHTML = "Task not found";
+          document.getElementById("alert-container").innerHTML =
+            "<div class='banner-alert'>Task not found in the database.</div>";
           return;
         }
 
-        project = state.projects.find((p) => p.id === task.projectId) || {
-          name: "Process",
-        };
-        manager = state.users.find(
-          (u) => u.id === (task.createdBy || project.createdBy),
-        ) || { name: "Manager" };
+        // ✅ FIXED: Force strict string matching so it doesn't crash on "u4" vs 4 or "1" vs 1
+        project = state.projects.find(
+          (p) => String(p.id) === String(task.projectId),
+        ) || { name: "General Process", createdBy: "u2" };
+
+        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
+        manager = masterUsers.find(
+          (u) =>
+            String(u.id) ===
+            String(task.createdBy || project.createdBy || "u2"),
+        ) || { name: "System Admin" };
 
         renderPage();
       });
@@ -904,130 +910,83 @@
           t.style.borderBottom = "none";
         });
 
-        document.getElementById("modal-content-area").style.padding = "24px";
-        document.getElementById("modal-footer-area").style.padding =
-          "16px 24px";
-        document.getElementById("modal-footer-area").style.background =
-          "#f8fafc";
-
         if (type === "submit") {
-          const activeTab = document.getElementById("tab-submit");
-          activeTab.style.color = "var(--blue)";
-          activeTab.style.borderBottom = "2px solid var(--blue)";
+          document.getElementById("tab-submit").style.color = "var(--blue)";
+          document.getElementById("tab-submit").style.borderBottom =
+            "2px solid var(--blue)";
           document.getElementById("modal-content-area").innerHTML = `
-      <div style="background:#fffbeb; border:1px solid #fde68a; padding:12px 16px; border-radius:8px; color:#b45309; font-size:12px; font-weight:500; display:flex; gap:12px; margin-bottom:24px; align-items:center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px; height:16px; flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        This submission will be reviewed by your Team Leader before marking the task complete.
-      </div>
-      <div class="form-group" style="margin-bottom:24px">
-        <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">WORK NOTES / SUMMARY</label>
-        <textarea class="form-textarea" style="border-radius:8px; padding:12px; font-size:13px" placeholder="Compiled Q4 data from all finance sub-teams. Draft report includes variance analysis..."></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">UPLOAD EVIDENCE DOCUMENTS</label>
-        <div style="border:2px dashed #e2e8f0; border-radius:12px; padding:40px; text-align:center; background:#fefeff">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="width:24px; height:24px; margin:0 auto 12px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <div style="font-size:13px; color:var(--text-secondary)">Drag & drop or <span style="color:var(--blue); font-weight:600; cursor:pointer">browse</span> PDF, DOCX, XLSX</div>
-        </div>
-      </div>
-    `;
-          document.getElementById("modal-footer-area").innerHTML = `
-      <button class="btn btn-secondary" style="border-radius:8px; padding:8px 16px; font-weight:500; background:white; border:1px solid var(--border)" onclick="closeModals()">Cancel</button>
-      <button class="btn btn-primary" style="border-radius:8px; padding:8px 20px; font-weight:600; background:var(--blue)" onclick="submitAct('review')">Submit for Review</button>
-    `;
-        } else if (type === "extension") {
-          const activeTab = document.getElementById("tab-extension");
-          activeTab.style.color = "var(--blue)";
-          activeTab.style.borderBottom = "2px solid var(--blue)";
-          document.getElementById("modal-content-area").innerHTML = `
-      <div style="background:#fffbeb; border:1px solid #fde68a; padding:12px 16px; border-radius:8px; color:#b45309; font-size:12px; font-weight:500; display:flex; gap:12px; margin-bottom:24px; align-items:center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px; height:16px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Your Team Leader will be notified and must approve the extension request.
-      </div>
-      <div class="form-row" style="margin-bottom:24px">
-        <div class="form-group">
-          <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">DEADLINE CURRENT</label>
-          <input type="text" class="form-input" style="border-radius:8px; font-size:13px; background:#f8fafc" value="December 18, 2024" disabled>
+        <div style="background:#fffbeb; padding:12px; border-radius:8px; color:#b45309; font-size:12px; margin-bottom:24px;">
+          This submission will be reviewed by your Team Leader.
         </div>
         <div class="form-group">
-          <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">REQUESTED NEW DATE *</label>
-          <input type="date" class="form-input" style="border-radius:8px; font-size:13px" value="2024-12-22">
+          <label class="form-label" for="review-notes">WORK NOTES / SUMMARY *</label>
+          <textarea id="review-notes" class="form-textarea" placeholder="Describe the work completed..."></textarea>
+          <span class="form-error hidden" id="review-notes-error">This field cannot be left blank.</span>
         </div>
-      </div>
-      <div class="form-group" style="margin-bottom:24px">
-        <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">REASON FOR EXTENSION *</label>
-        <textarea class="form-textarea" style="border-radius:8px; font-size:13px; padding:12px" placeholder="Explain why additional time is needed..."></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">IMPACT IF NOT EXTENDED</label>
-        <textarea class="form-textarea" style="border-radius:8px; font-size:13px; padding:12px" placeholder="Describe the risk if deadline is kept..." style="min-height:60px"></textarea>
-      </div>
-    `;
+      `;
           document.getElementById("modal-footer-area").innerHTML = `
-      <button class="btn btn-secondary" style="border-radius:8px; padding:8px 16px; font-weight:500; background:white; border:1px solid var(--border)" onclick="closeModals()">Cancel</button>
-      <button class="btn btn-primary" style="border-radius:8px; padding:8px 20px; font-weight:600; background:var(--blue)" onclick="submitAct('extension')">Request Extension</button>
-    `;
+        <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAct('review')">Submit for Review</button>
+      `;
         } else {
-          const activeTab = document.getElementById("tab-blocker");
-          activeTab.style.color = "var(--blue)";
-          activeTab.style.borderBottom = "2px solid var(--blue)";
+          document.getElementById("tab-blocker").style.color = "var(--blue)";
+          document.getElementById("tab-blocker").style.borderBottom =
+            "2px solid var(--blue)";
           document.getElementById("modal-content-area").innerHTML = `
-      <div style="background:#fff1f2; border:1px solid #fecdd3; padding:12px 16px; border-radius:8px; color:#be123c; font-size:12px; font-weight:500; display:flex; gap:12px; margin-bottom:24px; align-items:center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px; height:16px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        Reporting a blocker will notify your Team Leader immediately.
-      </div>
-      <div class="form-group" style="margin-bottom:24px">
-        <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">BLOCKER TYPE</label>
-        <select class="form-select" style="border-radius:8px; font-size:13px">
-          <option>Missing Information / Data</option>
-          <option>System Issue / Bug</option>
-        </select>
-      </div>
-      <div class="form-group" style="margin-bottom:24px">
-        <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">DESCRIPTION *</label>
-        <textarea class="form-textarea" style="border-radius:8px; font-size:13px; padding:12px" placeholder="Describe the blocker in detail..."></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase">ATTACH EVIDENCE</label>
-        <div style="border:2px dashed #e2e8f0; border-radius:12px; padding:40px; text-align:center; background:#fefeff">
-          <div style="font-size:13px; color:var(--text-secondary)">Drag & drop or <span style="color:var(--blue); font-weight:600; cursor:pointer">browse</span></div>
+        <div style="background:#fff1f2; padding:12px; border-radius:8px; color:#be123c; font-size:12px; margin-bottom:24px;">
+          Reporting a blocker will notify your Team Leader immediately.
         </div>
-      </div>
-    `;
+        <div class="form-group" style="margin-bottom:24px">
+          <label class="form-label" for="blocker-type">BLOCKER TYPE</label>
+          <select id="blocker-type" class="form-select">
+            <option value="Missing Data">Missing Information / Data</option>
+            <option value="System Issue">System Issue / Bug</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="blocker-desc">DESCRIPTION *</label>
+          <textarea id="blocker-desc" class="form-textarea" placeholder="Describe the blocker..."></textarea> 
+          <span class="form-error hidden" id="blocker-desc-error">Please describe the blocker. This cannot be blank.</span>
+        </div>
+      `;
           document.getElementById("modal-footer-area").innerHTML = `
-      <button class="btn btn-secondary" style="border-radius:8px; padding:8px 16px; font-weight:500; background:white; border:1px solid var(--border)" onclick="closeModals()">Cancel</button>
-      <button class="btn btn-danger" style="border-radius:8px; padding:8px 20px; font-weight:600; background:#be123c" onclick="submitAct('blocker')">Report Blocker</button>
-    `;
+        <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-danger" onclick="submitAct('blocker')">Report Blocker</button>
+      `;
         }
       }
-      function submitAct(type) {
-        if (type === "blocker") {
-          // Grab the inputs from the modal
-          const blockerType = document.getElementById("blocker-type")
-            ? document.getElementById("blocker-type").value
-            : "System Issue";
-          const blockerDesc = document.getElementById("blocker-desc")
-            ? document.getElementById("blocker-desc").value
-            : "No description provided.";
 
-          if (blockerDesc.trim() === "") {
+      function submitAct(type) {
+        let notifications =
+          JSON.parse(localStorage.getItem("system_notifications")) || [];
+        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
+        const freshSessionUser =
+          masterUsers.find((u) => String(u.id) === String(session.id)) ||
+          session;
+        const tlId = freshSessionUser.reportsTo || task.createdBy || "u2";
+
+        if (type === "blocker") {
+          // ✅ STRICT VALIDATION CHECK
+          const result = window.Validator.validateForm({
+            "blocker-desc": { required: true },
+          });
+          if (!result.valid) {
             window.Toast.error(
-              "Error",
-              "Please provide a description of the blocker.",
+              "Missing Information",
+              "You must provide a description of the blocker.",
             );
             return;
           }
 
-          // 1. Mark task as blocked
+          const blockerType = document.getElementById("blocker-type").value;
+          const blockerDesc = document.getElementById("blocker-desc").value;
+
           task.status = "blocked";
           task.statusLabel = "Blocked";
 
-          // 2. CREATE A REAL ESCALATION FOR THE PM!
           const newEsc = {
             id: window.Helpers.nextId(state.escalations),
-            from:
-              session.name +
-              (session.subRole === "team_leader" ? " (TL)" : " (TM)"),
+            from: session.name + " (TM)",
             title: "Task Blocked: " + task.name,
             description: blockerDesc,
             projectId: task.projectId,
@@ -1046,24 +1005,55 @@
           state.escalations.push(newEsc);
           window.Toast.warning(
             "Blocker Reported",
-            "Your Project Manager has been notified via Escalation.",
+            "Your Team Leader has been notified.",
           );
+
+          notifications.push({
+            id: Date.now(),
+            targetUserId: String(tlId),
+            title: `Task Blocked: ${task.name}`,
+            message: `${session.name} reported a blocker: ${blockerType}`,
+            type: "error",
+            date: "Just now",
+            read: false,
+          });
         } else if (type === "review") {
-          task.status = "done";
-          task.statusLabel = "Pending Review";
+          // ✅ STRICT VALIDATION CHECK
+          const result = window.Validator.validateForm({
+            "review-notes": { required: true },
+          });
+          if (!result.valid) {
+            window.Toast.error(
+              "Missing Information",
+              "Please summarize your work before submitting.",
+            );
+            return;
+          }
+
+          task.status = "in_review";
+          task.statusLabel = "Pending TL Review";
           window.Toast.success(
             "Work Submitted",
             "Submitted to Team Leader for review.",
           );
-        } else if (type === "extension") {
-          window.Toast.info(
-            "Extension Requested",
-            "Awaiting approval from Team Leader.",
-          );
+
+          notifications.push({
+            id: Date.now() + 1,
+            targetUserId: String(tlId),
+            title: `Ready for Review`,
+            message: `${session.name} submitted "${task.name}" for review.`,
+            type: "info",
+            date: "Just now",
+            read: false,
+          });
         }
 
-        closeModals();
+        localStorage.setItem(
+          "system_notifications",
+          JSON.stringify(notifications),
+        );
         window.Helpers.saveState(state);
+        closeModals();
         renderPage();
       }
     </script>

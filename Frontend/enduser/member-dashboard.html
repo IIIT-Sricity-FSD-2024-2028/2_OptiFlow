@@ -14,8 +14,9 @@
       <aside class="sidebar" id="sidebar"></aside>
       <div class="main-area">
         <header class="top-header">
-          <h1 class="page-title">My Dashboard</h1>
+          <h1 class="page-title">Dashboard</h1>
           <div class="header-actions">
+            <div id="reporting-badge-area"></div>
             <div class="bell-btn">
               <svg
                 viewBox="0 0 24 24"
@@ -29,32 +30,35 @@
             </div>
           </div>
         </header>
-        <main class="page-content" style="padding-top: 0">
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 24px;
-              padding-bottom: 16px;
-              border-bottom: 1px solid var(--border);
-            "
-          >
-            <h1 style="font-size: 20px; font-weight: 700">Dashboard</h1>
-          </div>
 
-          <!-- Stats -->
+        <main class="page-content">
           <div
-            class="stats-row"
-            id="member-stats"
-            style="margin-bottom: 24px"
+            id="debug-banner"
+            style="
+              display: none;
+              background: #fee2e2;
+              color: #b91c1c;
+              padding: 16px;
+              border-radius: 8px;
+              margin-bottom: 20px;
+              border: 1px solid #f87171;
+              font-weight: 600;
+            "
           ></div>
 
-          <!-- Tasks + Info -->
+          <div
+            id="member-stats"
+            style="
+              display: grid;
+              grid-template-columns: repeat(5, 1fr);
+              gap: 16px;
+              margin-bottom: 24px;
+            "
+          ></div>
+
           <div
             style="display: grid; grid-template-columns: 1fr 340px; gap: 24px"
           >
-            <!-- Tasks -->
             <div class="card" style="align-self: start">
               <div
                 class="card-header"
@@ -70,14 +74,10 @@
                   >View all →</a
                 >
               </div>
-              <div style="padding: 0 20px 20px" id="member-tasks-list">
-                <!-- JS -->
-              </div>
+              <div style="padding: 0 20px 20px" id="member-tasks-list"></div>
             </div>
 
-            <!-- Info Panel -->
             <div style="display: flex; flex-direction: column; gap: 24px">
-              <!-- Upcoming Deadlines -->
               <div class="card">
                 <div class="card-header" style="border-bottom: none">
                   <div class="card-title" style="font-size: 14px">
@@ -88,25 +88,37 @@
                   class="card-body"
                   style="display: flex; flex-direction: column; gap: 16px"
                   id="upcoming-deadlines"
-                >
-                  <!-- JS -->
-                </div>
+                ></div>
               </div>
 
-              <!-- Recent Activity -->
               <div class="card">
                 <div class="card-header" style="border-bottom: none">
-                  <div class="card-title" style="font-size: 14px">
-                    Recent Activity
+                  <div
+                    class="card-title"
+                    style="
+                      font-size: 14px;
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      style="width: 16px; height: 16px; color: var(--orange)"
+                    >
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    Compliance & Evidence
                   </div>
                 </div>
                 <div
                   class="card-body"
-                  style="display: flex; flex-direction: column; gap: 16px"
-                  id="recent-activity"
-                >
-                  <!-- JS -->
-                </div>
+                  id="compliance-activity"
+                  style="padding-top: 0"
+                ></div>
               </div>
             </div>
           </div>
@@ -122,184 +134,212 @@
     <script src="../js/components/sidebar.js"></script>
     <script src="../js/components/toast.js"></script>
     <script src="../js/components/modal.js"></script>
+
     <script>
       document.addEventListener("DOMContentLoaded", () => {
-        // ✅ 2. Security Guard & Session Adapter
-        if (!sessionStorage.getItem("currentUser")) {
-          window.location.replace("../login.html");
-          return;
-        }
-        session = window.Auth.getSession(); // Grabs the perfectly formatted user data!
-        window.Sidebar.render("dashboard");
-        window.Toast.init();
+        try {
+          if (!sessionStorage.getItem("currentUser")) {
+            window.location.replace("../login.html");
+            return;
+          }
+          const session = window.Auth.getSession();
+          window.Sidebar.render("dashboard");
+          window.Toast.init();
 
-        const state = window.Helpers.getState();
-        // ✅ Find the TM's Leader!
-        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-        const myLeader = masterUsers.find((u) => u.id === session.reportsTo);
+          const state = window.Helpers.getState() || {
+            projects: [],
+            tasks: [],
+            evidence: [],
+            complianceItems: [],
+          };
+          const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
 
-        // ✅ Inject the Leader's name next to the Dashboard title
-        if (myLeader) {
-          const titleArea = document.querySelector(".page-content > div");
-          const leaderBadge = document.createElement("div");
-          leaderBadge.innerHTML = `<div style="display:flex; align-items:center; gap:6px; background:white; border:1px solid var(--border); padding:6px 12px; border-radius:20px; font-size:12px; color:var(--text-secondary); box-shadow:var(--shadow-xs)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="width:14px; height:14px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Reporting to: <span style="font-weight:600; color:var(--text-primary)">${myLeader.name}</span></div>`;
-          titleArea.appendChild(leaderBadge);
-        }
-        const myTasks = state.tasks.filter(
-          (t) => t.assignedUserId === session.id,
-        );
-        const done = myTasks.filter((t) => t.status === "done").length;
-        const progress = myTasks.filter(
-          (t) => t.status === "in_progress",
-        ).length;
-        // Compute total, completed, overdue to match design
-        const total = myTasks.length;
-        const overdue = myTasks.filter(
-          (t) => t.overdue && t.status !== "done",
-        ).length;
+          const freshSessionUser =
+            masterUsers.find((u) => String(u.id) === String(session.id)) ||
+            session;
+          const myLeader = masterUsers.find(
+            (u) => String(u.id) === String(freshSessionUser.reportsTo),
+          );
 
-        // Stats
-        document.getElementById("member-stats").innerHTML = `
-    <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
-      <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">Assigned Tasks</div>
-      <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${total}</div>
-      <div style="display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--blue); background:var(--blue-light); padding:2px 6px; border-radius:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><polyline points="12 19 12 5"/><polyline points="5 12 12 5 19 12"/></svg> 2 new this week</div>
-    </div>
-    <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
-      <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">In Progress</div>
-      <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${progress}</div>
-      <div style="display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--orange); background:#ffedd5; padding:2px 6px; border-radius:4px">Active</div>
-    </div>
-    <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
-      <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">Completed</div>
-      <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${done}</div>
-      <div style="display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--green); background:#dcfce7; padding:2px 6px; border-radius:4px">This month</div>
-    </div>
-    <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
-      <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">Overdue</div>
-      <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${overdue}</div>
-      <div style="display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:#dc2626; background:#fee2e2; padding:2px 6px; border-radius:4px">Needs attention</div>
-    </div>`;
+          // ✅ FIXED: New Sleek Reporting Badge
+          if (myLeader) {
+            document.getElementById("reporting-badge-area").innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; padding:4px 12px 4px 4px; border-radius:99px; font-size:12px; color:#475569; font-weight:500;">
+              <div style="width:24px; height:24px; border-radius:50%; background:var(--blue); color:white; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;">
+                ${myLeader.name ? myLeader.name.charAt(0).toUpperCase() : "?"}
+              </div>
+              <span>Reporting to: <span style="color:#0f172a; font-weight:600">${myLeader.name}</span></span>
+            </div>`;
+          }
 
-        // Tasks list
-        const list = document.getElementById("member-tasks-list");
-        if (myTasks.length === 0) {
-          list.innerHTML = `<div class="empty-state"><div class="empty-state-text">No tasks assigned</div></div>`;
-        } else {
-          // Take first 5 tasks
-          list.innerHTML = myTasks
-            .slice(0, 5)
-            .map((t) => {
-              const proj = state.projects.find((p) => p.id === t.projectId) || {
-                name: "Process",
-              };
-              const assigner = state.users.find(
-                (u) => u.id === (t.createdBy || proj.createdBy),
-              ) || { name: "Manager" };
+          const activeProjectId = parseInt(freshSessionUser.projectId, 10);
+          const myProject = activeProjectId
+            ? state.projects.find((p) => p.id === activeProjectId)
+            : null;
 
-              let statClass = "badge-gray";
-              let statLabel = "Not Started";
-              if (t.status === "done") {
-                statClass = "badge-green";
-                statLabel = "Completed";
-              } else if (t.status === "in_progress") {
-                statClass = "badge-blue";
-                statLabel = "In Progress";
-              } else if (t.status === "blocked") {
-                statClass = "badge-orange";
-                statLabel = "At Risk";
-              }
+          const myTasks =
+            state.tasks.filter(
+              (t) => String(t.assignedUserId) === String(session.id),
+            ) || [];
 
-              if (t.overdue && t.status !== "done") {
-                statClass = "badge-red";
-                statLabel = "Overdue";
-              }
+          const done = myTasks.filter((t) => t.status === "done").length;
+          const progress = myTasks.filter(
+            (t) => t.status === "in_progress" || t.status === "in_review",
+          ).length;
+          const total = myTasks.length;
+          const overdue = myTasks.filter(
+            (t) => t.overdue && t.status !== "done" && t.status !== "in_review",
+          ).length;
 
-              const isChecked = t.status === "done";
-              return `
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); cursor:pointer" onclick="window.location.href='task-detail.html?id=${t.id}'">
-        <div style="display:flex; align-items:center; gap:12px; flex:1">
-          <div style="width:18px; height:18px; border-radius:4px; border:2px solid ${isChecked ? "var(--blue)" : "var(--border)"}; background:${isChecked ? "var(--blue)" : "white"}; display:flex; align-items:center; justify-content:center; flex-shrink:0" onclick="event.stopPropagation(); updateStatus(${t.id}, this)">
-            ${isChecked ? '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg>' : ""}
-          </div>
+          document.getElementById("member-stats").innerHTML = `
+        <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
+          <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">Assigned Tasks</div>
+          <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${total}</div>
+        </div>
+        <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
+          <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">In Progress</div>
+          <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${progress}</div>
+        </div>
+        <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
+          <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">Completed</div>
+          <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${done}</div>
+        </div>
+        <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border)">
+          <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">Overdue</div>
+          <div style="font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:8px">${overdue}</div>
+        </div>
+        <div class="stat-card" style="padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid var(--border); background:#f8fafc">
+          <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">My Project Overview</div>
+          <div style="font-size:28px; font-weight:700; color:var(--blue); margin-bottom:8px">${myProject ? (myProject.progress || 0) + "%" : "N/A"}</div>
+          <div style="font-size:11px; font-weight:600; color:var(--text-secondary); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${myProject ? myProject.name : "No project assigned"}</div>
+        </div>
+      `;
+
+          const list = document.getElementById("member-tasks-list");
+          if (myTasks.length === 0) {
+            list.innerHTML = `<div class="empty-state"><div class="empty-state-text">No tasks assigned</div></div>`;
+          } else {
+            list.innerHTML = myTasks
+              .slice(0, 5)
+              .map((t) => {
+                const proj = (state.projects || []).find(
+                  (p) => String(p.id) === String(t.projectId),
+                ) || { name: "General Process", createdBy: "u2" };
+                const assignerId = t.createdBy || proj.createdBy || "u2";
+                const assigner = masterUsers.find(
+                  (u) => String(u.id) === String(assignerId),
+                ) || { name: "System Admin" };
+
+                const assignerNameSplit = assigner.name
+                  ? String(assigner.name).split(" ")
+                  : ["System", "Admin"];
+                const assignerFormatted =
+                  assignerNameSplit[0] +
+                  " " +
+                  (assignerNameSplit[1] ? assignerNameSplit[1][0] + "." : "");
+
+                let statClass = "badge-gray";
+                if (t.status === "done") statClass = "badge-green";
+                else if (t.status === "in_progress") statClass = "badge-blue";
+                else if (t.status === "in_review") statClass = "badge-purple";
+                else if (t.status === "blocked") statClass = "badge-orange";
+                if (t.overdue && t.status !== "done") statClass = "badge-red";
+
+                const isChecked = t.status === "done";
+                const dateFmt = t.deadlineLabel
+                  ? String(t.deadlineLabel).split(",")[0]
+                  : "N/A";
+
+                return `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); cursor:pointer" onclick="window.location.href='task-detail.html?id=${t.id}'">
+            <div style="display:flex; align-items:center; gap:12px; flex:1">
+              <div style="width:18px; height:18px; border-radius:4px; border:2px solid ${isChecked ? "var(--blue)" : "var(--border)"}; background:${isChecked ? "var(--blue)" : "white"}; display:flex; align-items:center; justify-content:center; flex-shrink:0" onclick="event.stopPropagation(); updateStatus(${t.id})">
+                ${isChecked ? '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg>' : ""}
+              </div>
+              <div>
+                <div style="font-size:13px; font-weight:${isChecked ? "500" : "600"}; color:${isChecked ? "var(--text-muted)" : "var(--text-primary)"}; text-decoration:${isChecked ? "line-through" : "none"}; margin-bottom:2px">${t.name}</div>
+                <div style="font-size:11px; color:var(--text-muted)">${proj.name} · Assigned by ${assignerFormatted}</div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px;">
+              <span class="badge ${statClass}">${t.statusLabel}</span>
+              <span style="font-size:12px; font-weight:600; color:${t.overdue && !isChecked ? "var(--red)" : "var(--text-secondary)"}; width:54px; text-align:right">${dateFmt}</span>
+            </div>
+          </div>`;
+              })
+              .join("");
+            list.lastElementChild.style.borderBottom = "none";
+          }
+
+          const upcoming = myTasks
+            .filter((t) => t.status !== "done" && t.status !== "in_review")
+            .slice(0, 3);
+          const upContainer = document.getElementById("upcoming-deadlines");
+          if (upcoming.length === 0) {
+            upContainer.innerHTML =
+              '<div style="font-size:13px; color:var(--text-muted)">No upcoming deadlines</div>';
+          } else {
+            const colors = ["#ef4444", "#f59e0b", "#3b82f6"];
+            upContainer.innerHTML = upcoming
+              .map(
+                (t, idx) => `
           <div>
-            <div style="font-size:13px; font-weight:${isChecked ? "500" : "600"}; color:${isChecked ? "var(--text-muted)" : "var(--text-primary)"}; text-decoration:${isChecked ? "line-through" : "none"}; margin-bottom:2px">${t.name}</div>
-            <div style="font-size:11px; color:var(--text-muted)">${proj.name} · Assigned by ${assigner.name.split(" ")[0]} ${assigner.name.split(" ")[1]?.[0] + "." || ""}</div>
-          </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:16px;">
-          <span class="badge ${statClass}">${statLabel}</span>
-          <span style="font-size:12px; font-weight:600; color:${t.overdue && !isChecked ? "var(--red)" : "var(--text-secondary)"}; width:48px; text-align:right">${t.deadlineLabel.split(",")[0]}</span>
-        </div>
-      </div>`;
-            })
-            .join("");
-          list.lastElementChild.style.borderBottom = "none";
+            <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:2px">${t.name}</div>
+            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px">Due ${t.deadlineLabel ? String(t.deadlineLabel).split(",")[0] : "N/A"}</div>
+            <div style="height:4px; background:#f1f5f9; border-radius:2px; overflow:hidden; display:flex;">
+              <div style="height:100%; width:${70 - idx * 20}%; background:${colors[idx % 3]}; border-radius:2px"></div>
+            </div>
+          </div>`,
+              )
+              .join("");
+          }
+
+          const compContainer = document.getElementById("compliance-activity");
+          const myComplianceTasks = state.complianceItems
+            ? state.complianceItems.filter(
+                (c) => c.projectName === (myProject ? myProject.name : ""),
+              )
+            : [];
+
+          if (myComplianceTasks.length === 0) {
+            compContainer.innerHTML = `
+          <div class="empty-state" style="padding: 20px 0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px; height:32px; color:var(--text-muted); margin:0 auto 8px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <div class="empty-state-text">No active requirements</div>
+            <div style="font-size:11px; color:var(--text-muted)">You are up to date!</div>
+            <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="window.location.href='evidence.html'">Open Evidence Vault</button>
+          </div>`;
+          } else {
+            compContainer.innerHTML = myComplianceTasks
+              .map(
+                (c) => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); cursor:pointer" onclick="window.location.href='evidence.html'">
+            <div>
+              <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:2px">${c.policy} Requirement</div>
+              <div style="font-size:11px; color:var(--text-muted)">Project: ${c.projectName}</div>
+            </div>
+            <span class="badge ${c.status === "at_risk" || c.status === "violation" ? "badge-orange" : "badge-green"}">${c.evidenceLabel}</span>
+          </div>`,
+              )
+              .join("");
+            compContainer.lastElementChild.style.borderBottom = "none";
+            compContainer.innerHTML += `<button class="btn btn-secondary btn-sm" style="width:100%; margin-top:12px" onclick="window.location.href='evidence.html'">Submit Evidence</button>`;
+          }
+
+          window._memberTasks = myTasks;
+          window._memberState = state;
+        } catch (error) {
+          console.error(error);
+          document.getElementById("debug-banner").style.display = "block";
+          document.getElementById("debug-banner").innerHTML =
+            `<b>UI Error Detected:</b> ${error.message}`;
         }
-
-        // Upcoming deadlines
-        const upcoming = myTasks.filter((t) => t.status !== "done").slice(0, 3);
-        const upContainer = document.getElementById("upcoming-deadlines");
-        if (upcoming.length === 0) {
-          upContainer.innerHTML =
-            '<div style="font-size:13px; color:var(--text-muted)">No upcoming deadlines</div>';
-        } else {
-          // Simulated progress bars based on priority/status
-          const colors = ["#ef4444", "#f59e0b", "#3b82f6"]; // red, yellow, blue matching design
-          upContainer.innerHTML = upcoming
-            .map(
-              (t, idx) => `
-      <div>
-        <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:2px">${t.name}</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px">Due ${t.deadlineLabel.split(",")[0]}</div>
-        <div style="height:4px; background:#f1f5f9; border-radius:2px; overflow:hidden; display:flex;">
-          <div style="height:100%; width:${70 - idx * 20}%; background:${colors[idx % 3]}; border-radius:2px"></div>
-        </div>
-      </div>
-    `,
-            )
-            .join("");
-        }
-
-        // Recent activity
-        document.getElementById("recent-activity").innerHTML = `
-    <div style="display:flex; gap:12px; align-items:flex-start">
-      <div style="width:6px; height:6px; background:var(--green); border-radius:50%; margin-top:5px; flex-shrink:0"></div>
-      <div>
-        <div style="font-size:12px; font-weight:600; color:var(--text-primary)">Onboarding Checklist marked as Completed</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">Today, 11:32 AM</div>
-      </div>
-    </div>
-    <div style="display:flex; gap:12px; align-items:flex-start">
-      <div style="width:6px; height:6px; background:var(--blue); border-radius:50%; margin-top:5px; flex-shrink:0"></div>
-      <div>
-        <div style="font-size:12px; font-weight:500; color:var(--text-primary)">New task assigned — Client Data Verification</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">Today, 9:15 AM</div>
-      </div>
-    </div>
-    <div style="display:flex; gap:12px; align-items:flex-start">
-      <div style="width:6px; height:6px; background:var(--orange); border-radius:50%; margin-top:5px; flex-shrink:0"></div>
-      <div>
-        <div style="font-size:12px; font-weight:500; color:var(--text-primary)">Deadline extension requested for Q4 Report</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">Yesterday, 5:48 PM</div>
-      </div>
-    </div>
-    <div style="display:flex; gap:12px; align-items:flex-start">
-      <div style="width:6px; height:6px; background:var(--red); border-radius:50%; margin-top:5px; flex-shrink:0"></div>
-      <div>
-        <div style="font-size:12px; font-weight:500; color:var(--text-primary)">Blocker reported on Client Data Verification</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px">Yesterday, 3:02 PM</div>
-      </div>
-    </div>
-  `;
-
-        window._memberTasks = myTasks;
-        window._memberState = state;
-        window._memberSession = session;
       });
 
-      function updateStatus(taskId, btn) {
-        const task = window._memberState.tasks.find((t) => t.id === taskId);
+      function updateStatus(taskId) {
+        const task = window._memberState.tasks.find(
+          (t) => String(t.id) === String(taskId),
+        );
         if (!task) return;
         task.status = task.status === "done" ? "in_progress" : "done";
         task.statusLabel = task.status === "done" ? "Done" : "In Progress";
@@ -308,8 +348,6 @@
           `Updated task "${task.name}" to ${task.statusLabel}`,
           "Tasks",
         );
-
-        // Reload page to reflect exact design state toggle
         window.location.reload();
       }
     </script>

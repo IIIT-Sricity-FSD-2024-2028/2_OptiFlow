@@ -170,7 +170,7 @@
                     <th>PRIORITY</th>
                     <th>STATUS</th>
                     <th>DEADLINE</th>
-                    <th>ASSIGNED BY</th>
+                    <th>OWNER</th>
                     <th>ACTIONS</th>
                   </tr>
                 </thead>
@@ -208,17 +208,28 @@
       let currentStatus = "all";
 
       document.addEventListener("DOMContentLoaded", () => {
-        // ✅ 2. Security Guard & Session Adapter
         if (!sessionStorage.getItem("currentUser")) {
           window.location.replace("../login.html");
           return;
         }
-        session = window.Auth.getSession(); // Grabs the perfectly formatted user data!
+        session = window.Auth.getSession();
         window.Sidebar.render("tasks");
         window.Toast.init();
 
         state = window.Helpers.getState();
-        allMyTasks = state.tasks.filter((t) => t.assignedUserId === session.id);
+        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
+
+        // ✅ 1. Find the TL's Team!
+        const myTeamIds = masterUsers
+          .filter((u) => String(u.reportsTo) === String(session.id))
+          .map((u) => String(u.id));
+
+        // ✅ 2. Pull Team Tasks + Direct Tasks
+        allMyTasks = state.tasks.filter((t) => {
+          const isMine = String(t.assignedUserId) === String(session.id);
+          const isTeam = myTeamIds.includes(String(t.assignedUserId));
+          return isMine || isTeam;
+        });
 
         populateProcessFilter();
         renderFilters();
@@ -239,7 +250,7 @@
         const select = document.getElementById("process-filter");
         const projs = new Set(allMyTasks.map((t) => t.projectId));
         projs.forEach((pid) => {
-          const p = state.projects.find((p) => p.id === pid);
+          const p = state.projects.find((p) => String(p.id) === String(pid));
           if (p) {
             const opt = document.createElement("option");
             opt.value = p.id;
@@ -252,8 +263,9 @@
       function renderFilters() {
         const counts = {
           all: allMyTasks.length,
-          in_progress: allMyTasks.filter((t) => t.status === "in_progress")
-            .length,
+          in_progress: allMyTasks.filter(
+            (t) => t.status === "in_progress" || t.status === "in_review",
+          ).length,
           not_started: allMyTasks.filter((t) => t.status === "not_started")
             .length,
           done: allMyTasks.filter((t) => t.status === "done").length,
@@ -288,10 +300,15 @@
         const processId = document.getElementById("process-filter").value;
 
         const filtered = allMyTasks.filter((t) => {
+          // Note: "in_progress" tab also shows "in_review" tasks
           const matchStatus =
-            currentStatus === "all" || t.status === currentStatus;
-          const matchPrior = !priority || t.priority === priority;
-          const matchProc = !processId || t.projectId == processId;
+            currentStatus === "all" ||
+            t.status === currentStatus ||
+            (currentStatus === "in_progress" && t.status === "in_review");
+          const matchPrior =
+            !priority || (t.priority || "").toLowerCase() === priority;
+          const matchProc =
+            !processId || String(t.projectId) === String(processId);
           const matchSearch =
             !query ||
             t.name.toLowerCase().includes(query) ||
@@ -307,15 +324,27 @@
           return;
         }
 
+        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
+
         tbody.innerHTML = filtered
           .map((t) => {
-            const proj = state.projects.find((p) => p.id === t.projectId) || {
-              name: "Process",
-            };
-            const assigner = state.users.find(
-              (u) => u.id === (t.assignedBy || proj.managerId),
-            ) || { name: "Manager" };
+            const proj = state.projects.find(
+              (p) => String(p.id) === String(t.projectId),
+            ) || { name: "General Process" };
 
+            // ✅ 3. Find the OWNER (Assignee), not the Assigner!
+            const owner = masterUsers.find(
+              (u) => String(u.id) === String(t.assignedUserId),
+            ) || { name: "Unknown" };
+            const ownerNameSplit = owner.name
+              ? String(owner.name).split(" ")
+              : ["Unknown"];
+            const ownerFormatted =
+              ownerNameSplit[0] +
+              " " +
+              (ownerNameSplit[1] ? ownerNameSplit[1][0] + "." : "");
+
+            // Status Styling
             let statStyle =
               "background:#f1f5f9; color:#64748b; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
             let statLabel = "Not Started";
@@ -327,6 +356,10 @@
               statStyle =
                 "background:#e0f2fe; color:#0369a1; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
               statLabel = "In Progress";
+            } else if (t.status === "in_review") {
+              statStyle =
+                "background:#f3e8ff; color:#7e22ce; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
+              statLabel = "Pending TL Review";
             } else if (t.status === "blocked") {
               statStyle =
                 "background:#fef3c7; color:#b45309; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
@@ -337,40 +370,43 @@
               statStyle =
                 "background:#fee2e2; color:#be123c; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
               statLabel = "Overdue";
-            } else if (t.status === "not_started" && !t.overdue && !t.blocked) {
-              if (t.name.toLowerCase().includes("report")) {
-                statLabel = "Pending Acceptance";
-                statStyle =
-                  "background:#ffedd5; color:#c2410c; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600";
-              }
             }
 
-            const subtaskLabel = t.workflowStepId
-              ? "Subtask 1 of 2"
-              : "Standalone task";
+            const priorityColor =
+              (t.priority || "").toLowerCase() === "high" ||
+              (t.priority || "").toLowerCase() === "critical"
+                ? "red"
+                : (t.priority || "").toLowerCase() === "medium"
+                  ? "orange"
+                  : "green";
+            const dateStr = t.deadlineLabel
+              ? String(t.deadlineLabel).split(",")[0]
+              : "N/A";
 
             return `
-    <tr onclick="window.location.href='task-detail.html?id=${t.id}'" style="cursor:pointer; border-bottom:1px solid var(--border)">
-      <td style="padding:16px 20px">
-        <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px">${t.name}</div>
-        <div style="font-size:11px; color:var(--text-muted)">${subtaskLabel}</div>
-      </td>
-      <td style="font-size:13px; color:var(--text-primary)">${proj.name}</td>
-      <td><div style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:500; color:var(--text-primary)"><div style="width:10px; height:10px; border-radius:50%; background:var(--${t.priority === "high" ? "red" : t.priority === "medium" ? "orange" : "green"})"></div> ${t.priorityLabel}</div></td>
-      <td><span style="${statStyle}">${statLabel}</span></td>
-      <td style="font-size:13px; font-weight:500; color:${t.overdue && t.status !== "done" ? "var(--red)" : "var(--text-secondary)"}">${t.deadlineLabel.split(",")[0]}</td>
-      <td style="font-size:13px; color:var(--text-primary)">${assigner.name.split(" ")[0]} ${assigner.name.split(" ")[1]?.[0] + "." || ""}</td>
-      <td style="text-align:right">
-        <button class="btn btn-secondary view-btn" style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:6px 16px; border-radius:6px; font-weight:600" onclick="event.stopPropagation(); window.location.href='task-detail.html?id=${t.id}'">View →</button>
-      </td>
-    </tr>`;
+            <tr onclick="window.location.href='task-detail.html?id=${t.id}'" style="cursor:pointer; border-bottom:1px solid var(--border)">
+              <td style="padding:16px 20px">
+                <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px">${t.name}</div>
+                <div style="font-size:11px; color:var(--text-muted)">Standalone task</div>
+              </td>
+              <td style="font-size:13px; color:var(--text-primary)">${proj.name}</td>
+              <td><div style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:500; color:var(--text-primary)"><div style="width:10px; height:10px; border-radius:50%; background:var(--${priorityColor})"></div> ${t.priorityLabel || t.priority || "Medium"}</div></td>
+              <td><span style="${statStyle}">${statLabel}</span></td>
+              <td style="font-size:13px; font-weight:500; color:${t.overdue && t.status !== "done" ? "var(--red)" : "var(--text-secondary)"}">${dateStr}</td>
+              
+              <td style="font-size:13px; font-weight:600; color:var(--text-primary)">${ownerFormatted}</td>
+              
+              <td style="text-align:right">
+                <button class="btn btn-secondary view-btn" style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:6px 16px; border-radius:6px; font-weight:600" onclick="event.stopPropagation(); window.location.href='task-detail.html?id=${t.id}'">View →</button>
+              </td>
+            </tr>`;
           })
           .join("");
 
         document.getElementById("table-footer").innerHTML = `
-    <span>Showing ${filtered.length} of ${filtered.length} tasks</span>
-    <div style="width:24px;height:24px;background:var(--blue);color:white;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:600">1</div>
-  `;
+          <span>Showing ${filtered.length} of ${allMyTasks.length} tasks</span>
+          <div style="width:24px;height:24px;background:var(--blue);color:white;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:600">1</div>
+        `;
       }
     </script>
   </body>

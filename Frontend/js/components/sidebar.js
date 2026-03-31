@@ -158,7 +158,10 @@ window.Sidebar = {
     const html = `
       <div class="sidebar-logo" style="padding:18px 16px 14px">
         ${logoHTML}
-      </div>
+        </div>
+    <div class="sidebar-role-container">
+    <div class="sidebar-user-role1">${displayRole}</div>
+    </div>
       <div class="sidebar-section-label">Main</div>
       <nav class="sidebar-nav">${navHTML}</nav>
       <div class="sidebar-bottom">

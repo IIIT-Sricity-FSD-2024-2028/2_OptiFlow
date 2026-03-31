@@ -168,8 +168,8 @@
         pane.innerHTML = `
     <div style="background:var(--card-bg); max-width:800px; margin:0 auto; padding:32px 40px; border-radius:var(--r-xl); box-shadow:var(--shadow-sm); margin-top:16px; min-height:80vh;">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; border-bottom:1px solid var(--border); padding-bottom:16px;">
-        <h2 style="font-size:20px; font-weight:800; color:var(--text-primary);">${e.title}</h2>
-        <span class="badge badge-${e.priority === "high" ? "red" : "orange"}" style="padding:6px 12px; font-size:12px;">${e.priorityLabel} Priority</span>
+        <h2 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0;">${e.title}</h2>
+        <span class="badge badge-${(e.priority || "").toLowerCase() === "high" ? "red" : "orange"}" style="padding:6px 12px; font-size:12px;">${e.priorityLabel || e.priority} Priority</span>
       </div>
       
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:32px;">
@@ -186,45 +186,44 @@
           <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">Blocker — ${e.blocker}</div>
         </div>
         <div>
-          <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px;">Original Deadline</div>
-          <div style="font-size:14px; font-weight:500; color:var(--red); margin-top:4px;">Dec 15 (Overdue)</div>
-        </div>
-        <div>
-          <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px;">Affected Member</div>
-          <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">Ravi Kumar (TM)</div>
+          <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px;">Status</div>
+          <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">${e.statusLabel}</div>
         </div>
         <div>
           <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px;">Escalated On</div>
-          <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">${e.date}, 9:15 AM</div>
+          <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">${e.date}</div>
         </div>
       </div>
 
       <div style="margin-bottom:32px;">
         <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Escalation Notes</div>
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:var(--r-lg); padding:20px; font-size:13px; color:var(--text-primary); line-height:1.6;">
-          ${e.description}
+          ${e.description || "No description provided."}
         </div>
       </div>
 
+   ${
+     e.status === "open"
+       ? `
       <div style="margin-bottom:32px;">
-        <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Your Response</div>
-        <textarea class="form-textarea" placeholder="Enter resolution notes, reassignment details, or next steps..." style="height:120px; font-size:13px;"></textarea>
-      </div>
+        <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Your Response / Resolution *</div>
+        <textarea id="esc-resolution" class="form-textarea" placeholder="Enter resolution notes, reassignment details, or next steps..." style="height:120px; font-size:13px;"></textarea>
+        <span class="form-error hidden" id="esc-resolution-error">Resolution notes cannot be left blank.</span>
+      </div>`
+       : ""
+   }
 
       <div style="display:flex; gap:16px;">
         <button class="btn btn-secondary btn-lg" style="flex:1; justify-content:center;" onclick="window.location.href='tasks.html?project=${e.projectId}'">View Project</button>
         ${
           e.status === "open"
-            ? '<button class="btn btn-danger btn-lg" style="flex:1; justify-content:center; background:#ef4444; color:white; border:none;" onclick="window.Toast.info(\'Escalated\', \'Sent to Management\');">Escalate Further</button> <button class="btn btn-success btn-lg" style="flex:1; justify-content:center; background:#16a34a; color:white; border:none;" onclick="resolveEscalation(' +
-              e.id +
-              ')">Mark Resolved</button>'
-            : '<div style="flex:2; text-align:center; color:var(--green); font-weight:600; padding:10px; background:var(--green-bg); border-radius:var(--r); border:1px solid var(--green-border);">Resolved</div>'
+            ? `<button class="btn btn-success btn-lg" style="flex:1; justify-content:center; background:#16a34a; color:white; border:none;" onclick="resolveEscalation(${e.id})">Mark Resolved</button>`
+            : '<div style="flex:1; text-align:center; color:var(--green); font-weight:600; padding:10px; background:var(--green-bg); border-radius:var(--r); border:1px solid var(--green-border);">Resolved</div>'
         }
       </div>
     </div>
   `;
       }
-
       function bindEvents() {
         document.querySelectorAll("#esc-tabs .filter-tab").forEach((tab) => {
           tab.addEventListener("click", () => {
@@ -342,17 +341,36 @@
       }
 
       function resolveEscalation(id) {
+        // ✅ STRICT VALIDATION CHECK
+        const result = window.Validator.validateForm({
+          "esc-resolution": { required: true },
+        });
+        if (!result.valid) {
+          window.Toast.error(
+            "Missing Information",
+            "You must enter resolution notes before closing this.",
+          );
+          return;
+        }
+
         const idx = state.escalations.findIndex((e) => e.id === id);
         if (idx === -1) return;
+
+        // Grab the notes to save them
+        const resolutionNotes = document.getElementById("esc-resolution").value;
+
         state.escalations[idx].status = "resolved";
         state.escalations[idx].statusLabel = "Resolved";
+        // Optionally save the notes into the object so you can view them later!
+        state.escalations[idx].resolutionNotes = resolutionNotes;
+
         escalations = state.escalations;
         window.Helpers.saveState(state);
         window.Helpers.log(`Resolved escalation #${id}`, "Escalation");
         window.Toast.success("Resolved", "Escalation has been resolved.");
         renderList();
+        renderDetail(id); // Re-render to hide the text box
       }
-
       function deleteEscalation(id) {
         window.Modal.confirm({
           title: "Dismiss Escalation",

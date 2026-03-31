@@ -143,23 +143,59 @@
     <script src="../../js/components/modal.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
-        window.Auth.requireRole("admin");
+        // Ensure only PM or Superuser can access
+        if (!sessionStorage.getItem("currentUser")) {
+          window.location.replace("../../login.html");
+          return;
+        }
+        const session = window.Auth.getSession();
+        // Allow Superuser (1) or Project Manager (2)
+        if (session.roleId !== 1 && session.roleId !== 2) {
+          window.location.replace("../../login.html");
+          return;
+        }
+
         window.Sidebar.render("dashboard");
         window.Toast.init();
 
         const state = window.Helpers.getState();
-        const projects = state.projects;
-        const tasks = state.tasks;
-        const esc = state.escalations.filter((e) => e.status === "open");
-        const viol = state.complianceViolations || [];
-        const totalTasks = tasks.length;
-        const inProg = tasks.filter((t) => t.status === "In_Progress").length;
 
+        // Filter projects for this PM (or show all if Superuser)
+        const myProjects =
+          session.roleId === 1
+            ? state.projects
+            : state.projects.filter(
+                (p) => String(p.createdBy) === String(session.id),
+              );
+        const myProjectIds = myProjects.map((p) => String(p.id));
+
+        // Filter tasks related to those projects
+        const myTasks = state.tasks.filter((t) =>
+          myProjectIds.includes(String(t.projectId)),
+        );
+
+        // Filter escalations related to those projects
+        const myEscalations = state.escalations.filter(
+          (e) =>
+            e.status === "open" && myProjectIds.includes(String(e.projectId)),
+        );
+
+        // Filter compliance violations
+        const myViolations = (state.complianceViolations || []).filter(
+          (v) => v.status === "Open",
+        );
+
+        const totalTasks = myTasks.length;
+        const inProg = myTasks.filter(
+          (t) => t.status === "in_progress" || t.status === "in_review",
+        ).length;
+
+        // Render Stats Row
         document.getElementById("stats-row").innerHTML = `
     <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);padding:24px;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">ACTIVE PROJECTS</div>
-        <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1">${projects.filter((p) => p.status === "Active").length}</div>
+        <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1">${myProjects.filter((p) => p.status === "Active").length}</div>
       </div>
       <div style="font-size:24px;color:#0f172a;cursor:pointer" onclick="window.location.href='projects.html'">→</div>
     </div>
@@ -173,8 +209,8 @@
     <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);padding:24px;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">ESCALATIONS</div>
-        <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:8px">${esc.length}</div>
-        <div style="background:#fef2f2;color:#ef4444;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block">${esc.length > 0 ? "Needs attention" : "All clear"}</div>
+        <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:8px">${myEscalations.length}</div>
+        <div style="background:#fef2f2;color:#ef4444;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block">${myEscalations.length > 0 ? "Needs attention" : "All clear"}</div>
       </div>
       <div style="font-size:24px;color:#0f172a;cursor:pointer;align-self:flex-start" onclick="window.location.href='violations.html'">→</div>
     </div>
@@ -182,8 +218,8 @@
     <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);padding:24px;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">COMPLIANCE FLAGS</div>
-        <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:8px">${viol.filter((v) => v.status === "Open").length}</div>
-        <div style="background:#fef2f2;color:#ef4444;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block">${viol.some((v) => v.status === "Open") ? "Open violations" : "Compliant"}</div>
+        <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:8px">${myViolations.length}</div>
+        <div style="background:#fef2f2;color:#ef4444;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block">${myViolations.length > 0 ? "Open violations" : "Compliant"}</div>
       </div>
       <div style="font-size:24px;color:#0f172a;cursor:pointer;align-self:flex-start" onclick="window.location.href='compliance-dashboard.html'">→</div>
     </div>`;
@@ -193,8 +229,8 @@
           "repeat(4, 1fr)";
         document.getElementById("stats-row").style.gap = "24px";
 
-        // Project health
-        const healthHTML = projects
+        // Render Project Health
+        const healthHTML = myProjects
           .slice(0, 4)
           .map((p) => {
             let color = "#3b82f6";
@@ -229,9 +265,11 @@
       </div>`;
           })
           .join("");
-        document.getElementById("project-health-list").innerHTML = healthHTML;
+        document.getElementById("project-health-list").innerHTML =
+          healthHTML ||
+          '<div style="padding:20px;color:#94a3b8;font-size:13px">No active projects</div>';
 
-        // Escalation alerts
+        // Render Escalation Alerts
         const escColors = {
           high: "#ef4444",
           medium: "#f59e0b",
@@ -244,7 +282,7 @@
         };
 
         const escHTML =
-          esc
+          myEscalations
             .slice(0, 4)
             .map((e) => {
               const pri = (e.priority || "medium").toLowerCase();
@@ -256,7 +294,7 @@
       <div style="width:8px;height:8px;border-radius:50%;background:${c};margin-top:6px;margin-right:12px;flex-shrink:0"></div>
       <div style="flex:1;min-width:0;padding-right:16px">
         <div style="font-size:13px;font-weight:600;color:#0f172a;line-height:1.4">${e.title}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:4px">${e.date} · ${e.projectName} · ${e.priorityLabel}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px">${e.date} · ${e.projectName}</div>
       </div>
       <div style="background:${pill.bg};color:${pill.c};padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700">${e.priorityLabel}</div>
     </div>`;
@@ -265,22 +303,13 @@
           '<div style="padding:20px;color:#94a3b8;font-size:13px">No escalations</div>';
         document.getElementById("escalation-alerts-list").innerHTML = escHTML;
 
-        // Compliance flags
+        // Render Compliance Flags
         const compHTML =
-          (state.complianceViolations || [])
+          myViolations
             .slice(0, 4)
             .map((v) => {
-              let iconHTML, pillHTML;
-              if (v.status === "Open") {
-                iconHTML = `<div style="width:28px;height:28px;border-radius:50%;background:#fef2f2;border:1px solid #fecaca;color:#ef4444;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>`;
-                pillHTML = `<div style="background:#fef2f2;color:#ef4444;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700">Violation</div>`;
-              } else if (v.status === "Under_Review") {
-                iconHTML = `<div style="width:28px;height:28px;border-radius:50%;background:#fffbeb;border:1px solid #fde68a;color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>`;
-                pillHTML = `<div style="background:#fffbeb;color:#f59e0b;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700">At Risk</div>`;
-              } else {
-                iconHTML = `<div style="width:28px;height:28px;border-radius:50%;background:#f0fdf4;border:1px solid #bbf7d0;color:#10b981;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>`;
-                pillHTML = `<div style="background:#f0fdf4;color:#10b981;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700">Clear</div>`;
-              }
+              const iconHTML = `<div style="width:28px;height:28px;border-radius:50%;background:#fef2f2;border:1px solid #fecaca;color:#ef4444;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>`;
+              const pillHTML = `<div style="background:#fef2f2;color:#ef4444;padding:4px 8px;border-radius:4px;font-size:10px;font-weight:700">Violation</div>`;
 
               return `
     <div style="display:flex;align-items:flex-start;padding:16px 0;border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="window.location.href='compliance-dashboard.html'">

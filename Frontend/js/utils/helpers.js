@@ -52,64 +52,116 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initNotifications() {
-  const bell = document.querySelector('button[aria-label="Notifications"]');
+  const bell =
+    document.querySelector('button[aria-label="Notifications"]') ||
+    document.querySelector(".bell-btn");
   if (!bell) return;
+
+  // Get current user session
+  const sessionRaw = sessionStorage.getItem("currentUser");
+  if (!sessionRaw) return;
+  const session = JSON.parse(sessionRaw);
 
   const dropdown = document.createElement("div");
   dropdown.id = "globalNotificationPanel";
   dropdown.style.cssText = `
-        position: absolute; width: 380px; background: var(--card-bg); border: 1px solid var(--border-color);
-        border-radius: 8px; box-shadow: 0 12px 30px rgba(0,0,0,0.1); z-index: 9999; display: none;
-        flex-direction: column; overflow: hidden; cursor: default;
-    `;
-
-  dropdown.innerHTML = `
-        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-color);">
-            <span style="font-weight: 600; font-size: 14px; color: var(--text-main);">Notifications</span>
-            <span id="markAllReadBtn" style="font-size: 12px; color: var(--primary-color); cursor: pointer; font-weight: 500;">Mark all as read</span>
-        </div>
-        <div id="notifyList" style="max-height: 400px; overflow-y: auto;">
-            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; gap: 14px; align-items: flex-start; cursor: pointer;">
-                <div style="width: 8px; height: 8px; background: #EF4444; border-radius: 50%; margin-top: 6px; flex-shrink: 0;"></div>
-                <div>
-                    <div style="font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">Finance Q4 Report Overdue</div>
-                    <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">Stage 3 is delayed by 2 days.</div>
-                    <div style="font-size: 11px; color: #94A3B8; margin-top: 6px;">2 hours ago</div>
-                </div>
-            </div>
-        </div>
-        <div id="viewAllAlertsBtn" style="padding: 12px; text-align: center; border-top: 1px solid var(--border-color); font-size: 12px; color: var(--primary-color); cursor: pointer; font-weight: 600; background: var(--card-bg);">
-            View All Internal Alerts
-        </div>
+        position: absolute; width: 380px; background: var(--card-bg, #fff); border: 1px solid var(--border, #e2e8f0);
+        border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.1); z-index: 9999; display: none;
+        flex-direction: column; overflow: hidden; cursor: default; top: 60px; right: 20px;
     `;
 
   document.body.appendChild(dropdown);
 
-  document.getElementById("markAllReadBtn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    const dots = document.querySelectorAll(
-      "#notifyList > div > div:first-child",
-    );
-    dots.forEach((d) => (d.style.background = "transparent"));
-    const bellDot = bell.querySelector("span");
-    if (bellDot) bellDot.style.display = "none";
-    const items = document.querySelectorAll("#notifyList > div");
-    items.forEach((i) => (i.style.opacity = "0.6"));
-  });
+  function renderNotifs() {
+    const allNotifs =
+      JSON.parse(localStorage.getItem("system_notifications")) || [];
+    // Only show notifications meant for ME
+    const myNotifs = allNotifs
+      .filter((n) => String(n.targetUserId) === String(session.id))
+      .reverse();
+    const unreadCount = myNotifs.filter((n) => !n.read).length;
 
-  document.getElementById("viewAllAlertsBtn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    window.location.href = "audit.html";
-  });
+    // Manage the red dot on the bell icon
+    let existingDot = bell.querySelector(".bell-dot");
+    if (unreadCount > 0) {
+      if (!existingDot) {
+        bell.innerHTML += `<span class="bell-dot" style="position:absolute; top:2px; right:4px; width:10px; height:10px; background:var(--red, #ef4444); border-radius:50%; border:2px solid #fff;"></span>`;
+      }
+    } else if (existingDot) {
+      existingDot.remove();
+    }
+
+    // Build the list HTML
+    let listHTML = "";
+    if (myNotifs.length === 0) {
+      listHTML = `<div style="padding: 30px; text-align: center; color: var(--text-muted, #64748b); font-size: 13px;">No new notifications</div>`;
+    } else {
+      listHTML = myNotifs
+        .map((n) => {
+          const dotColor =
+            n.type === "error"
+              ? "#ef4444"
+              : n.type === "success"
+                ? "#10b981"
+                : "#3b82f6";
+          const opacity = n.read ? "0.6" : "1";
+          return `
+          <div style="padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0); display: flex; gap: 14px; align-items: flex-start; opacity: ${opacity}; background: ${n.read ? "transparent" : "#f8fafc"}">
+              <div style="width: 8px; height: 8px; background: ${n.read ? "transparent" : dotColor}; border-radius: 50%; margin-top: 6px; flex-shrink: 0;"></div>
+              <div>
+                  <div style="font-size: 13px; font-weight: 600; color: var(--text-primary, #0f172a); margin-bottom: 4px;">${n.title}</div>
+                  <div style="font-size: 12px; color: var(--text-secondary, #475569); line-height: 1.4;">${n.message}</div>
+                  <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${n.date}</div>
+              </div>
+          </div>
+        `;
+        })
+        .slice(0, 5)
+        .join(""); // Show max 5
+    }
+
+    dropdown.innerHTML = `
+          <div style="padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0); display: flex; justify-content: space-between; align-items: center; background: var(--bg-color, #f8fafc);">
+              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary, #0f172a);">Notifications</span>
+              ${unreadCount > 0 ? `<span id="markAllReadBtn" style="font-size: 12px; color: var(--blue, #2563eb); cursor: pointer; font-weight: 600;">Mark all as read</span>` : ""}
+          </div>
+          <div id="notifyList" style="max-height: 350px; overflow-y: auto;">
+              ${listHTML}
+          </div>
+      `;
+
+    const markReadBtn = document.getElementById("markAllReadBtn");
+    if (markReadBtn) {
+      markReadBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // Mark all as read in database
+        const updatedNotifs = allNotifs.map((n) => {
+          if (String(n.targetUserId) === String(session.id)) n.read = true;
+          return n;
+        });
+        localStorage.setItem(
+          "system_notifications",
+          JSON.stringify(updatedNotifs),
+        );
+        renderNotifs(); // Re-render dropdown
+      });
+    }
+  }
+
+  // Initial render
+  renderNotifs();
 
   bell.addEventListener("click", (e) => {
     e.stopPropagation();
     if (dropdown.style.display === "flex") {
       dropdown.style.display = "none";
     } else {
+      // Re-render to catch any new notifications that arrived while closed
+      renderNotifs();
       const rect = bell.getBoundingClientRect();
       dropdown.style.top = rect.bottom + 12 + "px";
-      dropdown.style.right = window.innerWidth - rect.right + "px";
+      // Adjust positioning based on screen size so it doesn't flow off-screen
+      dropdown.style.right = "20px";
       dropdown.style.display = "flex";
     }
   });
@@ -127,9 +179,9 @@ window.Helpers = {
   getState() {
     const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
 
-    // Safety Fallbacks included so test users don't crash the UI!
+    // ✅ ROBUST MAPPING: Ensure IDs remain as strict strings for absolute compatibility
     const formattedUsers = masterUsers.map((u) => ({
-      id: u.id,
+      id: String(u.id),
       fullName: u.name || "Unknown User",
       email: u.email || "",
       departmentId: u.department === "IT" ? 2 : 1,
@@ -144,6 +196,16 @@ window.Helpers = {
       status: u.status ? u.status.toLowerCase() : "active",
       avatar: u.name ? u.name.substring(0, 2).toUpperCase() : "??",
       avatarColor: "blue",
+      projectId: u.projectId ? parseInt(u.projectId, 10) : null, // Projects use numeric IDs
+      reportsTo: u.reportsTo ? String(u.reportsTo) : null,
+    }));
+
+    // Ensure all task assignments are strictly strings to match the user IDs
+    const rawTasks = JSON.parse(localStorage.getItem("pm_tasks")) || [];
+    const sanitizedTasks = rawTasks.map((t) => ({
+      ...t,
+      assignedUserId: String(t.assignedUserId),
+      createdBy: String(t.createdBy || "u2"),
     }));
 
     return {
@@ -153,7 +215,7 @@ window.Helpers = {
         { id: 2, name: "IT Infrastructure" },
       ],
       projects: JSON.parse(localStorage.getItem("pm_projects")) || [],
-      tasks: JSON.parse(localStorage.getItem("pm_tasks")) || [],
+      tasks: sanitizedTasks,
       subtasks: [],
       escalations: JSON.parse(localStorage.getItem("pm_escalations")) || [],
       complianceItems:
@@ -163,6 +225,7 @@ window.Helpers = {
       complianceViolations:
         JSON.parse(localStorage.getItem("pm_complianceViolations")) || [],
       auditLogs: JSON.parse(localStorage.getItem("pm_audit_logs")) || [],
+      evidence: JSON.parse(localStorage.getItem("pm_evidence")) || [],
     };
   },
 
@@ -170,14 +233,23 @@ window.Helpers = {
     localStorage.setItem("pm_projects", JSON.stringify(state.projects));
     localStorage.setItem("pm_tasks", JSON.stringify(state.tasks));
     localStorage.setItem("pm_escalations", JSON.stringify(state.escalations));
+
+    // ✅ ADDED THESE THREE LINES: Now it actually saves Evidence and Compliance data!
+    localStorage.setItem("pm_evidence", JSON.stringify(state.evidence || []));
+    localStorage.setItem(
+      "pm_complianceItems",
+      JSON.stringify(state.complianceItems || []),
+    );
+    localStorage.setItem(
+      "pm_complianceViolations",
+      JSON.stringify(state.complianceViolations || []),
+    );
   },
 
-  // ✅ RESTORED: Prevents Tasks page from crashing!
   getParam(name) {
     return new URLSearchParams(window.location.search).get(name);
   },
 
-  // ✅ RESTORED: Prevents Projects page from crashing!
   isOverdue(dateStr) {
     if (!dateStr) return false;
     return new Date(dateStr) < new Date();

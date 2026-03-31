@@ -366,6 +366,31 @@
         state.evidence.push(newEv);
         window.Helpers.saveState(state);
         window.Helpers.log(`Submitted evidence "${newEv.title}"`, "Compliance");
+
+        // ✅ THE FINAL INTEGRATION: Notify the Boss!
+        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
+        const freshSessionUser =
+          masterUsers.find((u) => String(u.id) === String(session.id)) ||
+          session;
+        const tlId = freshSessionUser.reportsTo || "u2"; // Send to TL (or PM as fallback)
+
+        let notifications =
+          JSON.parse(localStorage.getItem("system_notifications")) || [];
+        notifications.push({
+          id: Date.now(),
+          targetUserId: String(tlId),
+          title: "New Evidence Submitted",
+          message: `${session.name} submitted "${newEv.title}" for compliance review.`,
+          type: "success", // Green dot
+          date: "Just now",
+          read: false,
+        });
+        localStorage.setItem(
+          "system_notifications",
+          JSON.stringify(notifications),
+        );
+        // ✅ END INTEGRATION
+
         window.Modal.close("modal-ev-add");
         window.Toast.success(
           "Evidence Submitted",
@@ -373,7 +398,6 @@
         );
         render();
       }
-
       function submitEdit(evId) {
         const result = window.Validator.validateForm({
           "eev-title": { required: true, minLength: 5 },

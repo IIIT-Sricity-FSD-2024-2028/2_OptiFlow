@@ -24,7 +24,7 @@
   align-items: center;
   gap: 12px;
   padding: 24px !important; /* Overrides inline JS padding */
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin-left: 25px;
   color: white;
 }
 
@@ -138,7 +138,26 @@
   color: var(--sidebar-text);
   margin-top: 2px;
 }
+/* Container to help with alignment */
+.sidebar-role-container {
+  width: 100%;
+  display: flex;
+  justify-content: center; /* Centers horizontally */
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Classic divider */
+}
 
+.sidebar-user-role1 {
+  /* Text Styling */
+  text-transform: uppercase; /* Forces CAPITALIZATION */
+  text-align: center; /* Centers text inside its box */
+  letter-spacing: 1px; /* Classic ERP professional look */
+
+  /* Font & Color */
+  font-size: 11px; /* Classic small sub-header size */
+  font-weight: 700; /* Bold to stand out against dark bg */
+  color: #94a3b8; /* Professional muted slate blue/gray */
+}
 .sidebar-logout {
   color: #f87171 !important; /* Forces HR Red */
   font-size: 13px !important; /* Overrides tiny JS text */

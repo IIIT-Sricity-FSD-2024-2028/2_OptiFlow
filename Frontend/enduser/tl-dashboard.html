@@ -219,18 +219,32 @@
         const myProject = activeProjectId
           ? state.projects.find((p) => p.id === activeProjectId)
           : null;
+        // ✅ CALCULATE PENDING EVIDENCE FOR THE TL's TEAM
+        const teamEvidence = (state.evidence || []).filter(
+          (e) =>
+            myTeamIds.includes(String(e.userId)) &&
+            (e.status === "pending" || e.status === "under_review"),
+        );
+        const pendingEvidenceCount = teamEvidence.length;
+
         const blocked = myTasks.filter((t) => t.status === "blocked").length;
         const done = myTasks.filter((t) => t.status === "done").length;
         const inProgress = myTasks.filter(
-          (t) => t.status === "in_progress",
+          (t) => t.status === "in_progress" || t.status === "in_review",
         ).length;
 
-        // Stats (Updated to say "Team Tasks")
+        // ✅ FORCE 5-COLUMN GRID
+        document.getElementById("tl-stats").style.display = "grid";
+        document.getElementById("tl-stats").style.gridTemplateColumns =
+          "repeat(5, 1fr)";
+        document.getElementById("tl-stats").style.gap = "16px";
+
+        // ✅ STATS RENDER (Added the 5th Evidence Vault Card)
         document.getElementById("tl-stats").innerHTML = `
     <div class="stat-card">
       <div class="stat-label">Team Tasks</div>
       <div class="stat-value"><div class="stat-number">${myTasks.length}</div><div class="stat-arrow" onclick="window.location.href='my-tasks.html'">→</div></div>
-      <div class="stat-sub blue">${inProgress} in progress across team</div>
+      <div class="stat-sub blue">${inProgress} active across team</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Completed</div>
@@ -242,12 +256,16 @@
       <div class="stat-value"><div class="stat-number">${blocked}</div></div>
       <div class="stat-sub ${blocked > 0 ? "red" : "green"}">${blocked > 0 ? "Needs attention" : "None blocked"}</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="background:#f8fafc">
       <div class="stat-label">My Project Overview</div>
-      <div class="stat-value"><div class="stat-number" style="font-size:22px;line-height:1.4">${myProject ? myProject.progress + "%" : "N/A"}</div></div>
+      <div class="stat-value"><div class="stat-number" style="color:var(--blue);">${myProject ? myProject.progress + "%" : "N/A"}</div></div>
       <div class="stat-sub blue truncate">${myProject ? myProject.name : "No project assigned"}</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer; border: 1px solid ${pendingEvidenceCount > 0 ? "#fed7aa" : "var(--border)"}; background: ${pendingEvidenceCount > 0 ? "#fffbeb" : "#fff"}" onclick="window.location.href='evidence-review.html'">
+      <div class="stat-label" style="color:${pendingEvidenceCount > 0 ? "#b45309" : "var(--text-muted)"}">Pending Evidence</div>
+      <div class="stat-value"><div class="stat-number" style="color:${pendingEvidenceCount > 0 ? "#d97706" : "var(--text-primary)"}">${pendingEvidenceCount}</div></div>
+      <div class="stat-sub ${pendingEvidenceCount > 0 ? "orange" : "green"}">${pendingEvidenceCount > 0 ? "Review required →" : "Vault clear →"}</div>
     </div>`;
-
         // My tasks preview (Now shows exactly WHO owns the task)
         const preview = myTasks.slice(0, 4);
         document.getElementById("my-tasks-preview").innerHTML =
@@ -374,7 +392,13 @@
         const result = window.Validator.validateForm({
           "esc-quick-title": { required: true, minLength: 5 },
         });
-        if (!result.valid) return;
+        if (!result.valid) {
+          window.Toast.error(
+            "Missing Information",
+            "Please provide a valid issue title (min 5 characters).",
+          );
+          return;
+        }
 
         const myProject = session.projectId
           ? state.projects.find((p) => p.id === session.projectId)
