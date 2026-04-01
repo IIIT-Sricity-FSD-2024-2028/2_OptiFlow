@@ -102,7 +102,7 @@
         // ── Team 2: IT Security (reports to PM u4) ───────────────
         {
           id: "u8",
-          email: "tl@test.com",
+          email: "kiran@officesync.in",
           password: "123",
           role: "team_leader",
           name: "Kiran Rao",
