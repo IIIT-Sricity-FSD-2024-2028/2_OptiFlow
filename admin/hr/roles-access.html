@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync – Roles &amp; Access</title>
+    <link rel="stylesheet" href="../../css/hr/base.css" />
+    <link rel="stylesheet" href="../../css/hr/layout.css" />
+    <link rel="stylesheet" href="../../css/hr/components.css" />
+    <link rel="stylesheet" href="../../css/hr/roles-access.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div
+            class="logo-container"
+            style="display: flex; align-items: center"
+          >
+            <img
+              src="../../assets/images/logo_light.png"
+              alt="OfficeSync"
+              style="height: 28px; width: auto; display: block"
+            />
+          </div>
+          <div class="brand-subtitle">HR</div>
+        </div>
+        <nav class="sidebar-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="dashboard.html" class="nav-item"
+              ><i class="ri-dashboard-line"></i><span>Dashboard</span></a
+            >
+
+            <a href="teams-structure.html" class="nav-item"
+              ><i class="ri-team-line"></i><span>Teams</span></a
+            >
+            <a href="roles-access.html" class="nav-item active"
+              ><i class="ri-shield-keyhole-line"></i
+              ><span>Roles &amp; Access</span></a
+            >
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="user-profile">
+            <div class="avatar">DN</div>
+            <div class="user-info">
+              <span class="user-name">Divya Nair</span
+              ><span class="user-role">HR Manager</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content (blurred backdrop) -->
+      <div class="main-content">
+        <header class="top-header">
+          <div class="page-title">
+            <span class="breadcrumb-muted">HR Portal /</span>&nbsp;Roles &amp;
+            Access
+          </div>
+          <div class="header-actions">
+            <button class="btn-icon">
+              <i class="ri-notification-3-line"></i>
+            </button>
+          </div>
+        </header>
+        <!-- blurred background tiles -->
+        <div class="content-wrapper backdrop-blur-content" aria-hidden="true">
+          <div class="backdrop-grid">
+            <div class="backdrop-card" style="height: 200px"></div>
+            <div class="backdrop-card" style="height: 200px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Choice Modal ── -->
+    <div class="ra-modal-overlay" id="choiceModal">
+      <div class="ra-modal">
+        <div class="ra-modal-header">
+          <div>
+            <div class="ra-modal-title">Roles &amp; Access</div>
+            <div class="ra-modal-subtitle">
+              Choose what you'd like to manage
+            </div>
+          </div>
+          <button
+            class="ne-close"
+            onclick="window.location.href = 'dashboard.html'"
+            title="Back to Dashboard"
+          >
+            <i class="ri-close-line"></i>
+          </button>
+        </div>
+        <div class="ra-modal-body">
+          <a href="roles-system.html" class="ra-choice-card">
+            <div class="ra-choice-icon blue">
+              <i class="ri-shield-keyhole-line"></i>
+            </div>
+            <div class="ra-choice-text">
+              <div class="ra-choice-title">System Roles</div>
+              <div class="ra-choice-desc">
+                Manage predefined role permissions — Team Member, Team Leader,
+                Project Manager, and more. Controls what each role can see and
+                do.
+              </div>
+            </div>
+            <i class="ri-arrow-right-line ra-choice-arrow"></i>
+          </a>
+
+          <a href="roles-individual.html" class="ra-choice-card">
+            <div class="ra-choice-icon purple">
+              <i class="ri-user-settings-line"></i>
+            </div>
+            <div class="ra-choice-text">
+              <div class="ra-choice-title">Individual Permissions</div>
+              <div class="ra-choice-desc">
+                Grant or revoke specific permissions for individual employees,
+                overriding their role defaults on a per-person basis.
+              </div>
+            </div>
+            <i class="ri-arrow-right-line ra-choice-arrow"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Employees — OfficeSync</title>
+    <link rel="stylesheet" href="../../css/pm/base.css" />
+    <link rel="stylesheet" href="../../css/pm/layout.css" />
+    <link rel="stylesheet" href="../../css/pm/components.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div class="main-area">
+        <header class="top-header">
+          <h1 class="page-title">Employees</h1>
+          <div class="header-actions">
+            <div class="search-wrap">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                id="emp-search"
+                class="search-input"
+                placeholder="Search employees..."
+              />
+            </div>
+            <div class="bell-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+        <main class="page-content">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Team Members</div>
+              <span class="badge badge-blue" id="emp-count">0 members</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>EMPLOYEE</th>
+                    <th>ROLE</th>
+                    <th>DEPARTMENT</th>
+                    <th>PROJECT</th>
+                    <th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody id="emp-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <script src="../../js/data/db.js"></script>
+
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script src="../../js/components/modal.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        window.Auth.requireRole("admin");
+        window.Sidebar.render("employees");
+        window.Toast.init();
+        render();
+        document.getElementById("emp-search").addEventListener("input", render);
+      });
+
+      function render() {
+        const state = window.Helpers.getState();
+        const query = document.getElementById("emp-search").value.toLowerCase();
+        const endusers = state.users.filter(
+          (u) =>
+            u.role === "enduser" &&
+            (!query ||
+              u.name.toLowerCase().includes(query) ||
+              u.department.toLowerCase().includes(query)),
+        );
+        document.getElementById("emp-count").textContent =
+          endusers.length + " members";
+        const subMap = { team_leader: "Team Leader", member: "Team Member" };
+        const tbody = document.getElementById("emp-table-body");
+        tbody.innerHTML =
+          endusers
+            .map((u) => {
+              const proj = state.projects.find((p) =>
+                p.team.some((t) => t.userId === u.id),
+              );
+              return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar avatar-sm avatar-${u.avatarColor}">${u.avatar}</div>
+          <div><div class="td-label">${u.name}</div><div class="td-sub">${u.email}</div></div>
+        </div>
+      </td>
+      <td>${subMap[u.subRole] || "—"}</td>
+      <td>${u.department}</td>
+      <td>${proj ? `<a href="tasks.html?project=${proj.id}" style="color:var(--blue);font-weight:500">${proj.name}</a>` : '<span class="text-muted">—</span>'}</td>
+      <td><span class="badge ${window.Helpers.statusClass(u.status)}">${u.status}</span></td>
+    </tr>`;
+            })
+            .join("") ||
+          `<tr><td colspan="5"><div class="empty-state"><div class="empty-state-text">No employees found</div></div></td></tr>`;
+      }
+    </script>
+  </body>
+</html>

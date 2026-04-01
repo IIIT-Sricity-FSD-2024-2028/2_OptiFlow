@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings - OfficeSync PM</title>
+    <link rel="stylesheet" href="../../css/pm/base.css" />
+    <link rel="stylesheet" href="../../css/pm/layout.css" />
+    <link rel="stylesheet" href="../../css/pm/components.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* ✅ Repaired Settings CSS - Mapped to PM Colors */
+      .settings-container {
+        display: flex;
+        gap: 32px;
+        padding: 32px;
+        height: calc(100vh - 56px); /* Matched to PM header height */
+        overflow: hidden;
+        box-sizing: border-box;
+        background: #f8fafc; /* Adds subtle depth behind the cards */
+      }
+
+      .settings-nav {
+        width: 240px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .settings-nav-item {
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #64748b; /* Muted text */
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .settings-nav-item:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+      }
+
+      .settings-nav-item.active {
+        background: #2563eb; /* PM Blue */
+        color: white;
+        font-weight: 600;
+      }
+
+      .settings-nav-item.active svg {
+        stroke: white;
+      }
+
+      .settings-content {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 24px;
+      }
+
+      /* ✅ Fixed the floating Card */
+      .settings-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        padding: 32px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .settings-section {
+        margin-bottom: 40px;
+      }
+
+      .settings-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #0f172a;
+      }
+
+      .settings-desc {
+        font-size: 14px;
+        color: #64748b;
+        margin-bottom: 24px;
+      }
+
+      .setting-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 20px 0;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .setting-info {
+        max-width: 60%;
+      }
+
+      .setting-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: #0f172a;
+        margin-bottom: 4px;
+      }
+
+      .setting-help {
+        font-size: 13px;
+        color: #64748b;
+        line-height: 1.5;
+      }
+
+      /* ✅ Fixed the Toggles */
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #cbd5e1;
+        transition: 0.4s;
+        border-radius: 24px;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+      input:checked + .slider {
+        background-color: #2563eb;
+      }
+      input:checked + .slider:before {
+        transform: translateX(16px);
+      }
+
+      /* ✅ Fixed Inputs */
+      .form-control {
+        width: 100%;
+        max-width: 320px;
+        padding: 10px 12px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        color: #0f172a;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        outline: none;
+        margin-bottom: 0;
+      }
+      .form-control:focus {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px #eff6ff;
+      }
+
+      /* ✅ Ensures the Save button pops */
+      .btn-primary-safe {
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .btn-primary-safe:hover {
+        background-color: #1d4ed8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <div class="main-area">
+        <header class="top-header">
+          <h1 class="page-title">Dashboard</h1>
+          <div class="header-actions">
+            <div class="bell-btn" title="Notifications">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content" style="padding: 0; background: #f8fafc">
+          <div class="settings-container">
+            <div class="settings-nav">
+              <div class="settings-nav-item active" data-tab="tab-general">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="3" y1="9" x2="21" y2="9"></line>
+                  <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>
+                General Preferences
+              </div>
+              <div class="settings-nav-item" data-tab="tab-notifications">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                Notifications
+              </div>
+              <div class="settings-nav-item" data-tab="tab-security">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect
+                    x="3"
+                    y="11"
+                    width="18"
+                    height="11"
+                    rx="2"
+                    ry="2"
+                  ></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                Security & Access
+              </div>
+            </div>
+
+            <div class="settings-content">
+              <div class="settings-card">
+                <div
+                  id="tab-general"
+                  class="settings-pane"
+                  style="display: block"
+                >
+                  <div class="settings-section">
+                    <div class="settings-title">Display & Interface</div>
+                    <div class="settings-desc">
+                      Manage how your dashboard looks and feels.
+                    </div>
+
+                    <div class="setting-row">
+                      <div class="setting-info">
+                        <div class="setting-name">Compact Table Rows</div>
+                        <div class="setting-help">
+                          Reduce padding in data tables to show more
+                          information.
+                        </div>
+                      </div>
+                      <label class="switch"
+                        ><input type="checkbox" checked /><span
+                          class="slider"
+                        ></span
+                      ></label>
+                    </div>
+                  </div>
+
+                  <div class="settings-section" style="margin-bottom: 0">
+                    <div class="settings-title">Regional Settings</div>
+                    <div class="settings-desc">
+                      Set date and time formats for project timelines.
+                    </div>
+
+                    <div class="setting-row">
+                      <div class="setting-info">
+                        <div class="setting-name">Default Timezone</div>
+                        <div class="setting-help">
+                          Project deadlines will be bound to this timezone.
+                        </div>
+                      </div>
+                      <div>
+                        <select class="form-control">
+                          <option value="Asia/Kolkata">
+                            India Standard Time (IST)
+                          </option>
+                          <option value="UTC">
+                            Coordinated Universal Time (UTC)
+                          </option>
+                          <option value="America/New_York">
+                            Eastern Standard Time (EST)
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div
+                      class="setting-row"
+                      style="border-bottom: none; padding-bottom: 0"
+                    >
+                      <div class="setting-info">
+                        <div class="setting-name">Date Format</div>
+                        <div class="setting-help">
+                          How dates are displayed universally in tables.
+                        </div>
+                      </div>
+                      <div>
+                        <select class="form-control">
+                          <option value="DD-MM-YYYY">
+                            DD/MM/YYYY (24/10/2024)
+                          </option>
+                          <option value="MM-DD-YYYY">
+                            MM/DD/YYYY (10/24/2024)
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  id="tab-notifications"
+                  class="settings-pane"
+                  style="display: none"
+                >
+                  <div class="settings-section" style="margin-bottom: 0">
+                    <div class="settings-title">Notification Channels</div>
+                    <div class="settings-desc">
+                      Manage how and when you receive project alerts.
+                    </div>
+
+                    <div class="setting-row">
+                      <div class="setting-info">
+                        <div class="setting-name">Email Digests</div>
+                        <div class="setting-help">
+                          Receive a daily summary of project bottlenecks.
+                        </div>
+                      </div>
+                      <label class="switch"
+                        ><input type="checkbox" checked /><span
+                          class="slider"
+                        ></span
+                      ></label>
+                    </div>
+
+                    <div
+                      class="setting-row"
+                      style="border-bottom: none; padding-bottom: 0"
+                    >
+                      <div class="setting-info">
+                        <div class="setting-name">Real-time Push Alerts</div>
+                        <div class="setting-help">
+                          Receive browser push notifications for escalations.
+                        </div>
+                      </div>
+                      <label class="switch"
+                        ><input type="checkbox" /><span class="slider"></span
+                      ></label>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  id="tab-security"
+                  class="settings-pane"
+                  style="display: none"
+                >
+                  <div class="settings-section" style="margin-bottom: 0">
+                    <div class="settings-title">Authentication & Sessions</div>
+                    <div class="settings-desc">
+                      Manage your security policies and session timeouts.
+                    </div>
+
+                    <div class="setting-row">
+                      <div class="setting-info">
+                        <div class="setting-name">Enforce 2FA</div>
+                        <div class="setting-help">
+                          Require secondary authentication for your account.
+                        </div>
+                      </div>
+                      <label class="switch"
+                        ><input type="checkbox" /><span class="slider"></span
+                      ></label>
+                    </div>
+
+                    <div
+                      class="setting-row"
+                      style="border-bottom: none; padding-bottom: 0"
+                    >
+                      <div class="setting-info">
+                        <div class="setting-name">Session Timeout Limit</div>
+                        <div class="setting-help">
+                          Automatically logout after this period of inactivity.
+                        </div>
+                      </div>
+                      <div>
+                        <select class="form-control">
+                          <option value="15">15 Minutes</option>
+                          <option value="30" selected>30 Minutes</option>
+                          <option value="60">1 Hour</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script src="../../js/data/db.js"></script>
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script src="../../js/components/modal.js"></script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // Security check
+        if (!sessionStorage.getItem("currentUser")) {
+          window.location.replace("../../login.html");
+          return;
+        }
+
+        // Initialize UI
+        window.Sidebar.render("settings");
+        window.Toast.init();
+
+        // Tab Switching Logic
+        const tabs = document.querySelectorAll(".settings-nav-item");
+        const panes = document.querySelectorAll(".settings-pane");
+
+        tabs.forEach((tab) => {
+          tab.addEventListener("click", () => {
+            tabs.forEach((t) => t.classList.remove("active"));
+            panes.forEach((p) => (p.style.display = "none"));
+
+            tab.classList.add("active");
+            const targetId = tab.getAttribute("data-tab");
+            document.getElementById(targetId).style.display = "block";
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
