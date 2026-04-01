@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync - Compliance Officer</title>
+    <meta
+      name="description"
+      content="OfficeSync Compliance Officer Dashboard – Monitor compliance scores, pending evidence, open violations, and audit activity."
+    />
+    <link rel="stylesheet" href="../../css/compliance/base.css" />
+    <link rel="stylesheet" href="../../css/compliance/layout.css" />
+    <link rel="stylesheet" href="../../css/compliance/components.css" />
+    <link rel="stylesheet" href="../../css/compliance/compliance.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <script src="../../js/data/db.js"></script>
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script>
+      // --- 1. STRICT AUTHENTICATION CHECK ---
+      document.addEventListener("DOMContentLoaded", () => {
+        // Grab the current user session
+        const userStr = sessionStorage.getItem("currentUser");
+
+        // If no user is logged in, kick them out immediately
+        if (!userStr) {
+          window.location.replace("../../login.html");
+          return;
+        }
+
+        // Parse the session and check roles
+        const session = JSON.parse(userStr);
+
+        // Allow ONLY Superuser or Compliance Officer
+        if (
+          session.role !== "superuser" &&
+          session.role !== "compliance_officer"
+        ) {
+          alert("Access Denied: You do not have permission to view this area.");
+          window.location.replace("../../login.html");
+          return;
+        }
+      });
+
+      // --- 2. BULLETPROOF LOGOUT OVERRIDE ---
+      // This forces the logout button to clear everything and jump back exactly 2 folders.
+      window.Auth = window.Auth || {};
+      window.Auth.logout = function () {
+        sessionStorage.removeItem("currentUser");
+        localStorage.removeItem("currentUser"); // Clears any lingering local storage auth
+        window.location.replace("../../login.html");
+      };
+    </script>
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="page-title">Dashboard</div>
+          <div class="header-actions">
+            <button
+              class="btn-icon"
+              id="btn-notifications"
+              style="position: relative"
+              aria-label="Notifications"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Content Wrapper -->
+        <div class="content-wrapper">
+          <div
+            class="dashboard-status"
+            id="dashboard-status"
+            hidden
+            role="alert"
+            aria-live="polite"
+          ></div>
+
+          <!-- ===== METRICS GRID ===== -->
+          <div class="metrics-grid">
+            <!-- Compliance Score -->
+            <div class="card metric-card score-card" id="card-compliance-score">
+              <div
+                class="score-gauge-wrap"
+                aria-label="Compliance score: 75 out of 100"
+              >
+                <svg viewBox="0 0 80 80" aria-hidden="true">
+                  <circle class="gauge-bg" cx="40" cy="40" r="33" />
+                  <circle class="gauge-fill" cx="40" cy="40" r="33" />
+                </svg>
+                <div class="gauge-text">
+                  <span class="gauge-number">75</span>
+                  <span class="gauge-denom">/100</span>
+                </div>
+              </div>
+              <div class="score-info">
+                <div class="metric-title">Compliance Score</div>
+                <div class="score-value" id="score-label">Fair</div>
+                <div class="score-sub" id="score-sublabel">2 open violations dragging score</div>
+              </div>
+            </div>
+
+            <!-- Pending Evidence -->
+            <div class="card metric-card" id="card-pending-evidence">
+              <div class="metric-title">Pending Evidence</div>
+              <div class="metric-value">5</div>
+              <span class="metric-tag yellow">Awaiting review</span>
+            </div>
+
+            <!-- Open Violations -->
+            <div class="card metric-card" id="card-open-violations">
+              <div class="metric-title">Open Violations</div>
+              <div class="metric-value">2</div>
+              <span class="metric-tag red">Action required</span>
+            </div>
+
+            <!-- Rules Active -->
+            <div class="card metric-card" id="card-rules-active">
+              <div class="metric-title">Rules Active</div>
+              <div class="metric-value">14</div>
+              <span class="metric-tag blue">Across all projects</span>
+            </div>
+
+            <!-- Rule Conflicts (Feature #12) -->
+            <div class="card metric-card" id="card-rule-conflicts">
+              <div class="metric-title">Rule Conflicts</div>
+              <div class="metric-value" id="conflicts-metric-value">—</div>
+              <span class="metric-tag" id="conflicts-metric-tag">Checking…</span>
+            </div>
+          </div>
+          <!-- /metrics-grid -->
+
+          <!-- ===== PANELS ROW ===== -->
+          <div class="panels-row">
+            <!-- Pending Evidence Review -->
+            <div class="card" id="panel-evidence">
+              <div class="panel-header">
+                <h2 class="panel-title">Pending Evidence Review</h2>
+                <a
+                  href="compliance_evidence.html"
+                  class="panel-link"
+                  id="link-view-evidence"
+                  >View all →</a
+                >
+              </div>
+              <ul class="evidence-list" role="list">
+                <li class="evidence-item" id="evidence-gdpr">
+                  <svg
+                    class="evidence-icon"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    />
+                  </svg>
+                  <div class="evidence-info">
+                    <div class="evidence-title">GDPR Evidence Package</div>
+                    <div class="evidence-meta">
+                      Project Atlas · Kiran Rao · Today
+                    </div>
+                  </div>
+                  <span class="badge urgent">Urgent</span>
+                </li>
+
+                <li class="evidence-item" id="evidence-sox">
+                  <svg
+                    class="evidence-icon"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    />
+                  </svg>
+                  <div class="evidence-info">
+                    <div class="evidence-title">SOX Variance Report</div>
+                    <div class="evidence-meta">
+                      Finance Q4 · Priya S · Yesterday
+                    </div>
+                  </div>
+                  <span class="badge due-soon">Due soon</span>
+                </li>
+
+                <li class="evidence-item" id="evidence-iso">
+                  <svg
+                    class="evidence-icon"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    />
+                  </svg>
+                  <div class="evidence-info">
+                    <div class="evidence-title">ISO 27001 Control Check</div>
+                    <div class="evidence-meta">IT Security · Dec 15</div>
+                  </div>
+                  <span class="badge pending">Pending</span>
+                </li>
+              </ul>
+              <div
+                class="audit-empty-state"
+                id="evidence-empty-state"
+                hidden
+                aria-live="polite"
+              >
+                No pending evidence items to review.
+              </div>
+            </div>
+
+            <!-- Open Violations -->
+            <div class="card" id="panel-violations">
+              <div class="panel-header">
+                <h2 class="panel-title">Open Violations</h2>
+                <a
+                  href="compliance_violations.html"
+                  class="panel-link"
+                  id="link-view-violations"
+                  >View all →</a
+                >
+              </div>
+              <ul class="violations-list" role="list">
+                <li class="violation-item" id="violation-sox404">
+                  <span
+                    class="violation-dot dot-critical"
+                    aria-label="Critical"
+                  ></span>
+                  <div class="violation-info">
+                    <div class="violation-title">
+                      SOX 404 – Variance sign-off missing
+                    </div>
+                    <div class="violation-meta">
+                      Finance Q4 · Overdue by 3 days · PM: Arjun
+                    </div>
+                  </div>
+                  <span class="badge critical">Critical</span>
+                </li>
+
+                <li class="violation-item" id="violation-gdpr">
+                  <span
+                    class="violation-dot dot-warning"
+                    aria-label="Warning"
+                  ></span>
+                  <div class="violation-info">
+                    <div class="violation-title">
+                      GDPR – Evidence upload pending
+                    </div>
+                    <div class="violation-meta">
+                      Project Atlas · 2 days to threshold · PM: Arjun
+                    </div>
+                  </div>
+                  <span class="badge warning">Warning</span>
+                </li>
+              </ul>
+              <div
+                class="audit-empty-state"
+                id="violations-empty-state"
+                hidden
+                aria-live="polite"
+              >
+                No open violations — all clear.
+              </div>
+            </div>
+
+            <!-- Recent Audit Activity -->
+            <div class="card" id="panel-audit">
+              <div class="panel-header">
+                <h2 class="panel-title">Recent Audit Activity</h2>
+                <a
+                  href="compliance_audit_log.html"
+                  class="panel-link"
+                  id="link-full-log"
+                  >Full log →</a
+                >
+              </div>
+              <ul class="audit-list" id="audit-list" role="list">
+                <li class="audit-item" id="audit-iso27001">
+                  <div class="audit-icon icon-verified" aria-label="Verified">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <div class="audit-info">
+                    <div class="audit-title">
+                      ISO 27001 – IT Security verified
+                    </div>
+                    <div class="audit-meta">Today · Shreya Chandra</div>
+                  </div>
+                </li>
+
+                <li class="audit-item" id="audit-sox404-rejected">
+                  <div class="audit-icon icon-rejected" aria-label="Rejected">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </div>
+                  <div class="audit-info">
+                    <div class="audit-title">
+                      SOX 404 – Variance report rejected
+                    </div>
+                    <div class="audit-meta">Yesterday · Shreya Chandra</div>
+                  </div>
+                </li>
+
+                <li class="audit-item" id="audit-gdpr-updated">
+                  <div class="audit-icon icon-updated" aria-label="Updated">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  </div>
+                  <div class="audit-info">
+                    <div class="audit-title">
+                      GDPR rule updated – added evidence req.
+                    </div>
+                    <div class="audit-meta">Dec 14 · Shreya Chandra</div>
+                  </div>
+                </li>
+
+                <li class="audit-item" id="audit-hrpolicy">
+                  <div class="audit-icon icon-verified" aria-label="Verified">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <div class="audit-info">
+                    <div class="audit-title">
+                      HR Policy – Onboarding verified
+                    </div>
+                    <div class="audit-meta">Dec 12 · Shreya Chandra</div>
+                  </div>
+                </li>
+              </ul>
+              <div
+                class="audit-empty-state"
+                id="audit-empty-state"
+                hidden
+                aria-live="polite"
+              >
+                No recent audit activity to display.
+              </div>
+            </div>
+          </div>
+          <!-- /panels-row -->
+
+          <!-- ===== CONFLICTS PANEL ROW (Feature #12) ===== -->
+          <div class="panels-row" id="conflicts-panels-row" style="margin-top:0;">
+            <!-- Rule Conflict Resolution Panel -->
+            <div class="card" id="panel-conflicts" style="grid-column: 1 / -1;">
+              <div class="panel-header">
+                <h2 class="panel-title">
+                  <i class="ri-error-warning-line" style="color:#f59e0b;margin-right:6px;"></i>
+                  Rule Conflicts
+                  <span class="nav-badge" id="conflicts-panel-badge" style="display:none;margin-left:8px;background:#f59e0b;">0</span>
+                </h2>
+                <a href="compliance_rules.html#conflicts" class="panel-link" id="link-resolve-conflicts">Resolve in Rules →</a>
+              </div>
+              <!-- Conflict list rendered by JS -->
+              <ul class="conflicts-summary-list" role="list" id="conflicts-summary-list"></ul>
+              <div class="conflicts-clear-state" id="conflicts-clear-state" style="display:none;">
+                <i class="ri-shield-check-line" style="color:#16a34a;font-size:20px;"></i>
+                <span>All rule injections are consistent — no conflicts detected.</span>
+              </div>
+            </div>
+          </div>
+          <!-- /conflicts-panels-row -->
+
+        </div>
+        <!-- /content-wrapper -->
+      </main>
+    </div>
+    <!-- /admin-layout -->
+    <script src="../../js/pages/compliance/dashboard.js"></script>
+    <script src="../../js/pages/compliance/dashboard-conflicts.js"></script>
+  </body>
+</html>

@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync - Reports</title>
+    <meta
+      name="description"
+      content="OfficeSync Compliance Officer – Generate and download compliance reports."
+    />
+    <link rel="stylesheet" href="../../css/compliance/base.css" />
+    <link rel="stylesheet" href="../../css/compliance/layout.css" />
+    <link rel="stylesheet" href="../../css/compliance/components.css" />
+    <link rel="stylesheet" href="../../css/compliance/compliance.css" />
+    <link rel="stylesheet" href="../../css/compliance/reports.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <script src="../../js/data/db.js"></script>
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script>
+      // --- 1. STRICT AUTHENTICATION CHECK ---
+      document.addEventListener("DOMContentLoaded", () => {
+        // Grab the current user session
+        const userStr = sessionStorage.getItem("currentUser");
+
+        // If no user is logged in, kick them out immediately
+        if (!userStr) {
+          window.location.replace("../../login.html");
+          return;
+        }
+
+        // Parse the session and check roles
+        const session = JSON.parse(userStr);
+
+        // Allow ONLY Superuser or Compliance Officer
+        if (
+          session.role !== "superuser" &&
+          session.role !== "compliance_officer"
+        ) {
+          alert("Access Denied: You do not have permission to view this area.");
+          window.location.replace("../../login.html");
+          return;
+        }
+      });
+
+      // --- 2. BULLETPROOF LOGOUT OVERRIDE ---
+      // This forces the logout button to clear everything and jump back exactly 2 folders.
+      window.Auth = window.Auth || {};
+      window.Auth.logout = function () {
+        sessionStorage.removeItem("currentUser");
+        localStorage.removeItem("currentUser"); // Clears any lingering local storage auth
+        window.location.replace("../../login.html");
+      };
+    </script>
+  </head>
+  <body class="reports-page">
+    <div class="admin-layout">
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="page-title">Reports</div>
+          <div class="header-actions">
+            <!-- Bell icon -->
+            <button
+              class="btn-icon"
+              id="btn-notifications"
+              style="position: relative"
+              aria-label="Notifications"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="content-wrapper">
+          <div class="reports-layout">
+            <!-- ===== LEFT: GENERATE REPORT PANEL ===== -->
+            <section
+              class="reports-generate-panel"
+              aria-label="Generate Report"
+            >
+              <div class="reports-generate-header">
+                <h1 class="reports-generate-title">Generate Report</h1>
+              </div>
+
+              <div class="reports-generate-body">
+                <!-- Report Type -->
+                <div class="rg-section-label">Report Type</div>
+                <div
+                  class="report-type-grid"
+                  id="reportTypeGrid"
+                  role="radiogroup"
+                  aria-label="Report type"
+                >
+                  <div
+                    class="report-type-card selected"
+                    data-type="compliance-summary"
+                    onclick="selectReportType(this)"
+                    role="radio"
+                    aria-checked="true"
+                    tabindex="0"
+                  >
+                    <div class="report-type-icon rtic-blue" aria-hidden="true">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                    </div>
+                    <div class="report-type-name">Compliance Summary</div>
+                    <div class="report-type-desc">
+                      Overall status across all projects
+                    </div>
+                  </div>
+
+                  <div
+                    class="report-type-card"
+                    data-type="violations-report"
+                    onclick="selectReportType(this)"
+                    role="radio"
+                    aria-checked="false"
+                    tabindex="0"
+                  >
+                    <div class="report-type-icon rtic-red" aria-hidden="true">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                        />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                      </svg>
+                    </div>
+                    <div class="report-type-name">Violations Report</div>
+                    <div class="report-type-desc">
+                      All flagged violations &amp; resolutions
+                    </div>
+                  </div>
+
+                  <div
+                    class="report-type-card"
+                    data-type="audit-trail"
+                    onclick="selectReportType(this)"
+                    role="radio"
+                    aria-checked="false"
+                    tabindex="0"
+                  >
+                    <div class="report-type-icon rtic-green" aria-hidden="true">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="9 11 12 14 22 4" />
+                        <path
+                          d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                        />
+                      </svg>
+                    </div>
+                    <div class="report-type-name">Audit Trail</div>
+                    <div class="report-type-desc">
+                      Full audit log with actor history
+                    </div>
+                  </div>
+
+                  <div
+                    class="report-type-card"
+                    data-type="evidence-log"
+                    onclick="selectReportType(this)"
+                    role="radio"
+                    aria-checked="false"
+                    tabindex="0"
+                  >
+                    <div
+                      class="report-type-icon rtic-yellow"
+                      aria-hidden="true"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <line x1="18" y1="20" x2="18" y2="10" />
+                        <line x1="12" y1="20" x2="12" y2="4" />
+                        <line x1="6" y1="20" x2="6" y2="14" />
+                      </svg>
+                    </div>
+                    <div class="report-type-name">Evidence Log</div>
+                    <div class="report-type-desc">
+                      Evidence submitted &amp; reviewed
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Project -->
+                <div class="rg-section-label">Project</div>
+                <div class="rg-form-field">
+                  <select
+                    class="rg-select"
+                    id="rgProject"
+                    aria-label="Select project"
+                  >
+                    <option value="">All Projects</option>
+                    <option value="project-atlas">Project Atlas</option>
+                    <option value="finance-q4">Finance Q4</option>
+                    <option value="it-security">IT Security Audit</option>
+                    <option value="onboarding">Onboarding Overhaul</option>
+                    <option value="procurement">Procurement Review</option>
+                  </select>
+                </div>
+
+                <!-- Policy / Framework -->
+                <div class="rg-section-label">Policy / Framework</div>
+                <div class="rg-form-field">
+                  <select
+                    class="rg-select"
+                    id="rgPolicy"
+                    aria-label="Select policy or framework"
+                  >
+                    <option value="">All Policies</option>
+                    <option value="gdpr">GDPR</option>
+                    <option value="sox">SOX</option>
+                    <option value="iso27001">ISO 27001</option>
+                    <option value="hr-policy">HR Policy</option>
+                    <option value="internal">Internal</option>
+                  </select>
+                </div>
+
+                <!-- Workflow -->
+                <div class="rg-section-label">Workflow</div>
+                <div class="rg-form-field">
+                  <select
+                    class="rg-select"
+                    id="rgWorkflow"
+                    aria-label="Select workflow"
+                  >
+                    <option value="">All Workflows</option>
+                  </select>
+                </div>
+
+                <!-- Rule Version -->
+                <div class="rg-section-label">Rule Version Scope</div>
+                <div class="rg-form-field">
+                  <select
+                    class="rg-select"
+                    id="rgRuleVersion"
+                    aria-label="Select rule version"
+                  >
+                    <option value="">All Active Versions</option>
+                  </select>
+                </div>
+
+                <div class="rg-inline-warning" id="rgRuleWarning" style="display: none"></div>
+
+                <!-- Date Range -->
+                <div class="rg-section-label">Date Range</div>
+                <div class="rg-form-field rg-date-row">
+                  <input
+                    type="date"
+                    class="rg-input"
+                    id="rgDateStart"
+                    value="2024-10-01"
+                    aria-label="Start date"
+                  />
+                  <input
+                    type="date"
+                    class="rg-input"
+                    id="rgDateEnd"
+                    value="2024-12-17"
+                    aria-label="End date"
+                  />
+                </div>
+
+                <!-- Export Format -->
+                <div class="rg-section-label">Export Format</div>
+                <div class="rg-form-field">
+                  <select
+                    class="rg-select"
+                    id="rgFormat"
+                    aria-label="Select export format"
+                  >
+                    <option value="pdf">PDF</option>
+                    <option value="xlsx">XLSX</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </div>
+              </div>
+              <!-- /reports-generate-body -->
+
+              <div class="reports-generate-footer">
+                <button
+                  class="btn-preview-report"
+                  id="btn-preview-report"
+                  onclick="openReportPreviewModal()"
+                >
+                  Preview Configuration
+                </button>
+                <button
+                  class="btn-generate-report"
+                  id="btn-generate"
+                  onclick="generateReport()"
+                >
+                  Generate Report
+                </button>
+              </div>
+            </section>
+            <!-- /reports-generate-panel -->
+
+            <!-- ===== RIGHT: RECENT REPORTS PANEL ===== -->
+            <section class="reports-recent-panel" aria-label="Recent Reports">
+              <div class="reports-recent-header">
+                <h2 class="reports-recent-title">Recent Reports</h2>
+                <span class="reports-recent-filter">Last 30 days</span>
+              </div>
+
+              <div
+                class="reports-recent-list"
+                id="recentReportsList"
+                role="list"
+              >
+                <article
+                  class="report-card"
+                  role="listitem"
+                  id="report-compliance-q4"
+                >
+                  <div class="report-card-icon rtic-blue" aria-hidden="true">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                  </div>
+                  <div class="report-card-body">
+                    <div class="report-card-title">
+                      Compliance Summary — Q4 2024
+                    </div>
+                    <div class="report-card-meta">
+                      All Projects · All Policies · Generated Dec 15 · PDF · 2.1
+                      MB
+                    </div>
+                    <div class="report-card-tags">
+                      <span class="badge filetype">PDF</span>
+                      <span class="badge gray">All Projects</span>
+                    </div>
+                  </div>
+                  <button
+                    class="btn-download"
+                    onclick="downloadReport('compliance-q4')"
+                    aria-label="Download Compliance Summary Q4 2024"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download
+                  </button>
+                </article>
+
+                <article
+                  class="report-card"
+                  role="listitem"
+                  id="report-violations-finq4"
+                >
+                  <div class="report-card-icon rtic-red" aria-hidden="true">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                      />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  </div>
+                  <div class="report-card-body">
+                    <div class="report-card-title">
+                      Violations Report — Finance Q4
+                    </div>
+                    <div class="report-card-meta">
+                      Finance Q4 · SOX · Generated Dec 16 · PDF · 890 KB
+                    </div>
+                    <div class="report-card-tags">
+                      <span class="badge filetype">PDF</span>
+                      <span class="badge sox">SOX</span>
+                    </div>
+                  </div>
+                  <button
+                    class="btn-download"
+                    onclick="downloadReport('violations-finq4')"
+                    aria-label="Download Violations Report Finance Q4"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download
+                  </button>
+                </article>
+
+                <article
+                  class="report-card"
+                  role="listitem"
+                  id="report-audit-atlas"
+                >
+                  <div class="report-card-icon rtic-green" aria-hidden="true">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="9 11 12 14 22 4" />
+                      <path
+                        d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                      />
+                    </svg>
+                  </div>
+                  <div class="report-card-body">
+                    <div class="report-card-title">
+                      Audit Trail — Project Atlas
+                    </div>
+                    <div class="report-card-meta">
+                      Project Atlas · GDPR · Generated Dec 12 · Excel · 1.4 MB
+                    </div>
+                    <div class="report-card-tags">
+                      <span class="badge filetype">XLSX</span>
+                      <span class="badge gdpr">GDPR</span>
+                    </div>
+                  </div>
+                  <button
+                    class="btn-download"
+                    onclick="downloadReport('audit-atlas')"
+                    aria-label="Download Audit Trail Project Atlas"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download
+                  </button>
+                </article>
+
+                <article
+                  class="report-card"
+                  role="listitem"
+                  id="report-evidence-itsec"
+                >
+                  <div class="report-card-icon rtic-yellow" aria-hidden="true">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                  </div>
+                  <div class="report-card-body">
+                    <div class="report-card-title">
+                      Evidence Log — IT Security Audit
+                    </div>
+                    <div class="report-card-meta">
+                      IT Security · ISO 27001 · Generated Dec 10 · PDF · 3.2 MB
+                    </div>
+                    <div class="report-card-tags">
+                      <span class="badge filetype">PDF</span>
+                      <span class="badge iso">ISO 27001</span>
+                    </div>
+                  </div>
+                  <button
+                    class="btn-download"
+                    onclick="downloadReport('evidence-itsec')"
+                    aria-label="Download Evidence Log IT Security Audit"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download
+                  </button>
+                </article>
+              </div>
+              <!-- /reports-recent-list -->
+            </section>
+            <!-- /reports-recent-panel -->
+          </div>
+          <!-- /reports-layout -->
+        </div>
+        <!-- /content-wrapper -->
+      </main>
+    </div>
+    <!-- /admin-layout -->
+
+    <!-- ===== REPORT PREVIEW MODAL ===== -->
+    <div
+      class="modal-overlay"
+      id="reportPreviewModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reportPreviewTitle"
+    >
+      <div class="modal-content modal-lg" id="reportPreviewContent">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="reportPreviewTitle">
+              Report Configuration Preview
+            </h3>
+            <p class="modal-subtitle" id="reportPreviewSubtitle">
+              Validate report scope before generating a signed report artifact.
+            </p>
+          </div>
+          <span
+            class="modal-close"
+            id="btnCloseReportPreview"
+            aria-label="Close"
+            >&times;</span
+          >
+        </div>
+        <div class="modal-body">
+          <div class="report-preview-grid" id="reportPreviewGrid"></div>
+          <div
+            class="report-preview-warning"
+            id="reportPreviewWarning"
+            style="display: none"
+          ></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnCancelReportPreview">
+            Cancel
+          </button>
+          <button class="btn btn-primary" id="btnConfirmGenerateReport">
+            Generate Report
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== DOWNLOAD SUCCESS MODAL ===== -->
+    <div
+      class="modal-overlay"
+      id="downloadSuccessModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="downloadModalTitle"
+    >
+      <div class="modal-content" style="width: 400px">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="downloadModalTitle">
+              Download Successful !
+            </h3>
+          </div>
+          <span
+            class="modal-close"
+            onclick="closeDownloadModal()"
+            aria-label="Close"
+            >&times;</span
+          >
+        </div>
+        <div class="modal-body" style="padding: 24px 24px 8px">
+          <p
+            style="
+              font-size: 14px;
+              color: var(--text-muted);
+              margin: 0;
+              line-height: 1.6;
+            "
+          >
+            Please check your Browser Downloads to access the file
+          </p>
+        </div>
+        <div class="modal-footer" style="justify-content: stretch">
+          <button
+            class="btn btn-primary"
+            onclick="closeDownloadModal()"
+            style="
+              width: 100%;
+              padding: 11px 20px;
+              font-size: 14px;
+              font-weight: 600;
+            "
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../js/pages/compliance/reports.js"></script>
+  </body>
+</html>

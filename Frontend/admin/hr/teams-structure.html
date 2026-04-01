@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync – Team Structure</title>
+    <link rel="stylesheet" href="../../css/hr/base.css" />
+    <link rel="stylesheet" href="../../css/hr/layout.css" />
+    <link rel="stylesheet" href="../../css/hr/components.css" />
+    <link rel="stylesheet" href="../../css/hr/teams-structure.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- ── Sidebar ── -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div
+            class="logo-container"
+            style="display: flex; align-items: center"
+          >
+            <img
+              src="../../assets/images/logo_light.png"
+              alt="OfficeSync"
+              style="height: 28px; width: auto; display: block"
+            />
+          </div>
+          <div class="brand-subtitle">HR</div>
+        </div>
+
+        <nav class="sidebar-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="dashboard.html" class="nav-item">
+              <i class="ri-dashboard-line"></i><span>Dashboard</span>
+            </a>
+
+            <a href="teams-structure.html" class="nav-item active">
+              <i class="ri-team-line"></i><span>Teams</span>
+            </a>
+            <a href="roles-access.html" class="nav-item">
+              <i class="ri-shield-keyhole-line"></i
+              ><span>Roles &amp; Access</span>
+            </a>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-profile">
+            <div class="avatar">DN</div>
+            <div class="user-info">
+              <span class="user-name">Divya Nair</span>
+              <span class="user-role">HR Manager</span>
+            </div>
+          </div>
+          <button class="logout-btn" id="logoutBtn">
+            <i class="ri-logout-box-r-line"></i><span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- ── Main Content ── -->
+      <div class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="page-title">
+            <span class="breadcrumb-muted"
+              >HR Portal&nbsp;/&nbsp;Teams&nbsp;/</span
+            >
+            &nbsp;Team Structure
+          </div>
+          <div class="header-actions">
+            <select
+              class="dropdown-select"
+              id="deptFilter"
+              style="min-width: 160px"
+            >
+              <!-- populated by JS -->
+            </select>
+            <button
+              class="btn-icon"
+              id="notifBtn"
+              title="Notifications"
+              style="position: relative"
+            >
+              <i class="ri-notification-3-line"></i>
+            </button>
+            <button class="btn btn-primary" id="addMemberBtn">
+              <i class="ri-add-line"></i> Add Member
+            </button>
+          </div>
+        </header>
+
+        <!-- Content Wrapper -->
+        <div class="content-wrapper">
+          <!-- Stat Cards -->
+          <div class="metrics-grid" id="statsGrid">
+            <div class="card metric-card">
+              <div class="metric-header">
+                <div class="metric-icon-wrap blue">
+                  <i class="ri-group-line"></i>
+                </div>
+              </div>
+              <div class="metric-value" id="statTotal">—</div>
+              <div class="metric-title">Total Members</div>
+            </div>
+            <div class="card metric-card">
+              <div class="metric-header">
+                <div class="metric-icon-wrap purple">
+                  <i class="ri-team-line"></i>
+                </div>
+              </div>
+              <div class="metric-value" id="statTeams">—</div>
+              <div class="metric-title">Active Teams</div>
+            </div>
+            <div class="card metric-card">
+              <div class="metric-header">
+                <div class="metric-icon-wrap green">
+                  <i class="ri-checkbox-circle-line"></i>
+                </div>
+              </div>
+              <div class="metric-value" id="statActive">—</div>
+              <div class="metric-title">Active Now</div>
+            </div>
+            <div class="card metric-card">
+              <div class="metric-header">
+                <div class="metric-icon-wrap yellow">
+                  <i class="ri-time-line"></i>
+                </div>
+              </div>
+              <div class="metric-value" id="statPending">—</div>
+              <div class="metric-title">Pending Slots</div>
+            </div>
+          </div>
+
+          <!-- Tree Section -->
+          <div class="card tree-card">
+            <div id="treeLoader" class="tree-loader">
+              <i class="ri-loader-4-line spin"></i> Building org chart…
+            </div>
+            <div
+              id="treeContainer"
+              class="tree-scroll-wrapper"
+              style="display: none"
+            >
+              <div class="tree-root" id="treeRoot"></div>
+            </div>
+
+            <!-- Independent Role Holders -->
+            <div id="independentSection" style="display: none">
+              <div class="indie-divider">
+                <span>Independent Role Holders</span>
+              </div>
+              <div class="indie-grid" id="indieGrid"></div>
+            </div>
+          </div>
+        </div>
+        <!-- /content-wrapper -->
+      </div>
+      <!-- /main-content -->
+    </div>
+    <!-- /admin-layout -->
+
+    <!-- ── Notification Panel ── -->
+    <div class="notif-panel" id="notifPanel">
+      <div class="notif-panel-header">
+        <span>Notifications</span>
+        <i class="ri-close-line" id="closeNotif"></i>
+      </div>
+      <div class="notif-empty">
+        <i class="ri-notification-off-line"></i>
+        <p>No notifications right now</p>
+        <span>You're all caught up!</span>
+      </div>
+    </div>
+    <div class="notif-backdrop" id="notifBackdrop"></div>
+
+    <!-- ── Logout Modal ── -->
+    <div class="modal-overlay" id="logoutModal">
+      <div class="modal-content" style="width: 420px">
+        <div class="modal-header">
+          <div class="modal-title">
+            <i
+              class="ri-logout-box-r-line"
+              style="color: #ef4444; margin-right: 8px"
+            ></i>
+            Confirm Logout
+          </div>
+          <span class="modal-close" id="closeLogoutModal"
+            ><i class="ri-close-line"></i
+          ></span>
+        </div>
+        <div class="modal-body" style="padding: 28px 24px">
+          <p
+            style="font-size: 15px; color: var(--text-muted); line-height: 1.6"
+          >
+            Are you sure you want to log out?<br />You will be redirected to the
+            login page.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelLogout">Cancel</button>
+          <button
+            class="btn"
+            id="confirmLogout"
+            style="background: #ef4444; color: #fff; border-color: #ef4444"
+          >
+            Yes, Logout
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../js/data/hr-data-store.js"></script>
+    <script src="../../js/pages/hr/teams-structure.js"></script>
+  </body>
+</html>

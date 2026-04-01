@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync - Evidence Queue</title>
+    <meta
+      name="description"
+      content="OfficeSync Compliance Officer – Review, approve, or reject submitted evidence for compliance rules."
+    />
+    <link rel="stylesheet" href="../../css/compliance/base.css" />
+    <link rel="stylesheet" href="../../css/compliance/layout.css" />
+    <link rel="stylesheet" href="../../css/compliance/components.css" />
+    <link rel="stylesheet" href="../../css/compliance/compliance.css" />
+    <link rel="stylesheet" href="../../css/compliance/evidence.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <script src="../../js/data/db.js"></script>
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script>
+      // --- 1. STRICT AUTHENTICATION CHECK ---
+      document.addEventListener("DOMContentLoaded", () => {
+        // Grab the current user session
+        const userStr = sessionStorage.getItem("currentUser");
+
+        // If no user is logged in, kick them out immediately
+        if (!userStr) {
+          window.location.replace("../../login.html");
+          return;
+        }
+
+        // Parse the session and check roles
+        const session = JSON.parse(userStr);
+
+        // Allow ONLY Superuser or Compliance Officer
+        if (
+          session.role !== "superuser" &&
+          session.role !== "compliance_officer"
+        ) {
+          alert("Access Denied: You do not have permission to view this area.");
+          window.location.replace("../../login.html");
+          return;
+        }
+      });
+
+      // --- 2. BULLETPROOF LOGOUT OVERRIDE ---
+      // This forces the logout button to clear everything and jump back exactly 2 folders.
+      window.Auth = window.Auth || {};
+      window.Auth.logout = function () {
+        sessionStorage.removeItem("currentUser");
+        localStorage.removeItem("currentUser"); // Clears any lingering local storage auth
+        window.location.replace("../../login.html");
+      };
+    </script>
+  </head>
+  <body class="evidence-page">
+    <div class="admin-layout">
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="page-title">Evidence Queue</div>
+          <div class="header-actions">
+            <!-- Bell icon -->
+            <button
+              class="btn-icon"
+              id="btn-notifications"
+              style="position: relative"
+              aria-label="Notifications"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="content-wrapper">
+          <div class="evidence-layout">
+            <!-- ===== LEFT: EVIDENCE QUEUE ===== -->
+            <section class="evidence-queue" aria-label="Evidence Queue">
+              <div class="queue-header">
+                <h1 class="queue-header-title">Evidence Queue</h1>
+                <span class="queue-pending-count" id="queuePendingCount">5 pending</span>
+              </div>
+
+              <div class="queue-tabs" id="queueTabs" role="tablist">
+                <button class="queue-tab active" data-tab="all" role="tab" aria-selected="true">All (5)</button>
+                <button class="queue-tab" data-tab="pending" role="tab" aria-selected="false">Pending (1)</button>
+                <button class="queue-tab" data-tab="reviewed" role="tab" aria-selected="false">Reviewed (12)</button>
+              </div>
+
+              <!-- Search + Filter Bar -->
+              <div class="ev-search-bar">
+                <i class="ri-search-line"></i>
+                <input type="text" id="evSearchInput" placeholder="Search evidence..." autocomplete="off" />
+              </div>
+              <div class="ev-filter-row">
+                <select id="evPolicyFilter" class="ev-filter-select">
+                  <option value="all">All Policies</option>
+                  <option value="GDPR">GDPR</option>
+                  <option value="SOX">SOX</option>
+                  <option value="ISO 27001">ISO 27001</option>
+                  <option value="HR Policy">HR Policy</option>
+                  <option value="Internal">Internal</option>
+                </select>
+                <select id="evUrgencyFilter" class="ev-filter-select">
+                  <option value="all">All Urgency</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="due-soon">Due Soon</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+
+              <ul class="queue-list" id="queueList" role="list">
+                <li
+                  class="queue-item active"
+                  id="qi-gdpr"
+                  data-id="gdpr"
+                  onclick="selectEvidence('gdpr')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="queue-item-header">
+                    <span class="queue-item-title">GDPR Evidence Package</span>
+                    <span class="queue-item-date">Today</span>
+                  </div>
+                  <div class="queue-item-meta">
+                    Project Atlas · Kiran Rao (TL)
+                  </div>
+                  <div class="queue-item-badges">
+                    <span class="badge urgent">Urgent</span>
+                    <span class="badge policy">GDPR</span>
+                  </div>
+                </li>
+
+                <li
+                  class="queue-item"
+                  id="qi-sox"
+                  data-id="sox"
+                  onclick="selectEvidence('sox')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="queue-item-header">
+                    <span class="queue-item-title">SOX Variance Report</span>
+                    <span class="queue-item-date">Yesterday</span>
+                  </div>
+                  <div class="queue-item-meta">
+                    Finance Q4 · Priya Sharma (TL)
+                  </div>
+                  <div class="queue-item-badges">
+                    <span class="badge due-soon">Due soon</span>
+                    <span class="badge policy">SOX</span>
+                  </div>
+                </li>
+
+                <li
+                  class="queue-item"
+                  id="qi-iso"
+                  data-id="iso"
+                  onclick="selectEvidence('iso')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="queue-item-header">
+                    <span class="queue-item-title"
+                      >ISO 27001 Control Check</span
+                    >
+                    <span class="queue-item-date">Dec 15</span>
+                  </div>
+                  <div class="queue-item-meta">
+                    IT Security · Sunita Rao (TL)
+                  </div>
+                  <div class="queue-item-badges">
+                    <span class="badge pending">Pending</span>
+                    <span class="badge policy">ISO 27001</span>
+                  </div>
+                </li>
+
+                <li
+                  class="queue-item"
+                  id="qi-hr"
+                  data-id="hr"
+                  onclick="selectEvidence('hr')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="queue-item-header">
+                    <span class="queue-item-title">HR Policy Checklist</span>
+                    <span class="queue-item-date">Dec 14</span>
+                  </div>
+                  <div class="queue-item-meta">
+                    Onboarding Overhaul · Kiran Rao (TL)
+                  </div>
+                  <div class="queue-item-badges">
+                    <span class="badge pending">Pending</span>
+                    <span class="badge policy">HR Policy</span>
+                  </div>
+                </li>
+
+                <li
+                  class="queue-item"
+                  id="qi-proc"
+                  data-id="proc"
+                  onclick="selectEvidence('proc')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="queue-item-header">
+                    <span class="queue-item-title"
+                      >Procurement Audit Trail</span
+                    >
+                    <span class="queue-item-date">Dec 13</span>
+                  </div>
+                  <div class="queue-item-meta">
+                    Procurement Review · Priya Sharma (TL)
+                  </div>
+                  <div class="queue-item-badges">
+                    <span class="badge pending">Pending</span>
+                    <span class="badge policy">Internal</span>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <!-- ===== RIGHT: EVIDENCE DETAIL ===== -->
+            <section
+              class="evidence-detail"
+              id="evidenceDetail"
+              aria-label="Evidence Detail"
+            >
+              <div class="detail-content">
+                <!-- Header -->
+                <div class="detail-header">
+                  <div>
+                    <h2 class="detail-title" id="detailTitle">GDPR Evidence Package</h2>
+                    <div class="ev-linked-rule" id="evLinkedRule">
+                      <i class="ri-shield-check-line"></i>
+                      <span id="evLinkedRuleText">GDPR Verification</span>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="badge urgent" id="detailBadge">Urgent</span>
+                    <button class="ev-export-btn" id="btnExportEvidence" onclick="exportEvidenceReport()" title="Export Evidence Report">
+                      <i class="ri-download-2-line"></i> Export
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Review Workflow Stepper -->
+                <div class="ev-stepper" id="evStepper">
+                  <div class="ev-step done" id="evStep-submitted">
+                    <div class="ev-step-dot"></div>
+                    <div class="ev-step-label">Submitted</div>
+                  </div>
+                  <div class="ev-step-line" id="evLine1"></div>
+                  <div class="ev-step active" id="evStep-review">
+                    <div class="ev-step-dot"></div>
+                    <div class="ev-step-label">Under Review</div>
+                  </div>
+                  <div class="ev-step-line" id="evLine2"></div>
+                  <div class="ev-step" id="evStep-decision">
+                    <div class="ev-step-dot"></div>
+                    <div class="ev-step-label">Decision</div>
+                  </div>
+                </div>
+
+                <!-- Meta grid: read-only label/value pairs matching screenshot -->
+                <div class="detail-meta-grid">
+                  <div class="detail-meta-cell">
+                    <span class="detail-meta-label">Submitted By</span>
+                    <div class="detail-meta-value" id="metaSubmitter">
+                      Kiran Rao (TL)
+                    </div>
+                  </div>
+                  <div class="detail-meta-cell">
+                    <span class="detail-meta-label">Project</span>
+                    <div class="detail-meta-value" id="metaProject">
+                      Project Atlas
+                    </div>
+                  </div>
+                  <div class="detail-meta-cell">
+                    <span class="detail-meta-label">Compliance Rule</span>
+                    <div class="detail-meta-value" id="metaRule">
+                      GDPR Verification
+                    </div>
+                  </div>
+                  <div class="detail-meta-cell">
+                    <span class="detail-meta-label">Submitted On</span>
+                    <div class="detail-meta-value" id="metaSubmittedOn">
+                      Today, 10:22 AM
+                    </div>
+                  </div>
+                  <div class="detail-meta-cell">
+                    <span class="detail-meta-label">Review Deadline</span>
+                    <div class="detail-meta-value deadline" id="metaDeadline">
+                      Today EOD
+                    </div>
+                  </div>
+                  <div class="detail-meta-cell">
+                    <span class="detail-meta-label">Process Stage</span>
+                    <div class="detail-meta-value" id="metaStage">
+                      Stage 2 of 3
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Submitter Notes -->
+                <div class="detail-section">
+                  <div class="detail-section-label">Submitter Notes</div>
+                  <div class="submitter-notes-box" id="submitterNotes">
+                    Evidence package includes data audit results, GDPR
+                    verification checklist, and client consent records. Note:
+                    client cross-verification step (subtask 3) is still blocked
+                    due to access issue — IT escalation is in progress.
+                    Remaining evidence is complete and ready for review.
+                  </div>
+                </div>
+
+                <!-- Attached Files -->
+                <div class="detail-section">
+                  <div class="detail-section-label">Attached Files (3)</div>
+                  <div id="attachedFiles">
+                    <div class="attached-file-item">
+                      <svg
+                        class="file-icon"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                        />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                      <div class="file-info">
+                        <div class="file-name">GDPR_Evidence_Package.pdf</div>
+                        <div class="file-size">6.1 MB</div>
+                      </div>
+                      <button
+                        class="file-download-btn"
+                        onclick="downloadEvidence()"
+                        aria-label="Download GDPR_Evidence_Package.pdf"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div class="attached-file-item">
+                      <svg
+                        class="file-icon"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                        />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                      <div class="file-info">
+                        <div class="file-name">Data_Audit_Report.xlsx</div>
+                        <div class="file-size">2.3 MB</div>
+                      </div>
+                      <button
+                        class="file-download-btn"
+                        onclick="downloadEvidence()"
+                        aria-label="Download Data_Audit_Report.xlsx"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div class="attached-file-item">
+                      <svg
+                        class="file-icon"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                        />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                      <div class="file-info">
+                        <div class="file-name">Client_Consent_Records.pdf</div>
+                        <div class="file-size">890 KB</div>
+                      </div>
+                      <button
+                        class="file-download-btn"
+                        onclick="downloadEvidence()"
+                        aria-label="Download Client_Consent_Records.pdf"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Compliance Checklist -->
+                <div class="detail-section">
+                  <div class="detail-section-label">Compliance Checklist</div>
+                  <div id="complianceChecklist">
+                    <div class="checklist-item" onclick="toggleCheckbox(this)">
+                      <span class="check-icon checked" aria-label="Completed">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="3"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </span>
+                      <span>Data audit report submitted</span>
+                    </div>
+
+                    <div class="checklist-item" onclick="toggleCheckbox(this)">
+                      <span
+                        class="check-icon unchecked"
+                        aria-label="Incomplete"
+                      ></span>
+                      <span>Client consent records attached</span>
+                    </div>
+
+                    <div class="checklist-item" onclick="toggleCheckbox(this)">
+                      <span class="check-icon checked" aria-label="Completed">
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="3"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </span>
+                      <span>GDPR verification checklist completed</span>
+                    </div>
+
+                    <div class="checklist-item blocked">
+                      <span
+                        class="check-icon unchecked"
+                        aria-label="Blocked"
+                      ></span>
+                      <span
+                        >Client cross-verification (blocked — access
+                        pending)</span
+                      >
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Reviewer Notes -->
+                <div class="detail-section" id="reviewerNotesSection">
+                  <div class="detail-section-label">Reviewer Notes (Internal)</div>
+                  <textarea
+                    class="ev-reviewer-notes"
+                    id="reviewerNotes"
+                    placeholder="Add internal compliance notes (not visible to submitter)…"
+                    rows="3"
+                  ></textarea>
+                  <button class="ev-save-notes-btn" onclick="saveReviewerNotes()">
+                    <i class="ri-save-line"></i> Save Notes
+                  </button>
+                </div>
+
+                <!-- Chain-of-Custody Timeline -->
+                <div class="detail-section">
+                  <div class="detail-section-label">Chain of Custody</div>
+                  <div class="ev-timeline" id="evTimeline">
+                    <!-- Populated dynamically -->
+                  </div>
+                </div>
+
+              </div>
+              <!-- /detail-content -->
+
+              <!-- Sticky footer actions -->
+              <div class="detail-footer">
+                <button class="btn-request-info" id="btn-request-info" onclick="openRequestInfoModal()">
+                  <i class="ri-question-line" style="font-size:14px;"></i> Request Info
+                </button>
+                <button class="btn-reject" id="btn-reject" onclick="openRejectModal()">
+                  <i class="ri-close-circle-line" style="font-size:14px;"></i> Reject
+                </button>
+                <button class="btn-approve" id="btn-approve" onclick="approveEvidence()">
+                  <i class="ri-checkbox-circle-line" style="font-size:14px;"></i> Approve Evidence
+                </button>
+              </div>
+            </section>
+            <!-- /evidence-detail -->
+          </div>
+          <!-- /evidence-layout -->
+        </div>
+        <!-- /content-wrapper -->
+      </main>
+    </div>
+    <!-- /admin-layout -->
+
+    <!-- ===== DOWNLOAD SUCCESS MODAL ===== -->
+    <div class="modal-overlay" id="downloadSuccessModal" role="dialog" aria-modal="true" aria-labelledby="downloadModalTitle">
+      <div class="modal-content" style="width: 400px">
+        <div class="modal-header">
+          <h3 class="modal-title" id="downloadModalTitle">Download Successful!</h3>
+          <span class="modal-close" onclick="closeDownloadModal()" aria-label="Close">&times;</span>
+        </div>
+        <div class="modal-body" style="padding: 24px 24px 8px">
+          <p style="font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.6;">
+            Please check your Browser Downloads to access the file.
+          </p>
+        </div>
+        <div class="modal-footer" style="justify-content: stretch">
+          <button class="btn btn-primary" onclick="closeDownloadModal()" style="width:100%; padding:11px 20px; font-size:14px; font-weight:600;">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== REQUEST MORE INFO MODAL ===== -->
+    <div class="modal-overlay" id="requestInfoModal" role="dialog" aria-modal="true" aria-labelledby="requestInfoModalTitle">
+      <div class="modal-content" style="width:500px">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="requestInfoModalTitle">Request Additional Information</h3>
+            <p class="modal-subtitle">A notification will be sent to the submitter.</p>
+          </div>
+          <span class="modal-close" onclick="closeRequestInfoModal()" aria-label="Close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="reqInfoType">Information Required</label>
+            <select id="reqInfoType" class="form-control">
+              <option value="missing_file">Missing file / attachment</option>
+              <option value="clarification">Clarification on submitted notes</option>
+              <option value="signature">Missing approval signature</option>
+              <option value="revision">Revision of evidence document</option>
+              <option value="other">Other (specify below)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reqInfoMessage">Message to Submitter</label>
+            <textarea id="reqInfoMessage" class="form-control" rows="4" placeholder="Describe exactly what is needed from the submitter…"></textarea>
+            <div class="form-error" id="reqInfoMessageError">Message cannot be empty.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reqInfoDeadline">Response Deadline</label>
+            <input type="date" id="reqInfoDeadline" class="form-control" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeRequestInfoModal()">Cancel</button>
+          <button class="btn btn-primary" id="btnSendInfoRequest" onclick="sendInfoRequest()">
+            <i class="ri-send-plane-line"></i> Send Request
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== REJECT EVIDENCE MODAL ===== -->
+    <div class="modal-overlay" id="rejectModal" role="dialog" aria-modal="true" aria-labelledby="rejectModalTitle">
+      <div class="modal-content" style="width:500px">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="rejectModalTitle">Reject Evidence Submission</h3>
+            <p class="modal-subtitle">This action will be logged in the audit trail.</p>
+          </div>
+          <span class="modal-close" onclick="closeRejectModal()" aria-label="Close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="ev-reject-warning">
+            <i class="ri-alert-line"></i>
+            Rejecting will notify the submitter and log this decision. You can re-open the evidence if needed.
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <label class="form-label" for="rejectReason">Rejection Reason</label>
+            <select id="rejectReason" class="form-control">
+              <option value="">— Select a reason —</option>
+              <option value="incomplete">Incomplete — missing required documents</option>
+              <option value="inaccurate">Inaccurate — data does not match records</option>
+              <option value="expired">Expired — documentation is out of date</option>
+              <option value="unauthorized">Unauthorized — wrong submitter/department</option>
+              <option value="duplicate">Duplicate — evidence already submitted</option>
+              <option value="other">Other (specify below)</option>
+            </select>
+            <div class="form-error" id="rejectReasonError">Please select a rejection reason.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="rejectNotes">Additional Notes (optional)</label>
+            <textarea id="rejectNotes" class="form-control" rows="3" placeholder="Provide further context for the submitter…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeRejectModal()">Cancel</button>
+          <button class="btn" style="background:#dc2626; color:white; border:none;" id="btnConfirmReject" onclick="confirmReject()">
+            <i class="ri-close-circle-line"></i> Confirm Rejection
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../js/pages/compliance/evidence.js"></script>
+  </body>
+</html>

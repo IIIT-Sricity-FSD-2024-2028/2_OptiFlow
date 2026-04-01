@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync – System Roles</title>
+    <link rel="stylesheet" href="../../css/hr/base.css" />
+    <link rel="stylesheet" href="../../css/hr/layout.css" />
+    <link rel="stylesheet" href="../../css/hr/components.css" />
+    <link rel="stylesheet" href="../../css/hr/roles-access.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div
+            class="logo-container"
+            style="display: flex; align-items: center"
+          >
+            <img
+              src="../../assets/images/logo_light.png"
+              alt="OfficeSync"
+              style="height: 28px; width: auto; display: block"
+            />
+          </div>
+          <div class="brand-subtitle">HR</div>
+        </div>
+        <nav class="sidebar-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="dashboard.html" class="nav-item"
+              ><i class="ri-dashboard-line"></i><span>Dashboard</span></a
+            >
+            <a href="teams-structure.html" class="nav-item"
+              ><i class="ri-team-line"></i><span>Teams</span></a
+            >
+            <a href="roles-access.html" class="nav-item active"
+              ><i class="ri-shield-keyhole-line"></i
+              ><span>Roles &amp; Access</span></a
+            >
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="user-profile">
+            <div class="avatar">DN</div>
+            <div class="user-info">
+              <span class="user-name">Divya Nair</span
+              ><span class="user-role">HR Manager</span>
+            </div>
+          </div>
+          <button class="logout-btn" id="logoutBtn">
+            <i class="ri-logout-box-r-line"></i><span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <div class="main-content">
+        <header class="top-header">
+          <div class="page-title">
+            <a
+              href="roles-access.html"
+              style="
+                color: var(--text-muted);
+                font-weight: 400;
+                font-size: 16px;
+              "
+            >
+              <span class="breadcrumb-muted"
+                >HR Portal / Roles &amp; Access /</span
+              >
+            </a>
+            &nbsp;System Roles
+          </div>
+          <div class="header-actions">
+            <a
+              href="roles-individual.html"
+              class="btn btn-secondary"
+              style="font-size: 13px"
+            >
+              <i class="ri-user-settings-line"></i> Individual Permissions
+            </a>
+            <!-- <button class="btn-icon">
+              <i class="ri-notification-3-line"></i>
+            </button> -->
+            <button
+              class="btn-icon"
+              id="notifBtn"
+              title="Notifications"
+              style="position: relative"
+            >
+              <i class="ri-notification-3-line"></i>
+            </button>
+          </div>
+        </header>
+
+        <!-- Flush content: 3 panels -->
+        <div class="content-wrapper-flush">
+          <div class="roles-content-layout">
+            <!-- LEFT: Role list -->
+            <div class="roles-left-panel">
+              <div class="roles-left-panel-header">System Roles</div>
+              <div class="roles-left-panel-body" id="roleListContainer">
+                <!-- injected by JS -->
+              </div>
+            </div>
+
+            <!-- CENTER: Permissions -->
+            <div class="roles-center-panel">
+              <div class="roles-center-header">
+                <div class="roles-center-title" id="centerTitle">—</div>
+                <div class="roles-center-badge" id="centerBadge"></div>
+              </div>
+
+              <div class="roles-center-body" id="permissionsContainer">
+                <div class="roles-empty">
+                  <i class="ri-shield-keyhole-line"></i>
+                  <p>Select a role from the left to manage permissions.</p>
+                </div>
+              </div>
+
+              <div class="roles-save-bar" id="savebar" style="display: none">
+                <button class="btn btn-secondary" id="discardBtn">
+                  Discard
+                </button>
+                <button class="btn btn-primary" id="saveBtn">
+                  <i class="ri-check-line"></i> Save Changes
+                </button>
+              </div>
+            </div>
+
+            <!-- RIGHT: Employees in role -->
+            <div class="roles-right-panel">
+              <div class="roles-right-header">
+                <span class="roles-right-title">Employees in This Role</span>
+                <span class="roles-right-count" id="empCount">0</span>
+              </div>
+              <div class="roles-right-body" id="empListContainer">
+                <div class="roles-empty">
+                  <i class="ri-group-line"></i>
+                  <p>No role selected.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- /roles-content-layout -->
+        </div>
+        <!-- /content-wrapper-flush -->
+      </div>
+      <!-- /main-content -->
+    </div>
+    <!-- /admin-layout -->
+
+    <!-- ── Notification Panel ── -->
+    <div class="notif-panel" id="notifPanel">
+      <div class="notif-panel-header">
+        <span>Notifications</span>
+        <i class="ri-close-line" id="closeNotif"></i>
+      </div>
+      <div class="notif-empty">
+        <i class="ri-notification-off-line"></i>
+        <p>No notifications right now</p>
+        <span>You're all caught up!</span>
+      </div>
+    </div>
+    <div class="notif-backdrop" id="notifBackdrop"></div>
+
+    <!-- Logout Modal -->
+    <div class="modal-overlay" id="logoutModal">
+      <div class="modal-content" style="width: 420px">
+        <div class="modal-header">
+          <div class="modal-title">
+            <i
+              class="ri-logout-box-r-line"
+              style="color: #ef4444; margin-right: 8px"
+            ></i
+            >Confirm Logout
+          </div>
+          <span class="modal-close" id="closeLogoutModal"
+            ><i class="ri-close-line"></i
+          ></span>
+        </div>
+        <div class="modal-body" style="padding: 28px 24px">
+          <p
+            style="font-size: 15px; color: var(--text-muted); line-height: 1.6"
+          >
+            Are you sure you want to log out?
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelLogout">Cancel</button>
+          <button
+            class="btn"
+            id="confirmLogout"
+            style="background: #ef4444; color: #fff; border-color: #ef4444"
+          >
+            Yes, Logout
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="roles-toast" id="rolestoast">
+      <i class="ri-checkbox-circle-fill"></i
+      ><span id="toastMsg">Changes saved.</span>
+    </div>
+
+    <script src="../../js/data/hr-data-store.js"></script>
+    <script src="../../js/data/roles-store.js"></script>
+    <script src="../../js/pages/hr/roles-system.js"></script>
+  </body>
+</html>

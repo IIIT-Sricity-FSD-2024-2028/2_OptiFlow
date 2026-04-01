@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync - Violations</title>
+    <meta
+      name="description"
+      content="OfficeSync Compliance Officer – Review open and resolved compliance violations with full detail view."
+    />
+    <link rel="stylesheet" href="../../css/compliance/base.css" />
+    <link rel="stylesheet" href="../../css/compliance/layout.css" />
+    <link rel="stylesheet" href="../../css/compliance/components.css" />
+    <link rel="stylesheet" href="../../css/compliance/compliance.css" />
+    <link rel="stylesheet" href="../../css/compliance/violations.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <script src="../../js/data/db.js"></script>
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script>
+      // --- 1. STRICT AUTHENTICATION CHECK ---
+      document.addEventListener("DOMContentLoaded", () => {
+        // Grab the current user session
+        const userStr = sessionStorage.getItem("currentUser");
+
+        // If no user is logged in, kick them out immediately
+        if (!userStr) {
+          window.location.replace("../../login.html");
+          return;
+        }
+
+        // Parse the session and check roles
+        const session = JSON.parse(userStr);
+
+        // Allow ONLY Superuser or Compliance Officer
+        if (
+          session.role !== "superuser" &&
+          session.role !== "compliance_officer"
+        ) {
+          alert("Access Denied: You do not have permission to view this area.");
+          window.location.replace("../../login.html");
+          return;
+        }
+      });
+
+      // --- 2. BULLETPROOF LOGOUT OVERRIDE ---
+      // This forces the logout button to clear everything and jump back exactly 2 folders.
+      window.Auth = window.Auth || {};
+      window.Auth.logout = function () {
+        sessionStorage.removeItem("currentUser");
+        localStorage.removeItem("currentUser"); // Clears any lingering local storage auth
+        window.location.replace("../../login.html");
+      };
+    </script>
+  </head>
+  <body class="violations-page">
+    <div class="admin-layout">
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="page-title">Violations</div>
+          <div class="header-actions">
+            <!-- Bell icon -->
+            <button
+              class="btn-icon"
+              id="btn-notifications"
+              style="position: relative"
+              aria-label="Notifications"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="content-wrapper">
+          <div class="violations-layout">
+            <!-- ===== LEFT: VIOLATIONS QUEUE ===== -->
+            <section class="violations-queue" aria-label="Violations Queue">
+              <div class="violations-queue-header">
+                <h1 class="violations-queue-title">Violations</h1>
+                <span class="queue-pending-count">2 open</span>
+              </div>
+
+              <!-- ===== SEARCH + FILTER BAR (new) ===== -->
+              <div class="vq-search-bar">
+                <i class="ri-search-line"></i>
+                <input type="text" id="violationSearch" placeholder="Search violations…" oninput="filterQueue()" />
+              </div>
+              <div class="vq-filter-row">
+                <select id="severityFilter" class="vq-filter-select" onchange="filterQueue()">
+                  <option value="all">All Severities</option>
+                  <option value="critical">Critical</option>
+                  <option value="warning">Warning</option>
+                  <option value="info">Info</option>
+                </select>
+              </div>
+
+              <div class="pill-tabs" id="violationTabs">
+                <div class="pill-tab active" data-tab="open">Open (2)</div>
+                <div class="pill-tab" data-tab="resolved">Resolved (1)</div>
+                <div class="pill-tab" data-tab="all">All</div>
+              </div>
+
+              <ul class="violations-queue-list" id="violationsList" role="list">
+                <!-- Open Violation 1 — active/selected -->
+                <li
+                  class="vq-item active"
+                  id="vqi-sox404"
+                  data-id="sox404"
+                  onclick="selectViolation('sox404')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="vq-item-title">
+                    SOX 404 — Variance Sign-off Missing
+                  </div>
+                  <div class="vq-item-meta">
+                    Finance Q4 · Overdue 3 days · PM: Arjun Mehta
+                  </div>
+                  <div class="vq-item-badges">
+                    <span class="badge critical">Critical</span>
+                    <span class="badge open">Open</span>
+                  </div>
+                </li>
+
+                <!-- Open Violation 2 -->
+                <li
+                  class="vq-item"
+                  id="vqi-gdpr"
+                  data-id="gdpr"
+                  onclick="selectViolation('gdpr')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="vq-item-title">
+                    GDPR — Evidence Upload Pending
+                  </div>
+                  <div class="vq-item-meta">
+                    Project Atlas · 2 days to threshold · PM: Arjun Mehta
+                  </div>
+                  <div class="vq-item-badges">
+                    <span class="badge warning">Warning</span>
+                    <span class="badge open">Open</span>
+                  </div>
+                </li>
+
+                <!-- Recently Resolved label — rendered as a list item divider -->
+                <li class="vq-section-label" aria-hidden="true">
+                  Recently Resolved
+                </li>
+
+                <!-- Resolved Violation 1 -->
+                <li
+                  class="vq-item"
+                  id="vqi-iso27001"
+                  data-id="iso27001"
+                  onclick="selectViolation('iso27001')"
+                  role="button"
+                  tabindex="0"
+                >
+                  <div class="vq-item-title">
+                    ISO 27001 — Access Log Incomplete
+                  </div>
+                  <div class="vq-item-meta">IT Security · Resolved Dec 12</div>
+                  <div class="vq-item-badges">
+                    <span class="badge resolved">Resolved</span>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <!-- ===== RIGHT: VIOLATION DETAIL ===== -->
+            <section
+              class="violation-detail"
+              id="violationDetail"
+              aria-label="Violation Detail"
+            >
+              <div class="vd-content">
+                <!-- Header -->
+                <div class="vd-header">
+                  <div>
+                    <h2 class="vd-title" id="vdTitle">
+                      SOX 404 — Variance Sign-off Missing
+                    </h2>
+                    <!-- Linked Rule chip (new) -->
+                    <div class="vd-linked-rule" id="vdLinkedRule">
+                      <i class="ri-shield-check-line"></i>
+                      <span id="vdLinkedRuleText">SOX Section 404</span>
+                    </div>
+                  </div>
+                  <span class="badge critical" id="vdBadge">Critical</span>
+                </div>
+
+                <!-- ===== STATUS STEPPER (new) ===== -->
+                <div class="vd-stepper" id="vdStepper">
+                  <div class="vd-step" data-step="Open">
+                    <div class="vd-step-dot"></div>
+                    <div class="vd-step-label">Open</div>
+                  </div>
+                  <div class="vd-step-line"></div>
+                  <div class="vd-step" data-step="Under_Review">
+                    <div class="vd-step-dot"></div>
+                    <div class="vd-step-label">Under Review</div>
+                  </div>
+                  <div class="vd-step-line"></div>
+                  <div class="vd-step" data-step="Escalated">
+                    <div class="vd-step-dot"></div>
+                    <div class="vd-step-label">Escalated</div>
+                  </div>
+                  <div class="vd-step-line"></div>
+                  <div class="vd-step" data-step="Resolved">
+                    <div class="vd-step-dot"></div>
+                    <div class="vd-step-label">Resolved</div>
+                  </div>
+                </div>
+
+                <!-- Info Grid: 2 cols × 3 rows -->
+                <div class="vd-info-grid">
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Policy</span>
+                    <span class="vd-info-value" id="vdPolicy"
+                      >SOX Section 404</span
+                    >
+                  </div>
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Project</span>
+                    <span class="vd-info-value" id="vdProject"
+                      >Finance Q4 Reporting</span
+                    >
+                  </div>
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Responsible PM</span>
+                    <span class="vd-info-value" id="vdPM">Arjun Mehta</span>
+                  </div>
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Team Leader</span>
+                    <span class="vd-info-value" id="vdTL">Priya Sharma</span>
+                  </div>
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Violation Since</span>
+                    <span class="vd-info-value danger" id="vdSince"
+                      >Dec 15 (3 days)</span
+                    >
+                  </div>
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Risk Level</span>
+                    <span class="vd-info-value danger" id="vdRisk"
+                      >Regulatory Risk</span
+                    >
+                  </div>
+                  <!-- Assigned Investigator (new) -->
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Investigator</span>
+                    <span class="vd-info-value" id="vdInvestigator">— Unassigned —</span>
+                  </div>
+                  <div class="vd-info-cell">
+                    <span class="vd-info-label">Escalation Level</span>
+                    <span class="vd-info-value" id="vdEscLevel">—</span>
+                  </div>
+                </div>
+
+                <!-- Violation Description -->
+                <div class="vd-section">
+                  <div class="vd-section-label">Violation Description</div>
+                  <div class="vd-text-box" id="vdDescription">
+                    The SOX Section 404 variance report for Finance Q4 requires
+                    sign-off by the Finance Head before submission. The sign-off
+                    has not been completed as of the deadline (Dec 15). The
+                    Finance Head was unavailable due to an escalation through
+                    the PM, which has been opened. Until resolved, this
+                    constitutes a compliance violation under SOX internal
+                    controls requirements.
+                  </div>
+                </div>
+
+                <!-- Resolution Timeline -->
+                <div class="vd-section">
+                  <div class="vd-section-label">Resolution Timeline</div>
+                  <div class="vd-timeline" id="vdTimeline">
+                    <div class="vd-timeline-item">
+                      <span
+                        class="vd-timeline-dot vd-dot-red"
+                        aria-label="Flagged"
+                      ></span>
+                      <div class="vd-timeline-body">
+                        <div class="vd-timeline-text">
+                          Violation flagged — SOX 404 deadline missed
+                        </div>
+                        <div class="vd-timeline-date">Dec 15, 11:59 PM</div>
+                      </div>
+                    </div>
+
+                    <div class="vd-timeline-item">
+                      <span
+                        class="vd-timeline-dot vd-dot-yellow"
+                        aria-label="Escalation raised"
+                      ></span>
+                      <div class="vd-timeline-body">
+                        <div class="vd-timeline-text">
+                          Escalation raised — PM Arjun notified Finance Head
+                          directly
+                        </div>
+                        <div class="vd-timeline-date">Dec 16, 9:00 AM</div>
+                      </div>
+                    </div>
+
+                    <div class="vd-timeline-item">
+                      <span
+                        class="vd-timeline-dot vd-dot-blue"
+                        aria-label="Response pending"
+                      ></span>
+                      <div class="vd-timeline-body">
+                        <div class="vd-timeline-text">
+                          Finance Head response pending — sign-off expected by
+                          Dec 19
+                        </div>
+                        <div class="vd-timeline-date">Dec 17 (today)</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Evidence Links (new) -->
+                <div class="vd-section" id="vdEvidenceSection">
+                  <div class="vd-section-label">Linked Evidence</div>
+                  <ul class="vd-evidence-list" id="vdEvidenceList">
+                    <li class="vd-evidence-empty">No evidence linked yet.</li>
+                  </ul>
+                </div>
+
+                <!-- Notes / Actions -->
+                <div class="vd-section">
+                  <div class="vd-section-label">Your Notes / Actions</div>
+                  <textarea class="vd-notes-box" id="vdNotes">Monitoring closely. Finance Head has acknowledged the request per PM escalation. Sign-off expected by Dec 19. If not resolved, will escalate to regulatory team and flag for external audit preparation.</textarea>
+                  <button class="vd-save-notes-btn" id="btnSaveNotes" onclick="saveNotes()"><i class="ri-save-line"></i> Save Notes</button>
+                </div>
+              </div>
+              <!-- /vd-content -->
+
+              <!-- Sticky footer actions -->
+              <div class="vd-footer">
+                <button
+                  class="btn-view-project"
+                  id="btn-view-project"
+                  onclick="viewProject()"
+                >
+                  <i class="ri-external-link-line"></i> View Project
+                </button>
+                <!-- Assign Investigator (new) -->
+                <button
+                  class="btn-assign-investigator"
+                  id="btn-assign-investigator"
+                  onclick="openAssignModal()"
+                >
+                  <i class="ri-user-add-line"></i> Assign
+                </button>
+                <!-- Export (new) -->
+                <button
+                  class="btn-export-violation"
+                  id="btn-export-violation"
+                  onclick="exportViolation()"
+                >
+                  <i class="ri-download-2-line"></i> Export
+                </button>
+                <button
+                  class="btn-escalate"
+                  id="btn-escalate"
+                  onclick="openEscalateModal()"
+                >
+                  <i class="ri-alarm-warning-line"></i> Escalate
+                </button>
+                <button
+                  class="btn-mark-resolved"
+                  id="btn-mark-resolved"
+                  onclick="markResolved()"
+                >
+                  <i class="ri-check-double-line"></i> Mark Resolved
+                </button>
+              </div>
+            </section>
+            <!-- /violation-detail -->
+          </div>
+          <!-- /violations-layout -->
+        </div>
+        <!-- /content-wrapper -->
+      </main>
+    </div>
+    <!-- /admin-layout -->
+
+    <!-- ===== ASSIGN INVESTIGATOR MODAL (new) ===== -->
+    <div class="modal-overlay" id="assignModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">Assign Investigator</h3>
+          <span class="modal-close" onclick="closeAssignModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Select Investigator</label>
+            <select id="investigatorSelect" class="form-control">
+              <option value="">— Choose —</option>
+              <option value="Priya Sharma">Priya Sharma (Compliance Lead)</option>
+              <option value="Rohan Verma">Rohan Verma (Sr. Analyst)</option>
+              <option value="Anjali Nair">Anjali Nair (Risk Officer)</option>
+              <option value="Dev Kapoor">Dev Kapoor (Audit Manager)</option>
+            </select>
+            <div class="form-error" id="investigatorError">Please select an investigator.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Assignment Note (optional)</label>
+            <textarea id="assignNote" class="form-control" rows="3" placeholder="Add any context for the investigator…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveAssignment()">Assign</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ESCALATION MODAL (new) ===== -->
+    <div class="modal-overlay" id="escalateModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">Escalate Violation</h3>
+          <span class="modal-close" onclick="closeEscalateModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Escalation Level</label>
+            <select id="escalationLevel" class="form-control">
+              <option value="">— Select level —</option>
+              <option value="Internal Review">Internal Review</option>
+              <option value="Department Head">Department Head</option>
+              <option value="Regulatory Team">Regulatory Team</option>
+              <option value="External Audit">External Audit</option>
+            </select>
+            <div class="form-error" id="escalationLevelError">Please select an escalation level.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Escalation Reason</label>
+            <textarea id="escalationReason" class="form-control" rows="3" placeholder="Describe why this violation needs escalation…"></textarea>
+            <div class="form-error" id="escalationReasonError">Please provide an escalation reason.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notify (comma-separated emails)</label>
+            <input type="text" id="escalationNotify" class="form-control" placeholder="e.g. head@company.com, audit@company.com" />
+          </div>
+          <div class="vd-escalation-preview" id="escalationPreview" style="display:none">
+            <i class="ri-information-line"></i>
+            <span id="escalationPreviewText"></span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeEscalateModal()">Cancel</button>
+          <button class="btn" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;" onclick="previewEscalation()">Preview</button>
+          <button class="btn btn-primary" style="background:#dc2626;" onclick="confirmEscalation()"><i class="ri-alarm-warning-line"></i> Confirm Escalate</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../js/pages/compliance/violations.js"></script>
+  </body>
+</html>

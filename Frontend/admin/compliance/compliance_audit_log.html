@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync - Audit Log</title>
+    <meta
+      name="description"
+      content="OfficeSync Compliance Officer – System-wide audit trail of all compliance events, actions, and outcomes."
+    />
+    <link rel="stylesheet" href="../../css/compliance/base.css" />
+    <link rel="stylesheet" href="../../css/compliance/layout.css" />
+    <link rel="stylesheet" href="../../css/compliance/components.css" />
+    <link rel="stylesheet" href="../../css/compliance/compliance.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <script src="../../js/data/db.js"></script>
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script>
+      // --- 1. STRICT AUTHENTICATION CHECK ---
+      document.addEventListener("DOMContentLoaded", () => {
+        // Grab the current user session
+        const userStr = sessionStorage.getItem("currentUser");
+
+        // If no user is logged in, kick them out immediately
+        if (!userStr) {
+          window.location.replace("../../login.html");
+          return;
+        }
+
+        // Parse the session and check roles
+        const session = JSON.parse(userStr);
+
+        // Allow ONLY Superuser or Compliance Officer
+        if (
+          session.role !== "superuser" &&
+          session.role !== "compliance_officer"
+        ) {
+          alert("Access Denied: You do not have permission to view this area.");
+          window.location.replace("../../login.html");
+          return;
+        }
+      });
+
+      // --- 2. BULLETPROOF LOGOUT OVERRIDE ---
+      // This forces the logout button to clear everything and jump back exactly 2 folders.
+      window.Auth = window.Auth || {};
+      window.Auth.logout = function () {
+        sessionStorage.removeItem("currentUser");
+        localStorage.removeItem("currentUser"); // Clears any lingering local storage auth
+        window.location.replace("../../login.html");
+      };
+    </script>
+    <style>
+      /* =====================================================
+         AUDIT LOG PAGE — page-specific additions
+         ===================================================== */
+
+      /* Filter bar — pill-button style matching screenshot */
+      .audit-filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      .audit-search-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px 14px;
+        min-width: 220px;
+        flex: 1;
+        max-width: 280px;
+      }
+
+      .audit-search-bar svg {
+        color: var(--text-muted);
+        flex-shrink: 0;
+      }
+
+      .audit-search-bar input {
+        border: none;
+        outline: none;
+        font-size: 13px;
+        color: var(--text-main);
+        background: transparent;
+        width: 100%;
+        font-family: var(--font-family);
+      }
+
+      .audit-search-bar input::placeholder {
+        color: var(--text-muted);
+      }
+
+      /* Pill-button filter — matches screenshot style (pill with text, no dropdown arrow) */
+      .audit-filter-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        background: var(--card-bg);
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 500;
+        font-family: var(--font-family);
+        cursor: pointer;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+        transition:
+          border-color 0.15s,
+          background 0.15s,
+          color 0.15s;
+        white-space: nowrap;
+      }
+
+      .audit-filter-pill:focus,
+      .audit-filter-pill:hover {
+        border-color: var(--primary-color);
+        color: var(--text-main);
+      }
+
+      /* Audit Table Card */
+      .audit-table-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+      }
+
+      .audit-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .audit-table thead tr {
+        background: var(--card-bg);
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .audit-table th {
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.6px;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-align: left;
+        padding: 12px 20px;
+      }
+
+      .audit-table tbody tr {
+        border-bottom: 1px solid var(--border-color);
+        transition: background 0.12s;
+      }
+
+      .audit-table tbody tr:last-child {
+        border-bottom: none;
+      }
+
+      .audit-table tbody tr:hover {
+        background: #f8fafc;
+      }
+
+      .audit-table td {
+        padding: 16px 20px;
+        font-size: 14px;
+        vertical-align: middle;
+      }
+
+      .audit-timestamp {
+        font-size: 13px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        min-width: 150px;
+      }
+
+      .audit-event-cell {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .audit-event-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
+      .audit-event-icon.icon-success {
+        background: var(--success-bg);
+        color: var(--success-text);
+      }
+      .audit-event-icon.icon-violation {
+        background: var(--danger-bg);
+        color: var(--danger-text);
+      }
+      .audit-event-icon.icon-update {
+        background: var(--info-bg);
+        color: var(--info-text);
+      }
+      .audit-event-icon.icon-warning {
+        background: var(--warning-bg);
+        color: var(--warning-text);
+      }
+
+      .audit-event-text {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .audit-event-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-main);
+        margin-bottom: 3px;
+        white-space: nowrap;
+      }
+
+      .audit-event-subtitle {
+        font-size: 12px;
+        color: var(--text-muted);
+        white-space: nowrap;
+      }
+
+      .audit-actor-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        white-space: nowrap;
+      }
+
+      .actor-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        flex-shrink: 0;
+        color: white;
+      }
+
+      .avatar-blue {
+        background-color: #2563eb;
+      }
+      .avatar-red {
+        background-color: #ef4444;
+      }
+      .avatar-green {
+        background-color: #16a34a;
+      }
+      .avatar-purple {
+        background-color: #7c3aed;
+      }
+
+      .actor-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-main);
+      }
+
+      .badge.iso {
+        background-color: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+      }
+      .badge.sox {
+        background-color: #fff7ed;
+        color: #c2410c;
+        border: 1px solid #fed7aa;
+      }
+      .badge.gdpr {
+        background-color: #f0fdf4;
+        color: #15803d;
+        border: 1px solid #bbf7d0;
+      }
+      .badge.hrpol {
+        background-color: #fdf4ff;
+        color: #7e22ce;
+        border: 1px solid #e9d5ff;
+      }
+
+      .badge.outcome-approved {
+        background-color: var(--success-bg);
+        color: var(--success-text);
+      }
+      .badge.outcome-violation {
+        background-color: var(--danger-bg);
+        color: var(--danger-text);
+      }
+      .badge.outcome-updated {
+        background-color: var(--info-bg);
+        color: var(--info-text);
+      }
+      .badge.outcome-pending {
+        background-color: var(--warning-bg);
+        color: var(--warning-text);
+      }
+      .badge.outcome-resolved {
+        background-color: #dcfce7;
+        color: #166534;
+      }
+
+      .audit-project {
+        font-size: 13px;
+        color: var(--text-main);
+        white-space: nowrap;
+      }
+
+      /* Export icon button */
+      .btn-export {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--card-bg);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .btn-export:hover {
+        background: #f8fafc;
+        color: var(--text-main);
+      }
+
+      /* Loading spinner for tbody placeholder */
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="page-title">Audit Log</div>
+          <div class="header-actions" style="gap: 10px">
+            <!-- Export icon button (icon only, matching screenshot) -->
+            <button
+              class="btn-export"
+              id="btn-export"
+              aria-label="Export audit log"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </button>
+            <!-- Notification icon -->
+            <button
+              class="btn-icon"
+              id="btn-notifications"
+              style="position: relative"
+              aria-label="Notifications"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Content Wrapper -->
+        <div class="content-wrapper">
+          <!-- Filter Bar — pill-button style matching screenshot -->
+          <div
+            class="audit-filter-bar"
+            role="search"
+            aria-label="Audit log filters"
+          >
+            <div class="audit-search-bar">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                id="auditSearch"
+                placeholder="Search audit entries..."
+                aria-label="Search audit entries"
+              />
+            </div>
+
+            <select
+              class="audit-filter-pill"
+              id="filterEventType"
+              aria-label="Filter by event type"
+            >
+              <option value="">All Event Types</option>
+              <option value="approved">Approved</option>
+              <option value="violation">Violation</option>
+              <option value="updated">Updated</option>
+              <option value="pending">Pending</option>
+              <option value="resolved">Resolved</option>
+            </select>
+
+            <select
+              class="audit-filter-pill"
+              id="filterProject"
+              aria-label="Filter by project"
+            >
+              <option value="">All Projects</option>
+              <option value="it-security">IT Security Audit</option>
+              <option value="finance-q4">Finance Q4</option>
+              <option value="all-projects">All Projects</option>
+              <option value="project-atlas">Project Atlas</option>
+              <option value="onboarding">Onboarding Overhaul</option>
+            </select>
+
+            <select
+              class="audit-filter-pill"
+              id="filterPolicy"
+              aria-label="Filter by policy"
+            >
+              <option value="">All Policies</option>
+              <option value="iso27001">ISO 27001</option>
+              <option value="sox">SOX</option>
+              <option value="gdpr">GDPR</option>
+              <option value="hr-policy">HR Policy</option>
+            </select>
+
+            <select
+              class="audit-filter-pill"
+              id="filterWorkflow"
+              aria-label="Filter by workflow"
+            >
+              <option value="">All Workflows</option>
+            </select>
+
+            <select
+              class="audit-filter-pill"
+              id="filterDate"
+              aria-label="Filter by date range"
+            >
+              <option value="30">Last 30 days</option>
+              <option value="7">Last 7 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="365">Last year</option>
+            </select>
+
+            <button class="btn btn-secondary" id="btnResetAuditFilters" type="button">
+              Reset Filters
+            </button>
+          </div>
+
+          <!-- Audit Table Card -->
+          <div class="audit-table-card">
+            <div class="data-table-container">
+              <table
+                class="audit-table"
+                id="auditTable"
+                aria-label="Audit log entries"
+              >
+                <thead>
+                  <tr>
+                    <th scope="col">Timestamp</th>
+                    <th scope="col">Event</th>
+                    <th scope="col">Actor</th>
+                    <th scope="col">Policy</th>
+                    <th scope="col">Project</th>
+                    <th scope="col" class="col-statediff">State Change</th>
+                    <th scope="col">Outcome</th>
+                  </tr>
+                </thead>
+                <tbody id="auditTableBody">
+                  <!-- Loading placeholder replaced by renderAuditLog() on DOMContentLoaded -->
+                  <tr id="auditLoadingRow">
+                    <td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">
+                      Loading audit entries…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <!-- /audit-table-card -->
+        </div>
+        <!-- /content-wrapper -->
+      </main>
+    </div>
+    <!-- /admin-layout -->
+
+    <script src="../../js/pages/compliance/audit-log.js"></script>
+    <script src="../../js/pages/compliance/audit-log-export.js"></script>
+
+    <!-- ===== EXPORT FILTER MODAL ===== -->
+    <div class="modal-overlay" id="exportFilterModal" role="dialog" aria-modal="true" aria-labelledby="exportFilterTitle">
+      <div class="modal-content modal-lg" id="exportFilterContent">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="exportFilterTitle">Export Audit Log</h3>
+            <p class="modal-subtitle">Select filters before generating the signed export file.</p>
+          </div>
+          <span class="modal-close" id="btnCloseExportFilter" aria-label="Close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <!-- Date Range -->
+          <div class="form-group">
+            <label class="form-label">Date Range</label>
+            <select class="form-control" id="exportDatePreset">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="custom">Custom range&hellip;</option>
+            </select>
+          </div>
+          <div id="exportCustomDateRow" style="display:none;" class="form-row">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">From</label>
+              <input type="date" id="exportDateFrom" class="form-control" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">To</label>
+              <input type="date" id="exportDateTo" class="form-control" />
+            </div>
+          </div>
+          <!-- Policy + Project -->
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Policy Filter</label>
+              <select class="form-control" id="exportPolicyFilter">
+                <option value="">All Policies</option>
+                <option value="ISO 27001">ISO 27001</option>
+                <option value="SOX">SOX</option>
+                <option value="GDPR">GDPR</option>
+                <option value="HR Policy">HR Policy</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Project Filter</label>
+              <select class="form-control" id="exportProjectFilter">
+                <option value="">All Projects</option>
+                <option value="IT Security Audit">IT Security Audit</option>
+                <option value="Finance Q4">Finance Q4</option>
+                <option value="Project Atlas">Project Atlas</option>
+                <option value="Onboarding Overhaul">Onboarding Overhaul</option>
+              </select>
+            </div>
+          </div>
+          <!-- Format -->
+          <div class="form-group" style="margin-top:16px;margin-bottom:0;">
+            <label class="form-label">Export Format</label>
+            <div class="export-format-grid">
+              <label class="export-format-card" id="fmtCardCsv">
+                <input type="radio" name="exportFormat" value="csv" id="fmtCsv" checked />
+                <i class="ri-file-excel-2-line"></i>
+                <span>CSV</span>
+                <small>Machine-readable, filterable</small>
+              </label>
+              <label class="export-format-card" id="fmtCardPdf">
+                <input type="radio" name="exportFormat" value="txt" id="fmtPdf" />
+                <i class="ri-file-text-line"></i>
+                <span>TXT Report</span>
+                <small>Human-readable, printable</small>
+              </label>
+            </div>
+          </div>
+          <!-- Info -->
+          <div class="ec-info-box" style="margin-top:16px;margin-bottom:0;">
+            <i class="ri-shield-check-line" style="flex-shrink:0;font-size:16px;"></i>
+            <span>This export will be <strong>self-logged</strong> to the audit trail — who exported, when, and what filters were applied.</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnCancelExportFilter">Cancel</button>
+          <button class="btn btn-primary" id="btnPreviewExport">
+            <i class="ri-eye-line"></i> Preview &amp; Generate Hash
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== HASH CONFIRMATION MODAL ===== -->
+    <div class="modal-overlay" id="hashConfirmModal" role="dialog" aria-modal="true" aria-labelledby="hashConfirmTitle">
+      <div class="modal-content modal-lg" id="hashConfirmContent">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="hashConfirmTitle">Confirm Export</h3>
+            <p class="modal-subtitle">Review the export details and integrity hash before downloading.</p>
+          </div>
+          <span class="modal-close" id="btnCloseHashConfirm" aria-label="Close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="export-summary-grid" id="exportSummaryGrid"></div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label class="form-label" style="display:flex;align-items:center;gap:6px;">
+              <i class="ri-fingerprint-line" style="color:#7c3aed;"></i>
+              Export Integrity Hash (SHA-256 Simulated)
+            </label>
+            <div class="export-hash-box" id="exportHashBox"></div>
+          </div>
+          <div class="export-self-log-notice">
+            <label class="export-confirm-checkbox" for="exportConfirmCheck">
+              <input type="checkbox" id="exportConfirmCheck" />
+              <span>I confirm this export will be permanently self-logged to the compliance audit trail with my identity, timestamp, and applied filters.</span>
+            </label>
+          </div>
+          <div class="form-error" id="exportConfirmError" style="display:none;margin-top:8px;">You must check the confirmation box before downloading.</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnBackToFilter">&larr; Back to Filters</button>
+          <button class="btn btn-primary" id="btnDownloadExport" style="background:#16a34a;border-color:#16a34a;">
+            <i class="ri-download-line"></i> Download &amp; Log Export
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== AUDIT EVENT DETAIL MODAL ===== -->
+    <div class="modal-overlay" id="auditDetailModal" role="dialog" aria-modal="true" aria-labelledby="auditDetailTitle">
+      <div class="modal-content modal-lg" id="auditDetailContent">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" id="auditDetailTitle">Audit Event Details</h3>
+            <p class="modal-subtitle" id="auditDetailSubtitle">View full event context, linked workflow, and state transition details.</p>
+          </div>
+          <span class="modal-close" id="btnCloseAuditDetail" aria-label="Close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="audit-detail-grid" id="auditDetailGrid"></div>
+
+          <div class="audit-detail-section">
+            <div class="audit-detail-section-label">State Transition</div>
+            <div id="auditDetailStateTransition"></div>
+          </div>
+
+          <div class="audit-detail-section">
+            <div class="audit-detail-section-label">Context Notes</div>
+            <p class="audit-detail-note" id="auditDetailNotes"></p>
+          </div>
+
+          <div class="audit-detail-warning" id="auditDetailDuplicateWarning" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnAuditDetailOpenWorkflow" type="button">Open Workflow Context</button>
+          <button class="btn btn-primary" id="btnAuditDetailClose" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
