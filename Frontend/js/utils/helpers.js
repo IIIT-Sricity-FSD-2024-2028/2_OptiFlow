@@ -216,7 +216,7 @@ window.Helpers = {
       ],
       projects: JSON.parse(localStorage.getItem("pm_projects")) || [],
       tasks: sanitizedTasks,
-      subtasks: [],
+      subtasks: JSON.parse(localStorage.getItem("pm_subtasks")) || [],
       escalations: JSON.parse(localStorage.getItem("pm_escalations")) || [],
       complianceItems:
         JSON.parse(localStorage.getItem("pm_complianceItems")) || [],
@@ -224,6 +224,8 @@ window.Helpers = {
         JSON.parse(localStorage.getItem("pm_complianceViolations")) || [],
       complianceViolations:
         JSON.parse(localStorage.getItem("pm_complianceViolations")) || [],
+      complianceRules: JSON.parse(localStorage.getItem("pm_complianceRules")) || [],
+      complianceReports: JSON.parse(localStorage.getItem("pm_complianceReports")) || [],
       auditLogs: JSON.parse(localStorage.getItem("pm_audit_logs")) || [],
       evidence: JSON.parse(localStorage.getItem("pm_evidence")) || [],
     };
@@ -232,6 +234,7 @@ window.Helpers = {
   saveState(state) {
     localStorage.setItem("pm_projects", JSON.stringify(state.projects));
     localStorage.setItem("pm_tasks", JSON.stringify(state.tasks));
+    localStorage.setItem("pm_subtasks", JSON.stringify(state.subtasks || []));
     localStorage.setItem("pm_escalations", JSON.stringify(state.escalations));
 
     // ✅ ADDED THESE THREE LINES: Now it actually saves Evidence and Compliance data!
@@ -243,6 +246,14 @@ window.Helpers = {
     localStorage.setItem(
       "pm_complianceViolations",
       JSON.stringify(state.complianceViolations || []),
+    );
+    localStorage.setItem(
+      "pm_complianceRules",
+      JSON.stringify(state.complianceRules || []),
+    );
+    localStorage.setItem(
+      "pm_complianceReports",
+      JSON.stringify(state.complianceReports || []),
     );
   },
 

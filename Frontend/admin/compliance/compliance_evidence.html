@@ -27,30 +27,10 @@
     <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/components/sidebar.js"></script>
     <script src="../../js/components/toast.js"></script>
+    <script src="../../js/data/audit-store.js"></script>
     <script>
-      // --- 1. STRICT AUTHENTICATION CHECK ---
       document.addEventListener("DOMContentLoaded", () => {
-        // Grab the current user session
-        const userStr = sessionStorage.getItem("currentUser");
-
-        // If no user is logged in, kick them out immediately
-        if (!userStr) {
-          window.location.replace("../../login.html");
-          return;
-        }
-
-        // Parse the session and check roles
-        const session = JSON.parse(userStr);
-
-        // Allow ONLY Superuser or Compliance Officer
-        if (
-          session.role !== "superuser" &&
-          session.role !== "compliance_officer"
-        ) {
-          alert("Access Denied: You do not have permission to view this area.");
-          window.location.replace("../../login.html");
-          return;
-        }
+        protectPage(["compliance_officer"]);
       });
 
       // --- 2. BULLETPROOF LOGOUT OVERRIDE ---

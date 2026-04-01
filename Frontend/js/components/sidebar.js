@@ -4,26 +4,65 @@
 window.Sidebar = {
   navConfig: {
     SuperUser: [
+      { type: "section", label: "Main" },
       {
         id: "dashboard",
         label: "Dashboard",
         icon: "grid",
-        href: "dashboard.html",
+        href: "superuser/dashboard.html",
+        absolute: true,
       },
-      { id: "users", label: "Users", icon: "users", href: "users.html" },
+      {
+        id: "users",
+        label: "Users",
+        icon: "users",
+        href: "superuser/users.html",
+        absolute: true,
+      },
       {
         id: "departments",
         label: "Departments",
         icon: "office",
-        href: "departments.html",
+        href: "superuser/departments.html",
+        absolute: true,
       },
       {
         id: "workflows",
         label: "Workflows",
         icon: "flow",
-        href: "workflows.html",
+        href: "superuser/workflows.html",
+        absolute: true,
       },
-      { id: "audit", label: "Audit Log", icon: "audit", href: "audit.html" },
+      {
+        id: "audit",
+        label: "Audit Log",
+        icon: "audit",
+        href: "superuser/audit.html",
+        absolute: true,
+      },
+
+      { type: "section", label: "Global Modules" },
+      {
+        id: "global-hr",
+        label: "HR Portal",
+        icon: "hr",
+        href: "admin/pm/hr-dashboard.html",
+        absolute: true,
+      },
+      {
+        id: "global-pm",
+        label: "Project Manager",
+        icon: "pm",
+        href: "admin/pm/pm-dashboard.html",
+        absolute: true,
+      },
+      {
+        id: "global-compliance",
+        label: "Compliance Center",
+        icon: "compliance",
+        href: "admin/compliance/compliance_dashboard.html",
+        absolute: true,
+      },
     ],
     Project_Manager: [
       {
@@ -123,6 +162,9 @@ window.Sidebar = {
     office: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
     flow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>`,
     audit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+    hr: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 11c1.66 0 3-1.57 3-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11z"/><path d="M8 11c1.66 0 3-1.57 3-3.5S9.66 4 8 4 5 5.57 5 7.5 6.34 11 8 11z"/><path d="M8 13c-2.76 0-5 1.79-5 4v3h10v-3c0-2.21-2.24-4-5-4z"/><path d="M16 13c-1.2 0-2.3.29-3.2.78 1.35.92 2.2 2.15 2.2 3.72v2.5H21v-3c0-2.21-2.24-4-5-4z"/></svg>`,
+    pm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>`,
+    compliance: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-5"/></svg>`,
     tasks: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
     doc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
     settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
@@ -145,25 +187,6 @@ window.Sidebar = {
     const violationCount = state.complianceViolations
       ? state.complianceViolations.filter((v) => v.status === "Open").length
       : 0;
-
-    const navHTML = navItems
-      .map((item) => {
-        const isActive = item.id === activeId;
-        let badge = "";
-        if (item.badge === "escalations" && escalationCount > 0) {
-          badge = `<span class="nav-badge">${escalationCount}</span>`;
-        }
-        if (item.badge === "violations" && violationCount > 0) {
-          badge = `<span class="nav-badge">${violationCount}</span>`;
-        }
-        return `
-        <a href="${item.href}" class="nav-item ${isActive ? "active" : ""}">
-          ${this.icons[item.icon]}
-          <span>${item.label}</span>
-          ${badge}
-        </a>`;
-      })
-      .join("");
 
     const displayRole = session.roleName.replace("_", " ");
 
@@ -190,6 +213,38 @@ window.Sidebar = {
       prefix = "../";
     }
 
+    const resolveHref = (item) => {
+      if (!item || !item.href) return "#";
+      if (item.absolute) return prefix + item.href;
+      return item.href;
+    };
+
+    const hasSections = navItems.some((i) => i && i.type === "section");
+    const navHTML = navItems
+      .map((item) => {
+        if (item && item.type === "section") {
+          return `<div class="sidebar-section-label">${item.label}</div>`;
+        }
+
+        const isActive = item.id === activeId;
+        let badge = "";
+        if (item.badge === "escalations" && escalationCount > 0) {
+          badge = `<span class="nav-badge">${escalationCount}</span>`;
+        }
+        if (item.badge === "violations" && violationCount > 0) {
+          badge = `<span class="nav-badge">${violationCount}</span>`;
+        }
+
+        const href = resolveHref(item);
+        return `
+        <a href="${href}" class="nav-item ${isActive ? "active" : ""}">
+          ${this.icons[item.icon] || ""}
+          <span>${item.label}</span>
+          ${badge}
+        </a>`;
+      })
+      .join("");
+
     const logoHTML = this.icons.logo.replace(
       "REPLACE_ME",
       prefix + "assets/images/logo_light.png",
@@ -202,7 +257,7 @@ window.Sidebar = {
     <div class="sidebar-role-container">
     <div class="sidebar-user-role1">${displayRole}</div>
     </div>
-      <div class="sidebar-section-label">Main</div>
+      ${hasSections ? "" : `<div class="sidebar-section-label">Main</div>`}
       <nav class="sidebar-nav">${navHTML}</nav>
       <div class="sidebar-bottom">
         <div class="sidebar-settings" onclick="window.location.href='${prefix}admin/pm/settings.html'">

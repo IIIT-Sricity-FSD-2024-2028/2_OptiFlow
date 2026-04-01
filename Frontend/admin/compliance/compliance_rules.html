@@ -29,29 +29,8 @@
     <script src="../../js/components/toast.js"></script>
     <script src="../../js/components/modal.js"></script>
     <script>
-      // --- 1. STRICT AUTHENTICATION CHECK ---
       document.addEventListener("DOMContentLoaded", () => {
-        // Grab the current user session
-        const userStr = sessionStorage.getItem("currentUser");
-
-        // If no user is logged in, kick them out immediately
-        if (!userStr) {
-          window.location.replace("../../login.html");
-          return;
-        }
-
-        // Parse the session and check roles
-        const session = JSON.parse(userStr);
-
-        // Allow ONLY Superuser or Compliance Officer
-        if (
-          session.role !== "superuser" &&
-          session.role !== "compliance_officer"
-        ) {
-          alert("Access Denied: You do not have permission to view this area.");
-          window.location.replace("../../login.html");
-          return;
-        }
+        protectPage(["compliance_officer"]);
       });
 
       // --- 2. BULLETPROOF LOGOUT OVERRIDE ---
@@ -62,7 +41,20 @@
         localStorage.removeItem("currentUser"); // Clears any lingering local storage auth
         window.location.replace("../../login.html");
       };
-    </script>
+    <style>
+      .form-error {
+        color: var(--danger-text, #ef4444);
+        font-size: 12px;
+        margin-top: 4px;
+        display: block;
+      }
+      .form-error.hidden {
+        display: none !important;
+      }
+      .form-control.error {
+        border-color: var(--danger-text, #ef4444);
+      }
+    </style>
   </head>
   <body>
     <div class="admin-layout">
@@ -247,7 +239,7 @@
               class="form-control"
               placeholder="e.g. GDPR Data Retention Verification"
             />
-            <span class="form-error">Rule name is required.</span>
+            <span class="form-error hidden" id="ruleName-error">Rule name is required.</span>
           </div>
 
           <!-- Policy / Framework + Severity Level -->

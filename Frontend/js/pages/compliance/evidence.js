@@ -161,6 +161,14 @@ window.updateEvidenceStatus = function (status, label) {
     ev.status = status;
     ev.statusLabel = label;
 
+    if (window.AuditStore) {
+      window.AuditStore.add(
+        "Compliance",
+        `Evidence ${label.toLowerCase()}: "${ev.title}" (ID: ${ev.id})`,
+        status === "rejected" ? "Medium" : "Info",
+      );
+    }
+
     // 2. GENERATE NOTIFICATION FOR THE SUBMITTER
     if (!state.notifications) state.notifications = [];
 
@@ -232,10 +240,7 @@ window.closeDownloadModal = function () {
   if (modal) modal.classList.remove("active");
 };
 
-window.requestMoreInfo = function () {
-  if (window.Toast)
-    window.Toast.show("Information request sent to Submitter", "info");
-};
+
 
 window.toggleCheckbox = function (element) {
   if (element.classList.contains("blocked")) return;

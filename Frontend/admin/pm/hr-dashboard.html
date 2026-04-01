@@ -45,7 +45,7 @@
     <script src="../../js/components/modal.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
-        window.Auth.requireRole("admin");
+        protectPage(["hr_manager"]);
         window.Sidebar.render("dashboard");
         window.Toast.init();
 

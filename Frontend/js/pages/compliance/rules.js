@@ -80,11 +80,16 @@ function closeNewRuleModal() {
 }
 
 function saveNewRule() {
-  const nameInput = document.getElementById("ruleName");
-  if (!nameInput.value.trim()) {
-    if (window.Toast) window.Toast.show("Rule name is required", "error");
+  const result = window.Validator.validateForm({
+    "ruleName": { required: true }
+  });
+
+  if (!result.valid) {
+    if (window.Toast) window.Toast.show("Please fix the errors in the form.", "error");
     return;
   }
+
+  const nameInput = document.getElementById("ruleName");
 
   const newRule = {
     id: "rule_" + Date.now(),

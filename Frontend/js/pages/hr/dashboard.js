@@ -192,6 +192,11 @@ function setupNotifications() {
 // Init
 // ─────────────────────────────────────────
 document.addEventListener("DOMContentLoaded",async () => {
+  // Ensure HRStore and Master users stay synchronized before rendering
+  if (typeof HRStore !== "undefined" && HRStore.syncWithMaster) {
+    HRStore.syncWithMaster();
+  }
+
   // Read from store — nothing hardcoded
   renderMetrics();
   populateFilters();

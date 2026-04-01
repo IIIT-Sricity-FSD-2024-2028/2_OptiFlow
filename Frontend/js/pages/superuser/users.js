@@ -17,7 +17,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function refreshTable() {
-  let users = getUsers(); // Pulls from master db.js
+  // Ensure HRStore and Master users stay synchronized
+  if (typeof HRStore !== "undefined" && HRStore.syncWithMaster) {
+    HRStore.syncWithMaster();
+  }
+
+  let users = getUsers(); // Master db.js (kept as the canonical login list)
   const search = document.getElementById("searchInput").value.toLowerCase();
   const role = document.getElementById("roleFilter").value; // e.g., "hr_manager"
 
@@ -33,6 +38,95 @@ function refreshTable() {
   }
 
   renderUserTable(users);
+}
+
+function pushNotificationToRole(targetRole, { title, message, type }) {
+  try {
+    const users = getUsers();
+    const targets = users.filter((u) => String(u.role) === String(targetRole));
+    if (targets.length === 0) return;
+
+    let notifications = JSON.parse(localStorage.getItem("system_notifications")) || [];
+    const baseId = Date.now();
+    targets.forEach((t, i) => {
+      notifications.push({
+        id: baseId + i,
+        targetUserId: String(t.id),
+        title: title || "Notification",
+        message: message || "",
+        type: type || "info",
+        date: "Just now",
+        read: false,
+      });
+    });
+    localStorage.setItem("system_notifications", JSON.stringify(notifications));
+  } catch (e) {
+    console.warn("Notification hook failed.", e);
+  }
+}
+
+function upsertEmployeeFromAuthUser(authUser) {
+  if (typeof HRStore === "undefined") return;
+  if (!authUser || !authUser.email) return;
+
+  const email = authUser.email.trim().toLowerCase();
+  const emps = HRStore.getAll();
+  const existing = emps.find((e) => String(e.email || "").trim().toLowerCase() === email);
+
+  // Map auth role to HR display role
+  const roleMap = {
+    superuser: "Process Admin",
+    hr_manager: "HR Manager",
+    hr_ops: "HR Ops",
+    project_manager: "Project Manager",
+    team_leader: "Team Leader",
+    team_member: "Team Member",
+    compliance_officer: "Compliance Officer",
+    enduser: "Team Member",
+  };
+  const hrRole = roleMap[String(authUser.role || "").toLowerCase()] || authUser.role;
+  const hrStatus =
+    String(authUser.status || "Active").toLowerCase() === "inactive" ? "inactive" : "active";
+
+  if (existing) {
+    HRStore.update(existing.id, {
+      name: authUser.name || existing.name,
+      email: authUser.email,
+      phone: existing.phone || "+91 00000 00000",
+      department: authUser.department || existing.department,
+      team: existing.team || null,
+      role: hrRole,
+      parentId: existing.parentId || null,
+      joinDateRaw: existing.joinDateRaw || "",
+      joined: existing.joined || authUser.joined || existing.joined,
+      status: existing.status, // status handled via setStatus
+    });
+    HRStore.setStatus(existing.id, hrStatus);
+  } else {
+    // Create a minimal HR profile so HR dashboards and superuser users list stay aligned
+    const joined =
+      authUser.joined ||
+      new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    HRStore.add({
+      name: authUser.name || authUser.email,
+      initials: (authUser.name || authUser.email)
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .substring(0, 2) || "??",
+      color: "#2563eb",
+      role: hrRole,
+      department: authUser.department || "Operations",
+      team: null,
+      parentId: null,
+      status: hrStatus,
+      joined,
+      email: authUser.email,
+      phone: "+91 00000 00000",
+      joinDateRaw: "",
+    });
+  }
 }
 
 function renderUserTable(data) {
@@ -157,6 +251,7 @@ function saveUser() {
   if (id) {
     const idx = users.findIndex((u) => u.id === id);
     if (idx > -1) {
+      const prev = { ...users[idx] };
       users[idx] = {
         ...users[idx],
         name,
@@ -169,6 +264,28 @@ function saveUser() {
         tasks,
         processes,
       };
+
+      // Sync to HR employee store
+      upsertEmployeeFromAuthUser(users[idx]);
+
+      // Rule A: notify HR Manager if role/status changed
+      const roleChanged = prev.role !== users[idx].role;
+      const statusChanged = prev.status !== users[idx].status;
+      if (roleChanged || statusChanged) {
+        pushNotificationToRole("hr_manager", {
+          title: "User Account Updated",
+          message: `Superuser updated ${users[idx].name}: ${roleChanged ? `role → ${users[idx].role}` : ""}${roleChanged && statusChanged ? ", " : ""}${statusChanged ? `status → ${users[idx].status}` : ""}`,
+          type: "warning",
+        });
+      }
+
+      if (window.AuditStore) {
+        window.AuditStore.add(
+          "User Management",
+          `Updated user: ${users[idx].name} (${users[idx].email})`,
+          "Info",
+        );
+      }
     }
   } else {
     const newDate = new Date().toLocaleDateString("en-US", {
@@ -176,7 +293,7 @@ function saveUser() {
       day: "2-digit",
       year: "numeric",
     });
-    users.push({
+    const newUser = {
       id: "u" + Date.now(),
       name,
       email,
@@ -190,7 +307,19 @@ function saveUser() {
       responsibilities,
       tasks,
       processes,
-    });
+    };
+    users.push(newUser);
+
+    // Sync to HR employee store
+    upsertEmployeeFromAuthUser(newUser);
+
+    if (window.AuditStore) {
+      window.AuditStore.add(
+        "User Management",
+        `Created user: ${newUser.name} (${newUser.email}) — ${newUser.role}`,
+        "Info",
+      );
+    }
   }
 
   saveUsers(users); // Saves to master db.js
@@ -204,7 +333,7 @@ function deleteUser(id) {
       "Are you sure you want to deactivate this user? They will be unable to log in, and their HR profile will be marked inactive.",
     )
   ) {
-    let users = getUsers(); // Get master db list
+    const users = getUsers(); // Get master db list
 
     // 1. Find the user so we know their email/details before deleting
     const userToDelete = users.find((u) => u.id === id);
@@ -224,9 +353,27 @@ function deleteUser(id) {
         }
       }
 
-      // 3. Remove them from the Master Login DB
-      users = users.filter((u) => u.id !== id);
+      // 3. Deactivate in the Master Login DB (do NOT delete; keeps sync consistent)
+      const idx = users.findIndex((u) => u.id === id);
+      if (idx > -1) {
+        users[idx] = { ...users[idx], status: "Inactive" };
+      }
       saveUsers(users);
+
+      // Rule A: notify HR Manager
+      pushNotificationToRole("hr_manager", {
+        title: "User Deactivated",
+        message: `Superuser deactivated ${userToDelete.name} (${userToDelete.email}).`,
+        type: "error",
+      });
+
+      if (window.AuditStore) {
+        window.AuditStore.add(
+          "User Management",
+          `Deactivated user: ${userToDelete.name} (${userToDelete.email})`,
+          "Medium",
+        );
+      }
       refreshTable();
     }
   }

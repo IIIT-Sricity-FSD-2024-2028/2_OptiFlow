@@ -285,6 +285,15 @@ window.ProjectsPage = {
     this.state.projects.push(newProject);
     window.Helpers.saveState(this.state);
     window.Helpers.log('CREATE', 'Project', newProject.id, null, newProject, 'project:create');
+
+    if (window.AuditStore) {
+      window.AuditStore.add(
+        "PM",
+        `Created project: "${newProject.name}" (ID: ${newProject.id})`,
+        "Info",
+      );
+    }
+
     window.Modal.close('modal-add-project');
     window.Toast.success('Project Created', `"${newProject.name}" has been created.`);
     this.filtered = [...this.state.projects];

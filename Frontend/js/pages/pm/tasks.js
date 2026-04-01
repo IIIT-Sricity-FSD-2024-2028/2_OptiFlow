@@ -385,6 +385,14 @@ window.TasksPage = {
       "task:create",
     );
 
+    if (window.AuditStore) {
+      window.AuditStore.add(
+        "PM",
+        `Created task: "${newTask.name}" (Task ID: ${newTask.id}) for Project ${newTask.projectId}`,
+        "Info",
+      );
+    }
+
     window.Modal.close("modal-add-task");
     window.Toast.success("Task Added", `"${newTask.name}" created.`);
     this.tasks = this.state.tasks.filter(
