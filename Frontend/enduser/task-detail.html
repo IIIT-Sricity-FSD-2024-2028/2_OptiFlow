@@ -324,6 +324,8 @@
                   <!-- JS -->
                 </div>
 
+                <div id="subtasks-wrapper"></div>
+
                 <div
                   style="
                     display: flex;
@@ -685,11 +687,83 @@
       </div>
     </div>
 
+    <!-- Subtask Modal -->
+    <div id="subtask-modal" class="modal-overlay">
+      <div
+        class="modal"
+        style="border-radius: 12px; max-width: 500px; padding: 0"
+      >
+        <div
+          class="modal-header"
+          style="border-bottom: 1px solid var(--border); padding: 20px 24px"
+        >
+          <div
+            style="
+              font-size: 16px;
+              font-weight: 700;
+              color: var(--text-primary);
+            "
+          >
+            Create Subtask
+          </div>
+          <button
+            class="modal-close"
+            onclick="closeSubtaskModal()"
+            style="
+              background: transparent;
+              border: none;
+              font-size: 20px;
+              color: var(--text-muted);
+              cursor: pointer;
+            "
+          >
+            &times;
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 24px">
+          <div class="form-group">
+            <label class="form-label" for="subtask-title"
+              >SUBTASK TITLE *</label
+            >
+            <input
+              type="text"
+              id="subtask-title"
+              class="form-control"
+              placeholder="What needs to be done?"
+            />
+            <span class="form-error hidden" id="subtask-title-error"
+              >This field is required.</span
+            >
+          </div>
+          <div class="form-group" style="margin-top: 20px">
+            <label class="form-label" for="subtask-assignee"
+              >ASSIGN TO (Team Member) *</label
+            >
+            <select id="subtask-assignee" class="form-select">
+              <!-- JS -->
+            </select>
+            <span class="form-error hidden" id="subtask-assignee-error"
+              >Please select a team member.</span
+            >
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeSubtaskModal()">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="saveSubtask()">
+            Assign Subtask
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="../js/data/db.js"></script>
     <script src="../js/data/pm-data-store.js"></script>
     <script src="../js/utils/auth.js"></script>
     <script src="../js/utils/validator.js"></script>
     <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/audit-store.js"></script>
     <script src="../js/components/sidebar.js"></script>
     <script src="../js/components/toast.js"></script>
     <script src="../js/components/modal.js"></script>
@@ -829,6 +903,46 @@
           <div style="color:#475569">${task.description || "No description provided."}</div>
         </div>`;
 
+          // Render Subtasks
+          let subtasksList = state.subtasks.filter(
+            (st) => String(st.parentTaskId) === String(task.id),
+          );
+          let subtasksHtml = subtasksList
+            .map((st) => {
+              let assignee = masterUsers.find(
+                (u) => String(u.id) === String(st.assignedUserId),
+              ) || { name: "Unknown" };
+              let badgeCls =
+                st.status === "Completed"
+                  ? "background:#10b981;color:white"
+                  : "background:#e2e8f0;color:#475569";
+              return `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom:1px solid var(--border)">
+                <div>
+                   <div style="font-size:13px; font-weight:600; color:var(--text-primary)">${st.title}</div>
+                   <div style="font-size:11px; color:var(--text-muted); margin-top:2px">Assigned to: ${assignee.name}</div>
+                </div>
+                <div><span style="font-size:11px; font-weight:600; padding:4px 8px; border-radius:12px; ${badgeCls}">${st.status}</span></div>
+              </div>
+            `;
+            })
+            .join("");
+          if (subtasksList.length === 0) {
+            subtasksHtml = `<div style="padding:12px 0; font-size:13px; color:var(--text-muted)">No subtasks created yet.</div>`;
+          }
+
+          let subtasksSection = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 8px;">
+               <div style="font-size: 14px; font-weight: 700; color: var(--text-primary)">Subtasks</div>
+               ${session.role === "team_leader" ? `<button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="openSubtaskModal()">+ Add Subtask</button>` : ""}
+            </div>
+            <div style="margin-bottom: 24px" id="subtasks-container">
+               ${subtasksHtml}
+            </div>
+          `;
+          document.getElementById("subtasks-wrapper").innerHTML =
+            subtasksSection;
+
           // Activity
           document.getElementById("activity-log").innerHTML = `
     <div style="display:flex; gap:12px; align-items:flex-start">
@@ -872,6 +986,59 @@
         window.Toast.warning(
           "Not implemented",
           "Decline modal not implemented in prototype.",
+        );
+      }
+
+      function openSubtaskModal() {
+        document.getElementById("subtask-title").value = "";
+
+        // Populate assignees (Team members who report to this TL)
+        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
+        const myReports = masterUsers.filter(
+          (u) => String(u.reportsTo) === String(session.id),
+        );
+        const selectEl = document.getElementById("subtask-assignee");
+
+        if (myReports.length > 0) {
+          selectEl.innerHTML =
+            '<option value="">Select a team member...</option>' +
+            myReports
+              .map((u) => `<option value="${u.id}">${u.name}</option>`)
+              .join("");
+        } else {
+          selectEl.innerHTML =
+            '<option value="">No team members found reporting to you. (Ensure HR data is synced)</option>';
+        }
+
+        document.getElementById("subtask-modal").classList.add("open");
+      }
+
+      function closeSubtaskModal() {
+        document.getElementById("subtask-modal").classList.remove("open");
+      }
+
+      function saveSubtask() {
+        // Validation via PM Validator
+        const result = window.Validator.validateForm({
+          "subtask-title": { required: true },
+          "subtask-assignee": { required: true },
+        });
+        if (!result.valid) return;
+
+        const newSt = {
+          id: "st_" + Date.now(),
+          parentTaskId: task.id,
+          title: document.getElementById("subtask-title").value,
+          assignedUserId: document.getElementById("subtask-assignee").value,
+          status: "Pending",
+        };
+        state.subtasks.unshift(newSt);
+        window.Helpers.saveState(state);
+        closeSubtaskModal();
+        renderPage();
+        window.Toast.success(
+          "Subtask created",
+          "Team member has been assigned.",
         );
       }
 
@@ -990,6 +1157,14 @@
             "Blocker Reported",
             "Your Team Leader has been notified.",
           );
+
+          if (window.AuditStore) {
+            window.AuditStore.add(
+              "EndUser",
+              `${session.name} reported a blocker on "${task.name}" (${blockerType})`,
+              "High",
+            );
+          }
 
           notifications.push({
             id: Date.now(),

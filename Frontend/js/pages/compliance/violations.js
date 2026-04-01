@@ -39,9 +39,21 @@ const DEFAULT_VIOLATIONS = [
     resolutionNotes:
       "Monitoring closely. Finance Head has acknowledged the request per PM escalation. Sign-off expected by Dec 19. If not resolved, will escalate to regulatory team and flag for external audit preparation.",
     timeline: [
-      { dot: "red", text: "Violation flagged — SOX 404 deadline missed", date: "Dec 15, 11:59 PM" },
-      { dot: "yellow", text: "Escalation raised — PM Arjun notified Finance Head directly", date: "Dec 16, 9:00 AM" },
-      { dot: "blue", text: "Finance Head response pending — sign-off expected by Dec 19", date: "Dec 17 (today)" },
+      {
+        dot: "red",
+        text: "Violation flagged — SOX 404 deadline missed",
+        date: "Dec 15, 11:59 PM",
+      },
+      {
+        dot: "yellow",
+        text: "Escalation raised — PM Arjun notified Finance Head directly",
+        date: "Dec 16, 9:00 AM",
+      },
+      {
+        dot: "blue",
+        text: "Finance Head response pending — sign-off expected by Dec 19",
+        date: "Dec 17 (today)",
+      },
     ],
     evidence: [
       { name: "sox_variance_report_Q4.pdf", date: "Dec 15" },
@@ -67,8 +79,16 @@ const DEFAULT_VIOLATIONS = [
       "Project Atlas data export request for client XYZ has not had the required evidence uploaded within the mandated 48-hour window. The responsible team member has been notified twice. Evidence upload is now 4 days overdue.",
     resolutionNotes: "",
     timeline: [
-      { dot: "red", text: "Violation flagged — evidence upload window expired", date: "Dec 14, 6:00 PM" },
-      { dot: "yellow", text: "Under review — Team lead Rajan notified", date: "Dec 15, 10:00 AM" },
+      {
+        dot: "red",
+        text: "Violation flagged — evidence upload window expired",
+        date: "Dec 14, 6:00 PM",
+      },
+      {
+        dot: "yellow",
+        text: "Under review — Team lead Rajan notified",
+        date: "Dec 15, 10:00 AM",
+      },
     ],
     evidence: [],
   },
@@ -89,10 +109,19 @@ const DEFAULT_VIOLATIONS = [
     escalationLevel: null,
     detail:
       "The monthly access log review for the production environment was not completed by the mandated date. The logs have since been reviewed and signed off.",
-    resolutionNotes: "Resolved — access logs reviewed and signed off by Rahul Saxena on Dec 12.",
+    resolutionNotes:
+      "Resolved — access logs reviewed and signed off by Rahul Saxena on Dec 12.",
     timeline: [
-      { dot: "red", text: "Violation flagged — access log review overdue", date: "Dec 10" },
-      { dot: "green", text: "Log review completed and signed off", date: "Dec 12" },
+      {
+        dot: "red",
+        text: "Violation flagged — access log review overdue",
+        date: "Dec 10",
+      },
+      {
+        dot: "green",
+        text: "Log review completed and signed off",
+        date: "Dec 12",
+      },
     ],
     evidence: [{ name: "access_log_nov_review.pdf", date: "Dec 12" }],
   },
@@ -112,7 +141,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Tab switching
   document.querySelectorAll(".pill-tab").forEach(function (tab) {
     tab.addEventListener("click", function () {
-      document.querySelectorAll(".pill-tab").forEach((t) => t.classList.remove("active"));
+      document
+        .querySelectorAll(".pill-tab")
+        .forEach((t) => t.classList.remove("active"));
       this.classList.add("active");
       currentTabFilter = this.dataset.tab;
       filterQueue();
@@ -126,7 +157,9 @@ document.addEventListener("DOMContentLoaded", function () {
 /* ─── TAB COUNTS ─────────────────────────────────────────────── */
 function updateTabCounts() {
   const all = state.complianceViolations;
-  const openCount = all.filter((v) => v.status === "Open" || v.status === "Under_Review").length;
+  const openCount = all.filter(
+    (v) => v.status === "Open" || v.status === "Under_Review",
+  ).length;
   const resolvedCount = all.filter((v) => v.status === "Resolved").length;
 
   const pendingBadge = document.querySelector(".queue-pending-count");
@@ -142,7 +175,9 @@ function updateTabCounts() {
 
 /* ─── FILTER QUEUE (search + severity + tab) ─────────────────── */
 window.filterQueue = function () {
-  const searchVal = (document.getElementById("violationSearch")?.value || "").toLowerCase().trim();
+  const searchVal = (document.getElementById("violationSearch")?.value || "")
+    .toLowerCase()
+    .trim();
   const severityVal = document.getElementById("severityFilter")?.value || "all";
 
   updateTabCounts();
@@ -150,7 +185,8 @@ window.filterQueue = function () {
   let data = state.complianceViolations.filter((item) => {
     // Tab filter
     if (currentTabFilter === "open") {
-      if (item.status !== "Open" && item.status !== "Under_Review") return false;
+      if (item.status !== "Open" && item.status !== "Under_Review")
+        return false;
     } else if (currentTabFilter === "resolved") {
       if (item.status !== "Resolved") return false;
     }
@@ -158,7 +194,8 @@ window.filterQueue = function () {
     if (severityVal !== "all" && item.severity !== severityVal) return false;
     // Search
     if (searchVal) {
-      const haystack = `${item.title} ${item.projectName} ${item.policy || ""} ${item.pm || ""}`.toLowerCase();
+      const haystack =
+        `${item.title} ${item.projectName} ${item.policy || ""} ${item.pm || ""}`.toLowerCase();
       if (!haystack.includes(searchVal)) return false;
     }
     return true;
@@ -173,7 +210,8 @@ function renderQueue(data) {
   if (!list) return;
 
   if (data.length === 0) {
-    list.innerHTML = '<li class="vq-no-results">No violations match your filters.</li>';
+    list.innerHTML =
+      '<li class="vq-no-results">No violations match your filters.</li>';
     showEmptyDetail();
     return;
   }
@@ -198,7 +236,9 @@ function renderQueue(data) {
     .join("");
 
   // Select the first item or re-select active
-  const currentlyActive = data.find((v) => String(v.id) === String(activeViolationId));
+  const currentlyActive = data.find(
+    (v) => String(v.id) === String(activeViolationId),
+  );
   selectViolation(currentlyActive ? currentlyActive.id : data[0].id);
 }
 
@@ -238,7 +278,9 @@ window.selectViolation = function (id) {
   if (emptyState) emptyState.style.display = "none";
 
   // Highlight active queue item
-  document.querySelectorAll(".vq-item").forEach((el) => el.classList.remove("active"));
+  document
+    .querySelectorAll(".vq-item")
+    .forEach((el) => el.classList.remove("active"));
   const itemEl = document.getElementById("vqi-" + id);
   if (itemEl) itemEl.classList.add("active");
 
@@ -256,7 +298,9 @@ window.selectViolation = function (id) {
   // Badge
   const badge = document.getElementById("vdBadge");
   if (badge) {
-    badge.textContent = d.severity ? d.severity.charAt(0).toUpperCase() + d.severity.slice(1) : d.statusLabel;
+    badge.textContent = d.severity
+      ? d.severity.charAt(0).toUpperCase() + d.severity.slice(1)
+      : d.statusLabel;
     badge.className = `badge ${d.severity === "critical" ? "critical" : d.severity === "warning" ? "warning" : "blue"}`;
   }
 
@@ -271,7 +315,8 @@ window.selectViolation = function (id) {
   const sinceEl = document.getElementById("vdSince");
   if (sinceEl) {
     sinceEl.textContent = d.since || "—";
-    sinceEl.className = d.status !== "Resolved" ? "vd-info-value danger" : "vd-info-value";
+    sinceEl.className =
+      d.status !== "Resolved" ? "vd-info-value danger" : "vd-info-value";
   }
   setField("vdRisk", d.risk || "—");
   setField("vdInvestigator", d.investigator || "— Unassigned —");
@@ -334,14 +379,20 @@ function renderStepper(currentStatus) {
 }
 
 /* ─── TIMELINE RENDERER ──────────────────────────────────────── */
-const DOT_COLORS = { red: "vd-dot-red", yellow: "vd-dot-yellow", blue: "vd-dot-blue", green: "vd-dot-green" };
+const DOT_COLORS = {
+  red: "vd-dot-red",
+  yellow: "vd-dot-yellow",
+  blue: "vd-dot-blue",
+  green: "vd-dot-green",
+};
 
 function renderTimeline(items) {
   const container = document.getElementById("vdTimeline");
   if (!container) return;
 
   if (!items.length) {
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No timeline entries yet.</p>';
+    container.innerHTML =
+      '<p style="color:var(--text-muted);font-size:13px;">No timeline entries yet.</p>';
     return;
   }
 
@@ -375,7 +426,8 @@ function renderEvidence(items) {
   if (!list) return;
 
   if (!items.length) {
-    list.innerHTML = '<li class="vd-evidence-empty">No evidence linked yet.</li>';
+    list.innerHTML =
+      '<li class="vd-evidence-empty">No evidence linked yet.</li>';
     return;
   }
 
@@ -398,7 +450,9 @@ window.saveNotes = function () {
   const notesArea = document.getElementById("vdNotes");
   if (!notesArea) return;
 
-  const idx = state.complianceViolations.findIndex((v) => String(v.id) === String(activeViolationId));
+  const idx = state.complianceViolations.findIndex(
+    (v) => String(v.id) === String(activeViolationId),
+  );
   if (idx > -1) {
     state.complianceViolations[idx].resolutionNotes = notesArea.value;
     window.Helpers.saveState(state);
@@ -409,24 +463,32 @@ window.saveNotes = function () {
 /* ─── MARK RESOLVED ──────────────────────────────────────────── */
 window.markResolved = function () {
   if (confirm("Mark this violation as resolved?")) {
-    const idx = state.complianceViolations.findIndex((v) => String(v.id) === String(activeViolationId));
+    const idx = state.complianceViolations.findIndex(
+      (v) => String(v.id) === String(activeViolationId),
+    );
     if (idx > -1) {
       state.complianceViolations[idx].status = "Resolved";
       state.complianceViolations[idx].statusLabel = "Resolved";
 
       const notesArea = document.getElementById("vdNotes");
-      if (notesArea) state.complianceViolations[idx].resolutionNotes = notesArea.value;
+      if (notesArea)
+        state.complianceViolations[idx].resolutionNotes = notesArea.value;
 
       // Add timeline entry
-      const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-      (state.complianceViolations[idx].timeline = state.complianceViolations[idx].timeline || []).push({
+      const now = new Date().toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+      });
+      (state.complianceViolations[idx].timeline =
+        state.complianceViolations[idx].timeline || []).push({
         dot: "green",
         text: "Violation marked as resolved by Compliance Officer",
         date: now,
       });
 
       window.Helpers.saveState(state);
-      if (window.Toast) window.Toast.show("Violation marked as resolved.", "success");
+      if (window.Toast)
+        window.Toast.show("Violation marked as resolved.", "success");
       filterQueue();
     }
   }
@@ -434,7 +496,8 @@ window.markResolved = function () {
 
 /* ─── VIEW PROJECT ───────────────────────────────────────────── */
 window.viewProject = function () {
-  if (window.Toast) window.Toast.show("Redirecting to Project detail view…", "info");
+  if (window.Toast)
+    window.Toast.show("Redirecting to Project detail view…", "info");
 };
 
 /* ─── ASSIGN INVESTIGATOR MODAL ──────────────────────────────── */
@@ -442,7 +505,9 @@ window.openAssignModal = function () {
   const sel = document.getElementById("investigatorSelect");
   if (sel) {
     // Pre-select current investigator if set
-    const d = state.complianceViolations.find((v) => String(v.id) === String(activeViolationId));
+    const d = state.complianceViolations.find(
+      (v) => String(v.id) === String(activeViolationId),
+    );
     if (d && d.investigator) sel.value = d.investigator;
     else sel.value = "";
   }
@@ -465,7 +530,9 @@ window.saveAssignment = function () {
   setError("investigatorError", false);
 
   const investigator = sel.value;
-  const idx = state.complianceViolations.findIndex((v) => String(v.id) === String(activeViolationId));
+  const idx = state.complianceViolations.findIndex(
+    (v) => String(v.id) === String(activeViolationId),
+  );
   if (idx > -1) {
     state.complianceViolations[idx].investigator = investigator;
     // Update status to Under_Review if still Open
@@ -474,15 +541,20 @@ window.saveAssignment = function () {
       state.complianceViolations[idx].statusLabel = "Under Review";
     }
     // Add timeline entry
-    const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    (state.complianceViolations[idx].timeline = state.complianceViolations[idx].timeline || []).push({
+    const now = new Date().toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+    });
+    (state.complianceViolations[idx].timeline =
+      state.complianceViolations[idx].timeline || []).push({
       dot: "blue",
       text: `Investigator assigned: ${investigator}`,
       date: now,
     });
 
     window.Helpers.saveState(state);
-    if (window.Toast) window.Toast.show(`Assigned to ${investigator}.`, "success");
+    if (window.Toast)
+      window.Toast.show(`Assigned to ${investigator}.`, "success");
     closeModal("assignModal");
     // Re-render detail
     selectViolation(activeViolationId);
@@ -510,15 +582,21 @@ window.previewEscalation = function () {
   const reason = document.getElementById("escalationReason").value.trim();
   let valid = true;
 
-  if (!level) { setError("escalationLevelError", true); valid = false; }
-  else setError("escalationLevelError", false);
+  if (!level) {
+    setError("escalationLevelError", true);
+    valid = false;
+  } else setError("escalationLevelError", false);
 
-  if (!reason) { setError("escalationReasonError", true); valid = false; }
-  else setError("escalationReasonError", false);
+  if (!reason) {
+    setError("escalationReasonError", true);
+    valid = false;
+  } else setError("escalationReasonError", false);
 
   if (!valid) return;
 
-  const d = state.complianceViolations.find((v) => String(v.id) === String(activeViolationId));
+  const d = state.complianceViolations.find(
+    (v) => String(v.id) === String(activeViolationId),
+  );
   const title = d ? d.title : "Selected violation";
   const notify = document.getElementById("escalationNotify").value.trim();
 
@@ -533,29 +611,40 @@ window.confirmEscalation = function () {
   const reason = document.getElementById("escalationReason").value.trim();
   let valid = true;
 
-  if (!level) { setError("escalationLevelError", true); valid = false; }
-  else setError("escalationLevelError", false);
+  if (!level) {
+    setError("escalationLevelError", true);
+    valid = false;
+  } else setError("escalationLevelError", false);
 
-  if (!reason) { setError("escalationReasonError", true); valid = false; }
-  else setError("escalationReasonError", false);
+  if (!reason) {
+    setError("escalationReasonError", true);
+    valid = false;
+  } else setError("escalationReasonError", false);
 
   if (!valid) return;
 
-  const idx = state.complianceViolations.findIndex((v) => String(v.id) === String(activeViolationId));
+  const idx = state.complianceViolations.findIndex(
+    (v) => String(v.id) === String(activeViolationId),
+  );
   if (idx > -1) {
     state.complianceViolations[idx].status = "Escalated";
     state.complianceViolations[idx].statusLabel = "Escalated";
     state.complianceViolations[idx].escalationLevel = level;
 
-    const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    (state.complianceViolations[idx].timeline = state.complianceViolations[idx].timeline || []).push({
+    const now = new Date().toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+    });
+    (state.complianceViolations[idx].timeline =
+      state.complianceViolations[idx].timeline || []).push({
       dot: "red",
       text: `Escalated to ${level} — ${reason.substring(0, 80)}${reason.length > 80 ? "…" : ""}`,
       date: now,
     });
 
     window.Helpers.saveState(state);
-    if (window.Toast) window.Toast.show(`Violation escalated to ${level}.`, "warning");
+    if (window.Toast)
+      window.Toast.show(`Violation escalated to ${level}.`, "warning");
     closeModal("escalateModal");
     selectViolation(activeViolationId);
     filterQueue();
@@ -564,7 +653,9 @@ window.confirmEscalation = function () {
 
 /* ─── EXPORT VIOLATION ───────────────────────────────────────── */
 window.exportViolation = function () {
-  const d = state.complianceViolations.find((v) => String(v.id) === String(activeViolationId));
+  const d = state.complianceViolations.find(
+    (v) => String(v.id) === String(activeViolationId),
+  );
   if (!d) return;
 
   const lines = [
@@ -596,7 +687,9 @@ window.exportViolation = function () {
     "",
     "LINKED EVIDENCE",
     "-".repeat(40),
-    ...((d.evidence || []).length ? (d.evidence || []).map((e) => `• ${e.name} (${e.date})`) : ["No evidence linked."]),
+    ...((d.evidence || []).length
+      ? (d.evidence || []).map((e) => `• ${e.name} (${e.date})`)
+      : ["No evidence linked."]),
     "",
     `Exported: ${new Date().toLocaleString()}`,
   ];

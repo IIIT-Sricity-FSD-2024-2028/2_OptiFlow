@@ -103,19 +103,47 @@
             <section class="evidence-queue" aria-label="Evidence Queue">
               <div class="queue-header">
                 <h1 class="queue-header-title">Evidence Queue</h1>
-                <span class="queue-pending-count" id="queuePendingCount">5 pending</span>
+                <span class="queue-pending-count" id="queuePendingCount"
+                  >5 pending</span
+                >
               </div>
 
               <div class="queue-tabs" id="queueTabs" role="tablist">
-                <button class="queue-tab active" data-tab="all" role="tab" aria-selected="true">All (5)</button>
-                <button class="queue-tab" data-tab="pending" role="tab" aria-selected="false">Pending (1)</button>
-                <button class="queue-tab" data-tab="reviewed" role="tab" aria-selected="false">Reviewed (12)</button>
+                <button
+                  class="queue-tab active"
+                  data-tab="all"
+                  role="tab"
+                  aria-selected="true"
+                >
+                  All (5)
+                </button>
+                <button
+                  class="queue-tab"
+                  data-tab="pending"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  Pending (1)
+                </button>
+                <button
+                  class="queue-tab"
+                  data-tab="reviewed"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  Reviewed (12)
+                </button>
               </div>
 
               <!-- Search + Filter Bar -->
               <div class="ev-search-bar">
                 <i class="ri-search-line"></i>
-                <input type="text" id="evSearchInput" placeholder="Search evidence..." autocomplete="off" />
+                <input
+                  type="text"
+                  id="evSearchInput"
+                  placeholder="Search evidence..."
+                  autocomplete="off"
+                />
               </div>
               <div class="ev-filter-row">
                 <select id="evPolicyFilter" class="ev-filter-select">
@@ -256,15 +284,22 @@
                 <!-- Header -->
                 <div class="detail-header">
                   <div>
-                    <h2 class="detail-title" id="detailTitle">GDPR Evidence Package</h2>
+                    <h2 class="detail-title" id="detailTitle">
+                      GDPR Evidence Package
+                    </h2>
                     <div class="ev-linked-rule" id="evLinkedRule">
                       <i class="ri-shield-check-line"></i>
                       <span id="evLinkedRuleText">GDPR Verification</span>
                     </div>
                   </div>
-                  <div style="display:flex; align-items:center; gap:10px;">
+                  <div style="display: flex; align-items: center; gap: 10px">
                     <span class="badge urgent" id="detailBadge">Urgent</span>
-                    <button class="ev-export-btn" id="btnExportEvidence" onclick="exportEvidenceReport()" title="Export Evidence Report">
+                    <button
+                      class="ev-export-btn"
+                      id="btnExportEvidence"
+                      onclick="exportEvidenceReport()"
+                      title="Export Evidence Report"
+                    >
                       <i class="ri-download-2-line"></i> Export
                     </button>
                   </div>
@@ -526,14 +561,19 @@
 
                 <!-- Reviewer Notes -->
                 <div class="detail-section" id="reviewerNotesSection">
-                  <div class="detail-section-label">Reviewer Notes (Internal)</div>
+                  <div class="detail-section-label">
+                    Reviewer Notes (Internal)
+                  </div>
                   <textarea
                     class="ev-reviewer-notes"
                     id="reviewerNotes"
                     placeholder="Add internal compliance notes (not visible to submitter)…"
                     rows="3"
                   ></textarea>
-                  <button class="ev-save-notes-btn" onclick="saveReviewerNotes()">
+                  <button
+                    class="ev-save-notes-btn"
+                    onclick="saveReviewerNotes()"
+                  >
                     <i class="ri-save-line"></i> Save Notes
                   </button>
                 </div>
@@ -545,20 +585,37 @@
                     <!-- Populated dynamically -->
                   </div>
                 </div>
-
               </div>
               <!-- /detail-content -->
 
               <!-- Sticky footer actions -->
               <div class="detail-footer">
-                <button class="btn-request-info" id="btn-request-info" onclick="openRequestInfoModal()">
-                  <i class="ri-question-line" style="font-size:14px;"></i> Request Info
+                <button
+                  class="btn-request-info"
+                  id="btn-request-info"
+                  onclick="openRequestInfoModal()"
+                >
+                  <i class="ri-question-line" style="font-size: 14px"></i>
+                  Request Info
                 </button>
-                <button class="btn-reject" id="btn-reject" onclick="openRejectModal()">
-                  <i class="ri-close-circle-line" style="font-size:14px;"></i> Reject
+                <button
+                  class="btn-reject"
+                  id="btn-reject"
+                  onclick="openRejectModal()"
+                >
+                  <i class="ri-close-circle-line" style="font-size: 14px"></i>
+                  Reject
                 </button>
-                <button class="btn-approve" id="btn-approve" onclick="approveEvidence()">
-                  <i class="ri-checkbox-circle-line" style="font-size:14px;"></i> Approve Evidence
+                <button
+                  class="btn-approve"
+                  id="btn-approve"
+                  onclick="approveEvidence()"
+                >
+                  <i
+                    class="ri-checkbox-circle-line"
+                    style="font-size: 14px"
+                  ></i>
+                  Approve Evidence
                 </button>
               </div>
             </section>
@@ -572,57 +629,124 @@
     <!-- /admin-layout -->
 
     <!-- ===== DOWNLOAD SUCCESS MODAL ===== -->
-    <div class="modal-overlay" id="downloadSuccessModal" role="dialog" aria-modal="true" aria-labelledby="downloadModalTitle">
+    <div
+      class="modal-overlay"
+      id="downloadSuccessModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="downloadModalTitle"
+    >
       <div class="modal-content" style="width: 400px">
         <div class="modal-header">
-          <h3 class="modal-title" id="downloadModalTitle">Download Successful!</h3>
-          <span class="modal-close" onclick="closeDownloadModal()" aria-label="Close">&times;</span>
+          <h3 class="modal-title" id="downloadModalTitle">
+            Download Successful!
+          </h3>
+          <span
+            class="modal-close"
+            onclick="closeDownloadModal()"
+            aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body" style="padding: 24px 24px 8px">
-          <p style="font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.6;">
+          <p
+            style="
+              font-size: 14px;
+              color: var(--text-muted);
+              margin: 0;
+              line-height: 1.6;
+            "
+          >
             Please check your Browser Downloads to access the file.
           </p>
         </div>
         <div class="modal-footer" style="justify-content: stretch">
-          <button class="btn btn-primary" onclick="closeDownloadModal()" style="width:100%; padding:11px 20px; font-size:14px; font-weight:600;">Close</button>
+          <button
+            class="btn btn-primary"
+            onclick="closeDownloadModal()"
+            style="
+              width: 100%;
+              padding: 11px 20px;
+              font-size: 14px;
+              font-weight: 600;
+            "
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
 
     <!-- ===== REQUEST MORE INFO MODAL ===== -->
-    <div class="modal-overlay" id="requestInfoModal" role="dialog" aria-modal="true" aria-labelledby="requestInfoModalTitle">
-      <div class="modal-content" style="width:500px">
+    <div
+      class="modal-overlay"
+      id="requestInfoModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="requestInfoModalTitle"
+    >
+      <div class="modal-content" style="width: 500px">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title" id="requestInfoModalTitle">Request Additional Information</h3>
-            <p class="modal-subtitle">A notification will be sent to the submitter.</p>
+            <h3 class="modal-title" id="requestInfoModalTitle">
+              Request Additional Information
+            </h3>
+            <p class="modal-subtitle">
+              A notification will be sent to the submitter.
+            </p>
           </div>
-          <span class="modal-close" onclick="closeRequestInfoModal()" aria-label="Close">&times;</span>
+          <span
+            class="modal-close"
+            onclick="closeRequestInfoModal()"
+            aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label" for="reqInfoType">Information Required</label>
+            <label class="form-label" for="reqInfoType"
+              >Information Required</label
+            >
             <select id="reqInfoType" class="form-control">
               <option value="missing_file">Missing file / attachment</option>
-              <option value="clarification">Clarification on submitted notes</option>
+              <option value="clarification">
+                Clarification on submitted notes
+              </option>
               <option value="signature">Missing approval signature</option>
               <option value="revision">Revision of evidence document</option>
               <option value="other">Other (specify below)</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label" for="reqInfoMessage">Message to Submitter</label>
-            <textarea id="reqInfoMessage" class="form-control" rows="4" placeholder="Describe exactly what is needed from the submitter…"></textarea>
-            <div class="form-error" id="reqInfoMessageError">Message cannot be empty.</div>
+            <label class="form-label" for="reqInfoMessage"
+              >Message to Submitter</label
+            >
+            <textarea
+              id="reqInfoMessage"
+              class="form-control"
+              rows="4"
+              placeholder="Describe exactly what is needed from the submitter…"
+            ></textarea>
+            <div class="form-error" id="reqInfoMessageError">
+              Message cannot be empty.
+            </div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="reqInfoDeadline">Response Deadline</label>
+            <label class="form-label" for="reqInfoDeadline"
+              >Response Deadline</label
+            >
             <input type="date" id="reqInfoDeadline" class="form-control" />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeRequestInfoModal()">Cancel</button>
-          <button class="btn btn-primary" id="btnSendInfoRequest" onclick="sendInfoRequest()">
+          <button class="btn btn-secondary" onclick="closeRequestInfoModal()">
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary"
+            id="btnSendInfoRequest"
+            onclick="sendInfoRequest()"
+          >
             <i class="ri-send-plane-line"></i> Send Request
           </button>
         </div>
@@ -630,41 +754,85 @@
     </div>
 
     <!-- ===== REJECT EVIDENCE MODAL ===== -->
-    <div class="modal-overlay" id="rejectModal" role="dialog" aria-modal="true" aria-labelledby="rejectModalTitle">
-      <div class="modal-content" style="width:500px">
+    <div
+      class="modal-overlay"
+      id="rejectModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rejectModalTitle"
+    >
+      <div class="modal-content" style="width: 500px">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title" id="rejectModalTitle">Reject Evidence Submission</h3>
-            <p class="modal-subtitle">This action will be logged in the audit trail.</p>
+            <h3 class="modal-title" id="rejectModalTitle">
+              Reject Evidence Submission
+            </h3>
+            <p class="modal-subtitle">
+              This action will be logged in the audit trail.
+            </p>
           </div>
-          <span class="modal-close" onclick="closeRejectModal()" aria-label="Close">&times;</span>
+          <span
+            class="modal-close"
+            onclick="closeRejectModal()"
+            aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <div class="ev-reject-warning">
             <i class="ri-alert-line"></i>
-            Rejecting will notify the submitter and log this decision. You can re-open the evidence if needed.
+            Rejecting will notify the submitter and log this decision. You can
+            re-open the evidence if needed.
           </div>
-          <div class="form-group" style="margin-top: 16px;">
-            <label class="form-label" for="rejectReason">Rejection Reason</label>
+          <div class="form-group" style="margin-top: 16px">
+            <label class="form-label" for="rejectReason"
+              >Rejection Reason</label
+            >
             <select id="rejectReason" class="form-control">
               <option value="">— Select a reason —</option>
-              <option value="incomplete">Incomplete — missing required documents</option>
-              <option value="inaccurate">Inaccurate — data does not match records</option>
-              <option value="expired">Expired — documentation is out of date</option>
-              <option value="unauthorized">Unauthorized — wrong submitter/department</option>
-              <option value="duplicate">Duplicate — evidence already submitted</option>
+              <option value="incomplete">
+                Incomplete — missing required documents
+              </option>
+              <option value="inaccurate">
+                Inaccurate — data does not match records
+              </option>
+              <option value="expired">
+                Expired — documentation is out of date
+              </option>
+              <option value="unauthorized">
+                Unauthorized — wrong submitter/department
+              </option>
+              <option value="duplicate">
+                Duplicate — evidence already submitted
+              </option>
               <option value="other">Other (specify below)</option>
             </select>
-            <div class="form-error" id="rejectReasonError">Please select a rejection reason.</div>
+            <div class="form-error" id="rejectReasonError">
+              Please select a rejection reason.
+            </div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="rejectNotes">Additional Notes (optional)</label>
-            <textarea id="rejectNotes" class="form-control" rows="3" placeholder="Provide further context for the submitter…"></textarea>
+            <label class="form-label" for="rejectNotes"
+              >Additional Notes (optional)</label
+            >
+            <textarea
+              id="rejectNotes"
+              class="form-control"
+              rows="3"
+              placeholder="Provide further context for the submitter…"
+            ></textarea>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeRejectModal()">Cancel</button>
-          <button class="btn" style="background:#dc2626; color:white; border:none;" id="btnConfirmReject" onclick="confirmReject()">
+          <button class="btn btn-secondary" onclick="closeRejectModal()">
+            Cancel
+          </button>
+          <button
+            class="btn"
+            style="background: #dc2626; color: white; border: none"
+            id="btnConfirmReject"
+            onclick="confirmReject()"
+          >
             <i class="ri-close-circle-line"></i> Confirm Rejection
           </button>
         </div>

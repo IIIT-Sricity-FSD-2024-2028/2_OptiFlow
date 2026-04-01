@@ -4,26 +4,64 @@
 window.Sidebar = {
   navConfig: {
     SuperUser: [
+      { type: "section", label: "Main" },
       {
         id: "dashboard",
         label: "Dashboard",
         icon: "grid",
-        href: "dashboard.html",
+        href: "superuser/dashboard.html",
+        absolute: true,
       },
-      { id: "users", label: "Users", icon: "users", href: "users.html" },
+      {
+        id: "users",
+        label: "Users",
+        icon: "users",
+        href: "superuser/users.html",
+        absolute: true,
+      },
       {
         id: "departments",
         label: "Departments",
         icon: "office",
-        href: "departments.html",
+        href: "superuser/departments.html",
+        absolute: true,
       },
       {
         id: "workflows",
         label: "Workflows",
         icon: "flow",
-        href: "workflows.html",
+        href: "superuser/workflows.html",
+        absolute: true,
       },
-      { id: "audit", label: "Audit Log", icon: "audit", href: "audit.html" },
+      {
+        id: "audit",
+        label: "Audit Log",
+        icon: "audit",
+        href: "superuser/audit.html",
+        absolute: true,
+      },
+      { type: "section", label: "Global Modules" },
+      {
+        id: "global-hr",
+        label: "HR Portal",
+        icon: "hr",
+        href: "admin/hr/hr-dashboard.html",
+        absolute: true,
+      },
+      {
+        id: "global-pm",
+        label: "Project Manager",
+        icon: "pm",
+        href: "admin/pm/pm-dashboard.html",
+        absolute: true,
+      },
+      {
+        id: "global-compliance",
+        label: "Compliance Center",
+        icon: "compliance",
+        href: "admin/compliance/compliance_dashboard.html",
+        absolute: true,
+      },
     ],
     Project_Manager: [
       {
@@ -73,43 +111,42 @@ window.Sidebar = {
       { id: "tasks", label: "My Tasks", icon: "tasks", href: "my-tasks.html" },
       { id: "evidence", label: "Evidence", icon: "doc", href: "evidence.html" },
     ],
-    // ✅ ADDED COMPLIANCE OFFICER CONFIGURATION
     Compliance_Officer: [
       {
         id: "dashboard",
         label: "Dashboard",
         icon: "grid",
-        href: "admin/compliance/compliance_dashboard.html",
+        href: "compliance_dashboard.html",
       },
       {
         id: "evidence",
         label: "Evidence",
         icon: "doc",
-        href: "admin/compliance/compliance_evidence.html",
+        href: "compliance_evidence.html",
       },
       {
         id: "violations",
         label: "Violations",
         icon: "alert",
-        href: "admin/compliance/compliance_violations.html",
+        href: "compliance_violations.html",
       },
       {
         id: "rules",
         label: "Rules",
         icon: "shield",
-        href: "admin/compliance/compliance_rules.html",
+        href: "compliance_rules.html",
       },
       {
         id: "reports",
         label: "Reports",
         icon: "folder",
-        href: "admin/compliance/compliance_reports.html",
+        href: "compliance_reports.html",
       },
       {
         id: "audit",
         label: "Audit Log",
         icon: "audit",
-        href: "admin/compliance/compliance_audit_log.html",
+        href: "compliance_audit_log.html",
       },
     ],
   },
@@ -123,6 +160,9 @@ window.Sidebar = {
     office: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
     flow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>`,
     audit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+    hr: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 11c1.66 0 3-1.57 3-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11z"/><path d="M8 11c1.66 0 3-1.57 3-3.5S9.66 4 8 4 5 5.57 5 7.5 6.34 11 8 11z"/><path d="M8 13c-2.76 0-5 1.79-5 4v3h10v-3c0-2.21-2.24-4-5-4z"/><path d="M16 13c-1.2 0-2.3.29-3.2.78 1.35.92 2.2 2.15 2.2 3.72v2.5H21v-3c0-2.21-2.24-4-5-4z"/></svg>`,
+    pm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>`,
+    compliance: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-5"/></svg>`,
     tasks: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
     doc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
     settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
@@ -132,11 +172,19 @@ window.Sidebar = {
   },
 
   render(activeId) {
-    const session = window.Auth.getSession();
+    const session = window.Auth ? window.Auth.getSession() : null;
     if (!session) return;
 
-    const navItems = this.navConfig[session.roleName] || [];
-    const state = window.Helpers.getState();
+    // Bulletproof Role Handler
+    let rawRole = session.roleName || session.role || "Team_Member";
+    let configKey = rawRole
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join("_");
+    const navItems = this.navConfig[configKey] || this.navConfig[rawRole] || [];
+    const displayRole = configKey.replace("_", " ");
+
+    const state = window.Helpers ? window.Helpers.getState() : {};
 
     // Compute badge counts
     const escalationCount = state.escalations
@@ -150,7 +198,6 @@ window.Sidebar = {
     let prefix = "./";
     const path = window.location.pathname.toLowerCase();
 
-    // ✅ ADDED: /admin/compliance/ to the 2-folders deep check!
     if (
       path.includes("/admin/pm/") ||
       path.includes("/admin/hr/") ||
@@ -159,9 +206,7 @@ window.Sidebar = {
       path.includes("/enduser/leader/")
     ) {
       prefix = "../../";
-    }
-    // Are we ONE folder deep? (e.g., /superuser/, /admin/)
-    else if (
+    } else if (
       path.includes("/admin/") ||
       path.includes("/superuser/") ||
       path.includes("/enduser/")
@@ -169,16 +214,20 @@ window.Sidebar = {
       prefix = "../";
     }
 
-    // --- APPLY PREFIX TO ROLE LINKS ONLY FOR COMPLIANCE OFFICER (Per instruction) ---
-    const finalNavItems = navItems.map((item) => {
-      if (session.roleName === "Compliance_Officer") {
-        return { ...item, href: prefix + item.href };
-      }
-      return item;
-    });
+    const resolveHref = (item) => {
+      if (!item || !item.href) return "#";
+      if (item.absolute) return prefix + item.href;
+      return item.href;
+    };
 
-    const navHTML = finalNavItems
+    const hasSections = navItems.some((i) => i && i.type === "section");
+
+    const navHTML = navItems
       .map((item) => {
+        if (item && item.type === "section") {
+          return `<div class="sidebar-section-label">${item.label}</div>`;
+        }
+
         const isActive = item.id === activeId;
         let badge = "";
         if (item.badge === "escalations" && escalationCount > 0) {
@@ -187,16 +236,16 @@ window.Sidebar = {
         if (item.badge === "violations" && violationCount > 0) {
           badge = `<span class="nav-badge">${violationCount}</span>`;
         }
+
+        const href = resolveHref(item);
         return `
-        <a href="${item.href}" class="nav-item ${isActive ? "active" : ""}">
-          ${this.icons[item.icon]}
+        <a href="${href}" class="nav-item ${isActive ? "active" : ""}">
+          ${this.icons[item.icon] || ""}
           <span>${item.label}</span>
           ${badge}
         </a>`;
       })
       .join("");
-
-    const displayRole = session.roleName.replace("_", " ");
 
     const logoHTML = this.icons.logo.replace(
       "REPLACE_ME",
@@ -206,11 +255,11 @@ window.Sidebar = {
     const html = `
       <div class="sidebar-logo" style="padding:18px 16px 14px">
         ${logoHTML}
-        </div>
-    <div class="sidebar-role-container">
-    <div class="sidebar-user-role1">${displayRole}</div>
-    </div>
-      <div class="sidebar-section-label">Main</div>
+      </div>
+      <div class="sidebar-role-container">
+        <div class="sidebar-user-role1">${displayRole}</div>
+      </div>
+      ${hasSections ? "" : `<div class="sidebar-section-label">Main</div>`}
       <nav class="sidebar-nav">${navHTML}</nav>
       <div class="sidebar-bottom">
         <div class="sidebar-settings" onclick="window.location.href='${prefix}admin/pm/settings.html'">
@@ -218,9 +267,9 @@ window.Sidebar = {
           <span>Settings</span>
         </div>
         <div class="sidebar-user" style="align-items:flex-start">
-          <div class="avatar avatar-sm avatar-${session.avatarColor}" style="margin-top:2px">${session.avatar}</div>
+          <div class="avatar avatar-sm avatar-${session.avatarColor || "blue"}" style="margin-top:2px">${session.avatar || "U"}</div>
           <div class="sidebar-user-info">
-            <div class="sidebar-user-name">${session.name}</div>
+            <div class="sidebar-user-name">${session.name || "User"}</div>
             <div class="sidebar-user-role">${displayRole}</div>
             <div class="sidebar-logout" onclick="window.Auth.logout()" style="display:flex;align-items:center;gap:6px;color:#ef4444;font-size:10px;font-weight:700;text-transform:uppercase;margin-top:8px;cursor:pointer">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -234,8 +283,8 @@ window.Sidebar = {
     if (container) container.innerHTML = html;
   },
 };
+
 // --- GLOBAL NOTIFICATION BELL SYSTEM ---
-// This wires up the #btn-notifications icon on the top header of every page
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => {
     const bellBtn = document.getElementById("btn-notifications");
@@ -245,19 +294,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const state = window.Helpers ? window.Helpers.getState() : null;
     if (!session || !state) return;
 
-    // Ensure notifications array exists
     if (!state.notifications) {
       state.notifications = [];
       window.Helpers.saveState(state);
     }
 
-    // Filter for ONLY this user's notifications and sort newest to oldest
     const myNotifs = state.notifications
-      .filter((n) => String(n.userId) === String(session.id))
-      .sort((a, b) => b.id - a.id); // Sorts by timestamp, newest first
-    const unreadCount = myNotifs.filter((n) => !n.isRead).length;
+      .filter(
+        (n) =>
+          String(n.userId) === String(session.id) ||
+          String(n.targetUserId) === String(session.id),
+      )
+      .sort((a, b) => b.id - a.id);
 
-    // 1. Add Red Dot if there are unread notifications
+    const unreadCount = myNotifs.filter((n) => !n.isRead && !n.read).length;
+
     if (unreadCount > 0) {
       const redDot = document.createElement("span");
       redDot.style.cssText =
@@ -265,18 +316,15 @@ document.addEventListener("DOMContentLoaded", () => {
       bellBtn.appendChild(redDot);
     }
 
-    // 2. Click to open Notification Dropdown
     bellBtn.addEventListener("click", (e) => {
-      e.stopPropagation(); // Prevent immediate closing
+      e.stopPropagation();
 
-      // Toggle off if already open
       let existingDropdown = document.getElementById("notif-dropdown");
       if (existingDropdown) {
         existingDropdown.remove();
         return;
       }
 
-      // Build the dropdown UI
       const dropdown = document.createElement("div");
       dropdown.id = "notif-dropdown";
       dropdown.style.cssText =
@@ -292,11 +340,12 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         html += `<div style="max-height:350px; overflow-y:auto;">`;
         myNotifs.forEach((n) => {
+          const isRead = n.isRead || n.read;
           html += `
-            <div style="padding:14px 16px; border-bottom:1px solid #f1f5f9; background:${n.isRead ? "white" : "#eff6ff"};">
+            <div style="padding:14px 16px; border-bottom:1px solid #f1f5f9; background:${isRead ? "white" : "#eff6ff"};">
               <div style="font-size:13px; font-weight:600; color:#0f172a; margin-bottom:4px;">${n.title}</div>
               <div style="font-size:12px; color:#475569; line-height:1.5;">${n.message}</div>
-              <div style="font-size:10px; color:#94a3b8; margin-top:8px; text-transform:uppercase; letter-spacing:0.5px;">${n.time}</div>
+              <div style="font-size:10px; color:#94a3b8; margin-top:8px; text-transform:uppercase; letter-spacing:0.5px;">${n.time || n.date || "Just now"}</div>
             </div>`;
         });
         html += `</div>`;
@@ -305,23 +354,26 @@ document.addEventListener("DOMContentLoaded", () => {
       dropdown.innerHTML = html;
       document.body.appendChild(dropdown);
 
-      // 3. Mark as read in the database
       if (unreadCount > 0) {
         state.notifications.forEach((n) => {
-          if (String(n.userId) === String(session.id)) n.isRead = true;
+          if (
+            String(n.userId) === String(session.id) ||
+            String(n.targetUserId) === String(session.id)
+          ) {
+            n.isRead = true;
+            n.read = true;
+          }
         });
         window.Helpers.saveState(state);
 
-        // Remove the red dot visually
         const dot = bellBtn.querySelector("span");
         if (dot) dot.remove();
       }
     });
 
-    // Close dropdown when clicking anywhere else on the page
     document.addEventListener("click", () => {
       const drop = document.getElementById("notif-dropdown");
       if (drop) drop.remove();
     });
-  }, 200); // Small delay ensures HTML buttons exist before we attach code
+  }, 200);
 });

@@ -76,10 +76,27 @@
           <div class="page-title">Compliance Rules</div>
           <div class="header-actions">
             <!-- Conflicts badge chip — count updates dynamically -->
-            <div class="conflicts-chip" id="conflictsChip" onclick="switchTab('conflicts')" title="View conflicting rules">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            <div
+              class="conflicts-chip"
+              id="conflictsChip"
+              onclick="switchTab('conflicts')"
+              title="View conflicting rules"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <span id="conflictsChipCount">0</span> Conflicts
             </div>
@@ -127,15 +144,49 @@
             <!-- ── Tab Toolbar ── -->
             <div class="rules-toolbar" id="rulesToolbar">
               <div class="rules-tab-group" id="rulesTabGroup">
-                <button class="rules-tab active" id="tab-all" data-tab="all" onclick="switchTab('all')">All Rules</button>
-                <button class="rules-tab" id="tab-conflicts" data-tab="conflicts" onclick="switchTab('conflicts')">
+                <button
+                  class="rules-tab active"
+                  id="tab-all"
+                  data-tab="all"
+                  onclick="switchTab('all')"
+                >
+                  All Rules
+                </button>
+                <button
+                  class="rules-tab"
+                  id="tab-conflicts"
+                  data-tab="conflicts"
+                  onclick="switchTab('conflicts')"
+                >
                   Conflicts
-                  <span class="rules-tab-badge" id="conflictsTabBadge" style="display:none">0</span>
+                  <span
+                    class="rules-tab-badge"
+                    id="conflictsTabBadge"
+                    style="display: none"
+                    >0</span
+                  >
                 </button>
               </div>
               <div class="rules-search-bar">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="rulesSearchInput" placeholder="Search rules…" oninput="onRulesSearch()" aria-label="Search rules">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  id="rulesSearchInput"
+                  placeholder="Search rules…"
+                  oninput="onRulesSearch()"
+                  aria-label="Search rules"
+                />
               </div>
             </div>
 
@@ -152,13 +203,21 @@
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody id="rulesTableBody">
-                  <!-- Populated by renderRules() on DOMContentLoaded -->
-                  <tr id="rulesLoadingRow">
-                    <td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">
-                      Loading rules…
-                    </td>
-                  </tr>
+                <tbody id="rulesTableBody">
+                  <!-- Populated by renderRules() on DOMContentLoaded -->
+
+                  <tr id="rulesLoadingRow">
+                    <td
+                      colspan="6"
+                      style="
+                        text-align: center;
+                        padding: 40px;
+                        color: var(--text-muted);
+                      "
+                    >
+                      Loading rules…
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -343,49 +402,99 @@
     </div>
 
     <!-- ===== VERSION HISTORY DRAWER MODAL ===== -->
-    <div class="modal-overlay" id="versionHistoryModal" role="dialog" aria-modal="true" aria-labelledby="vhModalTitle">
+    <div
+      class="modal-overlay"
+      id="versionHistoryModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="vhModalTitle"
+    >
       <div class="modal-content modal-xl" id="versionHistoryModalContent">
         <div class="modal-header">
           <div>
             <h3 class="modal-title" id="vhModalTitle">Rule Version History</h3>
             <p class="modal-subtitle" id="vhRuleName">—</p>
           </div>
-          <span class="modal-close" onclick="closeVersionHistoryModal()" aria-label="Close">&times;</span>
+          <span
+            class="modal-close"
+            onclick="closeVersionHistoryModal()"
+            aria-label="Close"
+            >&times;</span
+          >
         </div>
-        <div class="modal-body" style="padding:0;">
+        <div class="modal-body" style="padding: 0">
           <!-- Active version banner -->
           <div class="vh-active-banner" id="vhActiveBanner">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
             <span id="vhActiveBannerText">Active: v1</span>
           </div>
           <!-- Version list -->
           <div id="vhVersionList" class="vh-version-list"></div>
         </div>
-        <div class="modal-footer" style="justify-content:space-between;">
-          <button class="btn btn-secondary" id="btn-create-version" onclick="createNewVersion()">+ Save as New Version</button>
-          <button class="btn btn-secondary" onclick="closeVersionHistoryModal()">Close</button>
+        <div class="modal-footer" style="justify-content: space-between">
+          <button
+            class="btn btn-secondary"
+            id="btn-create-version"
+            onclick="createNewVersion()"
+          >
+            + Save as New Version
+          </button>
+          <button
+            class="btn btn-secondary"
+            onclick="closeVersionHistoryModal()"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
 
     <!-- ===== ATTACH TO WORKFLOW MODAL ===== -->
-    <div class="modal-overlay" id="attachWorkflowModal" role="dialog" aria-modal="true" aria-labelledby="awModalTitle">
+    <div
+      class="modal-overlay"
+      id="attachWorkflowModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="awModalTitle"
+    >
       <div class="modal-content modal-lg">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title" id="awModalTitle">Attach Rule to Workflow</h3>
+            <h3 class="modal-title" id="awModalTitle">
+              Attach Rule to Workflow
+            </h3>
             <p class="modal-subtitle" id="awRuleName">—</p>
           </div>
-          <span class="modal-close" onclick="closeAttachWorkflowModal()" aria-label="Close">&times;</span>
+          <span
+            class="modal-close"
+            onclick="closeAttachWorkflowModal()"
+            aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <!-- Workflow selector -->
           <div class="form-group">
             <label class="form-label" for="awWorkflowSelect">Workflow</label>
-            <select id="awWorkflowSelect" class="form-control" onchange="onWorkflowSelect()">
+            <select
+              id="awWorkflowSelect"
+              class="form-control"
+              onchange="onWorkflowSelect()"
+            >
               <option value="">— Select a workflow —</option>
             </select>
-            <span class="form-error" id="awWorkflowError">Please select a workflow.</span>
+            <span class="form-error" id="awWorkflowError"
+              >Please select a workflow.</span
+            >
             <div
               id="awWorkflowEmptyState"
               class="workflow-empty-state"
@@ -397,42 +506,122 @@
           </div>
 
           <!-- Step selector — populated dynamically -->
-          <div class="form-group" id="awStepGroup" style="display:none;">
+          <div class="form-group" id="awStepGroup" style="display: none">
             <label class="form-label" for="awStepSelect">Workflow Step</label>
             <select id="awStepSelect" class="form-control">
               <option value="">— Select a step —</option>
             </select>
-            <span class="form-error" id="awStepError">Please select a step.</span>
+            <span class="form-error" id="awStepError"
+              >Please select a step.</span
+            >
           </div>
 
           <!-- Enforcement type -->
           <div class="form-group">
             <label class="form-label">Enforcement Type</label>
-            <div class="enforcement-type-grid" id="awEnforcementGrid" role="radiogroup" aria-label="Enforcement type">
-              <div class="et-card selected" data-type="BLOCK" onclick="selectEnforcement(this)" role="radio" aria-checked="true" tabindex="0">
+            <div
+              class="enforcement-type-grid"
+              id="awEnforcementGrid"
+              role="radiogroup"
+              aria-label="Enforcement type"
+            >
+              <div
+                class="et-card selected"
+                data-type="BLOCK"
+                onclick="selectEnforcement(this)"
+                role="radio"
+                aria-checked="true"
+                tabindex="0"
+              >
                 <div class="et-icon et-block">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                  </svg>
                 </div>
                 <div class="et-label">BLOCK</div>
                 <div class="et-desc">Prevents step completion</div>
               </div>
-              <div class="et-card" data-type="WARN" onclick="selectEnforcement(this)" role="radio" aria-checked="false" tabindex="0">
+              <div
+                class="et-card"
+                data-type="WARN"
+                onclick="selectEnforcement(this)"
+                role="radio"
+                aria-checked="false"
+                tabindex="0"
+              >
                 <div class="et-icon et-warn">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
                 </div>
                 <div class="et-label">WARN</div>
                 <div class="et-desc">Allow but flag warning</div>
               </div>
-              <div class="et-card" data-type="REQUIRE_APPROVAL" onclick="selectEnforcement(this)" role="radio" aria-checked="false" tabindex="0">
+              <div
+                class="et-card"
+                data-type="REQUIRE_APPROVAL"
+                onclick="selectEnforcement(this)"
+                role="radio"
+                aria-checked="false"
+                tabindex="0"
+              >
                 <div class="et-icon et-approval">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
                 </div>
                 <div class="et-label">REQUIRE_APPROVAL</div>
                 <div class="et-desc">CO must approve to proceed</div>
               </div>
-              <div class="et-card" data-type="AUTO_FLAG" onclick="selectEnforcement(this)" role="radio" aria-checked="false" tabindex="0">
+              <div
+                class="et-card"
+                data-type="AUTO_FLAG"
+                onclick="selectEnforcement(this)"
+                role="radio"
+                aria-checked="false"
+                tabindex="0"
+              >
                 <div class="et-icon et-autoflag">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path
+                      d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"
+                    />
+                    <line x1="4" y1="22" x2="4" y2="15" />
+                  </svg>
                 </div>
                 <div class="et-label">AUTO_FLAG</div>
                 <div class="et-desc">Flag async after completion</div>
@@ -441,98 +630,243 @@
           </div>
 
           <!-- Existing injections list for this rule -->
-          <div id="awExistingInjectionsSection" style="display:none;">
-            <div class="enforcement-section-label" style="margin-bottom:10px;">Current Injections for This Rule</div>
+          <div id="awExistingInjectionsSection" style="display: none">
+            <div class="enforcement-section-label" style="margin-bottom: 10px">
+              Current Injections for This Rule
+            </div>
             <div id="awExistingInjectionsList" class="aw-injections-list"></div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeAttachWorkflowModal()">Cancel</button>
-          <button class="btn btn-primary" id="btn-save-injection" onclick="saveWorkflowInjection()">Attach Rule</button>
+          <button
+            class="btn btn-secondary"
+            onclick="closeAttachWorkflowModal()"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary"
+            id="btn-save-injection"
+            onclick="saveWorkflowInjection()"
+          >
+            Attach Rule
+          </button>
         </div>
       </div>
     </div>
 
     <!-- ===== ESCALATION CONFIG MODAL ===== -->
-    <div class="modal-overlay" id="escalationConfigModal" role="dialog" aria-modal="true" aria-labelledby="ecModalTitle">
+    <div
+      class="modal-overlay"
+      id="escalationConfigModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ecModalTitle"
+    >
       <div class="modal-content modal-lg">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title" id="ecModalTitle">Escalation Configuration</h3>
+            <h3 class="modal-title" id="ecModalTitle">
+              Escalation Configuration
+            </h3>
             <p class="modal-subtitle" id="ecRuleName">—</p>
           </div>
-          <span class="modal-close" onclick="closeEscalationConfigModal()" aria-label="Close">&times;</span>
+          <span
+            class="modal-close"
+            onclick="closeEscalationConfigModal()"
+            aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <div class="ec-info-box">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <p>If a violation linked to this rule stays in <strong>CREATED</strong> or <strong>UNDER_INVESTIGATION</strong> state beyond the threshold, it will auto-escalate to <strong>ESCALATED</strong> and notify Super Admin.</p>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              style="flex-shrink: 0; margin-top: 1px"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <p>
+              If a violation linked to this rule stays in
+              <strong>CREATED</strong> or
+              <strong>UNDER_INVESTIGATION</strong> state beyond the threshold,
+              it will auto-escalate to <strong>ESCALATED</strong> and notify
+              Super Admin.
+            </p>
           </div>
 
           <!-- Auto-escalation toggle -->
-          <div class="enforcement-rule-item" style="margin-bottom:8px;">
-            <span style="font-weight:500;">Enable auto-escalation</span>
+          <div class="enforcement-rule-item" style="margin-bottom: 8px">
+            <span style="font-weight: 500">Enable auto-escalation</span>
             <label class="toggle-switch">
-              <input type="checkbox" id="ecAutoEscalateToggle" onchange="onEscalateToggle()" checked />
+              <input
+                type="checkbox"
+                id="ecAutoEscalateToggle"
+                onchange="onEscalateToggle()"
+                checked
+              />
               <span class="toggle-slider"></span>
             </label>
           </div>
 
           <!-- Threshold field — disabled when toggle is off -->
           <div class="form-group" id="ecThresholdGroup">
-            <label class="form-label" for="ecThresholdDays">Escalation Threshold (Days)</label>
-            <div style="display:flex;align-items:center;gap:12px;">
-              <input type="number" id="ecThresholdDays" class="form-control" value="7" min="1" max="90" style="width:120px;" />
-              <span style="font-size:13px;color:var(--text-muted);">days after violation is created without state change</span>
+            <label class="form-label" for="ecThresholdDays"
+              >Escalation Threshold (Days)</label
+            >
+            <div style="display: flex; align-items: center; gap: 12px">
+              <input
+                type="number"
+                id="ecThresholdDays"
+                class="form-control"
+                value="7"
+                min="1"
+                max="90"
+                style="width: 120px"
+              />
+              <span style="font-size: 13px; color: var(--text-muted)"
+                >days after violation is created without state change</span
+              >
             </div>
-            <span class="form-error" id="ecThresholdError">Please enter a value between 1 and 90.</span>
+            <span class="form-error" id="ecThresholdError"
+              >Please enter a value between 1 and 90.</span
+            >
           </div>
 
           <!-- Disable justification — only shown when toggle is OFF -->
-          <div class="form-group" id="ecDisableJustificationGroup" style="display:none;">
-            <label class="form-label" for="ecDisableJustification">Justification for disabling auto-escalation <span style="color:#dc2626;">*</span></label>
-            <textarea id="ecDisableJustification" class="form-control" rows="3" placeholder="Explain why auto-escalation is being disabled for this rule…"></textarea>
-            <span class="form-error" id="ecJustificationError">Justification is required when disabling auto-escalation.</span>
+          <div
+            class="form-group"
+            id="ecDisableJustificationGroup"
+            style="display: none"
+          >
+            <label class="form-label" for="ecDisableJustification"
+              >Justification for disabling auto-escalation
+              <span style="color: #dc2626">*</span></label
+            >
+            <textarea
+              id="ecDisableJustification"
+              class="form-control"
+              rows="3"
+              placeholder="Explain why auto-escalation is being disabled for this rule…"
+            ></textarea>
+            <span class="form-error" id="ecJustificationError"
+              >Justification is required when disabling auto-escalation.</span
+            >
           </div>
 
           <!-- Current config display -->
-          <div class="ec-current-config" id="ecCurrentConfig" style="display:none;">
+          <div
+            class="ec-current-config"
+            id="ecCurrentConfig"
+            style="display: none"
+          >
             <div class="enforcement-section-label">Current Configuration</div>
             <div id="ecCurrentConfigContent"></div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeEscalationConfigModal()">Cancel</button>
-          <button class="btn btn-primary" id="btn-save-escalation" onclick="saveEscalationConfig()">Save Configuration</button>
+          <button
+            class="btn btn-secondary"
+            onclick="closeEscalationConfigModal()"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary"
+            id="btn-save-escalation"
+            onclick="saveEscalationConfig()"
+          >
+            Save Configuration
+          </button>
         </div>
       </div>
     </div>
 
     <!-- ===== CONFLICT RESOLUTION MODAL ===== -->
-    <div class="modal-overlay" id="conflictResolveModal" role="dialog" aria-modal="true" aria-labelledby="crModalTitle">
+    <div
+      class="modal-overlay"
+      id="conflictResolveModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="crModalTitle"
+    >
       <div class="modal-content modal-xl">
         <div class="modal-header">
           <div>
             <h3 class="modal-title" id="crModalTitle">Resolve Rule Conflict</h3>
             <p class="modal-subtitle" id="crConflictContext">—</p>
           </div>
-          <span class="modal-close" onclick="closeConflictResolveModal()" aria-label="Close">&times;</span>
+          <span
+            class="modal-close"
+            onclick="closeConflictResolveModal()"
+            aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
-          <div class="ec-info-box" style="border-color:#f59e0b;background:#fffbeb;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <p style="color:#92400e;">Two rules attached to the same workflow step have conflicting enforcement types. Select which rule should be the <strong>active authority</strong> for this step. The suppressed rule will be logged.</p>
+          <div
+            class="ec-info-box"
+            style="border-color: #f59e0b; background: #fffbeb"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#d97706"
+              stroke-width="2.5"
+              style="flex-shrink: 0; margin-top: 1px"
+            >
+              <path
+                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <p style="color: #92400e">
+              Two rules attached to the same workflow step have conflicting
+              enforcement types. Select which rule should be the
+              <strong>active authority</strong> for this step. The suppressed
+              rule will be logged.
+            </p>
           </div>
           <div class="cr-rules-grid" id="crRulesGrid"></div>
-          <div class="form-group" style="margin-top:16px;">
-            <label class="form-label" for="crResolutionNote">Resolution Note <span style="color:#dc2626;">*</span></label>
-            <textarea id="crResolutionNote" class="form-control" rows="3" placeholder="Explain why the selected rule takes precedence…"></textarea>
-            <span class="form-error" id="crNoteError">Resolution note is required.</span>
+          <div class="form-group" style="margin-top: 16px">
+            <label class="form-label" for="crResolutionNote"
+              >Resolution Note <span style="color: #dc2626">*</span></label
+            >
+            <textarea
+              id="crResolutionNote"
+              class="form-control"
+              rows="3"
+              placeholder="Explain why the selected rule takes precedence…"
+            ></textarea>
+            <span class="form-error" id="crNoteError"
+              >Resolution note is required.</span
+            >
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeConflictResolveModal()">Cancel</button>
-          <button class="btn btn-primary" id="btn-resolve-conflict" onclick="resolveConflict()">Resolve Conflict</button>
+          <button
+            class="btn btn-secondary"
+            onclick="closeConflictResolveModal()"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary"
+            id="btn-resolve-conflict"
+            onclick="resolveConflict()"
+          >
+            Resolve Conflict
+          </button>
         </div>
       </div>
     </div>

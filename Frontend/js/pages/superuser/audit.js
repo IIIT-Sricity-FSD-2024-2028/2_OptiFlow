@@ -1,62 +1,5 @@
-// js/pages/audit.js
-const auditLogsData = [
-  {
-    timestamp: "10:45 AM, Dec 15 2024",
-    type: "Process",
-    user: "Vikram Patel",
-    ip: "192.168.1.42",
-    desc: "Published updated Finance Q4 workflow",
-    severity: "Info",
-  },
-  {
-    timestamp: "09:12 AM, Dec 15 2024",
-    type: "Authentication",
-    user: "Arjun Mehta",
-    ip: "192.168.1.18",
-    desc: "Successful login",
-    severity: "Info",
-  },
-  {
-    timestamp: "08:05 AM, Dec 15 2024",
-    type: "User Management",
-    user: "Vikram Patel",
-    ip: "192.168.1.42",
-    desc: "Assigned Sunita Rao to Finance Dept",
-    severity: "Info",
-  },
-  {
-    timestamp: "11:23 PM, Dec 14 2024",
-    type: "Authentication",
-    user: "Unknown",
-    ip: "82.16.4.102",
-    desc: "Failed login attempt (3/3)",
-    severity: "High",
-  },
-  {
-    timestamp: "04:15 PM, Dec 14 2024",
-    type: "Process",
-    user: "Sarah Jenkins",
-    ip: "192.168.1.55",
-    desc: "Auto-escalation triggered on IT Audit",
-    severity: "Medium",
-  },
-  {
-    timestamp: "02:00 PM, Dec 14 2024",
-    type: "User Management",
-    user: "Vikram Patel",
-    ip: "192.168.1.42",
-    desc: "Created new Admin user profile",
-    severity: "Info",
-  },
-  {
-    timestamp: "10:00 AM, Dec 14 2024",
-    type: "System",
-    user: "System",
-    ip: "localhost",
-    desc: "Daily backup sequence completed",
-    severity: "Info",
-  },
-];
+// js/pages/superuser/audit.js
+// Renders the global unified audit log from AuditStore (localStorage-backed).
 
 document.addEventListener("DOMContentLoaded", () => {
   refreshAuditTable();
@@ -75,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function exportToCSV() {
+  const auditLogsData = window.AuditStore ? window.AuditStore.list() : [];
   if (!auditLogsData || auditLogsData.length === 0) return;
 
   // Define headers
@@ -108,7 +52,7 @@ function exportToCSV() {
 }
 
 function refreshAuditTable() {
-  let logs = [...auditLogsData];
+  let logs = window.AuditStore ? window.AuditStore.list() : [];
   const search = document.getElementById("searchInput").value.toLowerCase();
   const type = document.getElementById("eventFilter").value;
 

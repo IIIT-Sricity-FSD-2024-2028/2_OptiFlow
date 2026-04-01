@@ -64,7 +64,10 @@
   border-radius: var(--border-radius);
   padding: 14px 14px 12px;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
   background: var(--card-bg);
   display: flex;
   flex-direction: column;
@@ -79,7 +82,7 @@
 .report-type-card.selected {
   border-color: var(--primary-color);
   background: #eff6ff;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.10);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .report-type-icon {
@@ -93,10 +96,22 @@
   margin-bottom: 2px;
 }
 
-.rtic-blue   { background: #eff6ff; color: #2563eb; }
-.rtic-red    { background: var(--danger-bg); color: var(--danger-text); }
-.rtic-green  { background: var(--success-bg); color: var(--success-text); }
-.rtic-yellow { background: var(--warning-bg); color: var(--warning-text); }
+.rtic-blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.rtic-red {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+.rtic-green {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+.rtic-yellow {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
 
 .report-type-name {
   font-size: 13px;
@@ -111,7 +126,9 @@
   line-height: 1.4;
 }
 
-.rg-form-field { margin-bottom: 14px; }
+.rg-form-field {
+  margin-bottom: 14px;
+}
 
 .rg-input,
 .rg-select {
@@ -190,7 +207,9 @@
   transition: background 0.15s;
 }
 
-.btn-generate-report:hover { background: var(--primary-hover); }
+.btn-generate-report:hover {
+  background: var(--primary-hover);
+}
 
 .rg-inline-warning {
   margin-top: -4px;
@@ -252,7 +271,9 @@
   box-shadow: var(--shadow-sm);
 }
 
-.report-card:hover { box-shadow: var(--shadow-md); }
+.report-card:hover {
+  box-shadow: var(--shadow-md);
+}
 
 .report-card-icon {
   width: 40px;
@@ -264,7 +285,10 @@
   flex-shrink: 0;
 }
 
-.report-card-body { flex: 1; min-width: 0; }
+.report-card-body {
+  flex: 1;
+  min-width: 0;
+}
 
 .report-card-title {
   font-size: 14px;
@@ -285,7 +309,11 @@
   text-overflow: ellipsis;
 }
 
-.report-card-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.report-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 
 .badge.filetype {
   background: #f1f5f9;
@@ -297,10 +325,26 @@
   letter-spacing: 0.3px;
 }
 
-.badge.iso    { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-.badge.sox    { background-color: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
-.badge.gdpr   { background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-.badge.hrpol  { background-color: #fdf4ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+.badge.iso {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.badge.sox {
+  background-color: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+.badge.gdpr {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.badge.hrpol {
+  background-color: #fdf4ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
 
 .btn-download {
   display: inline-flex;

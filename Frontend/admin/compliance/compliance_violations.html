@@ -109,10 +109,19 @@
               <!-- ===== SEARCH + FILTER BAR (new) ===== -->
               <div class="vq-search-bar">
                 <i class="ri-search-line"></i>
-                <input type="text" id="violationSearch" placeholder="Search violations…" oninput="filterQueue()" />
+                <input
+                  type="text"
+                  id="violationSearch"
+                  placeholder="Search violations…"
+                  oninput="filterQueue()"
+                />
               </div>
               <div class="vq-filter-row">
-                <select id="severityFilter" class="vq-filter-select" onchange="filterQueue()">
+                <select
+                  id="severityFilter"
+                  class="vq-filter-select"
+                  onchange="filterQueue()"
+                >
                   <option value="all">All Severities</option>
                   <option value="critical">Critical</option>
                   <option value="warning">Warning</option>
@@ -276,7 +285,9 @@
                   <!-- Assigned Investigator (new) -->
                   <div class="vd-info-cell">
                     <span class="vd-info-label">Investigator</span>
-                    <span class="vd-info-value" id="vdInvestigator">— Unassigned —</span>
+                    <span class="vd-info-value" id="vdInvestigator"
+                      >— Unassigned —</span
+                    >
                   </div>
                   <div class="vd-info-cell">
                     <span class="vd-info-label">Escalation Level</span>
@@ -356,8 +367,16 @@
                 <!-- Notes / Actions -->
                 <div class="vd-section">
                   <div class="vd-section-label">Your Notes / Actions</div>
-                  <textarea class="vd-notes-box" id="vdNotes">Monitoring closely. Finance Head has acknowledged the request per PM escalation. Sign-off expected by Dec 19. If not resolved, will escalate to regulatory team and flag for external audit preparation.</textarea>
-                  <button class="vd-save-notes-btn" id="btnSaveNotes" onclick="saveNotes()"><i class="ri-save-line"></i> Save Notes</button>
+                  <textarea class="vd-notes-box" id="vdNotes">
+Monitoring closely. Finance Head has acknowledged the request per PM escalation. Sign-off expected by Dec 19. If not resolved, will escalate to regulatory team and flag for external audit preparation.</textarea
+                  >
+                  <button
+                    class="vd-save-notes-btn"
+                    id="btnSaveNotes"
+                    onclick="saveNotes()"
+                  >
+                    <i class="ri-save-line"></i> Save Notes
+                  </button>
                 </div>
               </div>
               <!-- /vd-content -->
@@ -424,21 +443,34 @@
             <label class="form-label">Select Investigator</label>
             <select id="investigatorSelect" class="form-control">
               <option value="">— Choose —</option>
-              <option value="Priya Sharma">Priya Sharma (Compliance Lead)</option>
+              <option value="Priya Sharma">
+                Priya Sharma (Compliance Lead)
+              </option>
               <option value="Rohan Verma">Rohan Verma (Sr. Analyst)</option>
               <option value="Anjali Nair">Anjali Nair (Risk Officer)</option>
               <option value="Dev Kapoor">Dev Kapoor (Audit Manager)</option>
             </select>
-            <div class="form-error" id="investigatorError">Please select an investigator.</div>
+            <div class="form-error" id="investigatorError">
+              Please select an investigator.
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Assignment Note (optional)</label>
-            <textarea id="assignNote" class="form-control" rows="3" placeholder="Add any context for the investigator…"></textarea>
+            <textarea
+              id="assignNote"
+              class="form-control"
+              rows="3"
+              placeholder="Add any context for the investigator…"
+            ></textarea>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveAssignment()">Assign</button>
+          <button class="btn btn-secondary" onclick="closeAssignModal()">
+            Cancel
+          </button>
+          <button class="btn btn-primary" onclick="saveAssignment()">
+            Assign
+          </button>
         </div>
       </div>
     </div>
@@ -448,7 +480,9 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 class="modal-title">Escalate Violation</h3>
-          <span class="modal-close" onclick="closeEscalateModal()">&times;</span>
+          <span class="modal-close" onclick="closeEscalateModal()"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -460,26 +494,62 @@
               <option value="Regulatory Team">Regulatory Team</option>
               <option value="External Audit">External Audit</option>
             </select>
-            <div class="form-error" id="escalationLevelError">Please select an escalation level.</div>
+            <div class="form-error" id="escalationLevelError">
+              Please select an escalation level.
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Escalation Reason</label>
-            <textarea id="escalationReason" class="form-control" rows="3" placeholder="Describe why this violation needs escalation…"></textarea>
-            <div class="form-error" id="escalationReasonError">Please provide an escalation reason.</div>
+            <textarea
+              id="escalationReason"
+              class="form-control"
+              rows="3"
+              placeholder="Describe why this violation needs escalation…"
+            ></textarea>
+            <div class="form-error" id="escalationReasonError">
+              Please provide an escalation reason.
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Notify (comma-separated emails)</label>
-            <input type="text" id="escalationNotify" class="form-control" placeholder="e.g. head@company.com, audit@company.com" />
+            <input
+              type="text"
+              id="escalationNotify"
+              class="form-control"
+              placeholder="e.g. head@company.com, audit@company.com"
+            />
           </div>
-          <div class="vd-escalation-preview" id="escalationPreview" style="display:none">
+          <div
+            class="vd-escalation-preview"
+            id="escalationPreview"
+            style="display: none"
+          >
             <i class="ri-information-line"></i>
             <span id="escalationPreviewText"></span>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeEscalateModal()">Cancel</button>
-          <button class="btn" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;" onclick="previewEscalation()">Preview</button>
-          <button class="btn btn-primary" style="background:#dc2626;" onclick="confirmEscalation()"><i class="ri-alarm-warning-line"></i> Confirm Escalate</button>
+          <button class="btn btn-secondary" onclick="closeEscalateModal()">
+            Cancel
+          </button>
+          <button
+            class="btn"
+            style="
+              background: #fef2f2;
+              color: #dc2626;
+              border: 1px solid #fecaca;
+            "
+            onclick="previewEscalation()"
+          >
+            Preview
+          </button>
+          <button
+            class="btn btn-primary"
+            style="background: #dc2626"
+            onclick="confirmEscalation()"
+          >
+            <i class="ri-alarm-warning-line"></i> Confirm Escalate
+          </button>
         </div>
       </div>
     </div>

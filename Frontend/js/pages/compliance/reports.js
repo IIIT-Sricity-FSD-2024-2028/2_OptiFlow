@@ -34,7 +34,10 @@ function _saveState() {
 }
 
 function _initializeReportsData() {
-  if (Array.isArray(state.complianceReports) && state.complianceReports.length > 0) {
+  if (
+    Array.isArray(state.complianceReports) &&
+    state.complianceReports.length > 0
+  ) {
     return;
   }
 
@@ -135,16 +138,24 @@ function _bindReportEventHandlers() {
     });
   });
 
-  document.getElementById("btnCloseReportPreview")?.addEventListener("click", _closeReportPreviewModal);
-  document.getElementById("btnCancelReportPreview")?.addEventListener("click", _closeReportPreviewModal);
-  document.getElementById("btnConfirmGenerateReport")?.addEventListener("click", function () {
-    if (!reportPageState.pendingConfig) return;
-    window.generateReport(reportPageState.pendingConfig);
-  });
+  document
+    .getElementById("btnCloseReportPreview")
+    ?.addEventListener("click", _closeReportPreviewModal);
+  document
+    .getElementById("btnCancelReportPreview")
+    ?.addEventListener("click", _closeReportPreviewModal);
+  document
+    .getElementById("btnConfirmGenerateReport")
+    ?.addEventListener("click", function () {
+      if (!reportPageState.pendingConfig) return;
+      window.generateReport(reportPageState.pendingConfig);
+    });
 
-  document.getElementById("reportPreviewModal")?.addEventListener("click", function (e) {
-    if (e.target === this) _closeReportPreviewModal();
-  });
+  document
+    .getElementById("reportPreviewModal")
+    ?.addEventListener("click", function (e) {
+      if (e.target === this) _closeReportPreviewModal();
+    });
 
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
@@ -178,7 +189,9 @@ function _renderRuleVersionOptions() {
   const options = ['<option value="">All Active Versions</option>'];
   reportPageState.ruleCatalog.forEach((rule) => {
     const value = `${rule.id}|${rule.version}`;
-    options.push(`<option value="${_esc(value)}">${_esc(rule.name)} (${_esc(rule.version)})</option>`);
+    options.push(
+      `<option value="${_esc(value)}">${_esc(rule.name)} (${_esc(rule.version)})</option>`,
+    );
   });
   select.innerHTML = options.join("");
 }
@@ -189,13 +202,15 @@ function _updateRuleWarnings() {
 
   if (!reportPageState.ruleCatalog.length) {
     warning.style.display = "block";
-    warning.textContent = "No rule list found. Reports will be generated without version scoping.";
+    warning.textContent =
+      "No rule list found. Reports will be generated without version scoping.";
     return;
   }
 
   if (reportPageState.duplicateRuleVersions.size > 0) {
     warning.style.display = "block";
-    warning.textContent = "Duplicate rule versions detected in scope catalog. Report will include conflict marker.";
+    warning.textContent =
+      "Duplicate rule versions detected in scope catalog. Report will include conflict marker.";
     return;
   }
 
@@ -206,7 +221,9 @@ function _updateRuleWarnings() {
 function _collectReportConfig() {
   const selectedTypeCard = document.querySelector(".report-type-card.selected");
   const type = selectedTypeCard?.dataset.type || "compliance-summary";
-  const typeName = selectedTypeCard?.querySelector(".report-type-name")?.textContent?.trim() || "Compliance Summary";
+  const typeName =
+    selectedTypeCard?.querySelector(".report-type-name")?.textContent?.trim() ||
+    "Compliance Summary";
 
   const projectSelect = document.getElementById("rgProject");
   const policySelect = document.getElementById("rgPolicy");
@@ -218,17 +235,25 @@ function _collectReportConfig() {
     type,
     typeName,
     projectId: projectSelect?.value || "",
-    projectName: projectSelect?.options[projectSelect.selectedIndex]?.text || "All Projects",
+    projectName:
+      projectSelect?.options[projectSelect.selectedIndex]?.text ||
+      "All Projects",
     policyId: policySelect?.value || "",
-    policyName: policySelect?.options[policySelect.selectedIndex]?.text || "All Policies",
+    policyName:
+      policySelect?.options[policySelect.selectedIndex]?.text || "All Policies",
     workflowId: workflowSelect?.value || "",
-    workflowName: workflowSelect?.options[workflowSelect.selectedIndex]?.text || "All Workflows",
+    workflowName:
+      workflowSelect?.options[workflowSelect.selectedIndex]?.text ||
+      "All Workflows",
     ruleVersionKey: ruleVersionSelect?.value || "",
-    ruleVersionName: ruleVersionSelect?.options[ruleVersionSelect.selectedIndex]?.text || "All Active Versions",
+    ruleVersionName:
+      ruleVersionSelect?.options[ruleVersionSelect.selectedIndex]?.text ||
+      "All Active Versions",
     dateStart: document.getElementById("rgDateStart")?.value || "",
     dateEnd: document.getElementById("rgDateEnd")?.value || "",
     format: formatSelect?.value || "pdf",
-    formatLabel: formatSelect?.options[formatSelect.selectedIndex]?.text || "PDF",
+    formatLabel:
+      formatSelect?.options[formatSelect.selectedIndex]?.text || "PDF",
   };
 }
 
@@ -244,18 +269,33 @@ function _validateReportConfig(config) {
     errors.push("Start date must be before or equal to end date.");
   }
 
-  if ((config.type === "audit-trail" || config.type === "evidence-log") && !config.workflowId) {
-    errors.push("No workflow selected. This report type requires a workflow scope.");
+  if (
+    (config.type === "audit-trail" || config.type === "evidence-log") &&
+    !config.workflowId
+  ) {
+    errors.push(
+      "No workflow selected. This report type requires a workflow scope.",
+    );
   }
 
   if (!reportPageState.ruleCatalog.length) {
     warnings.push("Rule version scope unavailable because rule list is empty.");
   }
 
-  if (config.ruleVersionKey && reportPageState.duplicateRuleVersions.has(config.ruleVersionKey)) {
-    warnings.push("Selected rule version has duplicates; report will include a duplicate-version marker.");
-  } else if (!config.ruleVersionKey && reportPageState.duplicateRuleVersions.size > 0) {
-    warnings.push("Duplicate rule versions exist in catalog; choose a specific version scope for clarity.");
+  if (
+    config.ruleVersionKey &&
+    reportPageState.duplicateRuleVersions.has(config.ruleVersionKey)
+  ) {
+    warnings.push(
+      "Selected rule version has duplicates; report will include a duplicate-version marker.",
+    );
+  } else if (
+    !config.ruleVersionKey &&
+    reportPageState.duplicateRuleVersions.size > 0
+  ) {
+    warnings.push(
+      "Duplicate rule versions exist in catalog; choose a specific version scope for clarity.",
+    );
   }
 
   return {
@@ -331,7 +371,9 @@ window.renderReports = function () {
   const list = document.getElementById("recentReportsList");
   if (!list) return;
 
-  const reports = Array.isArray(state.complianceReports) ? state.complianceReports : [];
+  const reports = Array.isArray(state.complianceReports)
+    ? state.complianceReports
+    : [];
   if (!reports.length) {
     list.innerHTML = `
       <article class="report-card" role="listitem">
@@ -421,7 +463,9 @@ window.generateReport = function (overrideConfig) {
       tags: [
         { cls: "filetype", txt: config.formatLabel },
         { cls: visual.policyBadge, txt: config.policyName },
-        ...(config.ruleVersionKey ? [{ cls: "gray", txt: config.ruleVersionName }] : []),
+        ...(config.ruleVersionKey
+          ? [{ cls: "gray", txt: config.ruleVersionName }]
+          : []),
       ],
       scope: {
         workflowId: config.workflowId,
@@ -435,9 +479,15 @@ window.generateReport = function (overrideConfig) {
     _closeReportPreviewModal();
 
     if (validation.warnings.length && window.Toast) {
-      window.Toast.show(`Report generated with warning: ${validation.warnings[0]}`, "warning");
+      window.Toast.show(
+        `Report generated with warning: ${validation.warnings[0]}`,
+        "warning",
+      );
     } else if (window.Toast) {
-      window.Toast.show("Report generated successfully! Added to Recent Reports.", "success");
+      window.Toast.show(
+        "Report generated successfully! Added to Recent Reports.",
+        "success",
+      );
     }
   }, 1200);
 };
@@ -455,7 +505,9 @@ window.downloadReport = function (id) {
   if (state && Array.isArray(state.complianceReports)) {
     const rep = state.complianceReports.find((r) => r.id === id);
     if (rep) {
-      reportName = (rep.title || reportName).replace(/[^a-z0-9]/gi, "_").toLowerCase();
+      reportName = (rep.title || reportName)
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase();
       extension = (rep.format || "txt").toLowerCase();
     }
   }

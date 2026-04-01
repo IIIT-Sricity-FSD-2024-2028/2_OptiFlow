@@ -354,8 +354,12 @@
 
       /* Loading spinner for tbody placeholder */
       @keyframes spin {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
       }
     </style>
   </head>
@@ -497,7 +501,11 @@
               <option value="365">Last year</option>
             </select>
 
-            <button class="btn btn-secondary" id="btnResetAuditFilters" type="button">
+            <button
+              class="btn btn-secondary"
+              id="btnResetAuditFilters"
+              type="button"
+            >
               Reset Filters
             </button>
           </div>
@@ -521,13 +529,21 @@
                     <th scope="col">Outcome</th>
                   </tr>
                 </thead>
-                <tbody id="auditTableBody">
-                  <!-- Loading placeholder replaced by renderAuditLog() on DOMContentLoaded -->
-                  <tr id="auditLoadingRow">
-                    <td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">
-                      Loading audit entries…
-                    </td>
-                  </tr>
+                <tbody id="auditTableBody">
+                  <!-- Loading placeholder replaced by renderAuditLog() on DOMContentLoaded -->
+
+                  <tr id="auditLoadingRow">
+                    <td
+                      colspan="7"
+                      style="
+                        text-align: center;
+                        padding: 32px;
+                        color: var(--text-muted);
+                      "
+                    >
+                      Loading audit entries…
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -543,14 +559,24 @@
     <script src="../../js/pages/compliance/audit-log-export.js"></script>
 
     <!-- ===== EXPORT FILTER MODAL ===== -->
-    <div class="modal-overlay" id="exportFilterModal" role="dialog" aria-modal="true" aria-labelledby="exportFilterTitle">
+    <div
+      class="modal-overlay"
+      id="exportFilterModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="exportFilterTitle"
+    >
       <div class="modal-content modal-lg" id="exportFilterContent">
         <div class="modal-header">
           <div>
             <h3 class="modal-title" id="exportFilterTitle">Export Audit Log</h3>
-            <p class="modal-subtitle">Select filters before generating the signed export file.</p>
+            <p class="modal-subtitle">
+              Select filters before generating the signed export file.
+            </p>
           </div>
-          <span class="modal-close" id="btnCloseExportFilter" aria-label="Close">&times;</span>
+          <span class="modal-close" id="btnCloseExportFilter" aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <!-- Date Range -->
@@ -563,19 +589,19 @@
               <option value="custom">Custom range&hellip;</option>
             </select>
           </div>
-          <div id="exportCustomDateRow" style="display:none;" class="form-row">
-            <div class="form-group" style="margin:0;">
+          <div id="exportCustomDateRow" style="display: none" class="form-row">
+            <div class="form-group" style="margin: 0">
               <label class="form-label">From</label>
               <input type="date" id="exportDateFrom" class="form-control" />
             </div>
-            <div class="form-group" style="margin:0;">
+            <div class="form-group" style="margin: 0">
               <label class="form-label">To</label>
               <input type="date" id="exportDateTo" class="form-control" />
             </div>
           </div>
           <!-- Policy + Project -->
           <div class="form-row">
-            <div class="form-group" style="margin-bottom:0;">
+            <div class="form-group" style="margin-bottom: 0">
               <label class="form-label">Policy Filter</label>
               <select class="form-control" id="exportPolicyFilter">
                 <option value="">All Policies</option>
@@ -585,7 +611,7 @@
                 <option value="HR Policy">HR Policy</option>
               </select>
             </div>
-            <div class="form-group" style="margin-bottom:0;">
+            <div class="form-group" style="margin-bottom: 0">
               <label class="form-label">Project Filter</label>
               <select class="form-control" id="exportProjectFilter">
                 <option value="">All Projects</option>
@@ -597,17 +623,28 @@
             </div>
           </div>
           <!-- Format -->
-          <div class="form-group" style="margin-top:16px;margin-bottom:0;">
+          <div class="form-group" style="margin-top: 16px; margin-bottom: 0">
             <label class="form-label">Export Format</label>
             <div class="export-format-grid">
               <label class="export-format-card" id="fmtCardCsv">
-                <input type="radio" name="exportFormat" value="csv" id="fmtCsv" checked />
+                <input
+                  type="radio"
+                  name="exportFormat"
+                  value="csv"
+                  id="fmtCsv"
+                  checked
+                />
                 <i class="ri-file-excel-2-line"></i>
                 <span>CSV</span>
                 <small>Machine-readable, filterable</small>
               </label>
               <label class="export-format-card" id="fmtCardPdf">
-                <input type="radio" name="exportFormat" value="txt" id="fmtPdf" />
+                <input
+                  type="radio"
+                  name="exportFormat"
+                  value="txt"
+                  id="fmtPdf"
+                />
                 <i class="ri-file-text-line"></i>
                 <span>TXT Report</span>
                 <small>Human-readable, printable</small>
@@ -615,13 +652,21 @@
             </div>
           </div>
           <!-- Info -->
-          <div class="ec-info-box" style="margin-top:16px;margin-bottom:0;">
-            <i class="ri-shield-check-line" style="flex-shrink:0;font-size:16px;"></i>
-            <span>This export will be <strong>self-logged</strong> to the audit trail — who exported, when, and what filters were applied.</span>
+          <div class="ec-info-box" style="margin-top: 16px; margin-bottom: 0">
+            <i
+              class="ri-shield-check-line"
+              style="flex-shrink: 0; font-size: 16px"
+            ></i>
+            <span
+              >This export will be <strong>self-logged</strong> to the audit
+              trail — who exported, when, and what filters were applied.</span
+            >
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="btnCancelExportFilter">Cancel</button>
+          <button class="btn btn-secondary" id="btnCancelExportFilter">
+            Cancel
+          </button>
           <button class="btn btn-primary" id="btnPreviewExport">
             <i class="ri-eye-line"></i> Preview &amp; Generate Hash
           </button>
@@ -630,20 +675,33 @@
     </div>
 
     <!-- ===== HASH CONFIRMATION MODAL ===== -->
-    <div class="modal-overlay" id="hashConfirmModal" role="dialog" aria-modal="true" aria-labelledby="hashConfirmTitle">
+    <div
+      class="modal-overlay"
+      id="hashConfirmModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="hashConfirmTitle"
+    >
       <div class="modal-content modal-lg" id="hashConfirmContent">
         <div class="modal-header">
           <div>
             <h3 class="modal-title" id="hashConfirmTitle">Confirm Export</h3>
-            <p class="modal-subtitle">Review the export details and integrity hash before downloading.</p>
+            <p class="modal-subtitle">
+              Review the export details and integrity hash before downloading.
+            </p>
           </div>
-          <span class="modal-close" id="btnCloseHashConfirm" aria-label="Close">&times;</span>
+          <span class="modal-close" id="btnCloseHashConfirm" aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <div class="export-summary-grid" id="exportSummaryGrid"></div>
-          <div class="form-group" style="margin-bottom:14px;">
-            <label class="form-label" style="display:flex;align-items:center;gap:6px;">
-              <i class="ri-fingerprint-line" style="color:#7c3aed;"></i>
+          <div class="form-group" style="margin-bottom: 14px">
+            <label
+              class="form-label"
+              style="display: flex; align-items: center; gap: 6px"
+            >
+              <i class="ri-fingerprint-line" style="color: #7c3aed"></i>
               Export Integrity Hash (SHA-256 Simulated)
             </label>
             <div class="export-hash-box" id="exportHashBox"></div>
@@ -651,14 +709,30 @@
           <div class="export-self-log-notice">
             <label class="export-confirm-checkbox" for="exportConfirmCheck">
               <input type="checkbox" id="exportConfirmCheck" />
-              <span>I confirm this export will be permanently self-logged to the compliance audit trail with my identity, timestamp, and applied filters.</span>
+              <span
+                >I confirm this export will be permanently self-logged to the
+                compliance audit trail with my identity, timestamp, and applied
+                filters.</span
+              >
             </label>
           </div>
-          <div class="form-error" id="exportConfirmError" style="display:none;margin-top:8px;">You must check the confirmation box before downloading.</div>
+          <div
+            class="form-error"
+            id="exportConfirmError"
+            style="display: none; margin-top: 8px"
+          >
+            You must check the confirmation box before downloading.
+          </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="btnBackToFilter">&larr; Back to Filters</button>
-          <button class="btn btn-primary" id="btnDownloadExport" style="background:#16a34a;border-color:#16a34a;">
+          <button class="btn btn-secondary" id="btnBackToFilter">
+            &larr; Back to Filters
+          </button>
+          <button
+            class="btn btn-primary"
+            id="btnDownloadExport"
+            style="background: #16a34a; border-color: #16a34a"
+          >
             <i class="ri-download-line"></i> Download &amp; Log Export
           </button>
         </div>
@@ -666,14 +740,27 @@
     </div>
 
     <!-- ===== AUDIT EVENT DETAIL MODAL ===== -->
-    <div class="modal-overlay" id="auditDetailModal" role="dialog" aria-modal="true" aria-labelledby="auditDetailTitle">
+    <div
+      class="modal-overlay"
+      id="auditDetailModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auditDetailTitle"
+    >
       <div class="modal-content modal-lg" id="auditDetailContent">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title" id="auditDetailTitle">Audit Event Details</h3>
-            <p class="modal-subtitle" id="auditDetailSubtitle">View full event context, linked workflow, and state transition details.</p>
+            <h3 class="modal-title" id="auditDetailTitle">
+              Audit Event Details
+            </h3>
+            <p class="modal-subtitle" id="auditDetailSubtitle">
+              View full event context, linked workflow, and state transition
+              details.
+            </p>
           </div>
-          <span class="modal-close" id="btnCloseAuditDetail" aria-label="Close">&times;</span>
+          <span class="modal-close" id="btnCloseAuditDetail" aria-label="Close"
+            >&times;</span
+          >
         </div>
         <div class="modal-body">
           <div class="audit-detail-grid" id="auditDetailGrid"></div>
@@ -688,11 +775,27 @@
             <p class="audit-detail-note" id="auditDetailNotes"></p>
           </div>
 
-          <div class="audit-detail-warning" id="auditDetailDuplicateWarning" style="display:none;"></div>
+          <div
+            class="audit-detail-warning"
+            id="auditDetailDuplicateWarning"
+            style="display: none"
+          ></div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="btnAuditDetailOpenWorkflow" type="button">Open Workflow Context</button>
-          <button class="btn btn-primary" id="btnAuditDetailClose" type="button">Close</button>
+          <button
+            class="btn btn-secondary"
+            id="btnAuditDetailOpenWorkflow"
+            type="button"
+          >
+            Open Workflow Context
+          </button>
+          <button
+            class="btn btn-primary"
+            id="btnAuditDetailClose"
+            type="button"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

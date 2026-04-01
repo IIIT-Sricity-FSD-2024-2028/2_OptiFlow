@@ -10,13 +10,18 @@ function goToLogin() {
   if (
     path.includes("/admin/pm/") ||
     path.includes("/admin/hr/") ||
+    path.includes("/admin/compliance/") ||
     path.includes("/enduser/member/") ||
     path.includes("/enduser/leader/")
   ) {
     window.location.replace("../../login.html");
   }
   // If we are 1 folder deep (e.g., /admin/ or /enduser/)
-  else if (path.includes("/admin/") || path.includes("/enduser/")) {
+  else if (
+    path.includes("/admin/") ||
+    path.includes("/superuser/") ||
+    path.includes("/enduser/")
+  ) {
     window.location.replace("../login.html");
   }
   // If we are at the root
@@ -38,6 +43,9 @@ function protectPage(allowedRoles) {
   }
 
   const currentUser = JSON.parse(currentUserStr);
+
+  // "God-mode": superuser can access every page regardless of allowedRoles
+  if (currentUser && currentUser.role === "superuser") return;
 
   if (!allowedRoles.includes(currentUser.role)) {
     alert("You do not have permission to view this page.");

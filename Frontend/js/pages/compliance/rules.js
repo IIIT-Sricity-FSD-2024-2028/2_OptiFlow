@@ -192,31 +192,55 @@ function _migrateRule(r) {
 
 // Policy badge colour map
 const POLICY_COLORS = {
-  SOX:       { bg: "#fef3c7", color: "#92400e", border: "#fde68a" },
-  GDPR:      { bg: "#dbeafe", color: "#1e40af", border: "#bfdbfe" },
+  SOX: { bg: "#fef3c7", color: "#92400e", border: "#fde68a" },
+  GDPR: { bg: "#dbeafe", color: "#1e40af", border: "#bfdbfe" },
   "ISO 27001": { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
-  HR:        { bg: "#fdf2f8", color: "#86198f", border: "#f0abfc" },
-  Finance:   { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
-  Security:  { bg: "#ede9fe", color: "#6d28d9", border: "#c4b5fd" },
-  Internal:  { bg: "#f0f9ff", color: "#0369a1", border: "#bae6fd" },
+  HR: { bg: "#fdf2f8", color: "#86198f", border: "#f0abfc" },
+  Finance: { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+  Security: { bg: "#ede9fe", color: "#6d28d9", border: "#c4b5fd" },
+  Internal: { bg: "#f0f9ff", color: "#0369a1", border: "#bae6fd" },
 };
 
 const SEVERITY_COLORS = {
   Critical: "#dc2626",
-  High:     "#ea580c",
-  Medium:   "#f59e0b",
-  Low:      "#16a34a",
+  High: "#ea580c",
+  Medium: "#f59e0b",
+  Low: "#16a34a",
 };
 
 const ENF_CONFIG = {
-  BLOCK:            { icon: "ri-forbid-line",        bg: "#fee2e2", color: "#dc2626", label: "BLOCK" },
-  WARN:             { icon: "ri-alert-line",         bg: "#fef3c7", color: "#b45309", label: "WARN" },
-  REQUIRE_APPROVAL: { icon: "ri-checkbox-circle-line", bg: "#dbeafe", color: "#1d4ed8", label: "APPROVAL" },
-  AUTO_FLAG:        { icon: "ri-flag-line",          bg: "#ede9fe", color: "#7c3aed", label: "AUTO-FLAG" },
+  BLOCK: {
+    icon: "ri-forbid-line",
+    bg: "#fee2e2",
+    color: "#dc2626",
+    label: "BLOCK",
+  },
+  WARN: {
+    icon: "ri-alert-line",
+    bg: "#fef3c7",
+    color: "#b45309",
+    label: "WARN",
+  },
+  REQUIRE_APPROVAL: {
+    icon: "ri-checkbox-circle-line",
+    bg: "#dbeafe",
+    color: "#1d4ed8",
+    label: "APPROVAL",
+  },
+  AUTO_FLAG: {
+    icon: "ri-flag-line",
+    bg: "#ede9fe",
+    color: "#7c3aed",
+    label: "AUTO-FLAG",
+  },
 };
 
 function _policyBadge(policy) {
-  const c = POLICY_COLORS[policy] || { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0" };
+  const c = POLICY_COLORS[policy] || {
+    bg: "#f1f5f9",
+    color: "#475569",
+    border: "#e2e8f0",
+  };
   return `<span style="display:inline-flex;align-items:center;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:.3px;background:${c.bg};color:${c.color};border:1px solid ${c.border};">${policy}</span>`;
 }
 
@@ -240,12 +264,15 @@ function renderRules(filterFn) {
   let rules = state.complianceRules;
   if (filterFn) rules = rules.filter(filterFn);
 
-  const searchTerm = (document.getElementById("rulesSearchInput")?.value || "").toLowerCase();
+  const searchTerm = (
+    document.getElementById("rulesSearchInput")?.value || ""
+  ).toLowerCase();
   if (searchTerm) {
-    rules = rules.filter((r) =>
-      r.name.toLowerCase().includes(searchTerm) ||
-      r.policy.toLowerCase().includes(searchTerm) ||
-      r.dept.toLowerCase().includes(searchTerm)
+    rules = rules.filter(
+      (r) =>
+        r.name.toLowerCase().includes(searchTerm) ||
+        r.policy.toLowerCase().includes(searchTerm) ||
+        r.dept.toLowerCase().includes(searchTerm),
     );
   }
 
@@ -261,23 +288,34 @@ function renderRules(filterFn) {
     return;
   }
 
-  tbody.innerHTML = rules.map((rule) => {
-    const hasConflict = currentConflicts.some((c) => c.ruleAId === rule.id || c.ruleBId === rule.id);
-    const activeVer  = rule.versions?.find((v) => v.active);
-    const verLabel   = activeVer ? `v${activeVer.v}` : "v1";
-    const injections = rule.injections || [];
-    const sevColor   = _severityBarColor(rule.severity || "High");
+  tbody.innerHTML = rules
+    .map((rule) => {
+      const hasConflict = currentConflicts.some(
+        (c) => c.ruleAId === rule.id || c.ruleBId === rule.id,
+      );
+      const activeVer = rule.versions?.find((v) => v.active);
+      const verLabel = activeVer ? `v${activeVer.v}` : "v1";
+      const injections = rule.injections || [];
+      const sevColor = _severityBarColor(rule.severity || "High");
 
-    // Build enforcement pills from injections (unique types)
-    const enfTypes = [...new Set(injections.map((i) => i.enforcementType))];
-    const enfPills = enfTypes.map(_enfPill).join("");
+      // Build enforcement pills from injections (unique types)
+      const enfTypes = [...new Set(injections.map((i) => i.enforcementType))];
+      const enfPills = enfTypes.map(_enfPill).join("");
 
-    // Injection workflow chips
-    const wfChips = injections.slice(0, 2).map((inj) =>
-      `<span class="rc-wf-chip"><i class="ri-flow-chart"></i>${inj.workflowName} <span class="rc-wf-step">› ${inj.stepName}</span></span>`
-    ).join("") + (injections.length > 2 ? `<span class="rc-wf-chip gray">+${injections.length - 2} more</span>` : "");
+      // Injection workflow chips
+      const wfChips =
+        injections
+          .slice(0, 2)
+          .map(
+            (inj) =>
+              `<span class="rc-wf-chip"><i class="ri-flow-chart"></i>${inj.workflowName} <span class="rc-wf-step">› ${inj.stepName}</span></span>`,
+          )
+          .join("") +
+        (injections.length > 2
+          ? `<span class="rc-wf-chip gray">+${injections.length - 2} more</span>`
+          : "");
 
-    return `
+      return `
     <tr><td colspan="6" style="padding:0;">
       <div class="rule-card ${hasConflict ? "rule-card--conflict" : ""}" style="border-left-color:${sevColor};">
 
@@ -308,21 +346,26 @@ function renderRules(filterFn) {
               <span class="rc-meta-pill"><i class="ri-git-branch-line"></i>${verLabel}</span>
               <span class="rc-meta-pill"><i class="ri-building-line"></i>${rule.dept}</span>
               <span class="rc-meta-pill"><i class="ri-file-text-line"></i>Evidence: ${rule.evidence}</span>
-              ${rule.autoEscalate
-                ? `<span class="rc-meta-pill orange"><i class="ri-alarm-line"></i>Escalate ${rule.escalationThreshold}d</span>`
-                : `<span class="rc-meta-pill gray"><i class="ri-alarm-line"></i>No auto-escalate</span>`
+              ${
+                rule.autoEscalate
+                  ? `<span class="rc-meta-pill orange"><i class="ri-alarm-line"></i>Escalate ${rule.escalationThreshold}d</span>`
+                  : `<span class="rc-meta-pill gray"><i class="ri-alarm-line"></i>No auto-escalate</span>`
               }
             </div>
           </div>
 
           <!-- Row 4: enforcement pills + workflow chips -->
-          ${(enfTypes.length > 0 || injections.length > 0) ? `
+          ${
+            enfTypes.length > 0 || injections.length > 0
+              ? `
           <div class="rc-row rc-row--enf">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               ${enfPills}
               ${wfChips}
             </div>
-          </div>` : ""}
+          </div>`
+              : ""
+          }
 
         </div>
 
@@ -337,7 +380,8 @@ function renderRules(filterFn) {
 
       </div>
     </td></tr>`;
-  }).join("");
+    })
+    .join("");
 }
 
 // =====================================================================
@@ -431,7 +475,8 @@ function saveNewRule() {
   };
   state.complianceRules.push(newRule);
   window.Helpers.saveState(state);
-  if (window.Toast) window.Toast.show("New rule created successfully", "success");
+  if (window.Toast)
+    window.Toast.show("New rule created successfully", "success");
   closeNewRuleModal();
   detectConflicts();
   renderRules();
@@ -522,7 +567,7 @@ function editRule(id) {
 
 function saveEdit(id) {
   const idx = state.complianceRules.findIndex(
-    (r) => String(r.id) === String(id)
+    (r) => String(r.id) === String(id),
   );
   if (idx === -1) return;
 
@@ -536,11 +581,17 @@ function saveEdit(id) {
   const lastVer = rule.versions[rule.versions.length - 1];
   const unchanged = lastVer.name === newName && lastVer.desc === newDesc;
   if (unchanged) {
-    if (window.Toast) window.Toast.show("No changes since last version — snapshot not created", "warning");
+    if (window.Toast)
+      window.Toast.show(
+        "No changes since last version — snapshot not created",
+        "warning",
+      );
   } else {
     // Create new version snapshot
     const now = new Date().toLocaleDateString("en-GB", {
-      day: "2-digit", month: "short", year: "numeric",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
     });
     rule.versions.forEach((v) => (v.active = false));
     rule.versions.push({
@@ -558,7 +609,11 @@ function saveEdit(id) {
   rule.desc = newDesc;
 
   window.Helpers.saveState(state);
-  if (window.Toast && !unchanged) window.Toast.show("Rule updated — v" + rule.versions.length + " created", "success");
+  if (window.Toast && !unchanged)
+    window.Toast.show(
+      "Rule updated — v" + rule.versions.length + " created",
+      "success",
+    );
   document.getElementById("dynamic-rule-modal").remove();
   detectConflicts();
   renderRules();
@@ -569,14 +624,17 @@ function saveEdit(id) {
 // =====================================================================
 
 function openVersionHistoryModal(ruleId) {
-  const rule = state.complianceRules.find((r) => String(r.id) === String(ruleId));
+  const rule = state.complianceRules.find(
+    (r) => String(r.id) === String(ruleId),
+  );
   if (!rule) return;
   selectedRuleId = ruleId;
 
   const activeVer = rule.versions.find((v) => v.active);
   document.getElementById("vhRuleName").textContent = rule.name;
   document.getElementById("vhActiveBannerText").textContent =
-    "Active: " + (activeVer ? `v${activeVer.v} — saved ${activeVer.savedAt}` : "v1");
+    "Active: " +
+    (activeVer ? `v${activeVer.v} — saved ${activeVer.savedAt}` : "v1");
   renderVersionList(rule);
   document.getElementById("versionHistoryModal").classList.add("active");
 }
@@ -612,25 +670,31 @@ function renderVersionList(rule) {
           ? `<button class="btn btn-secondary" style="margin-top:10px;font-size:12px;padding:5px 12px;" onclick="activateVersion('${rule.id}', ${ver.v})">Activate this version</button>`
           : ""
       }
-    </div>`
+    </div>`,
     )
     .join("");
 }
 
 function createNewVersion() {
   const rule = state.complianceRules.find(
-    (r) => String(r.id) === String(selectedRuleId)
+    (r) => String(r.id) === String(selectedRuleId),
   );
   if (!rule) return;
 
   const lastVer = rule.versions[rule.versions.length - 1];
   // Duplicate guard
   if (lastVer.name === rule.name && lastVer.desc === rule.desc) {
-    if (window.Toast) window.Toast.show("No changes since last version — edit the rule first", "warning");
+    if (window.Toast)
+      window.Toast.show(
+        "No changes since last version — edit the rule first",
+        "warning",
+      );
     return;
   }
   const now = new Date().toLocaleDateString("en-GB", {
-    day: "2-digit", month: "short", year: "numeric",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
   rule.versions.forEach((v) => (v.active = false));
   rule.versions.push({
@@ -641,15 +705,17 @@ function createNewVersion() {
     active: true,
   });
   window.Helpers.saveState(state);
-  if (window.Toast) window.Toast.show(`v${rule.versions.length} saved`, "success");
-  document.getElementById("vhActiveBannerText").textContent = `Active: v${rule.versions.length} — saved ${now}`;
+  if (window.Toast)
+    window.Toast.show(`v${rule.versions.length} saved`, "success");
+  document.getElementById("vhActiveBannerText").textContent =
+    `Active: v${rule.versions.length} — saved ${now}`;
   renderVersionList(rule);
   renderRules();
 }
 
 function activateVersion(ruleId, versionNum) {
   const rule = state.complianceRules.find(
-    (r) => String(r.id) === String(ruleId)
+    (r) => String(r.id) === String(ruleId),
   );
   if (!rule) return;
   rule.versions.forEach((v) => (v.active = false));
@@ -660,8 +726,10 @@ function activateVersion(ruleId, versionNum) {
   rule.name = target.name;
   rule.desc = target.desc;
   window.Helpers.saveState(state);
-  if (window.Toast) window.Toast.show(`v${versionNum} is now the active version`, "success");
-  document.getElementById("vhActiveBannerText").textContent = `Active: v${versionNum} — saved ${target.savedAt}`;
+  if (window.Toast)
+    window.Toast.show(`v${versionNum} is now the active version`, "success");
+  document.getElementById("vhActiveBannerText").textContent =
+    `Active: v${versionNum} — saved ${target.savedAt}`;
   document.getElementById("vhRuleName").textContent = rule.name;
   renderVersionList(rule);
   renderRules();
@@ -672,7 +740,9 @@ function activateVersion(ruleId, versionNum) {
 // =====================================================================
 
 function openAttachWorkflowModal(ruleId) {
-  const rule = state.complianceRules.find((r) => String(r.id) === String(ruleId));
+  const rule = state.complianceRules.find(
+    (r) => String(r.id) === String(ruleId),
+  );
   if (!rule) return;
   selectedRuleId = ruleId;
   const wfEmptyState = document.getElementById("awWorkflowEmptyState");
@@ -686,15 +756,24 @@ function openAttachWorkflowModal(ruleId) {
   // Populate workflow dropdown
   const wfSelect = document.getElementById("awWorkflowSelect");
   const workflows = typeof getWorkflows === "function" ? getWorkflows() : [];
-  wfSelect.innerHTML = `<option value="">— Select a workflow —</option>` +
-    workflows.map((wf) => `<option value="${wf.id}" data-stages='${JSON.stringify(wf.stages)}'>${wf.name}</option>`).join("");
+  wfSelect.innerHTML =
+    `<option value="">— Select a workflow —</option>` +
+    workflows
+      .map(
+        (wf) =>
+          `<option value="${wf.id}" data-stages='${JSON.stringify(wf.stages)}'>${wf.name}</option>`,
+      )
+      .join("");
   wfSelect.disabled = workflows.length === 0;
   if (wfEmptyState) wfEmptyState.hidden = workflows.length !== 0;
 
   // Default enforcement = BLOCK
   document.querySelectorAll(".et-card").forEach((c) => {
     c.classList.toggle("selected", c.dataset.type === "BLOCK");
-    c.setAttribute("aria-checked", c.dataset.type === "BLOCK" ? "true" : "false");
+    c.setAttribute(
+      "aria-checked",
+      c.dataset.type === "BLOCK" ? "true" : "false",
+    );
   });
 
   // Show existing injections
@@ -721,10 +800,13 @@ function onWorkflowSelect() {
   }
 
   let stages = [];
-  try { stages = JSON.parse(selected.getAttribute("data-stages") || "[]"); } catch (_) {}
+  try {
+    stages = JSON.parse(selected.getAttribute("data-stages") || "[]");
+  } catch (_) {}
 
   const stepSelect = document.getElementById("awStepSelect");
-  stepSelect.innerHTML = `<option value="">— Select a step —</option>` +
+  stepSelect.innerHTML =
+    `<option value="">— Select a step —</option>` +
     stages.map((s) => `<option value="${s}">${s}</option>`).join("");
 
   document.getElementById("awStepGroup").style.display = "block";
@@ -741,7 +823,7 @@ function selectEnforcement(el) {
 
 function saveWorkflowInjection() {
   const rule = state.complianceRules.find(
-    (r) => String(r.id) === String(selectedRuleId)
+    (r) => String(r.id) === String(selectedRuleId),
   );
   if (!rule) return;
 
@@ -774,7 +856,11 @@ function saveWorkflowInjection() {
   rule.injections.push(injection);
   window.Helpers.saveState(state);
 
-  if (window.Toast) window.Toast.show(`Rule attached to "${wfName} → ${stepSelect.value}" as ${enforcementType}`, "success");
+  if (window.Toast)
+    window.Toast.show(
+      `Rule attached to "${wfName} → ${stepSelect.value}" as ${enforcementType}`,
+      "success",
+    );
 
   // Re-detect conflicts after new injection
   detectConflicts();
@@ -790,7 +876,9 @@ function renderExistingInjections(rule) {
     return;
   }
   section.style.display = "block";
-  list.innerHTML = rule.injections.map((inj, i) => `
+  list.innerHTML = rule.injections
+    .map(
+      (inj, i) => `
     <div class="aw-injection-item">
       <div class="aw-injection-info">
         <span class="aw-injection-wf">${inj.workflowName}</span>
@@ -799,11 +887,15 @@ function renderExistingInjections(rule) {
       </div>
       <span class="badge ${_enforcementBadgeClass(inj.enforcementType)}">${inj.enforcementType}</span>
       <button class="aw-injection-remove" onclick="removeInjection('${rule.id}', ${i})" title="Remove injection">&times;</button>
-    </div>`).join("");
+    </div>`,
+    )
+    .join("");
 }
 
 function removeInjection(ruleId, index) {
-  const rule = state.complianceRules.find((r) => String(r.id) === String(ruleId));
+  const rule = state.complianceRules.find(
+    (r) => String(r.id) === String(ruleId),
+  );
   if (!rule || !rule.injections) return;
   rule.injections.splice(index, 1);
   window.Helpers.saveState(state);
@@ -814,7 +906,14 @@ function removeInjection(ruleId, index) {
 }
 
 function _enforcementBadgeClass(type) {
-  return { BLOCK: "red", WARN: "yellow", REQUIRE_APPROVAL: "blue", AUTO_FLAG: "gray" }[type] || "gray";
+  return (
+    {
+      BLOCK: "red",
+      WARN: "yellow",
+      REQUIRE_APPROVAL: "blue",
+      AUTO_FLAG: "gray",
+    }[type] || "gray"
+  );
 }
 
 // =====================================================================
@@ -822,7 +921,9 @@ function _enforcementBadgeClass(type) {
 // =====================================================================
 
 function openEscalationConfigModal(ruleId) {
-  const rule = state.complianceRules.find((r) => String(r.id) === String(ruleId));
+  const rule = state.complianceRules.find(
+    (r) => String(r.id) === String(ruleId),
+  );
   if (!rule) return;
   selectedRuleId = ruleId;
 
@@ -833,12 +934,17 @@ function openEscalationConfigModal(ruleId) {
   // Set current values
   const enabled = rule.autoEscalate !== false;
   document.getElementById("ecAutoEscalateToggle").checked = enabled;
-  document.getElementById("ecThresholdDays").value = rule.escalationThreshold || 7;
+  document.getElementById("ecThresholdDays").value =
+    rule.escalationThreshold || 7;
   document.getElementById("ecDisableJustification").value = "";
 
   // Show/hide conditional sections
-  document.getElementById("ecThresholdGroup").style.display = enabled ? "block" : "none";
-  document.getElementById("ecDisableJustificationGroup").style.display = enabled ? "none" : "block";
+  document.getElementById("ecThresholdGroup").style.display = enabled
+    ? "block"
+    : "none";
+  document.getElementById("ecDisableJustificationGroup").style.display = enabled
+    ? "none"
+    : "block";
 
   // Show current config if exists
   renderCurrentEscalationConfig(rule);
@@ -854,15 +960,19 @@ function closeEscalationConfigModal() {
 
 function onEscalateToggle() {
   const enabled = document.getElementById("ecAutoEscalateToggle").checked;
-  document.getElementById("ecThresholdGroup").style.display = enabled ? "block" : "none";
-  document.getElementById("ecDisableJustificationGroup").style.display = enabled ? "none" : "block";
+  document.getElementById("ecThresholdGroup").style.display = enabled
+    ? "block"
+    : "none";
+  document.getElementById("ecDisableJustificationGroup").style.display = enabled
+    ? "none"
+    : "block";
   document.getElementById("ecThresholdError").style.display = "none";
   document.getElementById("ecJustificationError").style.display = "none";
 }
 
 function saveEscalationConfig() {
   const rule = state.complianceRules.find(
-    (r) => String(r.id) === String(selectedRuleId)
+    (r) => String(r.id) === String(selectedRuleId),
   );
   if (!rule) return;
 
@@ -878,20 +988,31 @@ function saveEscalationConfig() {
     if (!valid) return;
     rule.autoEscalate = true;
     rule.escalationThreshold = days;
-    rule.escalationConfig = { enabled: true, threshold: days, savedAt: _nowDate() };
+    rule.escalationConfig = {
+      enabled: true,
+      threshold: days,
+      savedAt: _nowDate(),
+    };
   } else {
-    const justification = document.getElementById("ecDisableJustification").value.trim();
+    const justification = document
+      .getElementById("ecDisableJustification")
+      .value.trim();
     if (!justification) {
       document.getElementById("ecJustificationError").style.display = "block";
       valid = false;
     }
     if (!valid) return;
     rule.autoEscalate = false;
-    rule.escalationConfig = { enabled: false, justification, savedAt: _nowDate() };
+    rule.escalationConfig = {
+      enabled: false,
+      justification,
+      savedAt: _nowDate(),
+    };
   }
 
   window.Helpers.saveState(state);
-  if (window.Toast) window.Toast.show("Escalation configuration saved", "success");
+  if (window.Toast)
+    window.Toast.show("Escalation configuration saved", "success");
   closeEscalationConfigModal();
   renderRules();
 }
@@ -996,10 +1117,11 @@ function renderConflictsTab() {
     return;
   }
 
-  tbody.innerHTML = unresolved.map((conflict, idx) => {
-    const cA = ENF_CONFIG[conflict.ruleAType] || ENF_CONFIG.AUTO_FLAG;
-    const cB = ENF_CONFIG[conflict.ruleBType] || ENF_CONFIG.AUTO_FLAG;
-    return `
+  tbody.innerHTML = unresolved
+    .map((conflict, idx) => {
+      const cA = ENF_CONFIG[conflict.ruleAType] || ENF_CONFIG.AUTO_FLAG;
+      const cB = ENF_CONFIG[conflict.ruleBType] || ENF_CONFIG.AUTO_FLAG;
+      return `
     <tr><td colspan="6" style="padding:0;">
       <div class="conflict-card">
 
@@ -1056,7 +1178,8 @@ function renderConflictsTab() {
 
       </div>
     </td></tr>`;
-  }).join("");
+    })
+    .join("");
 }
 
 function openConflictResolveModal(conflictIndex) {
@@ -1113,7 +1236,8 @@ function resolveConflict() {
   const note = document.getElementById("crResolutionNote").value.trim();
 
   if (!selected) {
-    if (window.Toast) window.Toast.show("Please select the authoritative rule", "error");
+    if (window.Toast)
+      window.Toast.show("Please select the authoritative rule", "error");
     return;
   }
   if (!note) {
@@ -1122,11 +1246,17 @@ function resolveConflict() {
   }
 
   const winnerRuleId = selected.dataset.ruleid;
-  const loserRuleId = winnerRuleId === conflict.ruleAId ? conflict.ruleBId : conflict.ruleAId;
+  const loserRuleId =
+    winnerRuleId === conflict.ruleAId ? conflict.ruleBId : conflict.ruleAId;
 
   // Mark conflict as resolved in state
   conflict.resolved = true;
-  conflict.resolution = { winnerRuleId, loserRuleId, note, resolvedAt: _nowDate() };
+  conflict.resolution = {
+    winnerRuleId,
+    loserRuleId,
+    note,
+    resolvedAt: _nowDate(),
+  };
 
   // Log to audit trail in state
   if (!state.auditLog) state.auditLog = [];
@@ -1142,7 +1272,11 @@ function resolveConflict() {
   });
 
   window.Helpers.saveState(state);
-  if (window.Toast) window.Toast.show("Conflict resolved — resolution logged to audit trail", "success");
+  if (window.Toast)
+    window.Toast.show(
+      "Conflict resolved — resolution logged to audit trail",
+      "success",
+    );
   closeConflictResolveModal();
   detectConflicts();
   renderConflictsTab();
@@ -1153,6 +1287,8 @@ function resolveConflict() {
 // =====================================================================
 function _nowDate() {
   return new Date().toLocaleDateString("en-GB", {
-    day: "2-digit", month: "short", year: "numeric",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }

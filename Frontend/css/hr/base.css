@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 :root {
   --primary-color: #2563eb;
   --primary-hover: #1d4ed8;
@@ -53,3 +54,60 @@ a {
 ul {
   list-style: none;
 }
+=======
+:root {
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+  --sidebar-bg: #1a223e; /* Dark navy from Figma */
+  --sidebar-hover: rgba(26, 86, 219, 0.35);
+  --sidebar-active: rgba(26, 86, 219, 0.35);
+  --sidebar-text: #94a3b8;
+  --sidebar-text-active: #ffffff;
+
+  --bg-color: #e2e9f8; /* Light gray from Figma */
+  --card-bg: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+
+  --border-color: #e2e8f0;
+
+  /* Status Colors */
+  --success-bg: #dcfce7;
+  --success-text: #166534;
+  --warning-bg: #fef9c3;
+  --warning-text: #854d0e;
+  --danger-bg: #fee2e2;
+  --danger-text: #991b1b;
+  --info-bg: #dbeafe;
+  --info-text: #1e40af;
+
+  --font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --border-radius: 8px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+ul {
+  list-style: none;
+}
+>>>>>>> main

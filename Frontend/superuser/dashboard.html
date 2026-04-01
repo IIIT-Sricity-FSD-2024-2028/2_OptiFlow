@@ -242,8 +242,10 @@
               onclick="window.location.href = 'workflows.html'"
             >
               <div class="metric-title">Total Processes</div>
-              <div class="metric-value">12</div>
-              <div class="metric-tag blue">Across 4 departments</div>
+              <div class="metric-value" id="metricTotalProcesses">—</div>
+              <div class="metric-tag blue" id="metricTotalProcessesTag">
+                Across — departments
+              </div>
               <svg
                 class="metric-icon-arrow"
                 width="24"
@@ -259,8 +261,10 @@
             </div>
             <div class="card metric-card">
               <div class="metric-title">Active Usage</div>
-              <div class="metric-value">8</div>
-              <div class="metric-tag green">Currently in use</div>
+              <div class="metric-value" id="metricActiveUsage">—</div>
+              <div class="metric-tag green" id="metricActiveUsageTag">
+                Currently active users
+              </div>
             </div>
             <div
               class="card metric-card"
@@ -270,8 +274,10 @@
               onclick="window.location.href = 'analytics.html'"
             >
               <div class="metric-title">Avg. Completion Rate</div>
-              <div class="metric-value">84%</div>
-              <div class="metric-tag green">This quarter</div>
+              <div class="metric-value" id="metricAvgCompletion">—%</div>
+              <div class="metric-tag green" id="metricAvgCompletionTag">
+                Across PM projects
+              </div>
               <svg
                 class="metric-icon-arrow"
                 width="24"
@@ -287,8 +293,10 @@
             </div>
             <div class="card metric-card">
               <div class="metric-title">Pending Review</div>
-              <div class="metric-value">3</div>
-              <div class="metric-tag yellow">Policy changes</div>
+              <div class="metric-value" id="metricPendingReview">—</div>
+              <div class="metric-tag yellow" id="metricPendingReviewTag">
+                HR pending provisions
+              </div>
             </div>
           </div>
 
@@ -355,7 +363,11 @@
     </div>
 
     <!-- JS dependencies -->
+    <script src="../js/data/db.js"></script>
+    <script src="../js/data/hr-data-store.js"></script>
+    <script src="../js/data/pm-data-store.js"></script>
     <script src="../js/data/workflows.js"></script>
+    <script src="../js/data/audit-store.js"></script>
     <script src="../js/utils/helpers.js"></script>
     <script src="../js/pages/superuser/dashboard.js"></script>
   </body>

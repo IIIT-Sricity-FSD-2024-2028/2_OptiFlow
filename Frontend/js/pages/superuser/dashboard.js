@@ -1,6 +1,7 @@
 // js/pages/dashboard.js
 
 document.addEventListener("DOMContentLoaded", () => {
+  renderOmniscientMetrics();
   updateTabCounts();
   refreshProcessTable();
 
@@ -25,6 +26,69 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+function renderOmniscientMetrics() {
+  // 1) Total Processes (Workflows)
+  const workflows = typeof getWorkflows === "function" ? getWorkflows() : [];
+  const totalProcesses = Array.isArray(workflows) ? workflows.length : 0;
+
+  // 2) Active users (Master Auth)
+  const users = typeof getUsers === "function" ? getUsers() : [];
+  const activeUsers = Array.isArray(users)
+    ? users.filter((u) => String(u.status || "").toLowerCase() === "active")
+        .length
+    : 0;
+  const deptCount = Array.isArray(users)
+    ? new Set(
+        users.map((u) => String(u.department || "").trim()).filter(Boolean),
+      ).size
+    : 0;
+
+  // 3) Avg completion rate (PM projects progress)
+  let pmProjects = [];
+  try {
+    pmProjects = JSON.parse(localStorage.getItem("pm_projects")) || [];
+  } catch {
+    pmProjects = [];
+  }
+  const avgProgress =
+    pmProjects.length > 0
+      ? Math.round(
+          pmProjects.reduce(
+            (sum, p) => sum + (parseFloat(p.progress) || 0),
+            0,
+          ) / pmProjects.length,
+        )
+      : 0;
+
+  // 4) Pending review (HR pending employees)
+  let pendingHR = 0;
+  if (typeof HRStore !== "undefined" && HRStore.getAll) {
+    const emps = HRStore.getAll();
+    pendingHR = Array.isArray(emps)
+      ? emps.filter((e) => String(e.status || "").toLowerCase() === "pending")
+          .length
+      : 0;
+  }
+
+  // Paint metrics (if elements exist)
+  const setText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(val);
+  };
+
+  setText("metricTotalProcesses", totalProcesses);
+  setText("metricTotalProcessesTag", `Across ${deptCount || "—"} departments`);
+
+  setText("metricActiveUsage", activeUsers);
+  setText("metricActiveUsageTag", "Currently active users");
+
+  setText("metricAvgCompletion", `${avgProgress}%`);
+  setText("metricAvgCompletionTag", "Across PM projects");
+
+  setText("metricPendingReview", pendingHR);
+  setText("metricPendingReviewTag", "HR pending provisions");
+}
 
 function updateTabCounts() {
   const all = getWorkflows();

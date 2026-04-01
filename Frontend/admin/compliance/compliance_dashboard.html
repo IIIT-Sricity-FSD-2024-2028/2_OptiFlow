@@ -125,7 +125,9 @@
               <div class="score-info">
                 <div class="metric-title">Compliance Score</div>
                 <div class="score-value" id="score-label">Fair</div>
-                <div class="score-sub" id="score-sublabel">2 open violations dragging score</div>
+                <div class="score-sub" id="score-sublabel">
+                  2 open violations dragging score
+                </div>
               </div>
             </div>
 
@@ -154,7 +156,9 @@
             <div class="card metric-card" id="card-rule-conflicts">
               <div class="metric-title">Rule Conflicts</div>
               <div class="metric-value" id="conflicts-metric-value">—</div>
-              <span class="metric-tag" id="conflicts-metric-tag">Checking…</span>
+              <span class="metric-tag" id="conflicts-metric-tag"
+                >Checking…</span
+              >
             </div>
           </div>
           <!-- /metrics-grid -->
@@ -429,27 +433,57 @@
           <!-- /panels-row -->
 
           <!-- ===== CONFLICTS PANEL ROW (Feature #12) ===== -->
-          <div class="panels-row" id="conflicts-panels-row" style="margin-top:0;">
+          <div
+            class="panels-row"
+            id="conflicts-panels-row"
+            style="margin-top: 0"
+          >
             <!-- Rule Conflict Resolution Panel -->
-            <div class="card" id="panel-conflicts" style="grid-column: 1 / -1;">
+            <div class="card" id="panel-conflicts" style="grid-column: 1 / -1">
               <div class="panel-header">
                 <h2 class="panel-title">
-                  <i class="ri-error-warning-line" style="color:#f59e0b;margin-right:6px;"></i>
+                  <i
+                    class="ri-error-warning-line"
+                    style="color: #f59e0b; margin-right: 6px"
+                  ></i>
                   Rule Conflicts
-                  <span class="nav-badge" id="conflicts-panel-badge" style="display:none;margin-left:8px;background:#f59e0b;">0</span>
+                  <span
+                    class="nav-badge"
+                    id="conflicts-panel-badge"
+                    style="display: none; margin-left: 8px; background: #f59e0b"
+                    >0</span
+                  >
                 </h2>
-                <a href="compliance_rules.html#conflicts" class="panel-link" id="link-resolve-conflicts">Resolve in Rules →</a>
+                <a
+                  href="compliance_rules.html#conflicts"
+                  class="panel-link"
+                  id="link-resolve-conflicts"
+                  >Resolve in Rules →</a
+                >
               </div>
               <!-- Conflict list rendered by JS -->
-              <ul class="conflicts-summary-list" role="list" id="conflicts-summary-list"></ul>
-              <div class="conflicts-clear-state" id="conflicts-clear-state" style="display:none;">
-                <i class="ri-shield-check-line" style="color:#16a34a;font-size:20px;"></i>
-                <span>All rule injections are consistent — no conflicts detected.</span>
+              <ul
+                class="conflicts-summary-list"
+                role="list"
+                id="conflicts-summary-list"
+              ></ul>
+              <div
+                class="conflicts-clear-state"
+                id="conflicts-clear-state"
+                style="display: none"
+              >
+                <i
+                  class="ri-shield-check-line"
+                  style="color: #16a34a; font-size: 20px"
+                ></i>
+                <span
+                  >All rule injections are consistent — no conflicts
+                  detected.</span
+                >
               </div>
             </div>
           </div>
           <!-- /conflicts-panels-row -->
-
         </div>
         <!-- /content-wrapper -->
       </main>

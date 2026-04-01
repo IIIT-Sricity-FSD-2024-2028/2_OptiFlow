@@ -31,18 +31,35 @@ const MOCK_EVIDENCE = [
     complianceRule: "GDPR Verification",
     deadline: "Today EOD",
     stage: "Stage 2 of 3",
-    notes: "Evidence package includes data audit results, GDPR verification checklist, and client consent records. Note: client cross-verification step (subtask 3) is still blocked due to access issue — IT escalation is in progress.",
+    notes:
+      "Evidence package includes data audit results, GDPR verification checklist, and client consent records. Note: client cross-verification step (subtask 3) is still blocked due to access issue — IT escalation is in progress.",
     reviewerNotes: "",
     file: "GDPR_Evidence_Package.pdf",
     checklist: [
       { label: "Data audit report submitted", done: true, blocked: false },
       { label: "Client consent records attached", done: false, blocked: false },
-      { label: "GDPR verification checklist completed", done: true, blocked: false },
-      { label: "Client cross-verification (blocked — access pending)", done: false, blocked: true },
+      {
+        label: "GDPR verification checklist completed",
+        done: true,
+        blocked: false,
+      },
+      {
+        label: "Client cross-verification (blocked — access pending)",
+        done: false,
+        blocked: true,
+      },
     ],
     timeline: [
-      { icon: "submit",  label: "Evidence submitted by Kiran Rao",         meta: "Today, 10:22 AM" },
-      { icon: "review",  label: "Picked up for review by Compliance Officer", meta: "Today, 10:45 AM" },
+      {
+        icon: "submit",
+        label: "Evidence submitted by Kiran Rao",
+        meta: "Today, 10:22 AM",
+      },
+      {
+        icon: "review",
+        label: "Picked up for review by Compliance Officer",
+        meta: "Today, 10:45 AM",
+      },
     ],
   },
   {
@@ -59,16 +76,29 @@ const MOCK_EVIDENCE = [
     complianceRule: "SOX Section 404",
     deadline: "Tomorrow, EOD",
     stage: "Stage 1 of 2",
-    notes: "Variance report covers all Finance Q4 transactions above $50k threshold. Supporting sign-offs from four department heads are attached.",
+    notes:
+      "Variance report covers all Finance Q4 transactions above $50k threshold. Supporting sign-offs from four department heads are attached.",
     reviewerNotes: "",
     file: "SOX_Variance_Report.pdf",
     checklist: [
       { label: "Variance report attached", done: true, blocked: false },
-      { label: "Department head sign-offs included", done: true, blocked: false },
-      { label: "Internal auditor review complete", done: false, blocked: false },
+      {
+        label: "Department head sign-offs included",
+        done: true,
+        blocked: false,
+      },
+      {
+        label: "Internal auditor review complete",
+        done: false,
+        blocked: false,
+      },
     ],
     timeline: [
-      { icon: "submit", label: "Evidence submitted by Priya Sharma", meta: "Yesterday, 3:10 PM" },
+      {
+        icon: "submit",
+        label: "Evidence submitted by Priya Sharma",
+        meta: "Yesterday, 3:10 PM",
+      },
     ],
   },
   {
@@ -85,16 +115,25 @@ const MOCK_EVIDENCE = [
     complianceRule: "ISO 27001 Controls",
     deadline: "Dec 20",
     stage: "Stage 1 of 3",
-    notes: "Monthly access log reviews and server hardening audits submitted. Penetration test report pending external vendor delivery.",
+    notes:
+      "Monthly access log reviews and server hardening audits submitted. Penetration test report pending external vendor delivery.",
     reviewerNotes: "",
     file: "ISO27001_Control_Check.pdf",
     checklist: [
       { label: "Access log review attached", done: true, blocked: false },
       { label: "Server hardening audit submitted", done: true, blocked: false },
-      { label: "Penetration test report (pending vendor)", done: false, blocked: true },
+      {
+        label: "Penetration test report (pending vendor)",
+        done: false,
+        blocked: true,
+      },
     ],
     timeline: [
-      { icon: "submit", label: "Evidence submitted by Sunita Rao", meta: "Dec 15, 9:00 AM" },
+      {
+        icon: "submit",
+        label: "Evidence submitted by Sunita Rao",
+        meta: "Dec 15, 9:00 AM",
+      },
     ],
   },
   {
@@ -111,18 +150,36 @@ const MOCK_EVIDENCE = [
     complianceRule: "HR Onboarding Policy",
     deadline: "Completed",
     stage: "Stage 3 of 3",
-    notes: "All HR onboarding checklist items verified and signed off. New hire policy acknowledgement forms attached.",
-    reviewerNotes: "All items verified. No issues found. Approved without further action.",
+    notes:
+      "All HR onboarding checklist items verified and signed off. New hire policy acknowledgement forms attached.",
+    reviewerNotes:
+      "All items verified. No issues found. Approved without further action.",
     file: "HR_Policy_Checklist.pdf",
     checklist: [
-      { label: "Policy acknowledgement forms received", done: true, blocked: false },
-      { label: "Background check clearance attached", done: true, blocked: false },
+      {
+        label: "Policy acknowledgement forms received",
+        done: true,
+        blocked: false,
+      },
+      {
+        label: "Background check clearance attached",
+        done: true,
+        blocked: false,
+      },
       { label: "Signed NDA attached", done: true, blocked: false },
     ],
     timeline: [
-      { icon: "submit",  label: "Evidence submitted by Kiran Rao",         meta: "Dec 14, 11:00 AM" },
-      { icon: "review",  label: "Assigned for review",                      meta: "Dec 14, 2:00 PM" },
-      { icon: "approve", label: "Evidence approved by Compliance Officer",  meta: "Dec 14, 4:30 PM" },
+      {
+        icon: "submit",
+        label: "Evidence submitted by Kiran Rao",
+        meta: "Dec 14, 11:00 AM",
+      },
+      { icon: "review", label: "Assigned for review", meta: "Dec 14, 2:00 PM" },
+      {
+        icon: "approve",
+        label: "Evidence approved by Compliance Officer",
+        meta: "Dec 14, 4:30 PM",
+      },
     ],
   },
   {
@@ -139,19 +196,45 @@ const MOCK_EVIDENCE = [
     complianceRule: "Internal Procurement Policy",
     deadline: "Re-submit by Dec 18",
     stage: "Rejected — Awaiting Re-submission",
-    notes: "Procurement audit trail submitted for Q4 review cycle. Includes vendor comparison matrix and PO approvals.",
-    reviewerNotes: "Missing senior management sign-off on POs above $100k threshold. Returned for revision.",
+    notes:
+      "Procurement audit trail submitted for Q4 review cycle. Includes vendor comparison matrix and PO approvals.",
+    reviewerNotes:
+      "Missing senior management sign-off on POs above $100k threshold. Returned for revision.",
     file: "Procurement_Audit_Trail.pdf",
     checklist: [
-      { label: "Vendor comparison matrix attached", done: true, blocked: false },
+      {
+        label: "Vendor comparison matrix attached",
+        done: true,
+        blocked: false,
+      },
       { label: "PO approvals included", done: true, blocked: false },
-      { label: "Senior management sign-off (>$100k)", done: false, blocked: false },
+      {
+        label: "Senior management sign-off (>$100k)",
+        done: false,
+        blocked: false,
+      },
     ],
     timeline: [
-      { icon: "submit", label: "Evidence submitted by Priya Sharma",       meta: "Dec 13, 8:15 AM" },
-      { icon: "review", label: "Review started by Compliance Officer",      meta: "Dec 13, 10:00 AM" },
-      { icon: "info",   label: "Additional information requested",          meta: "Dec 13, 11:30 AM" },
-      { icon: "reject", label: "Evidence rejected — missing sign-off",      meta: "Dec 13, 3:00 PM" },
+      {
+        icon: "submit",
+        label: "Evidence submitted by Priya Sharma",
+        meta: "Dec 13, 8:15 AM",
+      },
+      {
+        icon: "review",
+        label: "Review started by Compliance Officer",
+        meta: "Dec 13, 10:00 AM",
+      },
+      {
+        icon: "info",
+        label: "Additional information requested",
+        meta: "Dec 13, 11:30 AM",
+      },
+      {
+        icon: "reject",
+        label: "Evidence rejected — missing sign-off",
+        meta: "Dec 13, 3:00 PM",
+      },
     ],
   },
 ];
@@ -170,7 +253,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Tab switching
   document.querySelectorAll(".queue-tab").forEach(function (tab) {
     tab.addEventListener("click", function () {
-      document.querySelectorAll(".queue-tab").forEach((t) => t.classList.remove("active"));
+      document
+        .querySelectorAll(".queue-tab")
+        .forEach((t) => t.classList.remove("active"));
       this.classList.add("active");
       applyFilters();
     });
@@ -213,12 +298,12 @@ document.addEventListener("DOMContentLoaded", function () {
 // ─── TAB COUNT UPDATE ──────────────────────────────────────────
 function updateTabCounts() {
   const evidence = state.evidence || [];
-  const allCount  = evidence.length;
+  const allCount = evidence.length;
   const pendingCount = evidence.filter(
-    (e) => e.status === "pending" || e.status === "under_review"
+    (e) => e.status === "pending" || e.status === "under_review",
   ).length;
   const reviewedCount = evidence.filter(
-    (e) => e.status === "approved" || e.status === "rejected"
+    (e) => e.status === "approved" || e.status === "rejected",
   ).length;
 
   const pendingBadge = document.getElementById("queuePendingCount");
@@ -236,28 +321,50 @@ function updateTabCounts() {
 function applyFilters() {
   updateTabCounts();
 
-  const activeTab   = (document.querySelector(".queue-tab.active") || {}).dataset?.tab || "all";
-  const searchTerm  = (document.getElementById("evSearchInput")?.value || "").toLowerCase().trim();
-  const policyVal   = document.getElementById("evPolicyFilter")?.value || "all";
-  const urgencyVal  = document.getElementById("evUrgencyFilter")?.value || "all";
+  const activeTab =
+    (document.querySelector(".queue-tab.active") || {}).dataset?.tab || "all";
+  const searchTerm = (document.getElementById("evSearchInput")?.value || "")
+    .toLowerCase()
+    .trim();
+  const policyVal = document.getElementById("evPolicyFilter")?.value || "all";
+  const urgencyVal = document.getElementById("evUrgencyFilter")?.value || "all";
 
   const evidence = state.evidence || [];
 
   let filtered = evidence.filter((item) => {
     // Tab filter
-    if (activeTab === "pending"  && item.status !== "pending" && item.status !== "under_review") return false;
-    if (activeTab === "reviewed" && item.status !== "approved" && item.status !== "rejected")    return false;
+    if (
+      activeTab === "pending" &&
+      item.status !== "pending" &&
+      item.status !== "under_review"
+    )
+      return false;
+    if (
+      activeTab === "reviewed" &&
+      item.status !== "approved" &&
+      item.status !== "rejected"
+    )
+      return false;
 
     // Search
-    if (searchTerm && !item.title.toLowerCase().includes(searchTerm) &&
-        !(item.taskName || "").toLowerCase().includes(searchTerm) &&
-        !(item.submitterName || "").toLowerCase().includes(searchTerm)) return false;
+    if (
+      searchTerm &&
+      !item.title.toLowerCase().includes(searchTerm) &&
+      !(item.taskName || "").toLowerCase().includes(searchTerm) &&
+      !(item.submitterName || "").toLowerCase().includes(searchTerm)
+    )
+      return false;
 
     // Policy
-    if (policyVal !== "all" && (item.type || "").toLowerCase() !== policyVal.toLowerCase()) return false;
+    if (
+      policyVal !== "all" &&
+      (item.type || "").toLowerCase() !== policyVal.toLowerCase()
+    )
+      return false;
 
     // Urgency
-    if (urgencyVal !== "all" && (item.urgency || "pending") !== urgencyVal) return false;
+    if (urgencyVal !== "all" && (item.urgency || "pending") !== urgencyVal)
+      return false;
 
     return true;
   });
@@ -276,18 +383,23 @@ function renderQueue(filteredData) {
     return;
   }
 
-  list.innerHTML = filteredData.map((item) => {
-    const urgencyBadge = item.urgency === "urgent"   ? `<span class="badge urgent">Urgent</span>`
-                       : item.urgency === "due-soon" ? `<span class="badge due-soon">Due soon</span>`
-                       : `<span class="badge pending">${item.statusLabel || "Pending"}</span>`;
+  list.innerHTML = filteredData
+    .map((item) => {
+      const urgencyBadge =
+        item.urgency === "urgent"
+          ? `<span class="badge urgent">Urgent</span>`
+          : item.urgency === "due-soon"
+            ? `<span class="badge due-soon">Due soon</span>`
+            : `<span class="badge pending">${item.statusLabel || "Pending"}</span>`;
 
-    const reviewedBadge = item.status === "approved"
-      ? `<span class="badge approved">Approved</span>`
-      : item.status === "rejected"
-      ? `<span class="badge rejected-status">Rejected</span>`
-      : null;
+      const reviewedBadge =
+        item.status === "approved"
+          ? `<span class="badge approved">Approved</span>`
+          : item.status === "rejected"
+            ? `<span class="badge rejected-status">Rejected</span>`
+            : null;
 
-    return `
+      return `
       <li class="queue-item" id="qi-${item.id}"
           onclick="selectEvidence('${item.id}')"
           role="button" tabindex="0"
@@ -302,7 +414,8 @@ function renderQueue(filteredData) {
           <span class="badge policy">${item.type || "General"}</span>
         </div>
       </li>`;
-  }).join("");
+    })
+    .join("");
 
   // Auto-select first item
   selectEvidence(filteredData[0].id);
@@ -311,9 +424,9 @@ function renderQueue(filteredData) {
 // ─── EMPTY DETAIL STATE ────────────────────────────────────────
 function showEmptyDetail() {
   const detailContent = document.querySelector(".detail-content");
-  const detailFooter  = document.querySelector(".detail-footer");
+  const detailFooter = document.querySelector(".detail-footer");
   if (detailContent) detailContent.style.display = "none";
-  if (detailFooter)  detailFooter.style.display  = "none";
+  if (detailFooter) detailFooter.style.display = "none";
 
   let emptyState = document.getElementById("evidenceEmptyState");
   if (!emptyState) {
@@ -338,15 +451,17 @@ function showEmptyDetail() {
 window.selectEvidence = function (id) {
   // Restore layout
   const detailContent = document.querySelector(".detail-content");
-  const detailFooter  = document.querySelector(".detail-footer");
+  const detailFooter = document.querySelector(".detail-footer");
   if (detailContent) detailContent.style.display = "block";
-  if (detailFooter)  detailFooter.style.display  = "flex";
+  if (detailFooter) detailFooter.style.display = "flex";
 
   const emptyState = document.getElementById("evidenceEmptyState");
   if (emptyState) emptyState.style.display = "none";
 
   // Highlight queue item
-  document.querySelectorAll(".queue-item").forEach((el) => el.classList.remove("active"));
+  document
+    .querySelectorAll(".queue-item")
+    .forEach((el) => el.classList.remove("active"));
   const itemEl = document.getElementById("qi-" + id);
   if (itemEl) itemEl.classList.add("active");
 
@@ -358,7 +473,8 @@ window.selectEvidence = function (id) {
   document.getElementById("detailTitle").textContent = d.title;
 
   const linkedRuleText = document.getElementById("evLinkedRuleText");
-  if (linkedRuleText) linkedRuleText.textContent = d.complianceRule || d.type || "General Policy";
+  if (linkedRuleText)
+    linkedRuleText.textContent = d.complianceRule || d.type || "General Policy";
 
   // ── Detail Badge
   const detailBadge = document.getElementById("detailBadge");
@@ -386,22 +502,25 @@ window.selectEvidence = function (id) {
 
   // ── Meta grid
   const metaSubmitter = document.getElementById("metaSubmitter");
-  const metaProject   = document.getElementById("metaProject");
-  const metaRule      = document.getElementById("metaRule");
+  const metaProject = document.getElementById("metaProject");
+  const metaRule = document.getElementById("metaRule");
   const metaSubmittedOn = document.getElementById("metaSubmittedOn");
-  const metaDeadline  = document.getElementById("metaDeadline");
-  const metaStage     = document.getElementById("metaStage");
+  const metaDeadline = document.getElementById("metaDeadline");
+  const metaStage = document.getElementById("metaStage");
 
-  if (metaSubmitter)  metaSubmitter.textContent  = d.submitterName || "Unknown";
-  if (metaProject)    metaProject.textContent    = d.taskName      || "N/A";
-  if (metaRule)       metaRule.textContent       = d.complianceRule || d.type || "General Policy";
-  if (metaSubmittedOn) metaSubmittedOn.textContent = d.submittedOn || "Recently";
-  if (metaDeadline)   metaDeadline.textContent   = d.deadline      || "N/A";
-  if (metaStage)      metaStage.textContent      = d.stage         || "Stage 1";
+  if (metaSubmitter) metaSubmitter.textContent = d.submitterName || "Unknown";
+  if (metaProject) metaProject.textContent = d.taskName || "N/A";
+  if (metaRule)
+    metaRule.textContent = d.complianceRule || d.type || "General Policy";
+  if (metaSubmittedOn)
+    metaSubmittedOn.textContent = d.submittedOn || "Recently";
+  if (metaDeadline) metaDeadline.textContent = d.deadline || "N/A";
+  if (metaStage) metaStage.textContent = d.stage || "Stage 1";
 
   // ── Submitter Notes
   const submitterNotes = document.getElementById("submitterNotes");
-  if (submitterNotes) submitterNotes.textContent = d.notes || "No submitter notes provided.";
+  if (submitterNotes)
+    submitterNotes.textContent = d.notes || "No submitter notes provided.";
 
   // ── Attached Files
   const attachedFiles = document.getElementById("attachedFiles");
@@ -416,7 +535,7 @@ window.selectEvidence = function (id) {
           <div class="file-name">${d.file || "attached_document.pdf"}</div>
           <div class="file-size">Compliance Evidence</div>
         </div>
-        <button class="file-download-btn" onclick="downloadEvidence()" aria-label="Download ${d.file || 'file'}">
+        <button class="file-download-btn" onclick="downloadEvidence()" aria-label="Download ${d.file || "file"}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
@@ -444,8 +563,8 @@ window.selectEvidence = function (id) {
 // ─── STEPPER RENDERER ──────────────────────────────────────────
 function renderStepper(status) {
   const stepSubmitted = document.getElementById("evStep-submitted");
-  const stepReview    = document.getElementById("evStep-review");
-  const stepDecision  = document.getElementById("evStep-decision");
+  const stepReview = document.getElementById("evStep-review");
+  const stepDecision = document.getElementById("evStep-decision");
   const line1 = document.getElementById("evLine1");
   const line2 = document.getElementById("evLine2");
 
@@ -455,7 +574,9 @@ function renderStepper(status) {
   [stepSubmitted, stepReview, stepDecision].forEach((s) => {
     s.className = "ev-step";
   });
-  [line1, line2].forEach((l) => { if (l) l.className = "ev-step-line"; });
+  [line1, line2].forEach((l) => {
+    if (l) l.className = "ev-step-line";
+  });
 
   if (status === "pending" || status === "under_review") {
     stepSubmitted.classList.add("done");
@@ -497,7 +618,9 @@ function renderChecklist(items) {
     return;
   }
 
-  container.innerHTML = items.map((item) => `
+  container.innerHTML = items
+    .map(
+      (item) => `
     <div class="checklist-item${item.blocked ? " blocked" : ""}"
          onclick="${item.blocked ? "" : "toggleCheckbox(this)"}">
       <span class="check-icon ${item.done ? "checked" : "unchecked"}" aria-label="${item.done ? "Completed" : "Incomplete"}">
@@ -505,7 +628,9 @@ function renderChecklist(items) {
       </span>
       <span>${item.label}</span>
       ${item.blocked ? `<i class="ri-lock-line" style="margin-left:auto; font-size:13px; color:var(--text-muted);" title="Blocked"></i>` : ""}
-    </div>`).join("");
+    </div>`,
+    )
+    .join("");
 }
 
 // ─── TIMELINE RENDERER ─────────────────────────────────────────
@@ -519,17 +644,18 @@ function renderTimeline(timeline) {
   }
 
   const iconMap = {
-    submit:  { cls: "ev-icon-submit",  icon: "ri-upload-2-line" },
-    review:  { cls: "ev-icon-review",  icon: "ri-eye-line" },
+    submit: { cls: "ev-icon-submit", icon: "ri-upload-2-line" },
+    review: { cls: "ev-icon-review", icon: "ri-eye-line" },
     approve: { cls: "ev-icon-approve", icon: "ri-checkbox-circle-line" },
-    reject:  { cls: "ev-icon-reject",  icon: "ri-close-circle-line" },
-    info:    { cls: "ev-icon-info",    icon: "ri-question-line" },
-    update:  { cls: "ev-icon-update",  icon: "ri-edit-line" },
+    reject: { cls: "ev-icon-reject", icon: "ri-close-circle-line" },
+    info: { cls: "ev-icon-info", icon: "ri-question-line" },
+    update: { cls: "ev-icon-update", icon: "ri-edit-line" },
   };
 
-  container.innerHTML = timeline.map((evt) => {
-    const ic = iconMap[evt.icon] || iconMap.update;
-    return `
+  container.innerHTML = timeline
+    .map((evt) => {
+      const ic = iconMap[evt.icon] || iconMap.update;
+      return `
       <div class="ev-timeline-item">
         <div class="ev-timeline-icon ${ic.cls}">
           <i class="${ic.icon}"></i>
@@ -539,13 +665,14 @@ function renderTimeline(timeline) {
           <div class="ev-timeline-meta">${evt.meta || ""}</div>
         </div>
       </div>`;
-  }).join("");
+    })
+    .join("");
 }
 
 // ─── REVIEWER NOTES SAVE ───────────────────────────────────────
 window.saveReviewerNotes = function () {
   const idx = (state.evidence || []).findIndex(
-    (e) => String(e.id) === String(activeEvidenceId)
+    (e) => String(e.id) === String(activeEvidenceId),
   );
   if (idx > -1) {
     const notesEl = document.getElementById("reviewerNotes");
@@ -577,19 +704,19 @@ window.sendInfoRequest = function () {
   }
   messageEl.classList.remove("is-invalid");
 
-  const typeEl     = document.getElementById("reqInfoType");
+  const typeEl = document.getElementById("reqInfoType");
   const deadlineEl = document.getElementById("reqInfoDeadline");
 
-  const reqType    = typeEl?.options[typeEl.selectedIndex]?.text || "Information";
-  const deadline   = deadlineEl?.value || "No deadline set";
+  const reqType = typeEl?.options[typeEl.selectedIndex]?.text || "Information";
+  const deadline = deadlineEl?.value || "No deadline set";
 
   // Update state
   const idx = (state.evidence || []).findIndex(
-    (e) => String(e.id) === String(activeEvidenceId)
+    (e) => String(e.id) === String(activeEvidenceId),
   );
   if (idx > -1) {
     const ev = state.evidence[idx];
-    ev.status      = "info_requested";
+    ev.status = "info_requested";
     ev.statusLabel = "Info Requested";
 
     // Add timeline event
@@ -618,7 +745,8 @@ window.sendInfoRequest = function () {
   }
 
   closeRequestInfoModal();
-  if (window.Toast) window.Toast.show("Information request sent to submitter.", "info");
+  if (window.Toast)
+    window.Toast.show("Information request sent to submitter.", "info");
   applyFilters();
 };
 
@@ -637,7 +765,7 @@ window.closeRejectModal = function () {
 
 window.confirmReject = function () {
   const reasonEl = document.getElementById("rejectReason");
-  const reason   = reasonEl?.value;
+  const reason = reasonEl?.value;
 
   if (!reason) {
     reasonEl.classList.add("is-invalid");
@@ -646,14 +774,14 @@ window.confirmReject = function () {
   reasonEl.classList.remove("is-invalid");
 
   const reasonText = reasonEl.options[reasonEl.selectedIndex].text;
-  const notes      = document.getElementById("rejectNotes")?.value || "";
+  const notes = document.getElementById("rejectNotes")?.value || "";
 
   const idx = (state.evidence || []).findIndex(
-    (e) => String(e.id) === String(activeEvidenceId)
+    (e) => String(e.id) === String(activeEvidenceId),
   );
   if (idx > -1) {
     const ev = state.evidence[idx];
-    ev.status      = "rejected";
+    ev.status = "rejected";
     ev.statusLabel = "Rejected";
 
     // Timeline event
@@ -692,19 +820,24 @@ window.confirmReject = function () {
   }
 
   closeRejectModal();
-  if (window.Toast) window.Toast.show("Evidence rejected and submitter notified.", "error");
+  if (window.Toast)
+    window.Toast.show("Evidence rejected and submitter notified.", "error");
   applyFilters();
 };
 
 // ─── APPROVE ──────────────────────────────────────────────────
 window.approveEvidence = function () {
-  if (confirm("Approve this evidence submission?\n\nThis action will be logged in the audit trail.")) {
+  if (
+    confirm(
+      "Approve this evidence submission?\n\nThis action will be logged in the audit trail.",
+    )
+  ) {
     const idx = (state.evidence || []).findIndex(
-      (e) => String(e.id) === String(activeEvidenceId)
+      (e) => String(e.id) === String(activeEvidenceId),
     );
     if (idx > -1) {
       const ev = state.evidence[idx];
-      ev.status      = "approved";
+      ev.status = "approved";
       ev.statusLabel = "Approved";
 
       if (!ev.timeline) ev.timeline = [];
@@ -734,7 +867,8 @@ window.approveEvidence = function () {
       if (footer) footer.style.display = "none";
     }
 
-    if (window.Toast) window.Toast.show("Evidence approved successfully.", "success");
+    if (window.Toast)
+      window.Toast.show("Evidence approved successfully.", "success");
     applyFilters();
   }
 };
@@ -753,10 +887,11 @@ window.closeDownloadModal = function () {
 // ─── EXPORT REPORT ────────────────────────────────────────────
 window.exportEvidenceReport = function () {
   const d = (state.evidence || []).find(
-    (e) => String(e.id) === String(activeEvidenceId)
+    (e) => String(e.id) === String(activeEvidenceId),
   );
   if (!d) {
-    if (window.Toast) window.Toast.show("No evidence selected for export.", "error");
+    if (window.Toast)
+      window.Toast.show("No evidence selected for export.", "error");
     return;
   }
 
@@ -783,15 +918,18 @@ window.exportEvidenceReport = function () {
     ...(d.timeline || []).map((t) => `  [${t.meta}] ${t.label}`),
     "",
     "CHECKLIST:",
-    ...(d.checklist || []).map((c) => `  [${c.done ? "X" : " "}] ${c.label}${c.blocked ? " (BLOCKED)" : ""}`),
+    ...(d.checklist || []).map(
+      (c) =>
+        `  [${c.done ? "X" : " "}] ${c.label}${c.blocked ? " (BLOCKED)" : ""}`,
+    ),
     "",
     `Report generated: ${new Date().toLocaleString()}`,
   ];
 
   const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
   a.download = `${d.id}_evidence_report.txt`;
   document.body.appendChild(a);
   a.click();
@@ -807,8 +945,8 @@ window.toggleCheckbox = function (element) {
   const checkIcon = element.querySelector(".check-icon");
   const isChecked = checkIcon.classList.contains("checked");
 
-  checkIcon.classList.toggle("checked",   !isChecked);
-  checkIcon.classList.toggle("unchecked",  isChecked);
+  checkIcon.classList.toggle("checked", !isChecked);
+  checkIcon.classList.toggle("unchecked", isChecked);
   checkIcon.innerHTML = !isChecked
     ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
     : "";
@@ -817,4 +955,4 @@ window.toggleCheckbox = function (element) {
 // ─── BACKWARD-COMPAT STUBS ─────────────────────────────────────
 // These names were called from old inline HTML — keep working.
 window.requestMoreInfo = window.openRequestInfoModal;
-window.rejectEvidence  = window.openRejectModal;
+window.rejectEvidence = window.openRejectModal;

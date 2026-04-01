@@ -162,7 +162,6 @@ function closeModal(id) {
   document.getElementById(id).classList.remove("active");
 }
 
-
 // ─── 9. NOTIFICATION PANEL ───────────────────────────────
 function setupNotifications() {
   const btn = document.getElementById("notifBtn");
@@ -187,11 +186,15 @@ function setupNotifications() {
   backdrop.addEventListener("click", close);
 }
 
-
 // ─────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────
-document.addEventListener("DOMContentLoaded",async () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // Ensure HRStore and Master users stay synchronized before rendering
+  if (typeof HRStore !== "undefined" && HRStore.syncWithMaster) {
+    HRStore.syncWithMaster();
+  }
+
   // Read from store — nothing hardcoded
   renderMetrics();
   populateFilters();
@@ -225,7 +228,6 @@ document.addEventListener("DOMContentLoaded",async () => {
     .getElementById("cancelLogout")
     .addEventListener("click", () => closeModal("logoutModal"));
   document.getElementById("confirmLogout").addEventListener("click", () => {
-
     sessionStorage.removeItem("currentUser");
     closeModal("logoutModal");
     window.location.href = "../../login.html";
@@ -243,4 +245,3 @@ document.addEventListener("DOMContentLoaded",async () => {
       item.classList.add("active");
   });
 });
-

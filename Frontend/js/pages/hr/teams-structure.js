@@ -31,6 +31,7 @@ window.addEventListener("pageshow", (event) => {
 // this file can be swapped with a real fetch() later.
 async function loadData() {
   try {
+    if (HRStore && HRStore.syncWithMaster) HRStore.syncWithMaster();
     ALL_EMPLOYEES = HRStore.getAll();
     DEPARTMENTS = ["All Departments", ...HRStore.getDepartments()];
     return true;
@@ -65,23 +66,67 @@ function populateDeptFilter() {
 }
 
 // ─── 4. TREE BUILDING ────────────────────────────────────
+function normEmail(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase();
+}
+
+function resolveManagerEmpId(emp, ctx) {
+  // ctx: { hrByEmail, hrById, userById }
+  if (!emp) return null;
+
+  const raw = emp.parentId || emp.reportsTo || null;
+  if (!raw) return null;
+
+  const ref = String(raw);
+  // Already an HR employee id
+  if (ref.startsWith("EMP-")) return ref;
+
+  // Sometimes HR parentId got polluted with auth ids ("uX")
+  if (ref.startsWith("u")) {
+    const u = ctx.userById.get(ref);
+    if (!u) return null;
+    const mgrEmp = ctx.hrByEmail.get(normEmail(u.email));
+    return mgrEmp ? mgrEmp.id : null;
+  }
+
+  // Unknown format
+  return null;
+}
+
 function buildTree(employees) {
   const map = new Map();
   const idSet = new Set(employees.map((e) => e.id));
 
+  // Build cross-reference maps for robust parentId/reportsTo mapping
+  const hrByEmail = new Map();
+  const hrById = new Map();
+  employees.forEach((e) => {
+    hrById.set(String(e.id), e);
+    const em = normEmail(e.email);
+    if (em) hrByEmail.set(em, e);
+  });
+
+  const masterUsers =
+    typeof getUsers === "function"
+      ? getUsers()
+      : JSON.parse(localStorage.getItem("users")) || [];
+  const userById = new Map(masterUsers.map((u) => [String(u.id), u]));
+  const ctx = { hrByEmail, hrById, userById };
+
   employees.forEach((emp) => map.set(emp.id, { ...emp, children: [] }));
 
-  const roots = [];
-  const independents = [];
+  const topLevelNodes = [];
 
   employees.forEach((emp) => {
     const node = map.get(emp.id);
-    if (!emp.parentId) {
-      emp.team ? roots.push(node) : independents.push(node);
-    } else if (!idSet.has(emp.parentId)) {
-      independents.push(node);
+    const managerId = resolveManagerEmpId(emp, ctx);
+
+    if (managerId && map.has(managerId) && managerId !== emp.id) {
+      map.get(managerId).children.push(node);
     } else {
-      map.get(emp.parentId).children.push(node);
+      topLevelNodes.push(node);
     }
   });
 
@@ -97,7 +142,18 @@ function buildTree(employees) {
     );
     return false;
   }
-  roots.forEach((r) => detectCycle(r));
+  topLevelNodes.forEach((r) => detectCycle(r));
+
+  const roots = [];
+  const independents = [];
+
+  topLevelNodes.forEach((node) => {
+    if (node.children.length > 0) {
+      roots.push(node);
+    } else {
+      independents.push(node);
+    }
+  });
 
   return { roots, independents };
 }
@@ -228,16 +284,32 @@ function applyFilter() {
     const deptSet = new Set(
       ALL_EMPLOYEES.filter((e) => e.department === dept).map((e) => e.id),
     );
+
+    // Build cross-reference context using ALL_EMPLOYEES for ancestor walking
+    const hrByEmail = new Map();
+    ALL_EMPLOYEES.forEach((e) => {
+      const em = normEmail(e.email);
+      if (em) hrByEmail.set(em, e);
+    });
+    const masterUsers =
+      typeof getUsers === "function"
+        ? getUsers()
+        : JSON.parse(localStorage.getItem("users")) || [];
+    const userById = new Map(masterUsers.map((u) => [String(u.id), u]));
+    const ctx = { hrByEmail, hrById: new Map(), userById };
+
     // Walk up parent chain to include hierarchy ancestors
     function addAncestors(id) {
       const emp = ALL_EMPLOYEES.find((e) => e.id === id);
       if (!emp || deptSet.has(emp.id)) return;
       deptSet.add(emp.id);
-      if (emp.parentId) addAncestors(emp.parentId);
+      const managerId = resolveManagerEmpId(emp, ctx);
+      if (managerId) addAncestors(managerId);
     }
-    ALL_EMPLOYEES.filter((e) => e.department === dept && e.parentId).forEach(
-      (e) => addAncestors(e.parentId),
-    );
+    ALL_EMPLOYEES.filter((e) => e.department === dept).forEach((e) => {
+      const managerId = resolveManagerEmpId(e, ctx);
+      if (managerId) addAncestors(managerId);
+    });
     subset = ALL_EMPLOYEES.filter((e) => deptSet.has(e.id));
   }
 
