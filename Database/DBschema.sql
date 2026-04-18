@@ -158,7 +158,7 @@ CREATE TABLE Workflow_Instance_Steps (
 
 
 -- Replaced spaces with underscores to match professional API standards
-CREATE TYPE task_status AS ENUM ('Pending', 'In_Progress', 'In_Review', 'Completed', 'Cancelled');
+CREATE TYPE task_status AS ENUM ('Pending', 'In_Progress', 'In_Review', 'Blocked', 'Completed', 'Cancelled');
 
 -- Added a priority enum to help team members sort their queues
 CREATE TYPE task_priority AS ENUM ('Low', 'Medium', 'High', 'Critical');
@@ -323,6 +323,44 @@ CREATE TABLE Audit_Logs (
     -- Data State Changes (Using JSONB for structured querying)
     old_value JSONB, 
     new_value JSONB
+);
+CREATE TYPE escalation_status AS ENUM ('Open', 'Reviewed', 'Resolved', 'Closed');
+
+CREATE TABLE Escalations (
+    escalation_id SERIAL PRIMARY KEY,
+    task_id INT REFERENCES Tasks(task_id) ON DELETE CASCADE,
+    project_id INT REFERENCES Projects(project_id) ON DELETE CASCADE,
+    
+    reported_by INT REFERENCES Users(user_id), -- The Team Member
+    target_manager_id INT REFERENCES Users(user_id), -- The Team Leader (pulled via reportsTo)
+    
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    blocker_type VARCHAR(100), -- e.g., 'System Issue', 'Dependency'
+    priority rule_severity DEFAULT 'High',
+    status escalation_status DEFAULT 'Open',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP NULL
+);
+CREATE TYPE evidence_status AS ENUM ('Pending', 'Under_Review', 'Approved', 'Rejected');
+
+CREATE TABLE Compliance_Evidence (
+    evidence_id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES Users(user_id),
+    task_id INT NULL REFERENCES Tasks(task_id),
+    violation_id INT NULL REFERENCES Compliance_Violations(violation_id),
+    
+    title VARCHAR(255) NOT NULL,
+    evidence_type VARCHAR(50), -- 'Document', 'Screenshot', 'Archive'
+    file_url TEXT NOT NULL,
+    notes TEXT,
+    
+    status evidence_status DEFAULT 'Pending',
+    reviewed_by INT NULL REFERENCES Users(user_id),
+    
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP NULL
 );
 
 -- Creating indexes is critical for an Audit table, otherwise tracking history becomes terribly slow

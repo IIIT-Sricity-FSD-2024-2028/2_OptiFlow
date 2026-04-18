@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync – Create New Employee</title>
+    <link rel="stylesheet" href="../../css/hr/base.css" />
+    <link rel="stylesheet" href="../../css/hr/layout.css" />
+    <link rel="stylesheet" href="../../css/hr/components.css" />
+    <link rel="stylesheet" href="../../css/hr/new-employee.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- ── Sidebar ── -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div
+            class="logo-container"
+            style="display: flex; align-items: center"
+          >
+            <img
+              src="../../assets/images/logo_light.png"
+              alt="OfficeSync"
+              style="height: 28px; width: auto; display: block"
+            />
+          </div>
+          <div class="brand-subtitle">HR</div>
+        </div>
+        <nav class="sidebar-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a
+              href="dashboard.html"
+              class="nav-item active"
+              id="sidebarDashboard"
+            >
+              <i class="ri-dashboard-line"></i><span>Dashboard</span>
+            </a>
+
+            <a href="teams-structure.html" class="nav-item">
+              <i class="ri-team-line"></i><span>Teams</span>
+            </a>
+            <a href="roles-access.html" class="nav-item">
+              <i class="ri-shield-keyhole-line"></i
+              ><span>Roles &amp; Access</span>
+            </a>
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="user-profile">
+            <div class="avatar">DN</div>
+            <div class="user-info">
+              <span class="user-name">Divya Nair</span>
+              <span class="user-role">HR Manager</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ── Main Content (blurred backdrop) ── -->
+      <div class="main-content">
+        <header class="top-header">
+          <div class="page-title">Employees</div>
+          <div class="header-actions">
+            <button class="btn-icon">
+              <i class="ri-notification-3-line"></i>
+            </button>
+          </div>
+        </header>
+
+        <!-- Blurred backdrop tiles -->
+        <div class="content-wrapper backdrop-blur-content" aria-hidden="true">
+          <div class="backdrop-grid">
+            <div class="backdrop-card"></div>
+            <div class="backdrop-card"></div>
+            <div class="backdrop-card"></div>
+            <div class="backdrop-card"></div>
+          </div>
+          <div class="backdrop-table-card"></div>
+        </div>
+
+        <!-- ── MODAL OVERLAY ── -->
+        <div class="ne-overlay" id="formOverlay">
+          <div
+            class="ne-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modalTitle"
+          >
+            <!-- Header -->
+            <div class="ne-header">
+              <div>
+                <div class="ne-title" id="modalTitle">Create New Employee</div>
+                <div class="ne-subtitle">
+                  Provisions system login credentials on save
+                </div>
+              </div>
+              <button class="ne-close" id="closeModal" title="Close">
+                <i class="ri-close-line"></i>
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="ne-body">
+              <form id="newEmployeeForm" novalidate autocomplete="off">
+                <!-- Row 1: First + Last Name -->
+                <div class="ne-form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="firstName">FIRST NAME</label>
+                    <input
+                      class="form-control"
+                      id="firstName"
+                      type="text"
+                      placeholder="e.g. Kiran"
+                      maxlength="50"
+                    />
+                    <span class="form-error" id="err-firstName"
+                      >Please enter a valid first name (letters only).</span
+                    >
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="lastName">LAST NAME</label>
+                    <input
+                      class="form-control"
+                      id="lastName"
+                      type="text"
+                      placeholder="e.g. Rao"
+                      maxlength="50"
+                    />
+                    <span class="form-error" id="err-lastName"
+                      >Please enter a valid last name (letters only).</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Row 2: Email (full width) -->
+                <div class="form-group">
+                  <label class="form-label" for="workEmail">WORK EMAIL</label>
+                  <input
+                    class="form-control"
+                    id="workEmail"
+                    type="email"
+                    placeholder="firstname.lastname@company.com"
+                    maxlength="100"
+                  />
+                  <span class="form-error" id="err-workEmail"
+                    >Please enter a valid work email address.</span
+                  >
+                </div>
+
+                <!-- Row 3: Department + Team -->
+                <div class="ne-form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="department"
+                      >DEPARTMENT</label
+                    >
+                    <select class="form-control" id="department">
+                      <option value="">— Select Department —</option>
+                      <option>Operations</option>
+                      <option>Finance</option>
+                      <option>IT</option>
+                      <option>HR</option>
+                      <option>Compliance</option>
+                    </select>
+                    <span class="form-error" id="err-department"
+                      >Please select a department.</span
+                    >
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="team">TEAM</label>
+                    <select class="form-control" id="team">
+                      <option value="">— Select Team —</option>
+                    </select>
+                    <span class="form-error" id="err-team"
+                      >Please select a team.</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Row 4: System Role + Reports To -->
+                <div class="ne-form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="systemRole"
+                      >SYSTEM ROLE</label
+                    >
+                    <select class="form-control" id="systemRole">
+                      <option value="">— Select Role —</option>
+                      <option>Project Manager</option>
+                      <option>Team Leader</option>
+                      <option>Team Member</option>
+                      <option>Compliance Officer</option>
+                      <option>Process Admin</option>
+                      <option>HR Manager</option>
+                      <option>HR Ops</option>
+                    </select>
+                    <span class="form-error" id="err-systemRole"
+                      >Please select a system role.</span
+                    >
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="reportsTo">REPORTS TO</label>
+                    <select class="form-control" id="reportsTo">
+                      <option value="">— Select Manager —</option>
+                    </select>
+                    <span class="form-error" id="err-reportsTo"></span>
+                  </div>
+                </div>
+
+                <!-- Row 5: Phone + Join Date -->
+                <div class="ne-form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="phone">PHONE</label>
+                    <input
+                      class="form-control"
+                      id="phone"
+                      type="tel"
+                      placeholder="+91 XXXXX XXXXX"
+                      maxlength="20"
+                    />
+                    <span class="form-error" id="err-phone"
+                      >Enter a valid phone number (8–15 digits).</span
+                    >
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="joinDate">JOIN DATE</label>
+                    <input class="form-control" id="joinDate" type="date" />
+                    <span class="form-error" id="err-joinDate"
+                      >Please select a join date.</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Login Credentials (auto-generated) -->
+                <div class="form-group">
+                  <label class="form-label"
+                    >LOGIN CREDENTIALS (AUTO-GENERATED)</label
+                  >
+                  <div class="credentials-box">
+                    <div class="credentials-header">
+                      <i class="ri-lock-line"></i>
+                      <span>Credentials will be generated on save</span>
+                    </div>
+                    <div class="credentials-grid">
+                      <span class="cred-label">Username</span>
+                      <span class="cred-value" id="previewUsername"
+                        >firstname.lastname</span
+                      >
+                      <span class="cred-label">Temp Password</span>
+                      <span class="cred-value">auto-generated</span>
+                      <span class="cred-label">Access Level</span>
+                      <span class="cred-value" id="previewAccess"
+                        >Based on role assigned</span
+                      >
+                    </div>
+                    <p class="credentials-note">
+                      Employee will receive login credentials via their work
+                      email and be prompted to change password on first login.
+                    </p>
+                  </div>
+                </div>
+              </form>
+            </div>
+            <!-- /ne-body -->
+
+            <!-- Footer -->
+            <div class="ne-footer">
+              <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+              <button class="btn btn-primary" id="submitBtn">
+                <i class="ri-check-line"></i>
+                Create &amp; Provision Account
+              </button>
+            </div>
+          </div>
+          <!-- /ne-modal -->
+        </div>
+        <!-- /ne-overlay -->
+
+        <!-- ── SUCCESS TOAST ── -->
+        <div class="ne-toast" id="successToast">
+          <i class="ri-checkbox-circle-fill"></i>
+          <div>
+            <strong id="toastName">Employee Created</strong>
+            <span id="toastMsg">Account provisioned successfully.</span>
+          </div>
+        </div>
+      </div>
+      <!-- /main-content -->
+    </div>
+    <!-- /admin-layout -->
+
+    <script src="../../js/data/hr-data-store.js"></script>
+    <script src="../../js/data/audit-store.js"></script>
+    <script src="../../js/data/new-employee.js"></script>
+  </body>
+</html>

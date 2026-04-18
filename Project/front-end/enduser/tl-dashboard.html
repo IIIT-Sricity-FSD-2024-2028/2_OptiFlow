@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Team Leader Dashboard — OfficeSync</title>
+    <meta name="description" content="Team Leader Dashboard — OfficeSync" />
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div class="main-area">
+        <header class="top-header">
+          <h1 class="page-title">Dashboard</h1>
+          <div class="header-actions">
+            <div class="bell-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+        <main class="page-content">
+          <div class="stats-row" id="tl-stats"></div>
+
+          <div
+            style="
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 24px;
+              margin-bottom: 24px;
+            "
+          >
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Team Tasks</div>
+                <a href="my-tasks.html" class="card-action">View all →</a>
+              </div>
+              <div
+                class="card-body"
+                id="my-tasks-preview"
+                style="padding-top: 0"
+              ></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Project Overview</div>
+              </div>
+              <div class="card-body" id="project-overview"></div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px">
+            <div class="card">
+              <div
+                class="card-header"
+                style="background: #fffbfa; border-bottom: 1px solid #ffedd5"
+              >
+                <div>
+                  <div class="card-title" style="color: var(--orange)">
+                    ⚠ Raise an Escalation
+                  </div>
+                  <div
+                    style="
+                      font-size: 12px;
+                      color: var(--text-muted);
+                      margin-top: 2px;
+                    "
+                  >
+                    Report a critical blocker to your Project Manager
+                  </div>
+                </div>
+              </div>
+              <div class="card-body">
+                <div style="display: flex; flex-direction: column; gap: 16px">
+                  <div class="form-group" style="margin: 0">
+                    <label class="form-label" for="esc-quick-title"
+                      >Issue Title *</label
+                    >
+                    <input
+                      type="text"
+                      id="esc-quick-title"
+                      class="form-input"
+                      placeholder="Brief description of the blocker"
+                    />
+                    <span
+                      class="form-error hidden"
+                      id="esc-quick-title-error"
+                    ></span>
+                  </div>
+                  <div class="form-group" style="margin: 0">
+                    <label class="form-label" for="esc-quick-blocker"
+                      >Blocker Type</label
+                    >
+                    <select id="esc-quick-blocker" class="form-select">
+                      <option value="Access Issue">
+                        Access / Permission Issue
+                      </option>
+                      <option value="Dependency">Dependency Delay</option>
+                      <option value="Approval">Awaiting Approval</option>
+                      <option value="System Issue">System Outage / Bug</option>
+                    </select>
+                  </div>
+                  <div style="display: flex; gap: 16px; align-items: flex-end">
+                    <div class="form-group" style="margin: 0; flex: 1">
+                      <label class="form-label" for="esc-quick-priority"
+                        >Priority</label
+                      >
+                      <select id="esc-quick-priority" class="form-select">
+                        <option value="high">High</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </div>
+                    <button
+                      class="btn btn-primary"
+                      style="height: 38px; padding: 0 24px"
+                      onclick="raiseEscalation()"
+                    >
+                      Submit Alert
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">My Escalations Log</div>
+                  <div
+                    style="
+                      font-size: 12px;
+                      color: var(--text-muted);
+                      margin-top: 2px;
+                    "
+                  >
+                    Track the status of alerts you've raised
+                  </div>
+                </div>
+              </div>
+              <div
+                class="card-body"
+                id="tl-escalation-history"
+                style="max-height: 280px; overflow-y: auto; padding-top: 0"
+              ></div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script src="../js/data/db.js"></script>
+    <script src="../js/data/pm-data-store.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/utils/validator.js"></script>
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+
+    <script>
+      let session, state;
+
+      document.addEventListener("DOMContentLoaded", async () => {
+        // Security Check
+        if (!sessionStorage.getItem("currentUser")) {
+          window.location.replace("../login.html");
+          return;
+        }
+        session = window.Auth.getSession();
+
+        window.Sidebar.render("dashboard");
+        window.Toast.init();
+
+        state = await window.Helpers.getState();
+
+        // ✅ HIERARCHY LOGIC: Find the TL's Team!
+        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
+        const myTeam = masterUsers.filter((u) => u.reportsTo === session.id);
+        const myTeamIds = myTeam.map((u) => String(u.id));
+
+        // ✅ Pull Team Tasks + Direct Tasks
+        const myTasks = state.tasks.filter(
+          (t) =>
+            String(t.assignedUserId) === String(session.id) ||
+            myTeamIds.includes(String(t.assignedUserId)),
+        );
+        // Check for unread notifications for this specific Team Leader
+        const allNotifs =
+          JSON.parse(localStorage.getItem("system_notifications")) || [];
+        const myUnreadNotifs = allNotifs.filter(
+          (n) => n.targetUserId === session.id && !n.read,
+        );
+
+        if (myUnreadNotifs.length > 0) {
+          window.Toast.info(myUnreadNotifs[0].title, myUnreadNotifs[0].message);
+          document.querySelector(".bell-btn").innerHTML +=
+            `<span style="position:absolute; top:4px; right:6px; width:8px; height:8px; background:var(--red); border-radius:50%; border:2px solid white;"></span>`;
+        }
+        
+        // ✅ BULLETPROOF FIX: Always grab the freshest user data
+        const freshSessionUser =
+          masterUsers.find((u) => String(u.id) === String(session.id)) || session;
+        const activeProjectId = parseInt(freshSessionUser.projectId, 10);
+
+        const myProject = activeProjectId
+          ? state.projects.find((p) => p.id === activeProjectId)
+          : null;
+        
+        // ✅ CALCULATE PENDING EVIDENCE FOR THE TL's TEAM
+        const teamEvidence = (state.evidence || []).filter(
+          (e) =>
+            myTeamIds.includes(String(e.userId)) &&
+            (e.status === "pending" || e.status === "under_review"),
+        );
+        const pendingEvidenceCount = teamEvidence.length;
+
+        const blocked = myTasks.filter((t) => t.status === "blocked").length;
+        const done = myTasks.filter((t) => t.status === "done" || t.status === "resolved").length;
+        const inProgress = myTasks.filter(
+          (t) => t.status === "in_progress" || t.status === "in_review",
+        ).length;
+
+        // ✅ FORCE 5-COLUMN GRID
+        document.getElementById("tl-stats").style.display = "grid";
+        document.getElementById("tl-stats").style.gridTemplateColumns =
+          "repeat(5, 1fr)";
+        document.getElementById("tl-stats").style.gap = "16px";
+
+        // ✅ STATS RENDER
+        document.getElementById("tl-stats").innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Team Tasks</div>
+      <div class="stat-value"><div class="stat-number">${myTasks.length}</div><div class="stat-arrow" onclick="window.location.href='my-tasks.html'">→</div></div>
+      <div class="stat-sub blue">${inProgress} active across team</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Completed</div>
+      <div class="stat-value"><div class="stat-number">${done}</div></div>
+      <div class="stat-sub green">Finished</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Blocked Tasks</div>
+      <div class="stat-value"><div class="stat-number">${blocked}</div></div>
+      <div class="stat-sub ${blocked > 0 ? "red" : "green"}">${blocked > 0 ? "Needs attention" : "None blocked"}</div>
+    </div>
+    <div class="stat-card" style="background:#f8fafc">
+      <div class="stat-label">My Project Overview</div>
+      <div class="stat-value"><div class="stat-number" style="color:var(--blue);">${myProject ? (myProject.progress || 0) + "%" : "N/A"}</div></div>
+      <div class="stat-sub blue truncate">${myProject ? myProject.name : "No project assigned"}</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer; border: 1px solid ${pendingEvidenceCount > 0 ? "#fed7aa" : "var(--border)"}; background: ${pendingEvidenceCount > 0 ? "#fffbeb" : "#fff"}" onclick="window.location.href='evidence-review.html'">
+      <div class="stat-label" style="color:${pendingEvidenceCount > 0 ? "#b45309" : "var(--text-muted)"}">Pending Evidence</div>
+      <div class="stat-value"><div class="stat-number" style="color:${pendingEvidenceCount > 0 ? "#d97706" : "var(--text-primary)"}">${pendingEvidenceCount}</div></div>
+      <div class="stat-sub ${pendingEvidenceCount > 0 ? "orange" : "green"}">${pendingEvidenceCount > 0 ? "Review required →" : "Vault clear →"}</div>
+    </div>`;
+        
+        // My tasks preview
+        const preview = myTasks.slice(0, 4);
+        document.getElementById("my-tasks-preview").innerHTML =
+          preview.length === 0
+            ? '<div class="empty-state"><div class="empty-state-text">No tasks assigned</div></div>'
+            : preview
+                .map((t) => {
+                  let badgeClass = "badge-gray";
+                  if (t.status === "done" || t.status === "resolved") badgeClass = "badge-green";
+                  if (t.status === "in_progress") badgeClass = "badge-blue";
+                  if (t.status === "blocked") badgeClass = "badge-orange";
+
+                  // Find owner name to display to the TL
+                  const owner = masterUsers.find(
+                    (u) => String(u.id) === String(t.assignedUserId),
+                  ) || { name: "Unknown" };
+
+                  return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="window.location.href='my-tasks.html'">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px">${t.title || t.name}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Owner: <span style="font-weight:600;color:var(--text-secondary)">${owner.name}</span> · Due ${t.deadlineLabel || t.deadline || 'N/A'}</div>
+          </div>
+          <span class="badge ${badgeClass}">${t.status || t.statusLabel || 'Pending'}</span>
+        </div>`;
+                })
+                .join("");
+
+        // Project overview
+        if (myProject) {
+          let fc = "fill-blue";
+          if (myProject.status === "On_Hold") fc = "fill-red";
+          if (myProject.status === "Completed") fc = "fill-green";
+
+          document.getElementById("project-overview").innerHTML = `
+      <div style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:15px;font-weight:700;color:var(--text-primary)">${myProject.name}</div>
+          <span class="badge ${fc.replace("fill-", "badge-")}">${myProject.status || ''}</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>Overall Progress</span><span class="progress-pct">${myProject.progress || 0}%</span></div>
+          <div class="progress-bar" style="background:#e2e8f0; border-radius:4px; height:8px;"><div class="progress-fill ${fc}" style="width:${myProject.progress || 0}%; height:100%; border-radius:4px;"></div></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center">
+        <div style="background:var(--main-bg);padding:12px;border-radius:var(--r); border:1px solid var(--border)">
+          <div style="font-size:22px;font-weight:800;color:var(--text-primary)">${myProject.totalTasks || 0}</div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;margin-top:4px">Total</div>
+        </div>
+        <div style="background:#eff6ff;padding:12px;border-radius:var(--r); border:1px solid #bfdbfe">
+          <div style="font-size:22px;font-weight:800;color:var(--blue)">${myProject.inProgress || 0}</div>
+          <div style="font-size:10px;color:var(--blue);text-transform:uppercase;font-weight:700;margin-top:4px">In Prog</div>
+        </div>
+        <div style="background:#f0fdf4;padding:12px;border-radius:var(--r); border:1px solid #bbf7d0">
+          <div style="font-size:22px;font-weight:800;color:var(--green)">${myProject.completed || 0}</div>
+          <div style="font-size:10px;color:var(--green);text-transform:uppercase;font-weight:700;margin-top:4px">Done</div>
+        </div>
+        <div style="background:#fef2f2;padding:12px;border-radius:var(--r); border:1px solid #fecaca">
+          <div style="font-size:22px;font-weight:800;color:var(--red)">${myProject.overdue || 0}</div>
+          <div style="font-size:10px;color:var(--red);text-transform:uppercase;font-weight:700;margin-top:4px">Overdue</div>
+        </div>
+      </div>`;
+        } else {
+          document.getElementById("project-overview").innerHTML =
+            '<div class="empty-state"><div class="empty-state-text">No project assigned</div></div>';
+        }
+
+        // ✅ Initialize Escalation Log
+        renderEscalationLog();
+
+        window.Validator.attachLive("esc-quick-title", {
+          required: true,
+          minLength: 5,
+        });
+      });
+
+      function renderEscalationLog() {
+        const container = document.getElementById("tl-escalation-history");
+
+        const myEscalations = (state.escalations || []).filter((e) =>
+          e.from && e.from.includes(session.name),
+        );
+
+        if (myEscalations.length === 0) {
+          container.innerHTML = `
+      <div class="empty-state" style="padding-top:40px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;color:var(--text-muted);margin:0 auto 12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div class="empty-state-text">No escalations raised</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">When you raise an alert, its status will appear here.</div>
+      </div>`;
+          return;
+        }
+
+        const sortedLog = [...myEscalations].reverse();
+
+        container.innerHTML = sortedLog
+          .map((esc) => {
+            const isResolved =
+              esc.status === "resolved" || esc.status === "closed";
+            const badgeClass = isResolved ? "badge-green" : "badge-orange";
+            const iconHTML = isResolved
+              ? `<svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" style="width:16px;height:16px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
+              : `<svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" style="width:16px;height:16px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
+            return `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:16px 0; border-bottom:1px solid var(--border);">
+        <div style="display:flex; gap:12px; align-items:flex-start;">
+          <div style="margin-top:2px;">${iconHTML}</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${esc.title}</div>
+            <div style="font-size:11px; color:var(--text-muted);">
+              <span style="font-weight:600;color:var(--text-secondary)">${esc.date || ''}</span> · Blocker: ${esc.blocker}
+            </div>
+          </div>
+        </div>
+        <span class="badge ${badgeClass}" style="flex-shrink:0;">${esc.statusLabel || esc.status}</span>
+      </div>`;
+          })
+          .join("");
+      }
+
+      async function raiseEscalation() {
+        const result = window.Validator.validateForm({
+          "esc-quick-title": { required: true, minLength: 5 },
+        });
+        if (!result.valid) {
+          window.Toast.error(
+            "Missing Information",
+            "Please provide a valid issue title (min 5 characters).",
+          );
+          return;
+        }
+
+        const activeProjectId = parseInt(session.projectId, 10);
+        const myProject = activeProjectId
+          ? state.projects.find((p) => p.id === activeProjectId)
+          : null;
+        
+        const priority = window.Helpers.getVal("esc-quick-priority");
+
+        const newEsc = {
+          from: session.name + " (TL)",
+          title: window.Helpers.getVal("esc-quick-title"),
+          description: window.Helpers.getVal("esc-quick-title"),
+          project_id: myProject ? myProject.id : null,
+          blocker: window.Helpers.getVal("esc-quick-blocker") || "Unknown",
+          priority: priority,
+          status: "open",
+        };
+
+        try {
+          await window.Helpers.api.request('/escalations', 'POST', newEsc);
+          state = await window.Helpers.getState();
+
+          window.Toast.success(
+            "Escalation Raised",
+            "Your Project Manager has been notified.",
+          );
+
+          document.getElementById("esc-quick-title").value = "";
+          document.getElementById("esc-quick-blocker").selectedIndex = 0;
+          document.getElementById("esc-quick-priority").value = "medium";
+
+          renderEscalationLog();
+        } catch (e) {
+          console.error(e);
+          window.Toast.warning("Error", "Failed to raise escalation.");
+        }
+      }
+    </script>
+  </body>
+</html>

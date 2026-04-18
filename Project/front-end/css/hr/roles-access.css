@@ -1,0 +1,565 @@
+/* roles-access.css — shared styles for all Roles & Access pages */
+
+/* ── Landing page backdrop ── */
+.backdrop-blur-content {
+  filter: blur(3px);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.45;
+}
+.backdrop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.backdrop-card {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+/* ── Choice Modal (landing) ── */
+.ra-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 24px;
+}
+.ra-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+  animation: modalIn 0.2s ease;
+}
+@keyframes modalIn {
+  from { transform: translateY(16px) scale(0.98); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.ra-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+.ra-modal-title   { font-size: 18px; font-weight: 700; color: var(--text-main); }
+.ra-modal-subtitle{ font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.ra-modal-body    { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 12px; }
+
+.ra-choice-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+  text-decoration: none;
+  color: inherit;
+}
+.ra-choice-card:hover {
+  border-color: #93c5fd;
+  background: #f8faff;
+  box-shadow: 0 2px 12px rgba(37,99,235,0.08);
+}
+.ra-choice-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.ra-choice-icon.blue   { background: #dbeafe; color: #2563eb; }
+.ra-choice-icon.purple { background: #f3e8ff; color: #7c3aed; }
+.ra-choice-text  { flex: 1; }
+.ra-choice-title { font-size: 15px; font-weight: 600; color: var(--text-main); margin-bottom: 4px; }
+.ra-choice-desc  { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.ra-choice-arrow { color: var(--text-muted); font-size: 18px; flex-shrink: 0; }
+.ra-choice-card:hover .ra-choice-arrow { color: var(--primary-color); }
+
+/* ── 3-panel layout for system/individual roles pages ── */
+.roles-content-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Left panel: role or employee list */
+.roles-left-panel {
+  width: 200px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+.roles-left-panel-header {
+  padding: 18px 16px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.roles-left-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+/* Role item in left panel */
+.role-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 0;
+  position: relative;
+}
+.role-list-item:hover   { background: #f8fafc; }
+.role-list-item.active  { background: #eff6ff; }
+.role-list-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--primary-color);
+  border-radius: 0 2px 2px 0;
+}
+.role-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.role-list-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.role-list-name .sub { font-size: 11px; color: var(--text-muted); font-weight: 400; display: block; margin-top: 1px; }
+.role-emp-count {
+  font-size: 11px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 22px;
+  text-align: center;
+}
+.role-emp-count.has-override {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+/* ── Center panel: permissions ── */
+.roles-center-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border-color);
+  background: #fafbfc;
+}
+.roles-center-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  flex-shrink: 0;
+}
+.roles-center-title { font-size: 17px; font-weight: 700; color: var(--text-main); }
+.roles-center-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-color);
+  background: #dbeafe;
+  border-radius: 10px;
+  padding: 2px 9px;
+}
+.roles-center-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+/* Permission section heading */
+.perm-section { margin-bottom: 22px; }
+.perm-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+/* Two-column checkbox grid */
+.perm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+.perm-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+.perm-item:hover { background: #f1f5f9; }
+.perm-checkbox {
+  width: 16px; height: 16px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.perm-label {
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Toggle items (settings) */
+.perm-toggle-list { display: flex; flex-direction: column; gap: 10px; }
+.perm-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+.perm-toggle-item:hover { background: #f1f5f9; }
+.toggle-switch {
+  position: relative;
+  width: 40px; height: 22px;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 11px;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: white;
+  top: 3px; left: 3px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.toggle-switch input:checked + .toggle-track { background: var(--primary-color); }
+.toggle-switch input:checked + .toggle-track::after { transform: translateX(18px); }
+
+/* Save bar */
+.roles-save-bar {
+  padding: 14px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: white;
+  flex-shrink: 0;
+}
+
+/* ── Right panel: employees in role ── */
+.roles-right-panel {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: white;
+}
+.roles-right-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.roles-right-title { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.roles-right-count {
+  font-size: 12px;
+  font-weight: 600;
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 2px 8px;
+  color: var(--text-muted);
+}
+.roles-right-body { flex: 1; overflow-y: auto; padding: 8px 0; }
+
+/* Employee row in right panel */
+.role-emp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.role-emp-row:hover { background: #f8fafc; }
+.role-emp-avatar {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: white;
+  flex-shrink: 0;
+}
+.role-emp-info { flex: 1; min-width: 0; }
+.role-emp-name { font-size: 13px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.role-emp-meta { font-size: 11px; color: var(--text-muted); }
+.role-emp-status {
+  font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 8px;
+}
+.role-emp-status.active  { background:#dcfce7; color:#166534; }
+.role-emp-status.pending { background:#fef9c3; color:#854d0e; }
+
+/* ── Empty state ── */
+.roles-empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 48px 24px; text-align: center; color: var(--text-muted);
+}
+.roles-empty i { font-size: 36px; margin-bottom: 10px; opacity: 0.3; }
+.roles-empty p { font-size: 14px; }
+
+/* ── Individual page: employee list ── */
+.emp-list-filter {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.emp-list-filter select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  background: #f8fafc;
+  color: var(--text-main);
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+.emp-list-search {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.emp-list-search i { color: var(--text-muted); font-size: 14px; }
+.emp-list-search input {
+  border: none; outline: none; font-size: 13px; width: 100%;
+  background: transparent;
+}
+
+/* Individual employee row in left panel */
+.ind-emp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+.ind-emp-row:hover  { background: #f8fafc; }
+.ind-emp-row.active { background: #eff6ff; }
+.ind-emp-row.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--primary-color);
+  border-radius: 0 2px 2px 0;
+}
+.ind-emp-avatar {
+  width: 34px; height: 34px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: white; flex-shrink: 0;
+}
+.ind-emp-info { flex: 1; min-width: 0; }
+.ind-emp-name { font-size: 13px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ind-emp-role { font-size: 11px; color: var(--text-muted); }
+.ind-override-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #d97706; flex-shrink: 0;
+  display: none;
+}
+.ind-emp-row.has-override .ind-override-dot { display: block; }
+
+/* Individual perms: diff from base role */
+.perm-item.added   { background: #f0fdf4; }
+.perm-item.removed { background: #fff1f2; }
+.perm-item.added .perm-label   { color: #166534; }
+.perm-item.removed .perm-label { color: #9f1239; }
+
+/* Override diff legend */
+.override-legend {
+  display: flex; gap: 16px; align-items: center;
+  font-size: 11px; color: var(--text-muted);
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.legend-dot.added   { background: #bbf7d0; }
+.legend-dot.removed { background: #fecdd3; }
+
+/* Reset button */
+.btn-ghost-danger {
+  color: #dc2626; border: 1px solid #fca5a5; background: transparent;
+  font-size: 13px; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all .15s;
+}
+.btn-ghost-danger:hover { background: #fff1f2; }
+
+/* Toast */
+.roles-toast {
+  position: fixed; bottom: 28px; right: 28px;
+  background: #166534; color: white;
+  padding: 12px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  transform: translateY(16px); opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s ease;
+  z-index: 9999;
+}
+.roles-toast.show { transform: none; opacity: 1; }
+.roles-toast i { font-size: 18px; }
+
+/* content-wrapper with no padding for 3-panel layout */
+.content-wrapper-flush {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ne-close reuse */
+.ne-close {
+  width: 32px; height: 32px; border-radius: 6px;
+  border: 1px solid var(--border-color); background: white;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-muted); font-size: 18px; transition: all 0.15s;
+  flex-shrink: 0;
+}
+.ne-close:hover { background: #f8fafc; color: var(--text-main); }
+
+/* ── FIX: Notification panel styles ────────────────────────────
+   These were missing from dashboard.css, which is why the
+   notification button appeared to do nothing — the panel existed
+   in the DOM (dashboard.html) and the JS (setupNotifications) was
+   correct, but without these rules the panel had no positioning,
+   size, or visibility transitions to work with.
+──────────────────────────────────────────────────────────────── */
+
+/* Dim backdrop that closes the panel on click */
+.notif-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: none;         /* shown by JS adding class .open */
+}
+.notif-backdrop.open {
+  display: block;
+}
+
+/* The sliding panel itself */
+.notif-panel {
+  position: fixed;
+  top: 70px;             /* sits just below the top-header */
+  right: 24px;
+  width: 320px;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  z-index: 600;
+  overflow: hidden;
+  /* closed state */
+  transform: translateY(-8px) scale(0.97);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.notif-panel.open {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Panel header row */
+.notif-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.notif-panel-header i {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+.notif-panel-header i:hover {
+  color: var(--text-main);
+}
+
+/* Empty state inside the panel */
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.notif-empty i {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.35;
+}
+.notif-empty p {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.notif-empty span {
+  font-size: 12px;
+}

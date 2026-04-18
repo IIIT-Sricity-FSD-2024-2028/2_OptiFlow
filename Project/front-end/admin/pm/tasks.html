@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Project Detail — OfficeSync</title>
+    <link rel="stylesheet" href="../../css/pm/base.css" />
+    <link rel="stylesheet" href="../../css/pm/layout.css" />
+    <link rel="stylesheet" href="../../css/pm/components.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <div class="main-area">
+        <header class="top-header">
+          <div class="breadcrumb" id="page-breadcrumb">
+            <a class="breadcrumb-link" href="projects.html">Projects</a>
+            <span class="breadcrumb-sep">›</span>
+            <span class="breadcrumb-current">Loading...</span>
+          </div>
+          <div class="header-actions">
+            <div class="bell-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <!-- Project Header -->
+          <div id="project-header-container"></div>
+
+          <!-- Two Col Layout -->
+          <div class="two-col-layout">
+            <!-- Tasks Table -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Tasks</div>
+                <button class="btn btn-primary btn-sm" id="btn-add-task">
+                  + Task
+                </button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>TASK</th>
+                      <th>ASSIGNED TO</th>
+                      <th>PRIORITY</th>
+                      <th>STATUS</th>
+                      <th>DEADLINE</th>
+                      <th>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tasks-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right Panel -->
+            <div class="right-panel">
+              <!-- Team -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">Team</div>
+                </div>
+                <div class="card-body team-panel" id="team-panel"></div>
+              </div>
+
+              <!-- Compliance -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">Compliance</div>
+                  <a href="compliance-dashboard.html" class="card-action"
+                    >Full view →</a
+                  >
+                </div>
+                <div class="card-body" id="compliance-panel"></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script src="../../js/data/db.js"></script>
+
+    <script src="../../js/data/pm-data-store.js"></script>
+    <script src="../../js/utils/auth.js"></script>
+    <script src="../../js/utils/validator.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/data/audit-store.js"></script>
+    <script src="../../js/components/sidebar.js"></script>
+    <script src="../../js/components/toast.js"></script>
+    <script src="../../js/components/modal.js"></script>
+    <script src="../../js/pages/pm/tasks.js"></script>
+  </body>
+</html>

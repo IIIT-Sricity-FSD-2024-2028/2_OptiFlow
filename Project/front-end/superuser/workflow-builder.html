@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workflow Builder - OfficeSync</title>
+    <link rel="stylesheet" href="../css/base.css" />
+    <link rel="stylesheet" href="../css/layout.css" />
+    <link rel="stylesheet" href="../css/components.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .builder-layout {
+        display: flex;
+        height: 100vh;
+        width: 100vw;
+        background: var(--bg-color);
+        overflow: hidden;
+      }
+
+      /* Override Main Sidebar for Builder */
+      .sidebar {
+        width: 260px;
+      }
+
+      /* Content Area */
+      .builder-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .builder-header {
+        height: 70px;
+        background: white;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 32px;
+        flex-shrink: 0;
+      }
+
+      .builder-title {
+        font-size: 16px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .builder-title .muted {
+        color: var(--text-muted);
+      }
+
+      .builder-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .builder-actions .status-text {
+        color: #d97706;
+        font-size: 13px;
+        font-weight: 500;
+        margin-right: 12px;
+        background: #fef3c7;
+        padding: 4px 12px;
+        border-radius: 12px;
+      }
+
+      .btn-green {
+        background: #10b981;
+        color: white;
+        border: none;
+      }
+      .btn-green:hover {
+        background: #059669;
+      }
+
+      /* Canvas & Timeline Container */
+      .builder-body {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        background: var(--bg-color);
+        overflow: hidden;
+      }
+      .timeline-container {
+        width: 100%;
+        max-width: 800px;
+        padding: 40px;
+        height: 100%;
+        overflow-y: auto;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+      }
+
+      .process-meta {
+        display: flex;
+        gap: 16px;
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        margin-bottom: 40px;
+      }
+      .process-meta span {
+        color: var(--text-main);
+        margin-left: 4px;
+      }
+
+      /* Timeline Nodes */
+      .timeline-edge {
+        width: 2px;
+        height: 32px;
+        background: #cbd5e1;
+        margin: 8px 0;
+      }
+      .timeline-card {
+        width: 100%;
+        background: white;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s;
+        overflow: hidden;
+      }
+      .timeline-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      }
+      .timeline-card.active {
+        border-color: var(--primary-color);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+      }
+
+      /* Card Header */
+      .card-header {
+        padding: 20px 24px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        background: white;
+      }
+      .node-number {
+        width: 32px;
+        height: 32px;
+        background: var(--primary-color);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+      .card-header-content {
+        flex: 1;
+      }
+      .node-title {
+        font-weight: 600;
+        font-size: 16px;
+        margin-bottom: 4px;
+        color: var(--text-main);
+      }
+      .node-role {
+        font-size: 13px;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .node-tags {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-left: auto;
+      }
+
+      /* Accordion Body */
+      .card-body {
+        display: none;
+        padding: 0 24px 24px 72px;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 16px;
+        padding-top: 24px;
+      }
+      .timeline-card.active .card-body {
+        display: block;
+      }
+
+      /* Form fields (Reuse) */
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .form-group label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+        font-weight: 600;
+        display: block;
+      }
+      .form-control {
+        border: 1px solid #e2e8f0;
+        padding: 10px 12px;
+        margin-bottom: 20px;
+        font-size: 14px;
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 6px;
+      }
+      textarea.form-control {
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      .toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .toggle-label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 20px;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #cbd5e1;
+        transition: 0.4s;
+        border-radius: 20px;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+      }
+      input:checked + .slider {
+        background-color: var(--primary-color);
+      }
+      input:checked + .slider:before {
+        transform: translateX(16px);
+      }
+
+      .add-node-btn {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: white;
+        border: 2px dashed #cbd5e1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        cursor: pointer;
+        margin-top: 24px;
+        transition: all 0.2s;
+      }
+      .add-node-btn:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="builder-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div
+            class="logo-container"
+            style="padding: 0; justify-content: center"
+          >
+            <img
+              src="../assets/images/logo_light.png"
+              alt="OfficeSync"
+              style="height: 32px; width: auto; object-fit: contain"
+            />
+          </div>
+          <div class="brand-subtitle">Process Admin</div>
+        </div>
+
+        <nav class="sidebar-nav">
+          <!-- Collapsed navigation for builder focus -->
+          <div class="nav-section">
+            <div class="nav-section-title">Main</div>
+            <a href="dashboard.html" class="nav-item">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span>Dashboard</span>
+            </a>
+            <a href="workflows.html" class="nav-item active">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <span>Processes</span>
+            </a>
+            <a href="analytics.html" class="nav-item">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
+              <span>Analytics</span>
+            </a>
+          </div>
+          <div class="nav-section">
+            <div class="nav-section-title">Administration</div>
+            <a href="users.html" class="nav-item">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              <span>Users</span>
+            </a>
+            <a href="departments.html" class="nav-item">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                <rect x="9" y="9" width="6" height="6"></rect>
+                <line x1="9" y1="1" x2="9" y2="4"></line>
+                <line x1="15" y1="1" x2="15" y2="4"></line>
+                <line x1="9" y1="20" x2="9" y2="23"></line>
+                <line x1="15" y1="20" x2="15" y2="23"></line>
+                <line x1="20" y1="9" x2="23" y2="9"></line>
+                <line x1="20" y1="14" x2="23" y2="14"></line>
+                <line x1="1" y1="9" x2="4" y2="9"></line>
+                <line x1="1" y1="14" x2="4" y2="14"></line>
+              </svg>
+              <span>Departments</span>
+            </a>
+            <a href="audit.html" class="nav-item">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                ></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <span>Audit Logs</span>
+            </a>
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <a
+            href="settings.html"
+            class="nav-item"
+            style="padding-left: 0; background: transparent"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="3"></circle>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+              ></path>
+            </svg>
+            <span>Settings</span>
+          </a>
+          <div class="user-profile">
+            <div class="avatar">VP</div>
+            <div class="user-info">
+              <span class="user-name">Vikram Patel</span>
+              <span class="user-role">Process Admin</span>
+            </div>
+          </div>
+          <!-- Logout Demarcation -->
+          <div
+            style="
+              border-top: 1px solid rgba(255, 255, 255, 0.05);
+              margin-top: 16px;
+              padding-top: 16px;
+            "
+          >
+            <button
+              class="logout-btn"
+              onclick="logout()"
+              style="width: 100%; justify-content: flex-start; margin-top: 0"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              LOGOUT
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Builder -->
+      <div class="builder-main">
+        <header class="builder-header">
+          <div class="builder-title" id="builderTitle">
+            <span class="muted">Finance Q4 Reporting</span> › Workflow Builder
+          </div>
+          <div class="builder-actions">
+            <button
+              class="btn-icon"
+              style="position: relative; margin-right: 8px"
+              aria-label="Notifications"
+            >
+              <img
+                src="../assets/images/bell.svg"
+                alt="Notifications"
+                style="width: 20px; height: 20px"
+              />
+              <span
+                style="
+                  position: absolute;
+                  top: 6px;
+                  right: 8px;
+                  width: 8px;
+                  height: 8px;
+                  background: #ef4444;
+                  border-radius: 50%;
+                  border: 2px solid white;
+                "
+              ></span>
+            </button>
+            <span class="status-text">Unsaved changes</span>
+            <button class="btn btn-secondary" onclick="window.history.back()">
+              Discard
+            </button>
+            <button class="btn btn-secondary" onclick="saveProcessDraft()">
+              Save Draft
+            </button>
+            <button class="btn btn-green" onclick="publishProcess()">
+              Publish Process
+            </button>
+          </div>
+        </header>
+
+        <div class="builder-body">
+          <div class="timeline-container">
+            <div
+              id="processHeaderEdit"
+              style="
+                display: none;
+                background: white;
+                padding: 24px;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                margin-bottom: 24px;
+                width: 100%;
+              "
+            >
+              <div class="form-row">
+                <div class="form-group">
+                  <label>PROCESS NAME</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="newProcessName"
+                    placeholder="e.g., Q3 Marketing Campaign"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>DEPARTMENT</label>
+                  <select class="form-control" id="newProcessDept">
+                    <option value="Finance">Finance</option>
+                    <option value="HR">HR</option>
+                    <option value="IT">IT</option>
+                    <option value="Operations">Operations</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom: 0px">
+                <label>COMPLIANCE TAGS (Comma separated)</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="newProcessCompliance"
+                  placeholder="e.g., SOX, IFRS"
+                />
+              </div>
+            </div>
+            <div class="process-meta" id="processMetaDisplay">
+              PROCESS <span id="metaProcessName"></span> &nbsp;&nbsp; DEPARTMENT
+              <span id="metaProcessDept"></span> &nbsp;&nbsp; COMPLIANCE
+              <span id="metaProcessCompliance"></span> &nbsp;&nbsp; STAGES
+              <span id="stgCount">0</span>
+            </div>
+
+            <div
+              id="flowContainer"
+              style="
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+              "
+            >
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="../js/data/workflows.js"></script>
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/pages/superuser/workflow-builder.js"></script>
+  </body>
+</html>
