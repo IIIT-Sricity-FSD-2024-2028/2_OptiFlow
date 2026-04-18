@@ -1,22 +1,38 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateEvidenceDto {
-  @ApiProperty({ example: 101 })
+  @ApiProperty({ example: 9 })
   @IsNumber()
-  task_id: number;
+  user_id: number;
 
-  @ApiProperty({ example: 2 })
+  @ApiProperty({ example: 104, required: false })
+  @IsOptional()
   @IsNumber()
-  submitted_by: number;
+  task_id?: number;
 
-  @ApiProperty({ example: 'https://storage/report.pdf' })
+  @ApiProperty({ example: 2, required: false })
+  @IsOptional()
+  @IsNumber()
+  violation_id?: number;
+
+  @ApiProperty({ example: 'Server patch test results' })
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @ApiProperty({ example: 'Document', required: false })
+  @IsOptional()
+  @IsString()
+  evidence_type?: string;
+
+  @ApiProperty({ example: 'https://storage.officesync.in/evidence/report.pdf' })
   @IsString()
   @IsNotEmpty()
   file_url: string;
 
-  @ApiProperty({ example: 'Pending Review' })
+  @ApiProperty({ example: 'Partial test results from staging.', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  status: string;
+  notes?: string;
 }

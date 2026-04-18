@@ -1,5 +1,38 @@
 // js/pages/auth-flows.js
 
+function showAuthMessage(formId, message, type = 'error') {
+  const form = document.getElementById(formId);
+  if (!form) return;
+  
+  let msgDiv = form.querySelector('.auth-message');
+  if (!msgDiv) {
+    msgDiv = document.createElement('div');
+    msgDiv.className = 'auth-message';
+    msgDiv.style.padding = '10px';
+    msgDiv.style.marginBottom = '15px';
+    msgDiv.style.borderRadius = '6px';
+    msgDiv.style.fontSize = '0.875rem';
+    msgDiv.style.fontWeight = '500';
+    form.insertBefore(msgDiv, form.firstChild);
+  }
+  
+  if (type === 'error') {
+    msgDiv.style.backgroundColor = '#fef2f2';
+    msgDiv.style.color = '#dc2626';
+    msgDiv.style.border = '1px solid #fecaca';
+  } else if (type === 'success') {
+    msgDiv.style.backgroundColor = '#f0fdf4';
+    msgDiv.style.color = '#16a34a';
+    msgDiv.style.border = '1px solid #bbf7d0';
+  } else {
+    msgDiv.style.backgroundColor = '#f0f9ff';
+    msgDiv.style.color = '#0284c7';
+    msgDiv.style.border = '1px solid #bae6fd';
+  }
+  
+  msgDiv.textContent = message;
+}
+
 // --- Utility: Smart Toggle Password Visibility ---
 function togglePassword(inputId, buttonElement) {
   // 1. Find the specific input we want to toggle
@@ -72,13 +105,13 @@ document.addEventListener("DOMContentLoaded", () => {
             window.location.href = "enduser/member-dashboard.html"; 
           }
         } else {
-          alert("Invalid email. Could not find this user in the backend database.");
+          showAuthMessage("loginForm", "Invalid email. Could not find this user in the backend database.", "error");
           submitBtn.textContent = originalBtnText;
           submitBtn.disabled = false;
         }
       } catch (error) {
         console.error("Login failed:", error);
-        alert("Failed to connect to the backend API. Please ensure your NestJS server is running on port 3000.");
+        showAuthMessage("loginForm", "Failed to connect to the backend API. Please ensure your NestJS server is running on port 3000.", "error");
         submitBtn.textContent = originalBtnText;
         submitBtn.disabled = false;
       }
@@ -92,8 +125,10 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       // Enterprise systems generally do not allow self-registration.
       // Accounts are provisioned by HR (POST /users) which is protected by the RolesGuard.
-      alert("In this enterprise environment, new accounts must be provisioned by the HR Manager. Please contact HR.");
-      window.location.href = "login.html";
+      showAuthMessage("registerForm", "In this enterprise environment, new accounts must be provisioned by the HR Manager. Please contact HR.", "info");
+      setTimeout(() => {
+        window.location.href = "login.html";
+      }, 3000);
     });
   }
 
@@ -103,8 +138,10 @@ document.addEventListener("DOMContentLoaded", () => {
     forgotForm.addEventListener("submit", (e) => {
       e.preventDefault();
       const email = document.getElementById("forgotEmail").value;
-      alert(`A password reset link has been sent to ${email}`);
-      window.location.href = "reset-password.html";
+      showAuthMessage("forgotForm", `A password reset link has been sent to ${email}`, "success");
+      setTimeout(() => {
+        window.location.href = "reset-password.html";
+      }, 2000);
     });
   }
 
@@ -117,12 +154,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const confirmPass = document.getElementById("resetConfirm").value;
 
       if (newPass !== confirmPass) {
-        alert("Passwords do not match!");
+        showAuthMessage("resetForm", "Passwords do not match!", "error");
         return;
       }
 
-      alert("Password successfully reset! You can now log in.");
-      window.location.href = "login.html";
+      showAuthMessage("resetForm", "Password successfully reset! You can now log in.", "success");
+      setTimeout(() => {
+        window.location.href = "login.html";
+      }, 2000);
     });
   }
 });

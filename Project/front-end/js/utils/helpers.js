@@ -177,73 +177,222 @@ function initNotifications() {
 // ─────────────────────────────────────────
 window.Helpers = {
   async getState() {
-    let masterUsers = [], rawTasks = [], projects = [], escalations = [], evidence = [];
+    let rawUsers = [], rawTasks = [], rawProjects = [], rawEscalations = [], rawEvidence = [],
+        rawDepartments = [], rawRoles = [], rawSubtasks = [], rawAuditLogs = [],
+        rawComplianceRules = [], rawViolations = [];
     try {
-      const [uRes, tRes, pRes, eRes, evRes] = await Promise.all([
+      const [uRes, tRes, pRes, escRes, evRes, dRes, rRes, stRes, alRes, crRes, cvRes] = await Promise.all([
         this.api.request('/users'),
         this.api.request('/tasks'),
         this.api.request('/projects'),
         this.api.request('/escalations'),
-        this.api.request('/evidence')
+        this.api.request('/evidence'),
+        this.api.request('/departments'),
+        this.api.request('/roles'),
+        this.api.request('/subtasks'),
+        this.api.request('/audit-logs'),
+        this.api.request('/compliance-rules'),
+        this.api.request('/compliance-violations'),
       ]);
-      masterUsers = uRes || [];
-      rawTasks = tRes || [];
-      projects = pRes || [];
-      escalations = eRes || [];
-      evidence = evRes || [];
-    } catch(e) {
+      rawUsers           = uRes   || [];
+      rawTasks           = tRes   || [];
+      rawProjects        = pRes   || [];
+      rawEscalations     = escRes || [];
+      rawEvidence        = evRes  || [];
+      rawDepartments     = dRes   || [];
+      rawRoles           = rRes   || [];
+      rawSubtasks        = stRes  || [];
+      rawAuditLogs       = alRes  || [];
+      rawComplianceRules = crRes  || [];
+      rawViolations      = cvRes  || [];
+    } catch (e) {
       console.warn("Failed to fetch state from backend API", e);
     }
 
-    const formattedUsers = masterUsers.map((u) => ({
-      id: String(u.id),
-      fullName: u.full_name || "Unknown User",
-      email: u.email || "",
-      departmentId: u.department_id === 2 ? 2 : 1,
-      roleId:
-        u.role === "superuser"
-          ? 1
-          : u.role === "project_manager"
-            ? 2
-            : u.role === "team_leader"
-              ? 4
-              : 5,
-      status: u.status ? u.status.toLowerCase() : "active",
-      avatar: u.full_name ? u.full_name.substring(0, 2).toUpperCase() : "??",
-      avatarColor: "blue",
-      projectId: u.project_id ? parseInt(u.project_id, 10) : null,
-      reportsTo: u.reports_to ? String(u.reports_to) : null,
+    // role slug → numeric roleId
+    const roleSlugToId = {
+      superuser: 1, project_manager: 2, compliance_officer: 3,
+      hr_manager: 4, team_leader: 5, team_member: 6,
+    };
+
+    // ── Users ─────────────────────────────────────────────────────────────────────
+    const users = rawUsers.map((u) => {
+      const initials = u.full_name
+        ? u.full_name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
+        : '??';
+      return {
+        id: String(u.user_id),
+        userId: u.user_id,
+        fullName: u.full_name || 'Unknown User',
+        email: u.email || '',
+        role: u.role || 'team_member',
+        roleId: roleSlugToId[u.role] || 6,
+        departmentId: u.department_id || null,
+        managerId: u.manager_id || null,
+        reportsTo: u.manager_id ? String(u.manager_id) : null,
+        isActive: u.is_active !== undefined ? u.is_active : true,
+        status: u.is_active === false ? 'inactive' : 'active',
+        avatar: initials,
+        avatarColor: 'blue',
+        createdAt: u.created_at || null,
+      };
+    });
+
+    // ── Departments ──────────────────────────────────────────────────────────
+    const departments = rawDepartments.map((d) => ({
+      id: d.department_id,
+      departmentId: d.department_id,
+      name: d.department_name,
+      departmentName: d.department_name,
+      managerId: d.manager_id || null,
+      createdAt: d.created_at || null,
     }));
 
-    const sanitizedTasks = rawTasks.map((t) => ({
+    // ── Roles ───────────────────────────────────────────────────────────────────
+    const roles = rawRoles.map((r) => ({
+      id: r.role_id,
+      roleId: r.role_id,
+      name: r.role_name,
+      roleName: r.role_name,
+      description: r.description || '',
+      isSystem: r.is_system || false,
+      createdAt: r.created_at || null,
+    }));
+
+    // ── Projects ─────────────────────────────────────────────────────────────
+    const projects = rawProjects.map((p) => ({
+      ...p,
+      id: p.project_id,
+      projectId: p.project_id,
+      name: p.project_name,
+      projectName: p.project_name,
+      departmentId: p.department_id,
+      createdBy: p.created_by,
+      startDate: p.start_date,
+      endDate: p.end_date || null,
+      createdAt: p.created_at || null,
+    }));
+
+    // ── Tasks ────────────────────────────────────────────────────────────────────
+    const tasks = rawTasks.map((t) => ({
       ...t,
-      projectId: t.project_id,
+      id: t.task_id,
+      taskId: t.task_id,
+      projectId: t.project_id || null,
+      assignedTo: t.assigned_to,
       assignedUserId: String(t.assigned_to),
-      createdBy: String(t.created_by || "u2"),
+      createdBy: t.created_by,
+      estimatedHours: t.estimated_hours || 0,
+      actualHours: t.actual_hours || 0,
+      dueDate: t.due_date || null,
+      completedAt: t.completed_at || null,
+      createdAt: t.created_at || null,
+    }));
+
+    // ── Subtasks ─────────────────────────────────────────────────────────────
+    const subtasks = rawSubtasks.map((s) => ({
+      ...s,
+      id: s.subtask_id,
+      subtaskId: s.subtask_id,
+      taskId: s.task_id,
+      assignedTo: s.assigned_to,
+      estimatedHours: s.estimated_hours || 0,
+      dueDate: s.due_date || null,
+      completedAt: s.completed_at || null,
+      createdAt: s.created_at || null,
+    }));
+
+    // ── Escalations ──────────────────────────────────────────────────────────
+    const escalations = rawEscalations.map((e) => ({
+      ...e,
+      id: e.escalation_id,
+      escalationId: e.escalation_id,
+      taskId: e.task_id,
+      projectId: e.project_id,
+      reportedBy: e.reported_by,
+      targetManagerId: e.target_manager_id,
+      blockerType: e.blocker_type || '',
+      createdAt: e.created_at || null,
+      resolvedAt: e.resolved_at || null,
+    }));
+
+    // ── Audit Logs ─────────────────────────────────────────────────────────────
+    const auditLogs = rawAuditLogs.map((l) => ({
+      ...l,
+      id: l.log_id,
+      logId: l.log_id,
+      entityId: l.entity_id,
+      entityType: l.entity_type,
+      performedBy: l.performed_by || null,
+      performedAt: l.performed_at,
+      ipAddress: l.ip_address || null,
+      oldValue: l.old_value || null,
+      newValue: l.new_value || null,
+    }));
+
+    // ── Compliance Rules ──────────────────────────────────────────────────────
+    const complianceRules = rawComplianceRules.map((r) => ({
+      ...r,
+      id: r.rule_id,
+      ruleId: r.rule_id,
+      ruleName: r.rule_name,
+      remediationSteps: r.remediation_steps || '',
+      isActive: r.is_active !== undefined ? r.is_active : true,
+      createdAt: r.created_at || null,
+    }));
+
+    // ── Compliance Violations ───────────────────────────────────────────────
+    const complianceViolations = rawViolations.map((v) => ({
+      ...v,
+      id: v.violation_id,
+      violationId: v.violation_id,
+      ruleId: v.rule_id,
+      entityId: v.entity_id,
+      entityType: v.entity_type,
+      detectedAt: v.detected_at,
+      reportedBy: v.reported_by || null,
+      resolvedBy: v.resolved_by || null,
+      resolvedAt: v.resolved_at || null,
+      resolutionRemarks: v.resolution_remarks || null,
+      dueDate: v.due_date || null,
+    }));
+
+    // ── Evidence ─────────────────────────────────────────────────────────────
+    const evidence = rawEvidence.map((e) => ({
+      ...e,
+      id: e.evidence_id,
+      evidenceId: e.evidence_id,
+      userId: e.user_id,
+      taskId: e.task_id || null,
+      violationId: e.violation_id || null,
+      evidenceType: e.evidence_type || 'Document',
+      fileUrl: e.file_url,
+      reviewedBy: e.reviewed_by || null,
+      submittedAt: e.submitted_at,
+      reviewedAt: e.reviewed_at || null,
     }));
 
     return {
-      users: formattedUsers,
-      departments: [
-        { id: 1, name: "Operations" },
-        { id: 2, name: "IT Infrastructure" },
-      ],
-      projects: projects || [],
-      tasks: sanitizedTasks,
-      subtasks: [],
-      escalations: escalations || [],
-      complianceItems: [],
-      activeViolations: [],
-      complianceViolations: [],
-      complianceRules: [],
+      users,
+      departments,
+      roles,
+      projects,
+      tasks,
+      subtasks,
+      escalations,
+      auditLogs,
+      complianceRules,
+      complianceViolations,
+      evidence,
+      // Legacy aliases for backward-compat with older dashboard pages
+      complianceItems: complianceViolations,
+      activeViolations: complianceViolations.filter(v => v.status === 'Open'),
       complianceReports: [],
-      auditLogs: [],
-      evidence: evidence || [],
     };
   },
 
   async saveState(state) {
-    console.warn("saveState deprecated. PM components must use direct async API mutations.");
+    console.warn("saveState deprecated. Use direct async API mutations via Helpers.api.request().");
   },
 
   getParam(name) {

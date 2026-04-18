@@ -727,7 +727,7 @@
     <script>
       let session, state, task, project, manager;
 
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         if (!sessionStorage.getItem("currentUser")) {
           window.location.replace("../login.html");
           return;
@@ -736,7 +736,7 @@
         window.Sidebar.render("tasks");
         window.Toast.init();
 
-        state = window.Helpers.getState();
+        state = await window.Helpers.getState();
         const params = new URLSearchParams(window.location.search);
         const taskId = params.get("id"); // Keep as string for better matching
 
@@ -921,10 +921,10 @@
         }
       }
 
-      function acceptTask() {
+      async function acceptTask() {
         task.status = "in_progress";
         task.statusLabel = "In Progress";
-        window.Helpers.saveState(state);
+        await window.Helpers.saveState(state);
         renderPage();
         window.Toast.success("Task Accepted", "You can now begin work.");
       }
@@ -957,7 +957,7 @@
         document.getElementById("subtask-modal").classList.remove("open");
       }
 
-      function saveSubtask() {
+      async function saveSubtask() {
         // Validation via PM Validator
         const result = window.Validator.validateForm({
            "subtask-title": { required: true },
@@ -973,7 +973,7 @@
            status: "Pending"
         };
         state.subtasks.unshift(newSt);
-        window.Helpers.saveState(state);
+        await window.Helpers.saveState(state);
         closeSubtaskModal();
         renderPage();
         window.Toast.success("Subtask created", "Team member has been assigned.");
@@ -1043,7 +1043,7 @@
         }
       }
 
-      function submitAct(type) {
+      async function submitAct(type) {
         let notifications =
           JSON.parse(localStorage.getItem("system_notifications")) || [];
         const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
@@ -1147,7 +1147,7 @@
           "system_notifications",
           JSON.stringify(notifications),
         );
-        window.Helpers.saveState(state);
+        await window.Helpers.saveState(state);
         closeModals();
         renderPage();
       }

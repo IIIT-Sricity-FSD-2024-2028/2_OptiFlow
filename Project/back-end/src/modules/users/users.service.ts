@@ -12,41 +12,37 @@ export class UsersService {
   }
 
   findOne(id: number): User {
-    const user = this.db.users.find(u => u.id === id);
+    const user = this.db.users.find(u => u.user_id === id);
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
     return user;
   }
 
-  create(createUserDto: CreateUserDto): User {
+  create(dto: CreateUserDto): User {
     const newUser: User = {
-      id: this.db.users.length ? Math.max(...this.db.users.map(u => u.id)) + 1 : 1,
-      full_name: createUserDto.full_name,
-      email: createUserDto.email,
-      role: createUserDto.role,
-      department_id: createUserDto.department_id,
-      reports_to: createUserDto.reports_to || null,
-      status: createUserDto.status
+      user_id: this.db.users.length ? Math.max(...this.db.users.map(u => u.user_id)) + 1 : 1,
+      full_name: dto.full_name,
+      email: dto.email,
+      password_hash: dto.password_hash ?? 'default_hash',
+      role: dto.role,
+      department_id: dto.department_id,
+      manager_id: dto.manager_id ?? null,
+      is_active: dto.is_active ?? true,
+      created_at: new Date().toISOString(),
     };
     this.db.users.push(newUser);
     return newUser;
   }
 
-  update(id: number, updateUserDto: UpdateUserDto): User {
-    const userIndex = this.db.users.findIndex(u => u.id === id);
-    if (userIndex === -1) throw new NotFoundException(`User with ID ${id} not found`);
-    
-    const updatedUser = { 
-      ...this.db.users[userIndex], 
-      ...updateUserDto, 
-      reports_to: updateUserDto.reports_to !== undefined ? updateUserDto.reports_to : this.db.users[userIndex].reports_to 
-    };
-    this.db.users[userIndex] = updatedUser;
-    return updatedUser;
+  update(id: number, dto: UpdateUserDto): User {
+    const index = this.db.users.findIndex(u => u.user_id === id);
+    if (index === -1) throw new NotFoundException(`User with ID ${id} not found`);
+    this.db.users[index] = { ...this.db.users[index], ...dto };
+    return this.db.users[index];
   }
 
   remove(id: number): void {
-    const userIndex = this.db.users.findIndex(u => u.id === id);
-    if (userIndex === -1) throw new NotFoundException(`User with ID ${id} not found`);
-    this.db.users.splice(userIndex, 1);
+    const index = this.db.users.findIndex(u => u.user_id === id);
+    if (index === -1) throw new NotFoundException(`User with ID ${id} not found`);
+    this.db.users.splice(index, 1);
   }
 }

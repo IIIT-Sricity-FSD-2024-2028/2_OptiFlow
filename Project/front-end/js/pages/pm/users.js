@@ -7,9 +7,9 @@ window.UsersPage = {
   filtered: [],
   activeFilter: 'all',
 
-  init() {
-    this.state    = window.Helpers.getState();
-    this.filtered = [...this.state.users];
+  async init() {
+    this.state    = await window.Helpers.getState();
+    this.filtered = [...(this.state.users || [])];
     this.renderTable();
     this.bindEvents();
   },
@@ -255,9 +255,9 @@ window.UsersPage = {
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     window.Auth.requireRole('superuser');
     window.Sidebar.render('users');
     window.Toast.init();
-    window.UsersPage.init();
+    await window.UsersPage.init();
 });

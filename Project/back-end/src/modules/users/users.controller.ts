@@ -13,6 +13,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
+  @Roles('guest', 'superuser', 'hr_manager', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
   @ApiOperation({ summary: 'Get all users' })
   findAll() {
     return this.usersService.findAll();

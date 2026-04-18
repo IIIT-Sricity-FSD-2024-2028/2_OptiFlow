@@ -115,7 +115,7 @@
     <script>
       let session, state;
 
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         // ✅ 2. Security Guard & Session Adapter
         if (!sessionStorage.getItem("currentUser")) {
           window.location.replace("../login.html");
@@ -125,7 +125,7 @@
         window.Sidebar.render("evidence");
         window.Toast.init();
 
-        state = window.Helpers.getState();
+        state = await window.Helpers.getState();
         // Initialize evidence array if needed
         if (!state.evidence) state.evidence = getDefaultEvidence();
         render();
@@ -330,7 +330,7 @@
         });
       }
 
-      function submitEvidence() {
+      async function submitEvidence() {
         const result = window.Validator.validateForm({
           "ev-title": { required: true, minLength: 5 },
           "ev-type": { required: true },
@@ -364,7 +364,7 @@
 
         if (!state.evidence) state.evidence = [];
         state.evidence.push(newEv);
-        window.Helpers.saveState(state);
+        await window.Helpers.saveState(state);
         window.Helpers.log(`Submitted evidence "${newEv.title}"`, "Compliance");
 
         // ✅ THE FINAL INTEGRATION: Notify the Boss!
@@ -398,7 +398,7 @@
         );
         render();
       }
-      function submitEdit(evId) {
+      async function submitEdit(evId) {
         const result = window.Validator.validateForm({
           "eev-title": { required: true, minLength: 5 },
         });
@@ -425,7 +425,7 @@
           isRead: false,
         });
 
-        window.Helpers.saveState(state);
+        await window.Helpers.saveState(state);
         window.Modal.close("modal-ev-edit");
         window.Toast.success("Evidence Updated");
         render();
@@ -437,9 +437,9 @@
             "Are you sure you want to delete this evidence submission? This cannot be undone.",
           confirmLabel: "Delete",
           confirmClass: "btn-danger",
-          onConfirm: () => {
+          onConfirm: async () => {
             state.evidence = state.evidence.filter((e) => e.id !== evId);
-            window.Helpers.saveState(state);
+            await window.Helpers.saveState(state);
             window.Helpers.log(`Deleted evidence #${evId}`, "Compliance");
             window.Toast.warning("Deleted", "Evidence has been removed.");
             render();

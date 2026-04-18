@@ -56,10 +56,10 @@
 
         <div class="sidebar-footer">
           <div class="user-profile">
-            <div class="avatar">DN</div>
+            <div class="avatar" id="sidebarAvatar">??</div>
             <div class="user-info">
-              <span class="user-name">Divya Nair</span>
-              <span class="user-role">HR Manager</span>
+              <span class="user-name" id="sidebarName">Loading...</span>
+              <span class="user-role" id="sidebarRole">HR Manager</span>
             </div>
           </div>
 
@@ -267,10 +267,29 @@
         </div>
       </div>
     </div>
+    <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/data/db.js"></script>
     <script src="../../js/data/hr-data-store.js"></script>
     <script src="../../js/data/roles-store.js"></script>
     <script src="../../js/utils/auth.js"></script>
     <script src="../../js/pages/hr/dashboard.js"></script>
+    <script>
+      // Populate sidebar with real session user
+      (function() {
+        const raw = sessionStorage.getItem('currentUser');
+        if (!raw) return;
+        try {
+          const u = JSON.parse(raw);
+          const name = u.name || u.full_name || 'HR Manager';
+          const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || '??';
+          const el = document.getElementById('sidebarName');
+          const av = document.getElementById('sidebarAvatar');
+          const ro = document.getElementById('sidebarRole');
+          if (el) el.textContent = name;
+          if (av) av.textContent = initials;
+          if (ro) ro.textContent = u.role ? u.role.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'HR Manager';
+        } catch(e) {}
+      })();
+    </script>
   </body>
 </html>

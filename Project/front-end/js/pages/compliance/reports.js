@@ -1,13 +1,13 @@
 let state;
 
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
   // 1. Initialize Sidebar
   if (window.Sidebar) {
     window.Sidebar.render("reports");
   }
 
   // 2. Load the live database state
-  state = window.Helpers ? window.Helpers.getState() : {};
+  state = window.Helpers ? await window.Helpers.getState() : {};
   if (!state.complianceReports || state.complianceReports.length === 0) {
     state.complianceReports = [
       {
@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", function () {
         ],
       },
     ];
-    if (window.Helpers) window.Helpers.saveState(state);
+    if (window.Helpers) await window.Helpers.saveState(state);
   }
 
   // Render the initial list
@@ -116,7 +116,7 @@ window.generateReport = function () {
   if (window.Toast) window.Toast.show("Compiling report data...", "info");
 
   // 2. Simulate delay, then create the real data
-  setTimeout(() => {
+  setTimeout(async () => {
     // Restore button state
     btn.innerText = originalText;
     btn.style.opacity = "1";
@@ -163,7 +163,7 @@ window.generateReport = function () {
 
     // 4. Save to database and render!
     state.complianceReports.unshift(newReport); // Adds to the TOP of the list
-    if (window.Helpers) window.Helpers.saveState(state);
+    if (window.Helpers) await window.Helpers.saveState(state);
     window.renderReports();
 
     if (window.Toast)

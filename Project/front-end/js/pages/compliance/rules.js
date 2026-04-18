@@ -1,42 +1,24 @@
 let state;
 
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
   if (window.Sidebar) window.Sidebar.render("rules");
-  state = window.Helpers.getState();
+  state = await window.Helpers.getState();
 
-  // Load default rules if database is empty
-  if (!state.complianceRules || state.complianceRules.length === 0) {
-    state.complianceRules = [
-      {
-        id: "sox404",
-        name: "SOX Section 404",
-        policy: "SOX",
-        dept: "Finance Dept",
-        evidence: "Yes",
-        status: "Active",
-        desc: "Internal financial controls requiring annual sign-offs on all variance reports above $50k.",
-      },
-      {
-        id: "gdpr",
-        name: "GDPR Client Verification",
-        policy: "GDPR",
-        dept: "All dept",
-        evidence: "Yes",
-        status: "Active",
-        desc: "Requires multi-factor verification of data subject identity before processing any data export requests.",
-      },
-      {
-        id: "iso27001",
-        name: "ISO 27001 Controls",
-        policy: "ISO 27001",
-        dept: "IT Dept",
-        evidence: "Yes",
-        status: "Active",
-        desc: "Enforces mandatory monthly access log reviews and server hardening audits across all production infrastructure.",
-      },
-    ];
-    window.Helpers.saveState(state);
-  }
+  // Normalize backend fields so renderRules always has consistent shape
+  state.complianceRules = (state.complianceRules || []).map((r) => ({
+    // Preserve camelCase IDs already set by helpers.js
+    id: String(r.ruleId || r.id || Date.now()),
+    name: r.ruleName || r.name || "Unnamed Rule",
+    policy: r.severity || "General",   // severity doubles as a policy grouping until schema has dedicated policy field
+    dept: "All Departments",            // not in current schema; sensible default
+    evidence: "Yes",                    // all rules implicitly require evidence
+    status: r.isActive !== false ? "Active" : "Inactive",
+    desc: r.description || "No description provided.",
+    // Keep originals for detail modals
+    remediationSteps: r.remediationSteps || "",
+    severity: r.severity || "Medium",
+  }));
+
   renderRules();
 });
 
@@ -44,18 +26,23 @@ function renderRules() {
   const tbody = document.getElementById("rulesTableBody");
   if (!tbody) return;
 
+  if (!state.complianceRules || state.complianceRules.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--text-muted)">No compliance rules found.</td></tr>';
+    return;
+  }
+
   tbody.innerHTML = state.complianceRules
     .map(
       (rule) => `
     <tr>
       <td>
         <div class="td-title">${rule.name}</div>
-        <div class="td-subtitle">${rule.desc.substring(0, 40)}...</div>
+        <div class="td-subtitle">${rule.desc.substring(0, 50)}${rule.desc.length > 50 ? '...' : ''}</div>
       </td>
       <td>${rule.policy}</td>
       <td>${rule.dept}</td>
       <td><span class="badge green">${rule.evidence}</span></td>
-      <td><span class="badge ${rule.status === "Active" ? "green" : "gray"}">${rule.status}</span></td>
+      <td><span class="badge ${rule.status === "Active" ? "green" : "gray"}>${rule.status}</span></td>
       <td>
         <div class="action-btn-group">
           <button class="action-btn view" onclick="viewRule('${rule.id}')">View</button>
@@ -79,7 +66,7 @@ function closeNewRuleModal() {
   document.getElementById("newRuleModal").classList.remove("active");
 }
 
-function saveNewRule() {
+async function saveNewRule() {
   const result = window.Validator.validateForm({
     "ruleName": { required: true }
   });
@@ -103,7 +90,7 @@ function saveNewRule() {
   };
 
   state.complianceRules.push(newRule);
-  window.Helpers.saveState(state);
+  await window.Helpers.saveState(state);
 
   if (window.Toast)
     window.Toast.show("New rule created successfully", "success");
@@ -189,7 +176,7 @@ function editRule(id) {
   document.body.insertAdjacentHTML("beforeend", modalHtml);
 }
 
-function saveEdit(id) {
+async function saveEdit(id) {
   const idx = state.complianceRules.findIndex(
     (r) => String(r.id) === String(id),
   );
@@ -203,7 +190,7 @@ function saveEdit(id) {
     state.complianceRules[idx].desc =
       document.getElementById("editRuleDesc").value;
 
-    window.Helpers.saveState(state);
+    await window.Helpers.saveState(state);
     if (window.Toast) window.Toast.show("Rule updated successfully", "success");
     renderRules();
   }

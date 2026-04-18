@@ -173,12 +173,12 @@ window.Sidebar = {
     bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>`,
   },
 
-  render(activeId) {
+  async render(activeId) {
     const session = window.Auth.getSession();
     if (!session) return;
 
     const navItems = this.navConfig[session.roleName] || [];
-    const state = window.Helpers.getState();
+    const state = await window.Helpers.getState();
 
     // Compute badge counts
     const escalationCount = state.escalations
@@ -284,18 +284,18 @@ window.Sidebar = {
 // --- GLOBAL NOTIFICATION BELL SYSTEM ---
 // This wires up the #btn-notifications icon on the top header of every page
 document.addEventListener("DOMContentLoaded", () => {
-  setTimeout(() => {
+  setTimeout(async () => {
     const bellBtn = document.getElementById("btn-notifications");
     if (!bellBtn) return;
 
     const session = window.Auth ? window.Auth.getSession() : null;
-    const state = window.Helpers ? window.Helpers.getState() : null;
+    const state = window.Helpers ? await window.Helpers.getState() : null;
     if (!session || !state) return;
 
     // Ensure notifications array exists
     if (!state.notifications) {
       state.notifications = [];
-      window.Helpers.saveState(state);
+      await window.Helpers.saveState(state);
     }
 
     // Filter for ONLY this user's notifications and sort newest to oldest
@@ -313,7 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // 2. Click to open Notification Dropdown
-    bellBtn.addEventListener("click", (e) => {
+    bellBtn.addEventListener("click", async (e) => {
       e.stopPropagation(); // Prevent immediate closing
 
       // Toggle off if already open
@@ -357,7 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.notifications.forEach((n) => {
           if (String(n.userId) === String(session.id)) n.isRead = true;
         });
-        window.Helpers.saveState(state);
+        await window.Helpers.saveState(state);
 
         // Remove the red dot visually
         const dot = bellBtn.querySelector("span");

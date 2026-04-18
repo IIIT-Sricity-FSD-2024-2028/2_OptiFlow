@@ -16,20 +16,20 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-function refreshTable() {
+async function refreshTable() {
   // Ensure HRStore and Master users stay synchronized
   if (typeof HRStore !== "undefined" && HRStore.syncWithMaster) {
-    HRStore.syncWithMaster();
+    try { await HRStore.syncWithMaster(); } catch(e) {}
   }
 
-  let users = getUsers(); // Master db.js (kept as the canonical login list)
+  let users = await getUsers(); // NOW ASYNC — must await
   const search = document.getElementById("searchInput").value.toLowerCase();
-  const role = document.getElementById("roleFilter").value; // e.g., "hr_manager"
+  const role = document.getElementById("roleFilter").value;
 
   if (search) {
     users = users.filter(
       (u) =>
-        u.name.toLowerCase().includes(search) ||
+        (u.name || u.fullName || '').toLowerCase().includes(search) ||
         u.email.toLowerCase().includes(search),
     );
   }
@@ -65,12 +65,12 @@ function pushNotificationToRole(targetRole, { title, message, type }) {
   }
 }
 
-function upsertEmployeeFromAuthUser(authUser) {
+async function upsertEmployeeFromAuthUser(authUser) {
   if (typeof HRStore === "undefined") return;
   if (!authUser || !authUser.email) return;
 
   const email = authUser.email.trim().toLowerCase();
-  const emps = HRStore.getAll();
+  const emps = await HRStore.getAll();
   const existing = emps.find((e) => String(e.email || "").trim().toLowerCase() === email);
 
   // Map auth role to HR display role
@@ -89,7 +89,7 @@ function upsertEmployeeFromAuthUser(authUser) {
     String(authUser.status || "Active").toLowerCase() === "inactive" ? "inactive" : "active";
 
   if (existing) {
-    HRStore.update(existing.id, {
+    await HRStore.update(existing.id, {
       name: authUser.name || existing.name,
       email: authUser.email,
       phone: existing.phone || "+91 00000 00000",
@@ -101,13 +101,13 @@ function upsertEmployeeFromAuthUser(authUser) {
       joined: existing.joined || authUser.joined || existing.joined,
       status: existing.status, // status handled via setStatus
     });
-    HRStore.setStatus(existing.id, hrStatus);
+    await HRStore.setStatus(existing.id, hrStatus);
   } else {
     // Create a minimal HR profile so HR dashboards and superuser users list stay aligned
     const joined =
       authUser.joined ||
       new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" });
-    HRStore.add({
+    await HRStore.add({
       name: authUser.name || authUser.email,
       initials: (authUser.name || authUser.email)
         .split(" ")
@@ -134,43 +134,40 @@ function renderUserTable(data) {
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  if (data.length === 0) {
+  if (!data || data.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No users found</td></tr>';
     return;
   }
 
-  // ✅ 1. The Perfect Dictionary Map
-  // This forces the exact text you want and strictly uses safe CSS colors
   const roleMap = {
-    superuser: { name: "Process Admin", color: "purple" },
-    hr_manager: { name: "HR Manager", color: "blue" },
-    compliance_officer: { name: "Compliance Officer", color: "red" },
-    project_manager: { name: "Project Manager", color: "blue" },
-    team_leader: { name: "Team Leader", color: "yellow" },
-    team_member: { name: "Team Member", color: "gray" },
+    superuser:          { name: "Process Admin",        color: "purple" },
+    hr_manager:         { name: "HR Manager",           color: "blue"   },
+    compliance_officer: { name: "Compliance Officer",   color: "red"    },
+    project_manager:    { name: "Project Manager",      color: "blue"   },
+    team_leader:        { name: "Team Leader",          color: "yellow" },
+    team_member:        { name: "Team Member",          color: "gray"   },
   };
 
   data.forEach((u) => {
     const tr = document.createElement("tr");
-
-    // 2. Look up the role in our dictionary (fallback to gray if it's something weird)
     const roleData = roleMap[u.role] || { name: u.role, color: "gray" };
-
-    // 3. Set the variables for the HTML
     const readableRole = u.displayRole || roleData.name;
     const roleBadge = roleData.color;
     const statusBadge = u.status === "Active" ? "green" : "gray";
+    const displayName = u.name || u.fullName || "Unknown";
+    const dept = u.department || "—";
+    const joined = u.joined || "—";
 
     tr.innerHTML = `
             <td>
-                <div class="td-title">${u.name}</div>
+                <div class="td-title">${displayName}</div>
                 <div class="td-subtitle">${u.email}</div>
             </td>
             <td><span class="badge ${roleBadge}">${readableRole}</span></td>
-            <td>${u.department}</td>
+            <td>${dept}</td>
             <td><span class="badge ${statusBadge}">${u.status}</span></td>
-            <td style="color: var(--text-muted);">${u.joined}</td>
+            <td style="color: var(--text-muted);">${joined}</td>
             <td>
                 <button class="action-btn edit" onclick="openUserModal('${u.id}')">Edit</button>
                 <button class="action-btn delete" onclick="deleteUser('${u.id}')">Delete</button>
@@ -225,7 +222,7 @@ function closeUserModal() {
   document.body.style.overflow = "";
 }
 
-function saveUser() {
+async function saveUser() {
   const id = document.getElementById("userId").value;
   const name = document.getElementById("userName").value;
   const email = document.getElementById("userEmail").value;
@@ -266,7 +263,7 @@ function saveUser() {
       };
 
       // Sync to HR employee store
-      upsertEmployeeFromAuthUser(users[idx]);
+      await upsertEmployeeFromAuthUser(users[idx]);
 
       // Rule A: notify HR Manager if role/status changed
       const roleChanged = prev.role !== users[idx].role;
@@ -311,7 +308,7 @@ function saveUser() {
     users.push(newUser);
 
     // Sync to HR employee store
-    upsertEmployeeFromAuthUser(newUser);
+    await upsertEmployeeFromAuthUser(newUser);
 
     if (window.AuditStore) {
       window.AuditStore.add(
@@ -327,7 +324,7 @@ function saveUser() {
   refreshTable();
 }
 
-function deleteUser(id) {
+async function deleteUser(id) {
   if (
     confirm(
       "Are you sure you want to deactivate this user? They will be unable to log in, and their HR profile will be marked inactive.",
@@ -342,13 +339,13 @@ function deleteUser(id) {
       // 2. REVERSE INTEGRATION HOOK: Tell HRStore to deactivate this person
       // We look them up by email in the HR store, since the IDs might not match perfectly
       if (typeof HRStore !== "undefined") {
-        const hrEmps = HRStore.getAll();
+        const hrEmps = await HRStore.getAll();
         const hrProfile = hrEmps.find(
           (e) => e.email.toLowerCase() === userToDelete.email.toLowerCase(),
         );
 
         if (hrProfile) {
-          HRStore.setStatus(hrProfile.id, "inactive");
+          await HRStore.setStatus(hrProfile.id, "inactive");
           console.log(`[HR Sync] Deactivated ${hrProfile.email} in HR system.`);
         }
       }

@@ -108,7 +108,7 @@
           <button
             type="button"
             class="auth-btn-outline"
-            onclick="alert('SSO Integration Pending')"
+            onclick="showAuthMessage('loginForm', 'SSO Integration Pending', 'info')"
           >
             🏢 Sign in with Organization SSO
           </button>
@@ -127,6 +127,7 @@
       </div>
     </footer>
 
+    <script src="js/utils/helpers.js"></script>
     <script src="js/data/db.js"></script>
     <script src="js/utils/auth.js"></script>
     <script src="js/pages/auth-flows.js"></script>

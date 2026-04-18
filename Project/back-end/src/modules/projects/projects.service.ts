@@ -7,34 +7,39 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 export class ProjectsService {
   constructor(private readonly db: DatabaseService) {}
 
-  findAll(): Project[] {
-    return this.db.projects;
-  }
+  findAll(): Project[] { return this.db.projects; }
 
   findOne(id: number): Project {
-    const project = this.db.projects.find(p => p.id === id);
+    const project = this.db.projects.find(p => p.project_id === id);
     if (!project) throw new NotFoundException(`Project with ID ${id} not found`);
     return project;
   }
 
-  create(createProjectDto: CreateProjectDto): Project {
+  create(dto: CreateProjectDto): Project {
     const newProject: Project = {
-      id: this.db.projects.length ? Math.max(...this.db.projects.map(p => p.id)) + 1 : 1,
-      ...createProjectDto
+      project_id: this.db.projects.length ? Math.max(...this.db.projects.map(p => p.project_id)) + 1 : 1,
+      project_name: dto.project_name,
+      description: dto.description ?? '',
+      department_id: dto.department_id,
+      status: dto.status ?? 'Planning',
+      start_date: dto.start_date,
+      end_date: dto.end_date ?? null,
+      created_by: dto.created_by,
+      created_at: new Date().toISOString(),
     };
     this.db.projects.push(newProject);
     return newProject;
   }
 
-  update(id: number, updateProjectDto: UpdateProjectDto): Project {
-    const index = this.db.projects.findIndex(p => p.id === id);
+  update(id: number, dto: UpdateProjectDto): Project {
+    const index = this.db.projects.findIndex(p => p.project_id === id);
     if (index === -1) throw new NotFoundException(`Project ${id} not found`);
-    this.db.projects[index] = { ...this.db.projects[index], ...updateProjectDto };
+    this.db.projects[index] = { ...this.db.projects[index], ...dto };
     return this.db.projects[index];
   }
 
   remove(id: number): void {
-    const index = this.db.projects.findIndex(p => p.id === id);
+    const index = this.db.projects.findIndex(p => p.project_id === id);
     if (index === -1) throw new NotFoundException(`Project ${id} not found`);
     this.db.projects.splice(index, 1);
   }

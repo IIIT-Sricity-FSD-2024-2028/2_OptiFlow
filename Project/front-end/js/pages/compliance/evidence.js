@@ -1,9 +1,9 @@
 let state;
 let activeEvidenceId = null;
 
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
   if (window.Sidebar) window.Sidebar.render("evidence");
-  state = window.Helpers.getState();
+  state = await window.Helpers.getState();
   if (!state.evidence) state.evidence = [];
 
   document.querySelectorAll(".queue-tab").forEach(function (tab) {
@@ -150,7 +150,7 @@ window.selectEvidence = function (id) {
       <button class="file-download-btn" onclick="downloadEvidence()">Download</button>
     </div>`;
 };
-window.updateEvidenceStatus = function (status, label) {
+window.updateEvidenceStatus = async function (status, label) {
   const idx = state.evidence.findIndex(
     (e) => String(e.id) === String(activeEvidenceId),
   );
@@ -183,7 +183,7 @@ window.updateEvidenceStatus = function (status, label) {
     });
 
     // 3. Save and Refresh UI
-    window.Helpers.saveState(state);
+    await window.Helpers.saveState(state);
     if (window.Toast)
       window.Toast.show(
         `Evidence ${label}`,
@@ -193,7 +193,7 @@ window.updateEvidenceStatus = function (status, label) {
   }
 };
 
-window.requestMoreInfo = function () {
+window.requestMoreInfo = async function () {
   const idx = state.evidence.findIndex(
     (e) => String(e.id) === String(activeEvidenceId),
   );
@@ -212,21 +212,21 @@ window.requestMoreInfo = function () {
       isRead: false,
     });
 
-    window.Helpers.saveState(state);
+    await window.Helpers.saveState(state);
   }
 
   if (window.Toast)
     window.Toast.show("Information request sent to Submitter", "info");
 };
-window.rejectEvidence = function () {
+window.rejectEvidence = async function () {
   if (confirm("Are you sure you want to reject this evidence?")) {
-    updateEvidenceStatus("rejected", "Rejected");
+    await updateEvidenceStatus("rejected", "Rejected");
   }
 };
 
-window.approveEvidence = function () {
+window.approveEvidence = async function () {
   if (confirm("Approve this evidence submission?")) {
-    updateEvidenceStatus("approved", "Approved");
+    await updateEvidenceStatus("approved", "Approved");
   }
 };
 

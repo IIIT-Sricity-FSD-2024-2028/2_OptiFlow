@@ -7,12 +7,10 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 export class TasksService {
   constructor(private readonly db: DatabaseService) {}
 
-  findAll(): Task[] {
-    return this.db.tasks;
-  }
+  findAll(): Task[] { return this.db.tasks; }
 
   findOne(id: number): Task {
-    const task = this.db.tasks.find(t => t.id === id);
+    const task = this.db.tasks.find(t => t.task_id === id);
     if (!task) throw new NotFoundException(`Task with ID ${id} not found`);
     return task;
   }
@@ -21,24 +19,35 @@ export class TasksService {
     return this.db.tasks.filter(t => t.assigned_to === userId);
   }
 
-  create(createTaskDto: CreateTaskDto): Task {
+  create(dto: CreateTaskDto): Task {
     const newTask: Task = {
-      id: this.db.tasks.length ? Math.max(...this.db.tasks.map(t => t.id)) + 1 : 1,
-      ...createTaskDto
+      task_id: this.db.tasks.length ? Math.max(...this.db.tasks.map(t => t.task_id)) + 1 : 1,
+      project_id: dto.project_id ?? null,
+      title: dto.title,
+      description: dto.description ?? '',
+      created_by: dto.created_by,
+      assigned_to: dto.assigned_to,
+      status: dto.status ?? 'Pending',
+      priority: dto.priority ?? 'Medium',
+      estimated_hours: dto.estimated_hours ?? 0,
+      actual_hours: 0,
+      due_date: dto.due_date ?? null,
+      completed_at: null,
+      created_at: new Date().toISOString(),
     };
     this.db.tasks.push(newTask);
     return newTask;
   }
 
-  update(id: number, updateTaskDto: UpdateTaskDto): Task {
-    const index = this.db.tasks.findIndex(t => t.id === id);
+  update(id: number, dto: UpdateTaskDto): Task {
+    const index = this.db.tasks.findIndex(t => t.task_id === id);
     if (index === -1) throw new NotFoundException(`Task ${id} not found`);
-    this.db.tasks[index] = { ...this.db.tasks[index], ...updateTaskDto };
+    this.db.tasks[index] = { ...this.db.tasks[index], ...dto };
     return this.db.tasks[index];
   }
 
   remove(id: number): void {
-    const index = this.db.tasks.findIndex(t => t.id === id);
+    const index = this.db.tasks.findIndex(t => t.task_id === id);
     if (index === -1) throw new NotFoundException(`Task ${id} not found`);
     this.db.tasks.splice(index, 1);
   }

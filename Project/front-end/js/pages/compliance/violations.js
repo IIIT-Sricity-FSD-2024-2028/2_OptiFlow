@@ -1,16 +1,20 @@
 let state;
+let allUsers = [];
+let allRules = [];
 let activeViolationId = null;
 
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
   if (window.Sidebar) window.Sidebar.render("violations");
-  state = window.Helpers.getState();
+
+  // ── Async load ────────────────────────────────────────────────────────────
+  state = await window.Helpers.getState();
   if (!state.complianceViolations) state.complianceViolations = [];
+  allUsers = state.users || [];
+  allRules = state.complianceRules || [];
 
   document.querySelectorAll(".pill-tab").forEach(function (tab) {
     tab.addEventListener("click", function () {
-      document
-        .querySelectorAll(".pill-tab")
-        .forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".pill-tab").forEach((t) => t.classList.remove("active"));
       this.classList.add("active");
       renderQueue(this.dataset.tab);
     });
@@ -19,20 +23,38 @@ document.addEventListener("DOMContentLoaded", function () {
   renderQueue("open");
 });
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function userName(userId) {
+  const u = allUsers.find((u) => u.userId === userId || u.id === String(userId));
+  return u ? u.fullName : "System";
+}
+
+function ruleFor(ruleId) {
+  return allRules.find((r) => r.ruleId === ruleId) || {};
+}
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function severityBadge(severity) {
+  const map = { Critical: "critical", High: "warning", Medium: "pending", Low: "pending" };
+  return map[severity] || "pending";
+}
+
+// ── Tab Counts ────────────────────────────────────────────────────────────────
 function updateTabCounts() {
   const allCount = state.complianceViolations.length;
   const openCount = state.complianceViolations.filter(
     (v) => v.status === "Open" || v.status === "Under_Review",
   ).length;
-  const resolvedCount = state.complianceViolations.filter(
-    (v) => v.status === "Resolved",
-  ).length;
+  const resolvedCount = state.complianceViolations.filter((v) => v.status === "Resolved").length;
 
-  // Update Top Badge
   const pendingBadge = document.querySelector(".queue-pending-count");
   if (pendingBadge) pendingBadge.textContent = `${openCount} open`;
 
-  // Update Tab Text dynamically
   const tabs = document.querySelectorAll(".pill-tab");
   if (tabs.length >= 3) {
     tabs[0].textContent = `Open (${openCount})`;
@@ -41,43 +63,46 @@ function updateTabCounts() {
   }
 }
 
+// ── Render Violation Queue ────────────────────────────────────────────────────
 function renderQueue(filter) {
   updateTabCounts();
   const list = document.getElementById("violationsList");
   if (!list) return;
 
-  let filteredData = state.complianceViolations.filter((item) => {
+  const filteredData = state.complianceViolations.filter((item) => {
     if (filter === "all") return true;
-    if (filter === "open")
-      return item.status === "Open" || item.status === "Under_Review";
+    if (filter === "open") return item.status === "Open" || item.status === "Under_Review";
     if (filter === "resolved") return item.status === "Resolved";
     return true;
   });
 
   list.innerHTML =
     filteredData
-      .map(
-        (item) => `
-    <li class="vq-item" id="vqi-${item.id}" onclick="selectViolation('${item.id}')">
-      <div class="vq-item-title">${item.title}</div>
-      <div class="vq-item-meta">${item.projectName || "System"}</div>
-      <div class="vq-item-badges">
-        <span class="badge ${item.status === "Resolved" ? "resolved" : "critical"}">${item.statusLabel || item.status}</span>
-      </div>
-    </li>
-  `,
-      )
+      .map((item) => {
+        const rule = ruleFor(item.ruleId);
+        const severity = rule.severity || "Medium";
+        const title = rule.ruleName ? `${rule.ruleName} — ${item.entityType} #${item.entityId}` : `Violation #${item.violationId}`;
+        return `
+        <li class="vq-item" id="vqi-${item.violationId}" onclick="selectViolation(${item.violationId})" role="button" tabindex="0">
+          <div class="vq-item-title">${title}</div>
+          <div class="vq-item-meta">Detected ${fmtDate(item.detectedAt)} · Due: ${item.dueDate || "N/A"}</div>
+          <div class="vq-item-badges">
+            <span class="badge ${severityBadge(severity)}">${severity}</span>
+            <span class="badge ${item.status === "Resolved" ? "resolved" : "open"}">${item.status}</span>
+          </div>
+        </li>`;
+      })
       .join("") ||
     '<li style="padding:20px; text-align:center; color:#64748b;">No violations found.</li>';
 
   if (filteredData.length > 0) {
-    selectViolation(filteredData[0].id);
+    selectViolation(filteredData[0].violationId);
   } else {
     showEmptyDetail();
   }
 }
 
-// --- Empty State UI Generator ---
+// ── Empty Detail State ────────────────────────────────────────────────────────
 function showEmptyDetail() {
   const vdContent = document.querySelector(".vd-content");
   const vdFooter = document.querySelector(".vd-footer");
@@ -89,22 +114,20 @@ function showEmptyDetail() {
     emptyState = document.createElement("div");
     emptyState.id = "violationEmptyState";
     emptyState.style.cssText =
-      "display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%; color:#94a3b8; background: #f8fafc;";
+      "display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%; color:#94a3b8; background:#f8fafc;";
     emptyState.innerHTML = `
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:0.4">
         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
-      <p style="font-size:16px; font-weight:500; color:#64748b">No violations to review</p>
-    `;
+      <p style="font-size:16px; font-weight:500; color:#64748b">No violations to review</p>`;
     const detailSection = document.getElementById("violationDetail");
     if (detailSection) detailSection.appendChild(emptyState);
   }
   emptyState.style.display = "flex";
 }
 
-// --- GLOBALLY SCOPED FUNCTIONS ---
+// ── Select & Render Detail ────────────────────────────────────────────────────
 window.selectViolation = function (id) {
-  // Restore the layout if it was hidden by empty state
   const vdContent = document.querySelector(".vd-content");
   const vdFooter = document.querySelector(".vd-footer");
   if (vdContent) vdContent.style.display = "block";
@@ -113,59 +136,82 @@ window.selectViolation = function (id) {
   const emptyState = document.getElementById("violationEmptyState");
   if (emptyState) emptyState.style.display = "none";
 
-  document
-    .querySelectorAll(".vq-item")
-    .forEach((el) => el.classList.remove("active"));
+  document.querySelectorAll(".vq-item").forEach((el) => el.classList.remove("active"));
   const itemEl = document.getElementById("vqi-" + id);
   if (itemEl) itemEl.classList.add("active");
 
   activeViolationId = id;
-  const d = state.complianceViolations.find((v) => String(v.id) === String(id));
+  const d = state.complianceViolations.find((v) => v.violationId === id || String(v.violationId) === String(id));
   if (!d) return;
 
-  document.getElementById("vdTitle").textContent = d.title;
-  document.getElementById("vdProject").textContent = d.projectName || "System";
-  document.getElementById("vdDescription").textContent =
-    d.detail || "No detailed description provided.";
+  const rule = ruleFor(d.ruleId);
+  const severity = rule.severity || "Medium";
 
-  const notesArea = document.getElementById("vdNotes");
-  if (notesArea) notesArea.value = d.resolutionNotes || "";
-
-  // Hide actions footer if the violation is already resolved
-  if (vdFooter) {
-    vdFooter.style.display = d.status === "Resolved" ? "none" : "flex";
+  // Title & badge
+  const titleEl = document.getElementById("vdTitle");
+  const badgeEl = document.getElementById("vdBadge");
+  if (titleEl) titleEl.textContent = rule.ruleName ? `${rule.ruleName} — ${d.entityType} #${d.entityId}` : `Violation #${d.violationId}`;
+  if (badgeEl) {
+    badgeEl.textContent = severity;
+    badgeEl.className = `badge ${severityBadge(severity)}`;
   }
+
+  // Info grid cells
+  const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  setText("vdPolicy", rule.ruleName || "—");
+  setText("vdProject", `${d.entityType} #${d.entityId}`);
+  setText("vdPM", userName(d.reportedBy));
+  setText("vdTL", d.resolvedBy ? userName(d.resolvedBy) : "Unassigned");
+  setText("vdSince", fmtDate(d.detectedAt));
+  setText("vdRisk", severity === "Critical" ? "Regulatory Risk" : severity === "High" ? "Operational Risk" : "Process Risk");
+
+  // Description
+  const descEl = document.getElementById("vdDescription");
+  if (descEl) descEl.textContent = rule.description || "No detailed description provided.";
+
+  // Resolution notes
+  const notesArea = document.getElementById("vdNotes");
+  if (notesArea) notesArea.value = d.resolutionRemarks || "";
+
+  // Hide footer for already-resolved violations
+  if (vdFooter) vdFooter.style.display = d.status === "Resolved" ? "none" : "flex";
 };
 
-window.markResolved = function () {
-  if (confirm("Mark this violation as resolved?")) {
-    const idx = state.complianceViolations.findIndex(
-      (v) => String(v.id) === String(activeViolationId),
-    );
-    if (idx > -1) {
-      state.complianceViolations[idx].status = "Resolved";
-      state.complianceViolations[idx].statusLabel = "Resolved";
+// ── Actions ───────────────────────────────────────────────────────────────────
+window.markResolved = async function () {
+  if (!confirm("Mark this violation as resolved?")) return;
+  const idx = state.complianceViolations.findIndex(
+    (v) => String(v.violationId) === String(activeViolationId),
+  );
+  if (idx > -1) {
+    const notesArea = document.getElementById("vdNotes");
+    // Optimistic local update
+    state.complianceViolations[idx].status = "Resolved";
+    state.complianceViolations[idx].resolutionRemarks = notesArea ? notesArea.value : "";
+    state.complianceViolations[idx].resolvedAt = new Date().toISOString();
 
-      const notesArea = document.getElementById("vdNotes");
-      if (notesArea)
-        state.complianceViolations[idx].resolutionNotes = notesArea.value;
-
-      window.Helpers.saveState(state);
-      if (window.Toast)
-        window.Toast.show("Violation marked as resolved.", "success");
-      renderQueue(document.querySelector(".pill-tab.active").dataset.tab);
+    // PATCH to backend
+    try {
+      await window.Helpers.api.request(
+        `/compliance-violations/${activeViolationId}`,
+        "PATCH",
+        { status: "Resolved", resolution_remarks: state.complianceViolations[idx].resolutionRemarks },
+      );
+    } catch (e) {
+      console.warn("Could not persist violation update to backend:", e);
     }
+
+    if (window.Toast) window.Toast.show("Violation marked as resolved.", "success");
+    renderQueue(document.querySelector(".pill-tab.active")?.dataset.tab || "open");
   }
 };
 
 window.viewProject = function () {
-  if (window.Toast)
-    window.Toast.show("Redirecting to Project detail view...", "info");
+  if (window.Toast) window.Toast.show("Redirecting to Project detail view...", "info");
 };
 
 window.escalateViolation = function () {
   if (confirm("Escalate this violation to the regulatory team?")) {
-    if (window.Toast)
-      window.Toast.show("Violation escalated successfully.", "warning");
+    if (window.Toast) window.Toast.show("Violation escalated successfully.", "warning");
   }
 };

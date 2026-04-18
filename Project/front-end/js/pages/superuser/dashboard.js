@@ -27,13 +27,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-function renderOmniscientMetrics() {
+async function renderOmniscientMetrics() {
   // 1) Total Processes (Workflows)
   const workflows = typeof getWorkflows === "function" ? getWorkflows() : [];
   const totalProcesses = Array.isArray(workflows) ? workflows.length : 0;
 
-  // 2) Active users (Master Auth)
-  const users = typeof getUsers === "function" ? getUsers() : [];
+  // 2) Active users — getUsers() is now async
+  const users = typeof getUsers === "function" ? await getUsers() : [];
   const activeUsers = Array.isArray(users)
     ? users.filter((u) => String(u.status || "").toLowerCase() === "active").length
     : 0;
@@ -63,10 +63,12 @@ function renderOmniscientMetrics() {
   // 4) Pending review (HR pending employees)
   let pendingHR = 0;
   if (typeof HRStore !== "undefined" && HRStore.getAll) {
-    const emps = HRStore.getAll();
-    pendingHR = Array.isArray(emps)
-      ? emps.filter((e) => String(e.status || "").toLowerCase() === "pending").length
-      : 0;
+    try {
+      const emps = await HRStore.getAll();
+      pendingHR = Array.isArray(emps)
+        ? emps.filter((e) => String(e.status || "").toLowerCase() === "pending").length
+        : 0;
+    } catch (e) {}
   }
 
   // Paint metrics (if elements exist)
