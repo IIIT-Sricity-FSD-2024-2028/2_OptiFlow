@@ -1,5 +1,4 @@
 // js/utils/helpers.js
-
 // ─────────────────────────────────────────
 // PART 1: Legacy UI Helpers (Badges, Notifications)
 // ─────────────────────────────────────────
@@ -172,208 +171,346 @@ function initNotifications() {
     }
   });
 }
+
 // ─────────────────────────────────────────
 // PART 2: PM Module Helpers
 // ─────────────────────────────────────────
+
+/**
+ * window.Helpers.getState()
+ * ─────────────────────────
+ * Fetches all 11 backend resource collections concurrently using
+ * Promise.allSettled so that a single failing endpoint never wipes
+ * the rest of the application state.
+ *
+ * All snake_case backend fields are mapped to camelCase before returning.
+ * Every entity exposes both:
+ *   • `id`  (string) — legacy alias used throughout older dashboard pages
+ *   • a typed numeric PK alias (e.g. userId, taskId, projectId …)
+ *
+ * Endpoints consumed:
+ *   GET /users                  → users[]
+ *   GET /departments            → departments[]
+ *   GET /roles                  → roles[]
+ *   GET /projects               → projects[]
+ *   GET /tasks                  → tasks[]
+ *   GET /subtasks               → subtasks[]
+ *   GET /escalations            → escalations[]
+ *   GET /evidence               → evidence[]
+ *   GET /audit-logs             → auditLogs[]
+ *   GET /compliance-rules       → complianceRules[]
+ *   GET /compliance-violations  → complianceViolations[]
+ */
 window.Helpers = {
   async getState() {
-    let rawUsers = [], rawTasks = [], rawProjects = [], rawEscalations = [], rawEvidence = [],
-        rawDepartments = [], rawRoles = [], rawSubtasks = [], rawAuditLogs = [],
-        rawComplianceRules = [], rawViolations = [];
-    try {
-      const [uRes, tRes, pRes, escRes, evRes, dRes, rRes, stRes, alRes, crRes, cvRes] = await Promise.all([
-        this.api.request('/users'),
-        this.api.request('/tasks'),
-        this.api.request('/projects'),
-        this.api.request('/escalations'),
-        this.api.request('/evidence'),
-        this.api.request('/departments'),
-        this.api.request('/roles'),
-        this.api.request('/subtasks'),
-        this.api.request('/audit-logs'),
-        this.api.request('/compliance-rules'),
-        this.api.request('/compliance-violations'),
-      ]);
-      rawUsers           = uRes   || [];
-      rawTasks           = tRes   || [];
-      rawProjects        = pRes   || [];
-      rawEscalations     = escRes || [];
-      rawEvidence        = evRes  || [];
-      rawDepartments     = dRes   || [];
-      rawRoles           = rRes   || [];
-      rawSubtasks        = stRes  || [];
-      rawAuditLogs       = alRes  || [];
-      rawComplianceRules = crRes  || [];
-      rawViolations      = cvRes  || [];
-    } catch (e) {
-      console.warn("Failed to fetch state from backend API", e);
-    }
+    // 1. Concurrent fetch — perfectly aligned arrays
+    const ENDPOINTS = [
+      '/users',                  // 0
+      '/tasks',                  // 1
+      '/projects',               // 2
+      '/escalations',            // 3
+      '/evidence',               // 4
+      '/departments',            // 5
+      '/roles',                  // 6
+      '/subtasks',               // 7
+      '/audit-logs',             // 8
+      '/compliance-rules',       // 9
+      '/compliance-violations',  // 10
+      '/user-roles',             // 11
+      '/workflow-instances',     // 12
+      '/workflow-templates',     // 13
+      '/workflow-instance-steps' // 14
+    ];
 
-    // role slug → numeric roleId
+    const settled = await Promise.allSettled(
+      ENDPOINTS.map((ep) => this.api.request(ep))
+    );
+
+    const unwrap = (result, endpoint) => {
+      if (result.status === 'fulfilled') return Array.isArray(result.value) ? result.value : [];
+      console.warn(`[getState] Failed to fetch ${endpoint}:`, result.reason?.message ?? result.reason);
+      return [];
+    };
+
+    // Variables must perfectly match the index of the ENDPOINTS array above
+    const [
+      rawUsers,                  // 0 matches '/users'
+      rawTasks,                  // 1 matches '/tasks'
+      rawProjects,               // 2 matches '/projects'
+      rawEscalations,            // 3 matches '/escalations'
+      rawEvidence,               // 4 matches '/evidence'
+      rawDepartments,            // 5 matches '/departments'
+      rawRoles,                  // 6 matches '/roles'
+      rawSubtasks,               // 7 matches '/subtasks'
+      rawAuditLogs,              // 8 matches '/audit-logs'
+      rawComplianceRules,        // 9 matches '/compliance-rules'
+      rawViolations,             // 10 matches '/compliance-violations'
+      rawUserRoles,              // 11 matches '/user-roles'
+      rawWorkflowInstances,      // 12 matches '/workflow-instances'
+      rawWorkflowTemplates,      // 13 matches '/workflow-templates'
+      rawWorkflowInstanceSteps,  // 14 matches '/workflow-instance-steps'
+    ] = settled.map((r, i) => unwrap(r, ENDPOINTS[i]));
+
+    console.log("DEBUG - RAW USERS:", rawUsers);
+    console.log("DEBUG - RAW ROLES:", rawRoles);
+    console.log("DEBUG - RAW USER-ROLES:", rawUserRoles);
+    
+    // ── 2. Static lookup: role slug → numeric roleId ──────────────────────────
+    // Mirrors the seeded roles table in DatabaseService.
     const roleSlugToId = {
       superuser: 1, project_manager: 2, compliance_officer: 3,
       hr_manager: 4, team_leader: 5, team_member: 6,
     };
 
-    // ── Users ─────────────────────────────────────────────────────────────────────
+    // ── 3. Map each collection — NO object spreads; every field is explicit ───
+
+    // ── Roles ─────────────────────────────────────────────────────────────────
+    // Backend: { role_id, role_name, description, is_system, created_at }
+    const roles = rawRoles.map((r) => ({
+      id:          String(r.role_id),
+      roleId:      r.role_id,
+      name:        r.role_name    || '',
+      roleName:    r.role_name    || '',
+      description: r.description  || '',
+      isSystem:    r.is_system    || false,
+      createdAt:   r.created_at   || null,
+    }));
+
+    // ── User Roles Mapping ────────────────────────────────────────────────────
+    const userRoles = rawUserRoles.map(ur => ({
+      userId: String(ur.user_id),
+      roleId: ur.role_id,
+      assignedBy: ur.assigned_by || null,
+      assignedAt: ur.assigned_at || null
+    }));
+
+    // ── Users ─────────────────────────────────────────────────────────────────
+    // Backend: { user_id, full_name, email, password_hash, role,
+    //            department_id, manager_id, is_active, created_at }
     const users = rawUsers.map((u) => {
+      // Normalization Mapping: Attach roleName directly to the user object
+      const ur = userRoles.find(ur => String(ur.userId) === String(u.user_id));
+      const roleObj = ur ? roles.find(r => String(r.roleId) === String(ur.roleId)) : null;
+
       const initials = u.full_name
-        ? u.full_name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
+        ? u.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2)
         : '??';
       return {
-        id: String(u.user_id),
-        userId: u.user_id,
-        fullName: u.full_name || 'Unknown User',
-        email: u.email || '',
-        role: u.role || 'team_member',
-        roleId: roleSlugToId[u.role] || 6,
-        departmentId: u.department_id || null,
-        managerId: u.manager_id || null,
-        reportsTo: u.manager_id ? String(u.manager_id) : null,
-        isActive: u.is_active !== undefined ? u.is_active : true,
-        status: u.is_active === false ? 'inactive' : 'active',
-        avatar: initials,
-        avatarColor: 'blue',
-        createdAt: u.created_at || null,
+        id:           String(u.user_id),
+        userId:       u.user_id,
+        fullName:     u.full_name      || 'Unknown User',
+        email:        u.email          || '',
+        roleId:       roleObj ? roleObj.roleId : null,
+        roleName:     roleObj ? roleObj.roleName : 'Team Member',
+        departmentId: u.department_id  || null,
+        managerId:    u.manager_id     || null,
+        reportsTo:    u.manager_id     ? String(u.manager_id) : null,
+        isActive:     u.is_active      !== undefined ? u.is_active : true,
+        status:       u.is_active === false ? 'inactive' : 'active',
+        avatar:       initials,
+        avatarColor:  'blue',
+        createdAt:    u.created_at     || null,
       };
     });
 
-    // ── Departments ──────────────────────────────────────────────────────────
+    // ── Departments ───────────────────────────────────────────────────────────
+    // Backend: { department_id, department_name, manager_id, created_at }
     const departments = rawDepartments.map((d) => ({
-      id: d.department_id,
-      departmentId: d.department_id,
-      name: d.department_name,
-      departmentName: d.department_name,
-      managerId: d.manager_id || null,
-      createdAt: d.created_at || null,
+      id:             String(d.department_id),
+      departmentId:   d.department_id,
+      name:           d.department_name || '',
+      departmentName: d.department_name || '',
+      managerId:      d.manager_id      || null,
+      createdAt:      d.created_at      || null,
     }));
 
-    // ── Roles ───────────────────────────────────────────────────────────────────
-    const roles = rawRoles.map((r) => ({
-      id: r.role_id,
-      roleId: r.role_id,
-      name: r.role_name,
-      roleName: r.role_name,
-      description: r.description || '',
-      isSystem: r.is_system || false,
-      createdAt: r.created_at || null,
-    }));
-
-    // ── Projects ─────────────────────────────────────────────────────────────
+    // ── Projects ──────────────────────────────────────────────────────────────
+    // Backend: { project_id, project_name, description, department_id,
+    //            status, start_date, end_date, created_by, created_at }
     const projects = rawProjects.map((p) => ({
-      ...p,
-      id: p.project_id,
-      projectId: p.project_id,
-      name: p.project_name,
-      projectName: p.project_name,
-      departmentId: p.department_id,
-      createdBy: p.created_by,
-      startDate: p.start_date,
-      endDate: p.end_date || null,
-      createdAt: p.created_at || null,
+      id:           String(p.project_id),
+      projectId:    p.project_id,
+      name:         p.project_name  || '',
+      projectName:  p.project_name  || '',
+      description:  p.description   || '',
+      departmentId: p.department_id || null,
+      status:       p.status        || 'Active',
+      startDate:    p.start_date    || null,
+      endDate:      p.end_date      || null,
+      createdBy:    p.created_by    || null,
+      createdAt:    p.created_at    || null,
     }));
 
-    // ── Tasks ────────────────────────────────────────────────────────────────────
+    // ── Tasks ─────────────────────────────────────────────────────────────────
+    // Backend: { task_id, title, description, project_id, created_by,
+    //            assigned_to, priority, status, estimated_hours,
+    //            due_date, completed_at, created_at }
+    // Note: actual_hours is NOT in the backend schema; omitted.
     const tasks = rawTasks.map((t) => ({
-      ...t,
-      id: t.task_id,
-      taskId: t.task_id,
-      projectId: t.project_id || null,
-      assignedTo: t.assigned_to,
-      assignedUserId: String(t.assigned_to),
-      createdBy: t.created_by,
+      id:             String(t.task_id),
+      taskId:         t.task_id,
+      title:          t.title          || '',
+      description:    t.description    || '',
+      projectId:      t.project_id     || null,
+      createdBy:      t.created_by     || null,
+      assignedTo:     t.assigned_to    || null,
+      assignedUserId: t.assigned_to    ? String(t.assigned_to) : null,
+      priority:       t.priority       || 'Medium',
+      status:         t.status         || 'Pending',
       estimatedHours: t.estimated_hours || 0,
-      actualHours: t.actual_hours || 0,
-      dueDate: t.due_date || null,
-      completedAt: t.completed_at || null,
-      createdAt: t.created_at || null,
+      dueDate:        t.due_date       || null,
+      completedAt:    t.completed_at   || null,
+      createdAt:      t.created_at     || null,
     }));
 
-    // ── Subtasks ─────────────────────────────────────────────────────────────
+    // ── Subtasks ──────────────────────────────────────────────────────────────
+    // Backend: { subtask_id, task_id, title, description, assigned_to,
+    //            status, estimated_hours, due_date, completed_at, created_at }
     const subtasks = rawSubtasks.map((s) => ({
-      ...s,
-      id: s.subtask_id,
-      subtaskId: s.subtask_id,
-      taskId: s.task_id,
-      assignedTo: s.assigned_to,
+      id:             String(s.subtask_id),
+      subtaskId:      s.subtask_id,
+      taskId:         s.task_id         || null,
+      title:          s.title           || '',
+      description:    s.description     || '',
+      assignedTo:     s.assigned_to     || null,
+      status:         s.status          || 'Pending',
       estimatedHours: s.estimated_hours || 0,
-      dueDate: s.due_date || null,
-      completedAt: s.completed_at || null,
-      createdAt: s.created_at || null,
+      dueDate:        s.due_date        || null,
+      completedAt:    s.completed_at    || null,
+      createdAt:      s.created_at      || null,
     }));
 
-    // ── Escalations ──────────────────────────────────────────────────────────
+    // ── Escalations ───────────────────────────────────────────────────────────
+    // Backend: { escalation_id, task_id, project_id, reported_by,
+    //            target_manager_id, title, description, blocker_type,
+    //            priority, status, created_at, resolved_at }
     const escalations = rawEscalations.map((e) => ({
-      ...e,
-      id: e.escalation_id,
-      escalationId: e.escalation_id,
-      taskId: e.task_id,
-      projectId: e.project_id,
-      reportedBy: e.reported_by,
-      targetManagerId: e.target_manager_id,
-      blockerType: e.blocker_type || '',
-      createdAt: e.created_at || null,
-      resolvedAt: e.resolved_at || null,
+      id:              String(e.escalation_id),
+      escalationId:    e.escalation_id,
+      taskId:          e.task_id            || null,
+      projectId:       e.project_id         || null,
+      reportedBy:      e.reported_by        || null,
+      targetManagerId: e.target_manager_id  || null,
+      title:           e.title              || '',
+      description:     e.description        || '',
+      blockerType:     e.blocker_type       || '',
+      priority:        e.priority           || 'Medium',
+      status:          e.status             || 'Open',
+      createdAt:       e.created_at         || null,
+      resolvedAt:      e.resolved_at        || null,
     }));
 
-    // ── Audit Logs ─────────────────────────────────────────────────────────────
+    // ── Audit Logs ────────────────────────────────────────────────────────────
+    // Backend: { log_id, entity_id, entity_type, action, performed_by,
+    //            performed_at, ip_address, old_value, new_value }
     const auditLogs = rawAuditLogs.map((l) => ({
-      ...l,
-      id: l.log_id,
-      logId: l.log_id,
-      entityId: l.entity_id,
-      entityType: l.entity_type,
-      performedBy: l.performed_by || null,
-      performedAt: l.performed_at,
-      ipAddress: l.ip_address || null,
-      oldValue: l.old_value || null,
-      newValue: l.new_value || null,
+      id:          String(l.log_id),
+      logId:       l.log_id,
+      entityId:    l.entity_id       || null,
+      entityType:  l.entity_type     || '',
+      action:      l.action          || '',
+      performedBy: l.performed_by    || null,
+      performedAt: l.performed_at    || null,
+      ipAddress:   l.ip_address      || null,
+      oldValue:    l.old_value       || null,
+      newValue:    l.new_value       || null,
     }));
 
     // ── Compliance Rules ──────────────────────────────────────────────────────
+    // Backend: { rule_id, rule_name, description, remediation_steps,
+    //            severity, is_active, created_at }
     const complianceRules = rawComplianceRules.map((r) => ({
-      ...r,
-      id: r.rule_id,
-      ruleId: r.rule_id,
-      ruleName: r.rule_name,
+      id:               String(r.rule_id),
+      ruleId:           r.rule_id,
+      name:             r.rule_name         || '',
+      ruleName:         r.rule_name         || '',
+      description:      r.description       || '',
       remediationSteps: r.remediation_steps || '',
-      isActive: r.is_active !== undefined ? r.is_active : true,
-      createdAt: r.created_at || null,
+      severity:         r.severity          || 'Medium',
+      isActive:         r.is_active         !== undefined ? r.is_active : true,
+      createdAt:        r.created_at        || null,
     }));
 
-    // ── Compliance Violations ───────────────────────────────────────────────
+    // ── Compliance Violations ─────────────────────────────────────────────────
+    // Backend: { violation_id, rule_id, entity_id, entity_type, status,
+    //            detected_at, reported_by, resolved_by, resolved_at,
+    //            resolution_remarks, due_date }
     const complianceViolations = rawViolations.map((v) => ({
-      ...v,
-      id: v.violation_id,
-      violationId: v.violation_id,
-      ruleId: v.rule_id,
-      entityId: v.entity_id,
-      entityType: v.entity_type,
-      detectedAt: v.detected_at,
-      reportedBy: v.reported_by || null,
-      resolvedBy: v.resolved_by || null,
-      resolvedAt: v.resolved_at || null,
-      resolutionRemarks: v.resolution_remarks || null,
-      dueDate: v.due_date || null,
+      id:                 String(v.violation_id),
+      violationId:        v.violation_id,
+      ruleId:             v.rule_id             || null,
+      entityId:           v.entity_id           || null,
+      entityType:         v.entity_type         || '',
+      status:             v.status              || 'Open',
+      detectedAt:         v.detected_at         || null,
+      reportedBy:         v.reported_by         || null,
+      resolvedBy:         v.resolved_by         || null,
+      resolvedAt:         v.resolved_at         || null,
+      resolutionRemarks:  v.resolution_remarks  || null,
+      dueDate:            v.due_date            || null,
     }));
 
-    // ── Evidence ─────────────────────────────────────────────────────────────
+    // ── Evidence ──────────────────────────────────────────────────────────────
+    // Backend: { evidence_id, user_id, task_id, violation_id, title,
+    //            evidence_type, file_url, notes, status,
+    //            reviewed_by, submitted_at, reviewed_at }
     const evidence = rawEvidence.map((e) => ({
-      ...e,
-      id: e.evidence_id,
-      evidenceId: e.evidence_id,
-      userId: e.user_id,
-      taskId: e.task_id || null,
-      violationId: e.violation_id || null,
-      evidenceType: e.evidence_type || 'Document',
-      fileUrl: e.file_url,
-      reviewedBy: e.reviewed_by || null,
-      submittedAt: e.submitted_at,
-      reviewedAt: e.reviewed_at || null,
+      id:           String(e.evidence_id),
+      evidenceId:   e.evidence_id,
+      userId:       e.user_id          || null,
+      taskId:       e.task_id          || null,
+      violationId:  e.violation_id     || null,
+      title:        e.title            || '',
+      evidenceType: e.evidence_type    || 'Document',
+      fileUrl:      e.file_url         || '',
+      notes:        e.notes            || '',
+      status:       e.status           || 'Pending',
+      reviewedBy:   e.reviewed_by      || null,
+      submittedAt:  e.submitted_at     || null,
+      reviewedAt:   e.reviewed_at      || null,
     }));
 
+    // ── Workflow Data ─────────────────────────────────────────────────────────
+    const workflowInstances = rawWorkflowInstances.map(w => ({
+      id:            String(w.instance_id),
+      instanceId:    w.instance_id,
+      title:         w.title           || '',
+      templateId:    w.template_id     || null,
+      projectId:     w.project_id      || null,
+      initiatedBy:   w.initiated_by    || null,
+      currentStepId: w.current_step_id || null,
+      status:        w.status          || 'Draft',
+      startedAt:     w.started_at      || null,
+      completedAt:   w.completed_at    || null,
+    }));
+
+    const workflowTemplates = rawWorkflowTemplates.map(t => ({
+      id:            String(t.template_id),
+      templateId:    t.template_id,
+      name:          t.template_name || '',
+      description:   t.description || '',
+      createdBy:     t.created_by || null,
+      status:        t.status || 'Active',
+      createdAt:     t.created_at || null,
+    }));
+
+    const workflowInstanceSteps = rawWorkflowInstanceSteps.map(s => ({
+      id:              String(s.instance_step_id),
+      instanceStepId:  s.instance_step_id,
+      instanceId:      s.instance_id || null,
+      stepId:          s.step_id     || null,
+      assignedTo:      s.assigned_to || null,
+      status:          s.status      || 'Pending',
+      remarks:         s.remarks     || null,
+      actionedBy:      s.actioned_by || null,
+      createdAt:       s.created_at  || null,
+      actionedAt:      s.actioned_at || null,
+    }));
+
+    // ── 4. Assemble and return the unified application state ──────────────────
     return {
       users,
+      userRoles,
       departments,
       roles,
       projects,
@@ -384,10 +521,13 @@ window.Helpers = {
       complianceRules,
       complianceViolations,
       evidence,
+      workflowInstances,
+      workflowTemplates,
+      workflowInstanceSteps,
       // Legacy aliases for backward-compat with older dashboard pages
-      complianceItems: complianceViolations,
-      activeViolations: complianceViolations.filter(v => v.status === 'Open'),
-      complianceReports: [],
+      complianceItems:    complianceViolations,
+      activeViolations:   complianceViolations.filter((v) => v.status === 'Open'),
+      complianceReports:  [],
     };
   },
 
@@ -525,7 +665,7 @@ window.Helpers = {
 
       const headers = {
         'Content-Type': 'application/json',
-        'x-user-role': role 
+        'x-user-role': role
       };
 
       const config = { method, headers };
@@ -533,7 +673,7 @@ window.Helpers = {
 
       try {
         const response = await fetch(`${this.baseUrl}${endpoint}`, config);
-        
+
         if (!response.ok) {
           // Throw explicit errors on non-2xx responses
           let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
@@ -545,7 +685,7 @@ window.Helpers = {
           }
           throw new Error(errorMsg);
         }
-        
+
         return await response.json();
       } catch (error) {
         console.error(`API Request Failed [${method} ${endpoint}]:`, error);

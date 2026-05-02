@@ -206,26 +206,40 @@ async function renderPersonalDetails() {
 
 async function renderRolePermissions() {
   const groups = RolesStore.getPermissionGroups();
-  const effective = await RolesStore.getEmployeePermissions(emp.id, emp.role);
+  
+  // BULLETPROOF ID EXTRACTION: Force it to be a pure integer (e.g., 1 instead of "EMP-001")
+  const numericId = emp.rawId || parseInt(String(emp.id).replace("EMP-", ""), 10);
+  
+  // Safely fetch permissions
+  let effective = {};
+  try {
+     if (emp.roleSlug && emp.roleSlug !== "undefined") {
+         effective = await RolesStore.getEmployeePermissions(numericId, emp.roleSlug);
+     }
+  } catch (e) {
+     console.warn("Could not fetch permissions, skipping.");
+  }
 
   const enabledPerms = [];
   groups.forEach((g) => {
     const items = g.type === "checkbox" ? g.columns.flat() : g.items;
     items.forEach((p) => {
-      if (effective[p.id]) enabledPerms.push({ id: p.id, label: p.label, groupId: g.id });
+      if (effective && effective[p.id]) enabledPerms.push({ id: p.id, label: p.label, groupId: g.id });
     });
   });
 
   const tagsHtml = enabledPerms.length
-    ? enabledPerms
-        .map(
-          (p) =>
-            `<span class="ed-perm-tag ${PERM_GROUP_COLOR[p.groupId] ?? ""}">${p.label}</span>`,
-        )
-        .join("")
+    ? enabledPerms.map((p) => `<span class="ed-perm-tag ${PERM_GROUP_COLOR[p.groupId] ?? ""}">${p.label}</span>`).join("")
     : `<span style="font-size:13px;color:var(--text-muted);">No permissions assigned.</span>`;
 
-  const overrides = await RolesStore.getEmployeeOverrides(emp.id);
+  // Safely fetch overrides using the pure integer ID
+  let overrides = null;
+  try {
+    overrides = await RolesStore.getEmployeeOverrides(numericId);
+  } catch (err) {
+    console.warn("Overrides endpoint missing. Skipping.");
+  }
+  
   const hasOverride = !!overrides;
   const overrideBadge = hasOverride
     ? `<span style="font-size:11px;background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:8px;font-weight:500;">Custom</span>`
@@ -245,7 +259,7 @@ async function renderRolePermissions() {
         <div class="ed-perms-row">
           <div>
             <div class="ed-perms-label">System Role</div>
-            <div class="ed-perms-value">${emp.role}</div>
+            <div class="ed-perms-value">${emp.role || "Not Assigned"}</div>
           </div>
           <div>
             <div class="ed-perms-label">Team</div>
@@ -260,7 +274,6 @@ async function renderRolePermissions() {
     </div>
   `;
 }
-
 async function renderActivity() {
   const activities = await HRStore.getActivity(emp.id);
   const itemsHtml = activities.length
@@ -686,5 +699,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   await renderPage();
   setupNotifications();
+// --- DYNAMIC SIDEBAR UPDATER ---
+  // Fetch the live, mapped user from the backend
+  const currentUser = await HRStore.getCurrentUser();
+  if (currentUser) {
+    // We cast a wide net to catch whatever CSS class your HTML is using
+    const nameEls = document.querySelectorAll(".sidebar-user-name, .user-info h4, .profile-name, .name, .user-name");
+    const roleEls = document.querySelectorAll(".sidebar-user-role, .user-info p, .profile-role, .role, .user-role");
+    const avatarEls = document.querySelectorAll(".sidebar-avatar, .user-avatar, .avatar, .profile-avatar");
 
+    // Update all matching elements on the page
+    nameEls.forEach(el => el.textContent = currentUser.name);
+    roleEls.forEach(el => el.textContent = currentUser.role);
+    avatarEls.forEach(el => {
+      el.textContent = currentUser.initials;
+      el.style.backgroundColor = currentUser.color;
+    });
+  }
+  // -------------------------------
 });

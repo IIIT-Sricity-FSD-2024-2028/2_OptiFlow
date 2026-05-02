@@ -44,16 +44,25 @@
     <script src="../../js/components/toast.js"></script>
     <script src="../../js/components/modal.js"></script>
     <script>
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         protectPage(["hr_manager"]);
         window.Sidebar.render("dashboard");
         window.Toast.init();
 
-        const state = window.Helpers.getState();
-        const endusers = state.users.filter((u) => u.role === "enduser");
+        const state = await window.Helpers.getState();
+        const endusers = state.users.filter((u) => {
+          const ur = state.userRoles.find(r => r.userId === u.id);
+          return ur && (ur.roleId === 5 || ur.roleId === 6);
+        });
         const active = endusers.filter((u) => u.status === "active").length;
-        const tls = endusers.filter((u) => u.subRole === "team_leader").length;
-        const members = endusers.filter((u) => u.subRole === "member").length;
+        const tls = endusers.filter((u) => {
+          const ur = state.userRoles.find(r => r.userId === u.id);
+          return ur && ur.roleId === 5;
+        }).length;
+        const members = endusers.filter((u) => {
+          const ur = state.userRoles.find(r => r.userId === u.id);
+          return ur && ur.roleId === 6;
+        }).length;
 
         document.getElementById("hr-stats").innerHTML = `
     <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-value"><div class="stat-number">${endusers.length}</div></div><div class="stat-sub blue">In system</div></div>
@@ -77,9 +86,11 @@
             const taskCount = state.tasks.filter(
               (t) => t.assignedUserId === u.id,
             ).length;
+            const ur = state.userRoles.find(r => r.userId === u.id);
+            const displayRole = ur && ur.roleId === 5 ? "Team Leader" : "Team Member";
             return `<div class="team-member">
       <div class="avatar avatar-md avatar-${u.avatarColor}">${u.avatar}</div>
-      <div class="team-member-info"><div class="team-member-name">${u.name}</div><div class="team-member-role">${u.subRole === "team_leader" ? "Team Leader" : "Team Member"}</div></div>
+      <div class="team-member-info"><div class="team-member-name">${u.name}</div><div class="team-member-role">${displayRole}</div></div>
       <div class="team-member-tasks">${taskCount} tasks</div>
     </div>`;
           })

@@ -26,6 +26,7 @@ export class ProjectsService {
       end_date: dto.end_date ?? null,
       created_by: dto.created_by,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
     this.db.projects.push(newProject);
     return newProject;

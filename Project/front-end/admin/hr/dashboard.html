@@ -267,7 +267,7 @@
         </div>
       </div>
     </div>
-    <script src="../../js/utils/helpers.js"></script>
+<script src="../../js/utils/helpers.js?v=999"></script>
     <script src="../../js/data/db.js"></script>
     <script src="../../js/data/hr-data-store.js"></script>
     <script src="../../js/data/roles-store.js"></script>
@@ -287,7 +287,8 @@
           const ro = document.getElementById('sidebarRole');
           if (el) el.textContent = name;
           if (av) av.textContent = initials;
-          if (ro) ro.textContent = u.role ? u.role.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'HR Manager';
+          const roleMap = { 1:'Superuser', 2:'Project Manager', 3:'Compliance Officer', 4:'HR Manager', 5:'Team Leader', 6:'Team Member' };
+          if (ro) ro.textContent = roleMap[u.roleId] || (u.role ? u.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'HR Manager');
         } catch(e) {}
       })();
     </script>

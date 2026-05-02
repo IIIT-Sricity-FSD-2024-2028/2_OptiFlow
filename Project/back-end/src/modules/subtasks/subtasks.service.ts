@@ -23,12 +23,14 @@ export class SubtasksService {
       task_id: dto.task_id,
       title: dto.title,
       description: dto.description ?? '',
+      created_by: null,
       assigned_to: dto.assigned_to,
       status: dto.status ?? 'Pending',
       estimated_hours: dto.estimated_hours ?? 0,
       due_date: dto.due_date ?? null,
       completed_at: null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
     this.db.subtasks.push(newSubtask);
     return newSubtask;

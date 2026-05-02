@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseService, AuditLog } from '../../core/database/database.service';
+import { DatabaseService, AuditLog, SystemEntity } from '../../core/database/database.service';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 
 @Injectable()
@@ -20,11 +20,13 @@ export class AuditLogsService {
     const newLog: AuditLog = {
       log_id: this.db.audit_logs.length ? Math.max(...this.db.audit_logs.map(l => l.log_id)) + 1 : 1,
       entity_id: dto.entity_id,
-      entity_type: dto.entity_type,
+      entity_type: dto.entity_type as SystemEntity,
       action: dto.action,
       performed_by: dto.performed_by ?? null,
       performed_at: new Date().toISOString(),
       ip_address: dto.ip_address ?? null,
+      user_agent: null,
+      used_permission_slug: null,
       old_value: dto.old_value ?? null,
       new_value: dto.new_value ?? null,
     };

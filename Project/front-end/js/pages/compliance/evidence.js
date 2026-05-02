@@ -6,6 +6,22 @@ document.addEventListener("DOMContentLoaded", async function () {
   state = await window.Helpers.getState();
   if (!state.evidence) state.evidence = [];
 
+  // Normalize new schema fields to the legacy shape the rest of this file expects
+  state.evidence = state.evidence.map((e) => {
+    const task = (state.tasks || []).find(t => t.taskId === e.taskId || String(t.id) === String(e.taskId));
+    const submitter = (state.users || []).find(u => u.userId === e.userId || String(u.id) === String(e.userId));
+    return {
+      ...e,
+      // display-ready aliases
+      type:        e.evidenceType || 'Document',
+      taskName:    task ? task.title : `Task #${e.taskId || '—'}`,
+      submittedOn: e.submittedAt ? new Date(e.submittedAt).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '—',
+      file:        e.fileUrl || 'evidence_document.pdf',
+      statusLabel: e.status || 'Pending',
+      submitterName: submitter ? submitter.fullName : 'Unknown',
+    };
+  });
+
   document.querySelectorAll(".queue-tab").forEach(function (tab) {
     tab.addEventListener("click", function () {
       document
@@ -21,11 +37,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 function updateTabCounts() {
   const allCount = state.evidence.length;
+  // Backend EvidenceStatus enum: Pending, Under_Review, Approved, Rejected
   const pendingCount = state.evidence.filter(
-    (e) => e.status === "pending" || e.status === "under_review",
+    (e) => e.status === "Pending" || e.status === "Under_Review",
   ).length;
   const reviewedCount = state.evidence.filter(
-    (e) => e.status === "approved" || e.status === "rejected",
+    (e) => e.status === "Approved" || e.status === "Rejected",
   ).length;
 
   // Update Top Badge
@@ -50,9 +67,9 @@ function renderQueue(filter) {
   let filteredData = state.evidence.filter((item) => {
     if (filter === "all") return true;
     if (filter === "urgent" || filter === "pending")
-      return item.status === "pending" || item.status === "under_review";
+      return item.status === "Pending" || item.status === "Under_Review";
     if (filter === "reviewed")
-      return item.status === "approved" || item.status === "rejected";
+      return item.status === "Approved" || item.status === "Rejected";
     return true;
   });
 
@@ -60,14 +77,14 @@ function renderQueue(filter) {
     filteredData
       .map(
         (item) => `
-    <li class="queue-item" id="qi-${item.id}" onclick="selectEvidence('${item.id}')">
+    <li class="queue-item" id="qi-${item.evidenceId || item.id}" onclick="selectEvidence(${item.evidenceId || item.id})">
       <div class="queue-item-header">
         <span class="queue-item-title">${item.title}</span>
         <span class="queue-item-date">${item.submittedOn || "Just now"}</span>
       </div>
       <div class="queue-item-meta">Task: ${item.taskName || "General"}</div>
       <div class="queue-item-badges">
-        <span class="badge ${item.status === "approved" ? "green" : item.status === "rejected" ? "red" : "pending"}">${item.statusLabel || item.status}</span>
+        <span class="badge ${item.status === "Approved" ? "green" : item.status === "Rejected" ? "red" : "pending"}">${item.statusLabel || item.status}</span>
         <span class="badge policy">${item.type || "General"}</span>
       </div>
     </li>
@@ -77,7 +94,7 @@ function renderQueue(filter) {
     '<li style="padding:20px; text-align:center; color:#64748b;">No evidence found.</li>';
 
   if (filteredData.length > 0) {
-    selectEvidence(filteredData[0].id);
+    selectEvidence(filteredData[0].evidenceId || filteredData[0].id);
   } else {
     showEmptyDetail();
   }
@@ -126,16 +143,14 @@ window.selectEvidence = function (id) {
   if (itemEl) itemEl.classList.add("active");
 
   activeEvidenceId = id;
-  const d = state.evidence.find((e) => String(e.id) === String(id));
+  const d = state.evidence.find((e) => e.evidenceId === id || String(e.evidenceId) === String(id) || String(e.id) === String(id));
   if (!d) return;
 
-  const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-  const submitter = masterUsers.find(
-    (u) => String(u.id) === String(d.userId),
-  ) || { name: "System User" };
+  // Use the already-normalized submitterName from the state mapping step
+  const submitterName = d.submitterName || 'Unknown';
 
   document.getElementById("detailTitle").textContent = d.title;
-  document.getElementById("metaSubmitter").textContent = submitter.name;
+  document.getElementById("metaSubmitter").textContent = submitterName;
   document.getElementById("metaProject").textContent = d.taskName || "N/A";
   document.getElementById("metaRule").textContent = d.type || "General Policy";
   document.getElementById("metaSubmittedOn").textContent =
@@ -152,42 +167,39 @@ window.selectEvidence = function (id) {
 };
 window.updateEvidenceStatus = async function (status, label) {
   const idx = state.evidence.findIndex(
-    (e) => String(e.id) === String(activeEvidenceId),
+    (e) => e.evidenceId === activeEvidenceId || String(e.evidenceId) === String(activeEvidenceId) || String(e.id) === String(activeEvidenceId),
   );
   if (idx > -1) {
     const ev = state.evidence[idx];
+    const numericId = ev.evidenceId || parseInt(String(activeEvidenceId).replace(/[^0-9]/g, ''), 10);
 
-    // 1. Update the Evidence Status
+    // 1. Update the Evidence Status optimistically
     ev.status = status;
     ev.statusLabel = label;
+
+    // 2. PATCH to backend with correct status enum
+    try {
+      await window.Helpers.api.request(
+        `/evidence/${numericId}`,
+        "PATCH",
+        { status: status },
+      );
+    } catch (e) {
+      console.warn("Could not persist evidence update to backend:", e);
+    }
 
     if (window.AuditStore) {
       window.AuditStore.add(
         "Compliance",
-        `Evidence ${label.toLowerCase()}: "${ev.title}" (ID: ${ev.id})`,
-        status === "rejected" ? "Medium" : "Info",
+        `Evidence ${label.toLowerCase()}: "${ev.title}" (ID: ${numericId})`,
+        status === "Rejected" ? "Medium" : "Info",
       );
     }
 
-    // 2. GENERATE NOTIFICATION FOR THE SUBMITTER
-    if (!state.notifications) state.notifications = [];
-
-    state.notifications.unshift({
-      id: Date.now(),
-      userId: ev.userId, // This targets the exact TM/TL who submitted it (e.g., 'u4')
-      type: status === "approved" ? "success" : "error",
-      title: `Evidence ${label}`,
-      message: `Your evidence submission "${ev.title}" was ${label.toLowerCase()} by Compliance.`,
-      time: "Just now",
-      isRead: false,
-    });
-
-    // 3. Save and Refresh UI
-    await window.Helpers.saveState(state);
     if (window.Toast)
       window.Toast.show(
         `Evidence ${label}`,
-        status === "approved" ? "success" : "error",
+        status === "Approved" ? "success" : "error",
       );
     renderQueue(document.querySelector(".queue-tab.active").dataset.tab);
   }
@@ -220,13 +232,13 @@ window.requestMoreInfo = async function () {
 };
 window.rejectEvidence = async function () {
   if (confirm("Are you sure you want to reject this evidence?")) {
-    await updateEvidenceStatus("rejected", "Rejected");
+    await updateEvidenceStatus("Rejected", "Rejected");
   }
 };
 
 window.approveEvidence = async function () {
   if (confirm("Approve this evidence submission?")) {
-    await updateEvidenceStatus("approved", "Approved");
+    await updateEvidenceStatus("Approved", "Approved");
   }
 };
 

@@ -19,11 +19,13 @@ export class ComplianceRulesService {
     const newRule: ComplianceRule = {
       rule_id: this.db.compliance_rules.length ? Math.max(...this.db.compliance_rules.map(r => r.rule_id)) + 1 : 1,
       rule_name: dto.rule_name,
+      category_id: null,
       description: dto.description,
       remediation_steps: dto.remediation_steps,
       severity: dto.severity,
       is_active: dto.is_active ?? true,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
     this.db.compliance_rules.push(newRule);
     return newRule;

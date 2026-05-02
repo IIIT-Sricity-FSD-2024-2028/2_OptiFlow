@@ -152,43 +152,43 @@
             evidence: [],
             complianceItems: [],
           };
-          const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-
-          const freshSessionUser =
-            masterUsers.find((u) => String(u.id) === String(session.id)) ||
-            session;
-          const myLeader = masterUsers.find(
-            (u) => String(u.id) === String(freshSessionUser.reportsTo),
-          );
+          // Resolve manager from backend state (managerId on the user object)
+          const sessionUser = (state.users || []).find(u => String(u.userId) === String(session.id));
+          const myLeader = sessionUser
+            ? (state.users || []).find(u => String(u.userId) === String(sessionUser.managerId))
+            : null;
 
           // ✅ FIXED: New Sleek Reporting Badge
-          if (myLeader) {
+          const myLeaderName = myLeader ? (myLeader.fullName || myLeader.name) : null;
+          if (myLeaderName) {
             document.getElementById("reporting-badge-area").innerHTML = `
             <div style="display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; padding:4px 12px 4px 4px; border-radius:99px; font-size:12px; color:#475569; font-weight:500;">
               <div style="width:24px; height:24px; border-radius:50%; background:var(--blue); color:white; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;">
-                ${myLeader.name ? myLeader.name.charAt(0).toUpperCase() : "?"}
+                ${myLeaderName ? myLeaderName.charAt(0).toUpperCase() : "?"}
               </div>
-              <span>Reporting to: <span style="color:#0f172a; font-weight:600">${myLeader.name}</span></span>
+              <span>Reporting to: <span style="color:#0f172a; font-weight:600">${myLeaderName}</span></span>
             </div>`;
           }
 
-          const activeProjectId = parseInt(freshSessionUser.projectId, 10);
-          const myProject = activeProjectId
-            ? state.projects.find((p) => p.id === activeProjectId)
+          const myFirstTask = state.tasks.find(t => t.assignedTo === parseInt(String(session.id).replace(/[^0-9]/g,''),10) || String(t.assignedUserId) === String(session.id));
+          const myProject = myFirstTask
+            ? state.projects.find(p => p.projectId === myFirstTask.projectId)
             : null;
 
+          const sessionNumericId = parseInt(String(session.id).replace(/[^0-9]/g,''), 10);
           const myTasks =
-            state.tasks.filter(
-              (t) => String(t.assignedUserId) === String(session.id),
-            ) || [];
+            (state.tasks || []).filter(
+              (t) => t.assignedTo === sessionNumericId,
+            );
 
-          const done = myTasks.filter((t) => t.status === "done" || t.status === "resolved").length;
+          // Backend task status enums: Pending, In_Progress, In_Review, Blocked, Completed, Cancelled
+          const done = myTasks.filter((t) => t.status === "Completed").length;
           const progress = myTasks.filter(
-            (t) => t.status === "in_progress" || t.status === "in_review",
+            (t) => t.status === "In_Progress" || t.status === "In_Review",
           ).length;
           const total = myTasks.length;
           const overdue = myTasks.filter(
-            (t) => t.overdue && t.status !== "done" && t.status !== "resolved",
+            (t) => t.overdue && t.status !== "Completed",
           ).length;
 
           document.getElementById("member-stats").innerHTML = `
@@ -223,37 +223,36 @@
               .slice(0, 5)
               .map((t) => {
                 const proj = (state.projects || []).find(
-                  (p) => String(p.id) === String(t.projectId),
-                ) || { name: "General Process", createdBy: "u2" };
-                const assignerId = t.createdBy || proj.createdBy || "u2";
-                const assigner = masterUsers.find(
-                  (u) => String(u.id) === String(assignerId),
-                ) || { name: "System Admin" };
+                  (p) => p.projectId === t.projectId,
+                ) || { name: "General Process", createdBy: null };
+                const assignerId = t.createdBy || myFirstTask?.createdBy || null;
+                const assigner = (state.users || []).find(
+                  (u) => u.userId === assignerId || String(u.userId) === String(assignerId)
+                ) || { fullName: 'System Admin' };
 
-                const assignerNameSplit = assigner.name
-                  ? String(assigner.name).split(" ")
-                  : ["System", "Admin"];
+                const assignerFullName = assigner.fullName || assigner.name || 'System Admin';
+                const assignerNameSplit = assignerFullName.split(' ');
                 const assignerFormatted =
                   assignerNameSplit[0] +
-                  " " +
-                  (assignerNameSplit[1] ? assignerNameSplit[1][0] + "." : "");
+                  ' ' +
+                  (assignerNameSplit[1] ? assignerNameSplit[1][0] + '.' : '');
 
                 let statClass = "badge-gray";
-                if (t.status === "done" || t.status === "resolved") statClass = "badge-green";
-                else if (t.status === "in_progress") statClass = "badge-blue";
-                else if (t.status === "in_review") statClass = "badge-purple";
-                else if (t.status === "blocked") statClass = "badge-orange";
-                if (t.overdue && t.status !== "done" && t.status !== "resolved") statClass = "badge-red";
+                if (t.status === "Completed") statClass = "badge-green";
+                else if (t.status === "In_Progress") statClass = "badge-blue";
+                else if (t.status === "In_Review") statClass = "badge-purple";
+                else if (t.status === "Blocked") statClass = "badge-orange";
+                if (t.overdue && t.status !== "Completed") statClass = "badge-red";
 
-                const isChecked = t.status === "done" || t.status === "resolved";
-                const dateFmt = t.deadlineLabel
-                  ? String(t.deadlineLabel).split(",")[0]
-                  : (t.deadline || "N/A");
+                const isChecked = t.status === "Completed";
+                const dateFmt = t.dueDate
+                  ? new Date(t.dueDate).toLocaleDateString('en-IN', {day:'numeric', month:'short'})
+                  : 'N/A';
 
                 return `
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); cursor:pointer" onclick="window.location.href='task-detail.html?id=${t.id}'">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); cursor:pointer" onclick="window.location.href='task-detail.html?id=${t.taskId}'">
             <div style="display:flex; align-items:center; gap:12px; flex:1">
-              <div style="width:18px; height:18px; border-radius:4px; border:2px solid ${isChecked ? "var(--blue)" : "var(--border)"}; background:${isChecked ? "var(--blue)" : "white"}; display:flex; align-items:center; justify-content:center; flex-shrink:0" onclick="event.stopPropagation(); updateStatus(${t.id})">
+              <div style="width:18px; height:18px; border-radius:4px; border:2px solid ${isChecked ? "var(--blue)" : "var(--border)"}; background:${isChecked ? "var(--blue)" : "white"}; display:flex; align-items:center; justify-content:center; flex-shrink:0" onclick="event.stopPropagation(); updateStatus(${t.taskId})">
                 ${isChecked ? '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg>' : ""}
               </div>
               <div>
@@ -285,7 +284,7 @@
                 (t, idx) => `
           <div>
             <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:2px">${t.title || t.name}</div>
-            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px">Due ${t.deadlineLabel ? String(t.deadlineLabel).split(",")[0] : (t.deadline || 'N/A')}</div>
+            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px">Due ${t.dueDate ? new Date(t.dueDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'N/A'}</div>
             <div style="height:4px; background:#f1f5f9; border-radius:2px; overflow:hidden; display:flex;">
               <div style="height:100%; width:${70 - idx * 20}%; background:${colors[idx % 3]}; border-radius:2px"></div>
             </div>
@@ -338,12 +337,13 @@
 
       async function updateStatus(taskId) {
         const task = window._memberState.tasks.find(
-          (t) => String(t.id) === String(taskId),
+          (t) => t.taskId === taskId || String(t.taskId) === String(taskId),
         );
         if (!task) return;
-        const newStatus = (task.status === "done" || task.status === "resolved") ? "in_progress" : "done";
+        const newStatus = (task.status === "Completed") ? "In_Progress" : "Completed";
         try {
-          await window.Helpers.api.request('/tasks/' + taskId, 'PATCH', { status: newStatus });
+          const pureTaskId = task.taskId;
+          await window.Helpers.api.request('/tasks/' + pureTaskId, 'PATCH', { status: newStatus });
           window.location.reload();
         } catch (e) {
           console.error("Failed to update task status", e);

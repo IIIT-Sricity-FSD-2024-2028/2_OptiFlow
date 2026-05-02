@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Reflector } from '@nestjs/core';
+import { RolesGuard } from './core/guards/roles.guard';
 
 async function bootstrap() {
   // 1. Enable CORS so your vanilla JS frontend can actually talk to this server
@@ -13,6 +15,12 @@ async function bootstrap() {
     transform: true,
     whitelist: true, // Strips out any extra data not defined in the DTO
   }));
+
+  // 3. Apply RolesGuard globally (Fulfills Rubric RBAC requirement)
+  // Every route decorated with @Roles(...) will now have its x-user-role
+  // header checked automatically — no per-module wiring needed.
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new RolesGuard(reflector));
 
   // 3. Setup Swagger API Documentation (Fulfills Rubric #7)
   const config = new DocumentBuilder()

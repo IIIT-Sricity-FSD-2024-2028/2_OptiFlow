@@ -72,23 +72,32 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         // Fetch all users from the NestJS backend
         const users = await window.Helpers.api.request('/users', 'GET');
+        const userRoles = await window.Helpers.api.request('/users/roles/mapping', 'GET');
+        const rolesList = await window.Helpers.api.request('/roles', 'GET');
         
         // Find the user by email (Password check bypassed per rubric requirements)
         const validUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
         if (validUser) {
+          // Look up user_roles mapping to determine role
+          const ur = userRoles.find(x => x.user_id === validUser.user_id);
+          const roleObj = rolesList.find(r => r.role_id === ur?.role_id);
+          const roleString = roleObj ? roleObj.role_name : 'team_member';
+          const roleId = roleObj ? roleObj.role_id : 6;
+
           // Save session mapping backend snake_case to frontend expectations
           sessionStorage.setItem("currentUser", JSON.stringify({
             id: validUser.user_id,
             name: validUser.full_name,
             email: validUser.email,
-            role: validUser.role,
+            role: roleString,
+            roleId: roleId,
             departmentId: validUser.department_id,
-            reportsTo: validUser.reports_to
+            reportsTo: validUser.manager_id
           }));
 
           // Route based on the backend role string
-          const role = validUser.role.toLowerCase();
+          const role = roleString.toLowerCase();
           
           if (role === "superuser") {
             window.location.href = "superuser/dashboard.html";

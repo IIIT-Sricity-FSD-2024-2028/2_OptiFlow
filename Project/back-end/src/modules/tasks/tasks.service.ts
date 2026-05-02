@@ -23,6 +23,7 @@ export class TasksService {
     const newTask: Task = {
       task_id: this.db.tasks.length ? Math.max(...this.db.tasks.map(t => t.task_id)) + 1 : 1,
       project_id: dto.project_id ?? null,
+      workflow_instance_id: null,
       title: dto.title,
       description: dto.description ?? '',
       created_by: dto.created_by,
@@ -31,9 +32,12 @@ export class TasksService {
       priority: dto.priority ?? 'Medium',
       estimated_hours: dto.estimated_hours ?? 0,
       actual_hours: 0,
+      start_date: null,
       due_date: dto.due_date ?? null,
       completed_at: null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deleted_at: null,
     };
     this.db.tasks.push(newTask);
     return newTask;

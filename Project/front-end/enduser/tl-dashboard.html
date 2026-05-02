@@ -185,16 +185,17 @@
 
         state = await window.Helpers.getState();
 
-        // ✅ HIERARCHY LOGIC: Find the TL's Team!
-        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-        const myTeam = masterUsers.filter((u) => u.reportsTo === session.id);
-        const myTeamIds = myTeam.map((u) => String(u.id));
+        // HIERARCHY LOGIC: Find the TL's Team using backend userRoles + users
+        // TL's direct reports = users whose manager_id (managerId) matches the current session user
+        const sessionNumericId = parseInt(String(session.id).replace(/[^0-9]/g, ''), 10);
+        const myTeam = (state.users || []).filter(u => u.managerId === sessionNumericId || String(u.managerId) === String(session.id));
+        const myTeamIds = myTeam.map((u) => u.userId); // keep as integers
 
-        // ✅ Pull Team Tasks + Direct Tasks
+        // Pull Team Tasks + Direct Tasks — compare integers
         const myTasks = state.tasks.filter(
           (t) =>
-            String(t.assignedUserId) === String(session.id) ||
-            myTeamIds.includes(String(t.assignedUserId)),
+            t.assignedTo === sessionNumericId ||
+            myTeamIds.includes(t.assignedTo),
         );
         // Check for unread notifications for this specific Team Leader
         const allNotifs =
@@ -209,28 +210,24 @@
             `<span style="position:absolute; top:4px; right:6px; width:8px; height:8px; background:var(--red); border-radius:50%; border:2px solid white;"></span>`;
         }
         
-        // ✅ BULLETPROOF FIX: Always grab the freshest user data
-        const freshSessionUser =
-          masterUsers.find((u) => String(u.id) === String(session.id)) || session;
-        const activeProjectId = parseInt(freshSessionUser.projectId, 10);
-
-        const myProject = activeProjectId
-          ? state.projects.find((p) => p.id === activeProjectId)
+        const freshSessionUser = state.users.find(u => u.userId === sessionNumericId) || {};
+        const myProjectTask = state.tasks.find(t => myTeamIds.includes(t.assignedTo) || t.assignedTo === sessionNumericId);
+        const myProject = myProjectTask
+          ? state.projects.find(p => p.projectId === myProjectTask.projectId)
           : null;
         
-        // ✅ CALCULATE PENDING EVIDENCE FOR THE TL's TEAM
+        // CALCULATE PENDING EVIDENCE FOR THE TL's TEAM — backend uses Title_Case
         const teamEvidence = (state.evidence || []).filter(
           (e) =>
-            myTeamIds.includes(String(e.userId)) &&
-            (e.status === "pending" || e.status === "under_review"),
+            (myTeamIds.includes(e.userId) || String(e.userId) === String(session.id)) &&
+            (e.status === "Pending" || e.status === "Under_Review"),
         );
         const pendingEvidenceCount = teamEvidence.length;
 
-        const blocked = myTasks.filter((t) => t.status === "blocked").length;
-        const done = myTasks.filter((t) => t.status === "done" || t.status === "resolved").length;
-        const inProgress = myTasks.filter(
-          (t) => t.status === "in_progress" || t.status === "in_review",
-        ).length;
+        // Backend task status enums: Pending, In_Progress, In_Review, Blocked, Completed, Cancelled
+        const blocked    = myTasks.filter((t) => t.status === "Blocked").length;
+        const done       = myTasks.filter((t) => t.status === "Completed").length;
+        const inProgress = myTasks.filter((t) => t.status === "In_Progress" || t.status === "In_Review").length;
 
         // ✅ FORCE 5-COLUMN GRID
         document.getElementById("tl-stats").style.display = "grid";
@@ -274,20 +271,20 @@
             : preview
                 .map((t) => {
                   let badgeClass = "badge-gray";
-                  if (t.status === "done" || t.status === "resolved") badgeClass = "badge-green";
-                  if (t.status === "in_progress") badgeClass = "badge-blue";
-                  if (t.status === "blocked") badgeClass = "badge-orange";
+                  if (t.status === "Completed") badgeClass = "badge-green";
+                  if (t.status === "In_Progress") badgeClass = "badge-blue";
+                  if (t.status === "Blocked") badgeClass = "badge-orange";
 
-                  // Find owner name to display to the TL
-                  const owner = masterUsers.find(
-                    (u) => String(u.id) === String(t.assignedUserId),
-                  ) || { name: "Unknown" };
+                  // Find owner name from state.users (use integer userId)
+                  const owner = state.users.find(
+                    (u) => u.userId === t.assignedTo
+                  ) || { fullName: 'Unknown' };
 
                   return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="window.location.href='my-tasks.html'">
           <div>
             <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px">${t.title || t.name}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Owner: <span style="font-weight:600;color:var(--text-secondary)">${owner.name}</span> · Due ${t.deadlineLabel || t.deadline || 'N/A'}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Owner: <span style="font-weight:600;color:var(--text-secondary)">${owner.fullName || owner.name || 'Unknown'}</span> · Due ${t.dueDate || 'N/A'}</div>
           </div>
           <span class="badge ${badgeClass}">${t.status || t.statusLabel || 'Pending'}</span>
         </div>`;
@@ -347,7 +344,7 @@
         const container = document.getElementById("tl-escalation-history");
 
         const myEscalations = (state.escalations || []).filter((e) =>
-          e.from && e.from.includes(session.name),
+          String(e.reportedBy) === String(session.id)
         );
 
         if (myEscalations.length === 0) {
@@ -378,7 +375,7 @@
           <div>
             <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${esc.title}</div>
             <div style="font-size:11px; color:var(--text-muted);">
-              <span style="font-weight:600;color:var(--text-secondary)">${esc.date || ''}</span> · Blocker: ${esc.blocker}
+              <span style="font-weight:600;color:var(--text-secondary)">${esc.createdAt ? new Date(esc.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : ''}</span> · Blocker: ${esc.blockerType || 'Unknown'}
             </div>
           </div>
         </div>
@@ -400,21 +397,21 @@
           return;
         }
 
-        const activeProjectId = parseInt(session.projectId, 10);
-        const myProject = activeProjectId
-          ? state.projects.find((p) => p.id === activeProjectId)
+        // Resolve TL's current project from tasks
+        const myProjectForEsc = myProjectTask
+          ? state.projects.find(p => String(p.projectId) === String(myProjectTask.projectId))
           : null;
         
         const priority = window.Helpers.getVal("esc-quick-priority");
 
         const newEsc = {
-          from: session.name + " (TL)",
-          title: window.Helpers.getVal("esc-quick-title"),
-          description: window.Helpers.getVal("esc-quick-title"),
-          project_id: myProject ? myProject.id : null,
-          blocker: window.Helpers.getVal("esc-quick-blocker") || "Unknown",
-          priority: priority,
-          status: "open",
+          title:        window.Helpers.getVal("esc-quick-title"),
+          description:  window.Helpers.getVal("esc-quick-title"),
+          project_id:   myProjectForEsc ? myProjectForEsc.projectId : null,
+          blocker_type: window.Helpers.getVal("esc-quick-blocker") || "Unknown",
+          priority:     priority || 'Medium',
+          reported_by:  sessionNumericId,
+          status:       "Open",
         };
 
         try {

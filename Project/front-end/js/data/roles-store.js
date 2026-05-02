@@ -195,7 +195,8 @@
 
     async getSystemRole(roleKey) {
       try {
-        const sRole = await window.Helpers.api.request(`/roles/${encodeURIComponent(roleKey)}`, 'GET');
+        const slug = String(roleKey).toLowerCase().replace(/ /g, '_');
+        const sRole = await window.Helpers.api.request(`/roles/${encodeURIComponent(slug)}`, 'GET');
         const meta = ROLE_META.find(m => m.key === roleKey) || { color:"#64748b", dotColor:"#94a3b8" };
         return {
           key: roleKey,
@@ -216,7 +217,8 @@
 
     async saveSystemRole(roleKey, permissions) {
       try {
-        await window.Helpers.api.request(`/roles/${encodeURIComponent(roleKey)}`, 'PATCH', { permissions });
+        const slug = String(roleKey).toLowerCase().replace(/ /g, '_');
+        await window.Helpers.api.request(`/roles/${encodeURIComponent(slug)}`, 'PATCH', { permissions });
       } catch (e) {
         console.warn("RolesStore: API system role write failed.", e);
       }
@@ -247,7 +249,8 @@
 
     async getEmployeeOverrides(empId) {
       try {
-        return await window.Helpers.api.request(`/roles/overrides/${empId}`, 'GET');
+        const numericId = parseInt(String(empId).replace(/\D/g, ''), 10);
+        return await window.Helpers.api.request(`/roles/overrides/${numericId}`, 'GET');
       } catch {
         return null;
       }
@@ -255,10 +258,11 @@
 
     async saveEmployeeOverrides(empId, permissions) {
       try {
+        const numericId = parseInt(String(empId).replace(/\D/g, ''), 10);
         if (permissions === null) {
-          await window.Helpers.api.request(`/roles/overrides/${empId}`, 'DELETE');
+          await window.Helpers.api.request(`/roles/overrides/${numericId}`, 'DELETE');
         } else {
-          await window.Helpers.api.request(`/roles/overrides/${empId}`, 'PUT', { permissions });
+          await window.Helpers.api.request(`/roles/overrides/${numericId}`, 'PUT', { permissions });
         }
       } catch (e) {
         console.warn("RolesStore: API overrides write failed.", e);

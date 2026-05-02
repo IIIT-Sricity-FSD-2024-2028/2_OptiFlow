@@ -13,7 +13,7 @@ export class ComplianceRulesController {
   constructor(private readonly complianceRulesService: ComplianceRulesService) {}
 
   @Get()
-  @Roles('superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_member')
+  @Roles('superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_member', 'hr_manager')
   @ApiOperation({ summary: 'Get all compliance rules' })
   findAll() { return this.complianceRulesService.findAll(); }
 

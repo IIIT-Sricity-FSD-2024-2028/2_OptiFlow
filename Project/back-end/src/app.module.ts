@@ -13,6 +13,10 @@ import { SubtasksModule } from './modules/subtasks/subtasks.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { ComplianceRulesModule } from './modules/compliance-rules/compliance-rules.module';
 import { ComplianceViolationsModule } from './modules/compliance-violations/compliance-violations.module';
+import { UserRolesModule } from './modules/user-roles/user-roles.module';
+import { WorkflowInstancesModule } from './modules/workflow-instances/workflow-instances.module';
+import { WorkflowTemplatesModule } from './modules/workflow-templates/workflow-templates.module';
+import { WorkflowInstanceStepsModule } from './modules/workflow-instance-steps/workflow-instance-steps.module';
 
 @Module({
   imports: [
@@ -28,6 +32,10 @@ import { ComplianceViolationsModule } from './modules/compliance-violations/comp
     AuditLogsModule,
     ComplianceRulesModule,
     ComplianceViolationsModule,
+    UserRolesModule,
+    WorkflowInstancesModule,
+    WorkflowTemplatesModule,
+    WorkflowInstanceStepsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

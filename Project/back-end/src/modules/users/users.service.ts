@@ -11,6 +11,10 @@ export class UsersService {
     return this.db.users;
   }
 
+  findAllUserRoles() {
+    return this.db.user_roles;
+  }
+
   findOne(id: number): User {
     const user = this.db.users.find(u => u.user_id === id);
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
@@ -23,11 +27,12 @@ export class UsersService {
       full_name: dto.full_name,
       email: dto.email,
       password_hash: dto.password_hash ?? 'default_hash',
-      role: dto.role,
       department_id: dto.department_id,
       manager_id: dto.manager_id ?? null,
       is_active: dto.is_active ?? true,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deleted_at: null,
     };
     this.db.users.push(newUser);
     return newUser;

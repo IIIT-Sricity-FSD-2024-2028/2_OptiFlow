@@ -10,20 +10,20 @@ window.TasksPage = {
     this.state = await window.Helpers.getState();
     const pid = parseInt(window.Helpers.getParam("project") || "1");
 
-    // ✅ SAFETY GUARD: Prevent crash if the project database is empty
+    // SAFETY GUARD: Prevent crash if the project database is empty
     if (!this.state.projects || this.state.projects.length === 0) {
       console.warn("No projects found in database!");
       return;
     }
 
     this.project =
-      this.state.projects.find((p) => p.id === pid) || this.state.projects[0];
+      this.state.projects.find((p) => p.projectId === pid) || this.state.projects[0];
 
-    // ✅ SAFETY GUARD: Stop rendering if project doesn't exist
+    // SAFETY GUARD: Stop rendering if project doesn't exist
     if (!this.project) return;
 
     this.tasks = this.state.tasks.filter(
-      (t) => parseInt(t.projectId) === parseInt(this.project.id),
+      (t) => parseInt(t.projectId) === parseInt(this.project.projectId),
     );
     this.render();
     this.bindEvents();
@@ -68,7 +68,7 @@ window.TasksPage = {
             <div style="display:flex;align-items:center;gap:16px;font-size:13px;color:#64748b">
               <span style="display:flex;align-items:center;gap:4px">Due: ${dateLabel}</span>
               <span style="display:flex;align-items:center;gap:4px">Dept: ${dept}</span>
-              <span style="display:flex;align-items:center;gap:4px">ID: P-${p.id.toString().padStart(4, "0")}</span>
+              <span style="display:flex;align-items:center;gap:4px">ID: P-${(this.project.projectId || this.project.id).toString().padStart(4, "0")}</span>
             </div>
           </div>
           <div style="display:flex;gap:12px">
@@ -135,7 +135,7 @@ window.TasksPage = {
           sBadgeClass = t.blocked ? "badge-red" : "badge-gray";
 
         const assigneeObj = this.state.users.find(
-          (u) => parseInt(u.id) === parseInt(t.assignedUserId),
+          (u) => parseInt(u.userId) === parseInt(t.assignedTo || t.assignedUserId),
         );
         const assigneeName = assigneeObj ? assigneeObj.fullName : "Unassigned";
         const assigneeColor = assigneeObj ? assigneeObj.avatarColor : "gray";
@@ -159,7 +159,7 @@ window.TasksPage = {
             ? `<div style="font-size:11px;color:#64748b;margin-top:2px;display:flex;align-items:center;gap:4px">↳ ${subtasks.filter((s) => s.status === "Completed").length}/${subtasks.length} subtasks done</div>`
             : "";
 
-        return `<tr style="cursor:pointer" onclick="window.TasksPage.openEdit(${t.id})">
+        return `<tr style="cursor:pointer" onclick="window.TasksPage.openEdit(${t.taskId})">
         <td style="padding:16px">
           <div style="font-size:14px;font-weight:600;color:#0f172a;margin-bottom:2px">${t.title || t.name}</div>
           <div style="font-size:12px;color:#64748b">${t.category || "Task"}</div>
@@ -170,7 +170,7 @@ window.TasksPage = {
         <td style="padding:16px"><span class="badge ${sBadgeClass}">${t.status || "Pending"}</span></td>
         <td style="padding:16px">${dateHTML}</td>
         <td style="padding:16px" onclick="event.stopPropagation()">
-          <button class="btn btn-sm" style="background:#eff6ff;color:#2563eb;font-weight:600;border:none;padding:6px 14px" onclick="window.TasksPage.openEdit(${t.id})">${t.status === "Completed" ? "View" : "Review"}</button>
+          <button class="btn btn-sm" style="background:#eff6ff;color:#2563eb;font-weight:600;border:none;padding:6px 14px" onclick="window.TasksPage.openEdit(${t.taskId})">${t.status === "Completed" ? "View" : "Review"}</button>
         </td>
       </tr>`;
       })
@@ -182,7 +182,7 @@ window.TasksPage = {
       ...new Set(this.tasks.map((t) => t.assignedUserId)),
     ];
     const members = this.state.users.filter((u) =>
-      assignedUserIds.includes(parseInt(u.id)) || assignedUserIds.includes(u.id),
+      assignedUserIds.includes(parseInt(u.userId)) || assignedUserIds.includes(u.userId),
     );
 
     const html =
@@ -195,9 +195,9 @@ window.TasksPage = {
             <div class="avatar avatar-md avatar-${m.avatarColor}">${m.avatar}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600;color:#0f172a">${m.fullName}</div>
-              <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${m.roleId === 4 ? "Team Leader" : "Team Member"}</div>
+              <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${m.roleName || (m.roleId === 4 ? 'Team Leader' : 'Team Member')}</div>
             </div>
-            <div style="font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;padding:4px 8px;border-radius:6px;white-space:nowrap">${this.tasks.filter((t) => String(t.assignedUserId) === String(m.id)).length} tasks</div>
+            <div style="font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;padding:4px 8px;border-radius:6px;white-space:nowrap">${this.tasks.filter((t) => String(t.assignedTo || t.assignedUserId) === String(m.userId)).length} tasks</div>
           </div>`,
             )
             .join("");
@@ -346,14 +346,18 @@ window.TasksPage = {
     const session = window.Auth.getSession();
     const priority = window.Helpers.getVal("task-priority") || "Medium";
     const deadline = window.Helpers.getVal("task-deadline");
-    const assignedId = parseInt(window.Helpers.getVal("task-assigned"));
+    const assignedId = parseInt(String(window.Helpers.getVal("task-assigned")).replace(/\D/g, '')) || null;
+    const creatorId = session && session.id ? parseInt(String(session.id).replace(/\D/g, '')) : 1;
 
     const newTask = {
-      project_id: this.project.id,
+      project_id: parseInt(String(this.project.id).replace(/\D/g, '')) || 1,
       title: window.Helpers.getVal("task-name"),
       assigned_to: assignedId,
+      created_by: creatorId,
       priority: priority,
-      status: "open",
+      status: "Pending",
+      estimated_hours: parseFloat(window.Helpers.getVal("task-est")) || 0,
+      due_date: deadline
     };
 
     try {
@@ -379,13 +383,13 @@ window.TasksPage = {
   },
 
   openEdit(taskId) {
-    const task = this.state.tasks.find((t) => t.id === taskId);
+    const task = this.state.tasks.find((t) => t.taskId === taskId || t.id === taskId);
     if (!task) return;
 
     const existing = document.getElementById("task-side-panel-overlay");
     if (existing) window.TasksPage.closeEdit();
 
-    const subtasks = this.state.subtasks.filter((st) => st.taskId === taskId);
+    const subtasks = this.state.subtasks.filter((st) => st.taskId === taskId || st.taskId === task.taskId);
     const subHTML =
       subtasks
         .map(
@@ -408,7 +412,7 @@ window.TasksPage = {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:24px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
         <div>
           <div style="font-size:18px;font-weight:800;color:#0f172a">Task Review</div>
-          <div style="font-size:12px;font-weight:600;color:#64748b;margin-top:4px;letter-spacing:0.5px">ID: T-${task.id.toString().padStart(4, "0")}</div>
+          <div style="font-size:12px;font-weight:600;color:#64748b;margin-top:4px;letter-spacing:0.5px">ID: T-${(task.taskId || task.id).toString().padStart(4, "0")}</div>
         </div>
         <button onclick="window.TasksPage.closeEdit()" style="background:#e2e8f0;border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#475569;cursor:pointer;font-weight:bold">&times;</button>
       </div>
@@ -456,7 +460,7 @@ window.TasksPage = {
 
       <div style="padding:20px 24px;border-top:1px solid #e2e8f0;background:#fff;display:flex;gap:12px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="window.TasksPage.closeEdit()" style="padding:10px 20px;border-radius:8px;border-color:#e2e8f0;color:#475569">Cancel</button>
-        <button class="btn btn-primary" onclick="window.TasksPage.submitEdit(${taskId})" style="padding:10px 24px;border-radius:8px;background:#2563eb">Save Updates</button>
+        <button class="btn btn-primary" onclick="window.TasksPage.submitEdit(${task.taskId || task.id})" style="padding:10px 24px;border-radius:8px;background:#2563eb">Save Updates</button>
       </div>
     </div>`;
 
@@ -478,13 +482,23 @@ window.TasksPage = {
   },
 
   async submitEdit(taskId) {
-    const idx = this.state.tasks.findIndex((t) => t.id === taskId);
+    const idx = this.state.tasks.findIndex((t) => t.taskId === taskId || t.id === taskId);
     if (idx === -1) return;
 
-    const newStatus = window.Helpers.getVal("etask-status");
+    const numericTaskId = this.state.tasks[idx].taskId || parseInt(String(taskId).replace(/[^0-9]/g, ''), 10);
+
+    let newStatus = window.Helpers.getVal("etask-status");
+    if (newStatus === "open") newStatus = "Pending";
+    if (newStatus === "in_progress") newStatus = "In_Progress";
+    if (newStatus === "resolved") newStatus = "Completed";
+    if (newStatus === "closed") newStatus = "Completed";
 
     try {
-      await window.Helpers.api.request(`/tasks/${taskId}`, 'PATCH', { status: newStatus });
+      const pureTaskId = numericTaskId;
+      await window.Helpers.api.request(`/tasks/${pureTaskId}`, 'PATCH', { 
+        status: newStatus,
+        estimated_hours: parseFloat(window.Helpers.getVal("etask-actual")) || undefined
+      });
       this.state = await window.Helpers.getState();
 
       window.TasksPage.closeEdit();
@@ -492,7 +506,7 @@ window.TasksPage = {
         "Task Updated",
         "Status saved successfully.",
       );
-      this.tasks = this.state.tasks.filter((t) => parseInt(t.projectId) === parseInt(this.project.id));
+      this.tasks = this.state.tasks.filter((t) => parseInt(t.projectId) === parseInt(this.project.projectId));
       this.render();
     } catch (e) {
       console.error(e);

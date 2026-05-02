@@ -188,7 +188,11 @@ window.Sidebar = {
       ? state.complianceViolations.filter((v) => v.status === "Open").length
       : 0;
 
-    const displayRole = session.roleName.replace("_", " ");
+    // Cross-reference user with the global state for the most up-to-date name & role
+    const freshUser = state.users.find(u => String(u.userId) === String(session.id)) || session;
+    const displayName = freshUser.fullName || session.name || "Unknown User";
+    const rawRole = freshUser.roleName || session.roleName || "User";
+    const displayRole = rawRole.replace(/_/g, " ");
 
     // Calculate asset prefix dynamically based on folder depth
     let prefix = "./";
@@ -265,9 +269,9 @@ window.Sidebar = {
           <span>Settings</span>
         </div>
         <div class="sidebar-user" style="align-items:flex-start">
-          <div class="avatar avatar-sm avatar-${session.avatarColor}" style="margin-top:2px">${session.avatar}</div>
+          <div class="avatar avatar-sm avatar-${session.avatarColor || 'blue'}" style="margin-top:2px">${freshUser.avatar || session.avatar || '?'}</div>
           <div class="sidebar-user-info">
-            <div class="sidebar-user-name">${session.name}</div>
+            <div class="sidebar-user-name">${displayName}</div>
             <div class="sidebar-user-role">${displayRole}</div>
             <div class="sidebar-logout" onclick="window.Auth.logout()" style="display:flex;align-items:center;gap:6px;color:#ef4444;font-size:10px;font-weight:700;text-transform:uppercase;margin-top:8px;cursor:pointer">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

@@ -181,19 +181,21 @@ window.selectViolation = function (id) {
 window.markResolved = async function () {
   if (!confirm("Mark this violation as resolved?")) return;
   const idx = state.complianceViolations.findIndex(
-    (v) => String(v.violationId) === String(activeViolationId),
+    (v) => v.violationId === activeViolationId || String(v.violationId) === String(activeViolationId),
   );
   if (idx > -1) {
     const notesArea = document.getElementById("vdNotes");
+    const numericId = state.complianceViolations[idx].violationId;
+
     // Optimistic local update
     state.complianceViolations[idx].status = "Resolved";
     state.complianceViolations[idx].resolutionRemarks = notesArea ? notesArea.value : "";
     state.complianceViolations[idx].resolvedAt = new Date().toISOString();
 
-    // PATCH to backend
+    // PATCH to backend using pure integer ID
     try {
       await window.Helpers.api.request(
-        `/compliance-violations/${activeViolationId}`,
+        `/compliance-violations/${numericId}`,
         "PATCH",
         { status: "Resolved", resolution_remarks: state.complianceViolations[idx].resolutionRemarks },
       );

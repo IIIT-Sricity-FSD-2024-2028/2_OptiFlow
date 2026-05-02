@@ -38,9 +38,9 @@ window.ProjectsPage = {
   },
 
   projectCard(p) {
-    const projectTasks    = this.state.tasks.filter(t => t.projectId === p.id);
+    const projectTasks    = this.state.tasks.filter(t => parseInt(t.projectId) === parseInt(p.projectId));
     const assignedUserIds = [...new Set(projectTasks.map(t => t.assignedUserId))];
-    const team            = this.state.users.filter(u => assignedUserIds.includes(u.id));
+    const team            = this.state.users.filter(u => assignedUserIds.includes(String(u.userId)) || assignedUserIds.includes(u.userId));
     
     // Create compact overlapping avatars
     const avatars = team.slice(0, 3).map((u, i) => `<div style="width:28px;height:28px;border-radius:50%;background:var(--${u.avatarColor || 'blue'});border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;${i>0?'margin-left:-10px':''}">${u.avatar}</div>`).join('');
@@ -88,15 +88,15 @@ window.ProjectsPage = {
     const badgeCompliance = `<div style="font-size:11px;font-weight:600;color:${compColor};display:flex;align-items:center">${pathShield} ${compText}</div>`;
 
     return `
-      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-top:5px solid ${borderColor};padding:24px;display:flex;flex-direction:column;gap:12px;cursor:pointer;position:relative;border-left:1px solid #f1f5f9;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9" onclick="window.location.href='tasks.html?project=${p.id}'" class="hover-elevate">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-top:5px solid ${borderColor};padding:24px;display:flex;flex-direction:column;gap:12px;cursor:pointer;position:relative;border-left:1px solid #f1f5f9;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9" onclick="window.location.href='tasks.html?project=${p.projectId}'" class="hover-elevate">
 
         <div style="position:absolute;top:16px;right:16px">
-          <button class="btn" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px" onclick="window.ProjectsPage.toggleMenu(event, ${p.id})">
+          <button class="btn" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px" onclick="window.ProjectsPage.toggleMenu(event, ${p.projectId})">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
           </button>
-          <div id="proj-menu-${p.id}" class="proj-dropdown hidden" style="position:absolute;right:0;top:24px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:10;width:140px;overflow:hidden">
-            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#475569" onclick="event.stopPropagation();window.ProjectsPage.openEditModal(${p.id})">Edit Project</div>
-            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#ef4444;border-top:1px solid #f1f5f9" onclick="event.stopPropagation();window.ProjectsPage.confirmDelete(${p.id})">Delete</div>
+          <div id="proj-menu-${p.projectId}" class="proj-dropdown hidden" style="position:absolute;right:0;top:24px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:10;width:140px;overflow:hidden">
+            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#475569" onclick="event.stopPropagation();window.ProjectsPage.openEditModal(${p.projectId})">Edit Project</div>
+            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#ef4444;border-top:1px solid #f1f5f9" onclick="event.stopPropagation();window.ProjectsPage.confirmDelete(${p.projectId})">Delete</div>
           </div>
         </div>
 
@@ -285,7 +285,7 @@ window.ProjectsPage = {
       status:       statusVal,
       start_date:    new Date().toISOString().split('T')[0],
       end_date:      window.Helpers.getVal('proj-due'),
-      created_by:    session ? parseInt(session.id.replace('u','')) || 1 : 1
+      created_by:    session ? parseInt(String(session.id).replace(/[^0-9]/g, ''), 10) || 1 : 1
     };
 
     try {
@@ -316,11 +316,12 @@ window.ProjectsPage = {
     // Close any open dropdown
     document.querySelectorAll('.proj-dropdown').forEach(d => d.classList.add('hidden'));
 
-    const p     = this.state.projects.find(x => x.id === id);
+    const p = this.state.projects.find(x => x.projectId === id || String(x.projectId) === String(id));
     if (!p) return;
+    const numericId = p.projectId;
     const depts = this.state.departments;
     const deptOptions = depts.map(d =>
-      `<option value="${d.id}" ${d.id === p.departmentId ? 'selected' : ''}>${d.name}</option>`
+      `<option value="${d.departmentId}" ${d.departmentId === p.departmentId ? 'selected' : ''}>${d.name}</option>`
     ).join('');
 
     window.Modal.create({
@@ -366,7 +367,7 @@ window.ProjectsPage = {
         </div>`,
       footerHTML: `
         <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-edit-project')">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="window.ProjectsPage.submitEdit(${id})">Save Changes</button>`
+        <button class="btn btn-primary btn-sm" onclick="window.ProjectsPage.submitEdit(${numericId})">Save Changes</button>`
     });
 
     window.Validator.attachLive('edit-proj-name', { required: true, minLength: 3 });
@@ -380,8 +381,10 @@ window.ProjectsPage = {
     });
     if (!result.valid) return;
 
-    const idx = this.state.projects.findIndex(x => x.id === id);
+    const idx = this.state.projects.findIndex(x => x.projectId === id || String(x.projectId) === String(id));
     if (idx === -1) return;
+
+    const numericId = this.state.projects[idx].projectId;
 
     const statusVal  = window.Helpers.getVal('edit-proj-status');
     const progress   = Math.min(100, Math.max(0, parseInt(window.Helpers.getVal('edit-proj-progress')) || 0));
@@ -395,7 +398,7 @@ window.ProjectsPage = {
     };
 
     try {
-      await window.Helpers.api.request(`/projects/${id}`, 'PATCH', updatePayload);
+      await window.Helpers.api.request(`/projects/${numericId}`, 'PATCH', updatePayload);
       this.state = await window.Helpers.getState();
 
       window.Modal.close('modal-edit-project');
@@ -417,8 +420,9 @@ window.ProjectsPage = {
   /* ── Delete ── */
   confirmDelete(id) {
     document.querySelectorAll('.proj-dropdown').forEach(d => d.classList.add('hidden'));
-    const p = this.state.projects.find(x => x.id === id);
+    const p = this.state.projects.find(x => x.projectId === id || String(x.projectId) === String(id));
     if (!p) return;
+    const numericId = p.projectId;
 
     window.Modal.confirm({
       title:        'Delete Project',
@@ -426,7 +430,7 @@ window.ProjectsPage = {
       confirmLabel: 'Delete Project',
       onConfirm:    async () => {
         try {
-          await window.Helpers.api.request(`/projects/${id}`, 'DELETE');
+          await window.Helpers.api.request(`/projects/${numericId}`, 'DELETE');
           this.state = await window.Helpers.getState();
           
           window.Toast.warning('Deleted', `"${p.name}" was deleted.`);

@@ -138,7 +138,7 @@ window.UsersPage = {
     });
   },
 
-  submitAdd() {
+  async submitAdd() {
     const name = window.Helpers.getVal('u-name');
     const email = window.Helpers.getVal('u-email');
     const roleId = parseInt(window.Helpers.getVal('u-role'));
@@ -150,31 +150,26 @@ window.UsersPage = {
       return;
     }
 
-    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-    const colors = ['blue','green','red','orange','purple','teal','pink','indigo'];
-    const color  = colors[Math.floor(Math.random() * colors.length)];
-
     const newUser = {
-      id:           window.Helpers.nextId(this.state.users),
-      fullName:     name,
-      email:        email,
-      password:     'user123',
-      roleId:       roleId,
-      departmentId: deptId,
-      managerId:    managerId,
-      status:       'active',
-      avatar:       initials,
-      avatarColor:  color
+      full_name:     name,
+      email:         email,
+      password_hash: 'changeme_' + Date.now(),
+      department_id: deptId,
+      manager_id:    managerId,
+      is_active:     true,
     };
 
-    this.state.users.push(newUser);
-    window.Helpers.saveState(this.state);
-    window.Helpers.log('CREATE', 'User', newUser.id, null, newUser, 'user:create');
-    
-    window.Modal.close('modal-add-user');
-    window.Toast.success('User Added', `${name} created.`);
-    this.filtered = [...this.state.users];
-    this.renderTable();
+    try {
+      await window.Helpers.api.request('/users', 'POST', newUser);
+      this.state = await window.Helpers.getState();
+      window.Modal.close('modal-add-user');
+      window.Toast.success('User Added', `${name} created.`);
+      this.filtered = [...this.state.users];
+      this.renderTable();
+    } catch (e) {
+      console.error(e);
+      window.Toast.error('Error', 'Failed to create user.');
+    }
   },
 
   openEdit(userId) {
@@ -218,40 +213,46 @@ window.UsersPage = {
     });
   },
 
-  submitEdit(userId) {
-    const idx = this.state.users.findIndex(u => u.id === userId);
+  async submitEdit(userId) {
+    const numericId = parseInt(String(userId).replace(/[^0-9]/g, ''), 10);
+    const idx = this.state.users.findIndex(u => u.userId === numericId || String(u.userId) === String(userId));
     if (idx === -1) return;
 
-    const old = JSON.parse(JSON.stringify(this.state.users[idx]));
-    
-    Object.assign(this.state.users[idx], {
-      fullName:     window.Helpers.getVal('eu-name'),
-      roleId:       parseInt(window.Helpers.getVal('eu-role')),
-      departmentId: parseInt(window.Helpers.getVal('eu-dept')),
-      managerId:    parseInt(window.Helpers.getVal('eu-manager')) || null
-    });
+    const patch = {
+      department_id: parseInt(window.Helpers.getVal('eu-dept')) || undefined,
+      manager_id:    parseInt(window.Helpers.getVal('eu-manager')) || null,
+    };
+    const newName = window.Helpers.getVal('eu-name');
+    if (newName) patch.full_name = newName;
 
-    window.Helpers.saveState(this.state);
-    window.Helpers.log('UPDATE', 'User', userId, old, this.state.users[idx], 'user:update');
-    
-    window.Modal.close('modal-edit-user');
-    window.Toast.success('User Updated', 'Changes saved.');
-    this.filtered = [...this.state.users];
-    this.renderTable();
+    try {
+      await window.Helpers.api.request(`/users/${numericId}`, 'PATCH', patch);
+      this.state = await window.Helpers.getState();
+      window.Modal.close('modal-edit-user');
+      window.Toast.success('User Updated', 'Changes saved.');
+      this.filtered = [...this.state.users];
+      this.renderTable();
+    } catch (e) {
+      console.error(e);
+      window.Toast.error('Error', 'Failed to update user.');
+    }
   },
 
-  toggleStatus(userId) {
-    const idx = this.state.users.findIndex(u => u.id === userId);
-    if (idx === -1) return;
-    
-    const old = JSON.parse(JSON.stringify(this.state.users[idx]));
-    this.state.users[idx].status = this.state.users[idx].status === 'active' ? 'inactive' : 'active';
-    
-    window.Helpers.saveState(this.state);
-    window.Helpers.log('STATUS_CHANGE', 'User', userId, old, this.state.users[idx], 'user:update');
-    window.Toast.info('Status Updated', 'User status changed.');
-    this.filtered = [...this.state.users];
-    this.renderTable();
+  async toggleStatus(userId) {
+    const numericId = parseInt(String(userId).replace(/[^0-9]/g, ''), 10);
+    const u = this.state.users.find(x => x.userId === numericId || String(x.userId) === String(userId));
+    if (!u) return;
+    const newStatus = u.isActive === false ? true : false; // toggle
+    try {
+      await window.Helpers.api.request(`/users/${numericId}`, 'PATCH', { is_active: newStatus });
+      this.state = await window.Helpers.getState();
+      window.Toast.info('Status Updated', 'User status changed.');
+      this.filtered = [...this.state.users];
+      this.renderTable();
+    } catch (e) {
+      console.error(e);
+      window.Toast.error('Error', 'Failed to update user status.');
+    }
   }
 };
 

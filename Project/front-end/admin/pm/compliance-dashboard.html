@@ -80,7 +80,7 @@
     <script src="../../js/components/toast.js"></script>
     <script src="../../js/components/modal.js"></script>
     <script>
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         if (!sessionStorage.getItem("currentUser")) {
           window.location.replace("../../login.html");
           return;
@@ -89,11 +89,11 @@
         window.Sidebar.render("compliance");
         window.Toast.init();
 
-        renderPage();
+        await renderPage();
       });
 
-      function renderPage() {
-        const state = window.Helpers.getState();
+      async function renderPage() {
+        const state = await window.Helpers.getState();
         const items = state.complianceItems || [];
         // Only show violations that haven't been resolved yet
         const viol = (state.complianceViolations || []).filter(
@@ -214,7 +214,7 @@
         });
       }
 
-      function submitViolationResolution(id) {
+      async function submitViolationResolution(id) {
         const result = window.Validator.validateForm({
           "violation-notes": { required: true, minLength: 5 },
         });
@@ -227,7 +227,7 @@
         }
 
         const notes = document.getElementById("violation-notes").value;
-        const state = window.Helpers.getState();
+        const state = await window.Helpers.getState();
 
         // Find the violation and mark it resolved
         const vIdx = state.complianceViolations.findIndex((v) => v.id === id);

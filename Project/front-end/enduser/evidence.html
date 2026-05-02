@@ -349,54 +349,28 @@
         });
 
         const newEv = {
-          id: window.Helpers.nextId(state.evidence || []),
-          userId: session.id,
-          title: window.Helpers.getVal("ev-title"),
-          taskId,
-          taskName,
-          type: window.Helpers.getVal("ev-type"),
-          submittedOn: dateStr,
-          status: "pending",
-          statusLabel: "Pending",
-          notes: window.Helpers.getVal("ev-notes"),
-          file: window.Helpers.getVal("ev-file"),
+          user_id:       parseInt(String(session.id).replace(/[^0-9]/g, ''), 10) || 1,
+          task_id:       taskId ? parseInt(taskId) : null,
+          title:         window.Helpers.getVal("ev-title"),
+          evidence_type: window.Helpers.getVal("ev-type"),
+          notes:         window.Helpers.getVal("ev-notes"),
+          file_url:      window.Helpers.getVal("ev-file") || "attached_document.pdf",
         };
 
-        if (!state.evidence) state.evidence = [];
-        state.evidence.push(newEv);
-        await window.Helpers.saveState(state);
-        window.Helpers.log(`Submitted evidence "${newEv.title}"`, "Compliance");
+        try {
+          await window.Helpers.api.request('/evidence', 'POST', newEv);
+          state = await window.Helpers.getState();
 
-        // ✅ THE FINAL INTEGRATION: Notify the Boss!
-        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-        const freshSessionUser =
-          masterUsers.find((u) => String(u.id) === String(session.id)) ||
-          session;
-        const tlId = freshSessionUser.reportsTo || "u2"; // Send to TL (or PM as fallback)
-
-        let notifications =
-          JSON.parse(localStorage.getItem("system_notifications")) || [];
-        notifications.push({
-          id: Date.now(),
-          targetUserId: String(tlId),
-          title: "New Evidence Submitted",
-          message: `${session.name} submitted "${newEv.title}" for compliance review.`,
-          type: "success", // Green dot
-          date: "Just now",
-          read: false,
-        });
-        localStorage.setItem(
-          "system_notifications",
-          JSON.stringify(notifications),
-        );
-        // ✅ END INTEGRATION
-
-        window.Modal.close("modal-ev-add");
-        window.Toast.success(
-          "Evidence Submitted",
-          "Your evidence is pending review.",
-        );
-        render();
+          window.Modal.close("modal-ev-add");
+          window.Toast.success(
+            "Evidence Submitted",
+            "Your evidence is pending review.",
+          );
+          render();
+        } catch (e) {
+          console.error(e);
+          window.Toast.warning("Error", "Failed to submit evidence: " + e.message);
+        }
       }
       async function submitEdit(evId) {
         const result = window.Validator.validateForm({
@@ -404,31 +378,37 @@
         });
         if (!result.valid) return;
 
-        const idx = state.evidence.findIndex((e) => e.id === evId);
-        if (idx === -1) return;
+        const payload = {
+          title: window.Helpers.getVal("eev-title"),
+          evidence_type: window.Helpers.getVal("eev-type"),
+          notes: window.Helpers.getVal("eev-notes"),
+        };
 
-        const ev = state.evidence[idx];
-        ev.title = window.Helpers.getVal("eev-title");
-        ev.type = window.Helpers.getVal("eev-type");
-        ev.notes = window.Helpers.getVal("eev-notes");
+        try {
+          await window.Helpers.api.request(`/evidence/${evId}`, 'PATCH', payload);
+          state = await window.Helpers.getState();
 
-        // ✅ FIXED: Corrected variable names for notifications
-        if (!state.notifications) state.notifications = [];
+          // ✅ FIXED: Corrected variable names for notifications
+          if (!state.notifications) state.notifications = [];
 
-        state.notifications.unshift({
-          id: Date.now(),
-          userId: "u5", // Compliance Officer
-          type: "info",
-          title: "Evidence Updated",
-          message: `${session.name} updated the evidence: "${ev.title}"`,
-          time: "Just now",
-          isRead: false,
-        });
+          state.notifications.unshift({
+            id: Date.now(),
+            userId: "u5", // Compliance Officer
+            type: "info",
+            title: "Evidence Updated",
+            message: `${session.name} updated the evidence: "${payload.title}"`,
+            time: "Just now",
+            isRead: false,
+          });
 
-        await window.Helpers.saveState(state);
-        window.Modal.close("modal-ev-edit");
-        window.Toast.success("Evidence Updated");
-        render();
+          await window.Helpers.saveState(state); // For notifications
+          window.Modal.close("modal-ev-edit");
+          window.Toast.success("Evidence Updated");
+          render();
+        } catch (e) {
+          console.error(e);
+          window.Toast.warning("Error", "Failed to update evidence: " + e.message);
+        }
       }
       function deleteEvidence(evId) {
         window.Modal.confirm({
@@ -438,11 +418,16 @@
           confirmLabel: "Delete",
           confirmClass: "btn-danger",
           onConfirm: async () => {
-            state.evidence = state.evidence.filter((e) => e.id !== evId);
-            await window.Helpers.saveState(state);
-            window.Helpers.log(`Deleted evidence #${evId}`, "Compliance");
-            window.Toast.warning("Deleted", "Evidence has been removed.");
-            render();
+            try {
+              await window.Helpers.api.request(`/evidence/${evId}`, 'DELETE');
+              state = await window.Helpers.getState();
+              window.Helpers.log(`Deleted evidence #${evId}`, "Compliance");
+              window.Toast.warning("Deleted", "Evidence has been removed.");
+              render();
+            } catch (e) {
+              console.error(e);
+              window.Toast.warning("Error", "Failed to delete evidence: " + e.message);
+            }
           },
         });
       }

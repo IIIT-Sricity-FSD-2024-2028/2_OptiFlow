@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService, ComplianceViolation } from '../../core/database/database.service';
+import { DatabaseService, ComplianceViolation, SystemEntity } from '../../core/database/database.service';
 import { CreateComplianceViolationDto } from './dto/create-compliance-violation.dto';
 import { UpdateComplianceViolationDto } from './dto/update-compliance-violation.dto';
 
@@ -20,7 +20,7 @@ export class ComplianceViolationsService {
       violation_id: this.db.compliance_violations.length ? Math.max(...this.db.compliance_violations.map(v => v.violation_id)) + 1 : 1,
       rule_id: dto.rule_id,
       entity_id: dto.entity_id,
-      entity_type: dto.entity_type,
+      entity_type: dto.entity_type as SystemEntity,
       status: 'Open',
       detected_at: new Date().toISOString(),
       reported_by: dto.reported_by ?? null,
@@ -36,7 +36,7 @@ export class ComplianceViolationsService {
   update(id: number, dto: UpdateComplianceViolationDto): ComplianceViolation {
     const index = this.db.compliance_violations.findIndex(v => v.violation_id === id);
     if (index === -1) throw new NotFoundException(`Violation ${id} not found`);
-    this.db.compliance_violations[index] = { ...this.db.compliance_violations[index], ...dto };
+    this.db.compliance_violations[index] = { ...this.db.compliance_violations[index], ...dto } as ComplianceViolation;
     return this.db.compliance_violations[index];
   }
 

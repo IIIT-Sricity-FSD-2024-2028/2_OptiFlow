@@ -142,7 +142,7 @@
     <script src="../../js/components/toast.js"></script>
     <script src="../../js/components/modal.js"></script>
     <script>
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         // Ensure only PM or Superuser can access
         if (!sessionStorage.getItem("currentUser")) {
           window.location.replace("../../login.html");
@@ -158,7 +158,7 @@
         window.Sidebar.render("dashboard");
         window.Toast.init();
 
-        const state = window.Helpers.getState();
+        const state = await window.Helpers.getState();
 
         // Filter projects for this PM (or show all if Superuser)
         const myProjects =

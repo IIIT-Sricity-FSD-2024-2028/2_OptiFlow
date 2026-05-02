@@ -78,24 +78,37 @@ async function saveNewRule() {
 
   const nameInput = document.getElementById("ruleName");
 
-  const newRule = {
-    id: "rule_" + Date.now(),
-    name: nameInput.value,
-    policy: document.getElementById("rulePolicy").value || "General",
-    dept: document.getElementById("ruleDept").value || "All Departments",
-    evidence: document.getElementById("toggleEvidence").checked ? "Yes" : "No",
-    status: "Active",
-    desc:
-      document.getElementById("ruleDesc").value || "No description provided.",
+  const newRulePayload = {
+    rule_name:   nameInput.value,
+    description: document.getElementById("ruleDesc").value || "No description provided.",
+    severity:    document.getElementById("rulePolicy").value || "Medium",
+    is_active:   true,
+    remediation_steps: "",
   };
 
-  state.complianceRules.push(newRule);
-  await window.Helpers.saveState(state);
-
-  if (window.Toast)
-    window.Toast.show("New rule created successfully", "success");
-  closeNewRuleModal();
-  renderRules();
+  try {
+    await window.Helpers.api.request('/compliance-rules', 'POST', newRulePayload);
+    // Refresh state so the new rule appears
+    state = await window.Helpers.getState();
+    // Re-apply the normalization transform
+    state.complianceRules = (state.complianceRules || []).map((r) => ({
+      id: String(r.ruleId || r.id || Date.now()),
+      name: r.ruleName || r.name || "Unnamed Rule",
+      policy: r.severity || "General",
+      dept: "All Departments",
+      evidence: "Yes",
+      status: r.isActive !== false ? "Active" : "Inactive",
+      desc: r.description || "No description provided.",
+      remediationSteps: r.remediationSteps || "",
+      severity: r.severity || "Medium",
+    }));
+    if (window.Toast) window.Toast.show("New rule created successfully", "success");
+    closeNewRuleModal();
+    renderRules();
+  } catch (e) {
+    console.error("Failed to create rule:", e);
+    if (window.Toast) window.Toast.show("Failed to create rule.", "error");
+  }
 }
 
 // === BULLETPROOF VIEW/EDIT MODALS ===
@@ -181,17 +194,22 @@ async function saveEdit(id) {
     (r) => String(r.id) === String(id),
   );
   if (idx > -1) {
-    state.complianceRules[idx].name =
-      document.getElementById("editRuleName").value;
-    state.complianceRules[idx].policy =
-      document.getElementById("editRulePolicy").value;
-    state.complianceRules[idx].dept =
-      document.getElementById("editRuleDept").value;
-    state.complianceRules[idx].desc =
-      document.getElementById("editRuleDesc").value;
+    const numericId = parseInt(String(id).replace(/[^0-9]/g, ''), 10);
+    const patch = {
+      rule_name:   document.getElementById("editRuleName").value,
+      description: document.getElementById("editRuleDesc").value,
+    };
+    // Update local state for instant UI feedback
+    state.complianceRules[idx].name  = patch.rule_name;
+    state.complianceRules[idx].desc  = patch.description;
 
-    await window.Helpers.saveState(state);
-    if (window.Toast) window.Toast.show("Rule updated successfully", "success");
+    try {
+      await window.Helpers.api.request(`/compliance-rules/${numericId}`, 'PATCH', patch);
+      if (window.Toast) window.Toast.show("Rule updated successfully", "success");
+    } catch (e) {
+      console.warn("Could not persist rule update to backend:", e);
+      if (window.Toast) window.Toast.show("Rule saved locally (backend unavailable).", "warning");
+    }
     renderRules();
   }
   document.getElementById("dynamic-rule-modal").remove();

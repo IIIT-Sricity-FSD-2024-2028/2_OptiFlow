@@ -16,11 +16,6 @@ export class CreateUserDto {
   @IsString()
   password_hash?: string;
 
-  @ApiProperty({ example: 'team_member' })
-  @IsString()
-  @IsNotEmpty()
-  role: string;
-
   @ApiProperty({ example: 1 })
   @IsNumber()
   department_id: number;

@@ -118,38 +118,72 @@
     // No-op: data is now always fetched live from the backend
     async syncWithMaster() {},
 
-    async getAll(filters = {}) {
+  async getAll(filters = {}) {
       try {
-        const users = await window.Helpers.api.request("/users");
-        let mapped = (users || []).map(mapIn).filter(Boolean);
+        // Force the app to run getState() so all the roles are mapped properly!
+        const globalState = await window.Helpers.getState();
+        
+        // Grab the 'users' array out of that fully mapped state
+        let mapped = globalState.users || [];
 
+        // Apply filters (if any)
         if (filters.status)     mapped = mapped.filter(e => e.status === filters.status);
-        if (filters.department) mapped = mapped.filter(e => e.department === filters.department);
-        if (filters.role)       mapped = mapped.filter(e => e.roleSlug === filters.role || e.role === filters.role);
+        if (filters.department) mapped = mapped.filter(e => e.departmentId === filters.department || e.department === filters.department);
+        
+        // Use the new snake_case properties from the backend
+        if (filters.role)       mapped = mapped.filter(e => e.roleId === filters.role || e.roleName === filters.role);
+        
         if (filters.search) {
           const q = filters.search.toLowerCase();
           mapped = mapped.filter(
-            e => e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)
+            e => e.fullName.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)
           );
         }
-        return mapped;
+        
+    // Finally, map it into the old "EMP-000" format the HR dashboard expects
+        return mapped.map(u => {
+            return {
+              id:          `EMP-${String(u.userId).padStart(3, "0")}`,
+              rawId:       u.userId,
+              name:        u.fullName || "Unknown",
+              initials:    u.avatar || "??",
+              color:       colorFor(u.userId),
+              
+              // FIX: Translate snake_case into beautiful Title Case!
+              role:        ROLE_DISPLAY[u.roleName] || u.roleName, 
+              roleSlug:    u.roleName, 
+              
+              department:  DEPT_MAP[u.departmentId] || `Dept ${u.departmentId}`,
+              team:        null,
+              
+              // FIX: Re-add the manager connection so the Org Chart Tree works!
+              parentId:    u.managerId ? `EMP-${String(u.managerId).padStart(3, "0")}` : null,
+              
+              status:      u.status,
+              joined:      u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : "—",
+              email:       u.email || "",
+              phone:       "+91 00000 00000",
+            };
+        });
+
       } catch (error) {
         console.error("HRStore.getAll failed:", error);
         return [];
       }
     },
 
-    async getById(id) {
+async getById(id) {
       if (!id) return null;
       try {
-        const numericId = parseInt(String(id).replace("EMP-", ""), 10);
-        const u = await window.Helpers.api.request(`/users/${numericId}`);
-        return mapIn(u);
-      } catch {
+        // FORCE it to use the beautifully mapped data from getAll()
+        // This instantly fixes the "undefined" role issue!
+        const allEmployees = await this.getAll();
+        return allEmployees.find(e => e.id === id) || null;
+      } catch (error) {
+        console.error("HRStore.getById failed:", error);
         return null;
       }
     },
-
     async getStats() {
       const emps = await this.getAll();
       const teamSet = new Set(emps.map(e => e.team).filter(Boolean));
