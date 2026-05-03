@@ -3,34 +3,80 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-    <title>Team Leader Dashboard — OfficeSync</title>
-    <meta name="description" content="Team Leader Dashboard — OfficeSync" />
+    <title>Team Leader — Orchestration · OfficeSync</title>
+    <meta name="description" content="Team Leader orchestration dashboard — OfficeSync" />
     <link rel="stylesheet" href="../css/pm/base.css" />
     <link rel="stylesheet" href="../css/pm/layout.css" />
     <link rel="stylesheet" href="../css/pm/components.css" />
+    <style>
+      .page-content.dashboard-tight {
+        max-width: 1200px;
+      }
+      #tl-stats .stat-card {
+        min-height: 108px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      #tl-managerial-actions {
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      }
+      #tl-create-subtask-modal.modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.5);
+        z-index: 10000;
+        padding: 16px;
+        backdrop-filter: blur(2px);
+      }
+      #tl-create-subtask-modal.modal-overlay.open {
+        display: flex;
+      }
+      #tl-create-subtask-modal .modal {
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+        border: 1px solid var(--border);
+      }
+    </style>
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar"></aside>
       <div class="main-area">
         <header class="top-header">
-          <h1 class="page-title">Dashboard</h1>
+          <div>
+            <h1 class="page-title">Team orchestration</h1>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-weight:500">
+              Oversee workload, reviews, breakdowns · no longer the same layout as execution
+            </div>
+          </div>
           <div class="header-actions">
-            <div class="bell-btn">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
+            <div class="bell-btn" style="position: relative">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 01-3.46 0" />
               </svg>
             </div>
           </div>
         </header>
-        <main class="page-content">
+        <main class="page-content dashboard-tight">
           <div class="stats-row" id="tl-stats"></div>
+
+          <div
+            id="tl-managerial-actions"
+            style="
+              display: flex;
+              flex-wrap: wrap;
+              gap: 12px;
+              margin-bottom: 24px;
+              padding: 16px;
+              background: var(--card-bg, #fff);
+              border: 1px solid var(--border);
+              border-radius: var(--r, 10px);
+            "
+          ></div>
 
           <div
             style="
@@ -42,92 +88,84 @@
           >
             <div class="card">
               <div class="card-header">
-                <div class="card-title">Team Tasks</div>
-                <a href="my-tasks.html" class="card-action">View all →</a>
+                <div class="card-title">Team overview</div>
+                <a href="my-tasks.html" class="card-action">Open task list →</a>
               </div>
-              <div
-                class="card-body"
-                id="my-tasks-preview"
-                style="padding-top: 0"
-              ></div>
+              <div class="card-body" id="tl-team-overview-list" style="padding-top: 0"></div>
             </div>
 
             <div class="card">
               <div class="card-header">
-                <div class="card-title">Project Overview</div>
+                <div class="card-title">Project pulse</div>
               </div>
               <div class="card-body" id="project-overview"></div>
             </div>
           </div>
 
+          <div class="card" id="tl-review-queue-panel" style="margin-bottom: 24px">
+            <div class="card-header" style="background: #faf5ff; border-bottom: 1px solid #e9d5ff">
+              <div>
+                <div class="card-title" style="color: #6b21a8">Review queue</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px">
+                  Work awaiting you: <strong>Pending TL Review</strong> or <strong>In Review</strong> — approve or send back.
+                </div>
+              </div>
+            </div>
+            <div class="card-body" id="tl-review-queue-list" style="padding-top: 8px"></div>
+          </div>
+
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px">
             <div class="card">
-              <div
-                class="card-header"
-                style="background: #fffbfa; border-bottom: 1px solid #ffedd5"
-              >
+              <div class="card-header" style="background: #fffbeb; border-bottom: 1px solid #fcd34d">
                 <div>
-                  <div class="card-title" style="color: var(--orange)">
-                    ⚠ Raise an Escalation
-                  </div>
-                  <div
-                    style="
-                      font-size: 12px;
-                      color: var(--text-muted);
-                      margin-top: 2px;
-                    "
-                  >
-                    Report a critical blocker to your Project Manager
+                  <div class="card-title" style="color: #b45309">Escalate to PM</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px">
+                    Escalate a dependency or outage to the Project Manager.
                   </div>
                 </div>
               </div>
               <div class="card-body">
-                <div style="display: flex; flex-direction: column; gap: 16px">
+                <div style="display: flex; flex-direction: column; gap: 12px">
                   <div class="form-group" style="margin: 0">
-                    <label class="form-label" for="esc-quick-title"
-                      >Issue Title *</label
-                    >
+                    <label class="form-label" for="tl-esc-task">Task *</label>
+                    <select id="tl-esc-task" class="form-select"></select>
+                  </div>
+                  <div class="form-group" style="margin: 0">
+                    <label class="form-label" for="tl-esc-quick-title">Issue title *</label>
                     <input
                       type="text"
-                      id="esc-quick-title"
+                      id="tl-esc-quick-title"
                       class="form-input"
                       placeholder="Brief description of the blocker"
+                      autocomplete="off"
                     />
-                    <span
-                      class="form-error hidden"
-                      id="esc-quick-title-error"
-                    ></span>
+                    <span class="form-error hidden" id="tl-esc-quick-title-error"></span>
                   </div>
                   <div class="form-group" style="margin: 0">
-                    <label class="form-label" for="esc-quick-blocker"
-                      >Blocker Type</label
-                    >
-                    <select id="esc-quick-blocker" class="form-select">
-                      <option value="Access Issue">
-                        Access / Permission Issue
-                      </option>
-                      <option value="Dependency">Dependency Delay</option>
-                      <option value="Approval">Awaiting Approval</option>
-                      <option value="System Issue">System Outage / Bug</option>
+                    <label class="form-label" for="tl-esc-quick-blocker">Blocker type</label>
+                    <select id="tl-esc-quick-blocker" class="form-select">
+                      <option value="Access Issue">Access / permission</option>
+                      <option value="Dependency">Dependency delay</option>
+                      <option value="Approval">Awaiting approval</option>
+                      <option value="System Issue">System outage / bug</option>
                     </select>
                   </div>
-                  <div style="display: flex; gap: 16px; align-items: flex-end">
+                  <div style="display: flex; gap: 12px; align-items: flex-end">
                     <div class="form-group" style="margin: 0; flex: 1">
-                      <label class="form-label" for="esc-quick-priority"
-                        >Priority</label
-                      >
-                      <select id="esc-quick-priority" class="form-select">
+                      <label class="form-label" for="tl-esc-quick-priority">Priority</label>
+                      <select id="tl-esc-quick-priority" class="form-select">
                         <option value="high">High</option>
                         <option value="medium" selected>Medium</option>
                         <option value="low">Low</option>
                       </select>
                     </div>
                     <button
+                      type="button"
                       class="btn btn-primary"
-                      style="height: 38px; padding: 0 24px"
-                      onclick="raiseEscalation()"
+                      style="height: 38px"
+                      onclick="window.TlDashboard.raiseEscalation()"
                     >
-                      Submit Alert
+                      Send escalation
                     </button>
                   </div>
                 </div>
@@ -137,302 +175,78 @@
             <div class="card">
               <div class="card-header">
                 <div>
-                  <div class="card-title">My Escalations Log</div>
-                  <div
-                    style="
-                      font-size: 12px;
-                      color: var(--text-muted);
-                      margin-top: 2px;
-                    "
-                  >
-                    Track the status of alerts you've raised
+                  <div class="card-title">Team escalation watch</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px">
+                    Blockers filed by anyone on your team (and you).
                   </div>
                 </div>
               </div>
-              <div
-                class="card-body"
-                id="tl-escalation-history"
-                style="max-height: 280px; overflow-y: auto; padding-top: 0"
-              ></div>
+              <div class="card-body" id="tl-escalation-history" style="max-height: 320px; overflow-y: auto; padding-top: 0"></div>
             </div>
           </div>
         </main>
       </div>
     </div>
 
+    <div id="tl-create-subtask-modal" class="modal-overlay">
+      <div class="modal" style="border-radius: 12px; max-width: 520px; padding: 0">
+        <div class="modal-header" style="border-bottom: 1px solid var(--border); padding: 20px 24px">
+          <div style="font-size: 16px; font-weight: 700; color: var(--text-primary)">Create subtask</div>
+          <button
+            type="button"
+            class="modal-close"
+            onclick="window.TlDashboard.closeSubtaskModal()"
+            style="
+              background: transparent;
+              border: none;
+              font-size: 22px;
+              color: var(--text-muted);
+              cursor: pointer;
+              line-height: 1;
+            "
+          >
+            &times;
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 24px">
+          <p id="tl-sub-parent-label" style="font-size: 12px; color: var(--text-muted); margin: 0 0 16px"></p>
+          <div class="form-group" style="margin: 0 0 16px">
+            <label class="form-label" for="tl-sub-parent-task">Parent task *</label>
+            <select id="tl-sub-parent-task" class="form-select"></select>
+            <span class="form-error hidden" id="tl-sub-parent-task-error"></span>
+          </div>
+          <div class="form-group" style="margin: 0 0 16px">
+            <label class="form-label" for="tl-sub-title">Subtask title *</label>
+            <input type="text" id="tl-sub-title" class="form-input" placeholder="What should be done?" />
+            <span class="form-error hidden" id="tl-sub-title-error"></span>
+          </div>
+          <div class="form-group" style="margin: 0 0 16px">
+            <label class="form-label" for="tl-sub-assignee">Assign to *</label>
+            <select id="tl-sub-assignee" class="form-select"></select>
+            <span class="form-error hidden" id="tl-sub-assignee-error"></span>
+          </div>
+          <div class="form-group" style="margin: 0">
+            <label class="form-label" for="tl-sub-due">Deadline</label>
+            <input type="date" id="tl-sub-due" class="form-input" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="window.TlDashboard.closeSubtaskModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="window.TlDashboard.submitSubtask()">
+            Save & assign
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="../js/data/db.js"></script>
     <script src="../js/data/pm-data-store.js"></script>
+    <script src="../js/tasks-store.js"></script>
     <script src="../js/utils/auth.js"></script>
-    <script src="../js/utils/validator.js"></script>
     <script src="../js/utils/helpers.js"></script>
     <script src="../js/components/sidebar.js"></script>
     <script src="../js/components/toast.js"></script>
     <script src="../js/components/modal.js"></script>
-
-    <script>
-      let session, state;
-
-      document.addEventListener("DOMContentLoaded", async () => {
-        // Security Check
-        if (!sessionStorage.getItem("currentUser")) {
-          window.location.replace("../login.html");
-          return;
-        }
-        session = window.Auth.getSession();
-
-        window.Sidebar.render("dashboard");
-        window.Toast.init();
-
-        state = await window.Helpers.getState();
-
-        // HIERARCHY LOGIC: Find the TL's Team using backend userRoles + users
-        // TL's direct reports = users whose manager_id (managerId) matches the current session user
-        const sessionNumericId = parseInt(String(session.id).replace(/[^0-9]/g, ''), 10);
-        const myTeam = (state.users || []).filter(u => u.managerId === sessionNumericId || String(u.managerId) === String(session.id));
-        const myTeamIds = myTeam.map((u) => u.userId); // keep as integers
-
-        // Pull Team Tasks + Direct Tasks — compare integers
-        const myTasks = state.tasks.filter(
-          (t) =>
-            t.assignedTo === sessionNumericId ||
-            myTeamIds.includes(t.assignedTo),
-        );
-        // Check for unread notifications for this specific Team Leader
-        const allNotifs =
-          JSON.parse(localStorage.getItem("system_notifications")) || [];
-        const myUnreadNotifs = allNotifs.filter(
-          (n) => n.targetUserId === session.id && !n.read,
-        );
-
-        if (myUnreadNotifs.length > 0) {
-          window.Toast.info(myUnreadNotifs[0].title, myUnreadNotifs[0].message);
-          document.querySelector(".bell-btn").innerHTML +=
-            `<span style="position:absolute; top:4px; right:6px; width:8px; height:8px; background:var(--red); border-radius:50%; border:2px solid white;"></span>`;
-        }
-        
-        const freshSessionUser = state.users.find(u => u.userId === sessionNumericId) || {};
-        const myProjectTask = state.tasks.find(t => myTeamIds.includes(t.assignedTo) || t.assignedTo === sessionNumericId);
-        const myProject = myProjectTask
-          ? state.projects.find(p => p.projectId === myProjectTask.projectId)
-          : null;
-        
-        // CALCULATE PENDING EVIDENCE FOR THE TL's TEAM — backend uses Title_Case
-        const teamEvidence = (state.evidence || []).filter(
-          (e) =>
-            (myTeamIds.includes(e.userId) || String(e.userId) === String(session.id)) &&
-            (e.status === "Pending" || e.status === "Under_Review"),
-        );
-        const pendingEvidenceCount = teamEvidence.length;
-
-        // Backend task status enums: Pending, In_Progress, In_Review, Blocked, Completed, Cancelled
-        const blocked    = myTasks.filter((t) => t.status === "Blocked").length;
-        const done       = myTasks.filter((t) => t.status === "Completed").length;
-        const inProgress = myTasks.filter((t) => t.status === "In_Progress" || t.status === "In_Review").length;
-
-        // ✅ FORCE 5-COLUMN GRID
-        document.getElementById("tl-stats").style.display = "grid";
-        document.getElementById("tl-stats").style.gridTemplateColumns =
-          "repeat(5, 1fr)";
-        document.getElementById("tl-stats").style.gap = "16px";
-
-        // ✅ STATS RENDER
-        document.getElementById("tl-stats").innerHTML = `
-    <div class="stat-card">
-      <div class="stat-label">Team Tasks</div>
-      <div class="stat-value"><div class="stat-number">${myTasks.length}</div><div class="stat-arrow" onclick="window.location.href='my-tasks.html'">→</div></div>
-      <div class="stat-sub blue">${inProgress} active across team</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Completed</div>
-      <div class="stat-value"><div class="stat-number">${done}</div></div>
-      <div class="stat-sub green">Finished</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Blocked Tasks</div>
-      <div class="stat-value"><div class="stat-number">${blocked}</div></div>
-      <div class="stat-sub ${blocked > 0 ? "red" : "green"}">${blocked > 0 ? "Needs attention" : "None blocked"}</div>
-    </div>
-    <div class="stat-card" style="background:#f8fafc">
-      <div class="stat-label">My Project Overview</div>
-      <div class="stat-value"><div class="stat-number" style="color:var(--blue);">${myProject ? (myProject.progress || 0) + "%" : "N/A"}</div></div>
-      <div class="stat-sub blue truncate">${myProject ? myProject.name : "No project assigned"}</div>
-    </div>
-    <div class="stat-card" style="cursor:pointer; border: 1px solid ${pendingEvidenceCount > 0 ? "#fed7aa" : "var(--border)"}; background: ${pendingEvidenceCount > 0 ? "#fffbeb" : "#fff"}" onclick="window.location.href='evidence-review.html'">
-      <div class="stat-label" style="color:${pendingEvidenceCount > 0 ? "#b45309" : "var(--text-muted)"}">Pending Evidence</div>
-      <div class="stat-value"><div class="stat-number" style="color:${pendingEvidenceCount > 0 ? "#d97706" : "var(--text-primary)"}">${pendingEvidenceCount}</div></div>
-      <div class="stat-sub ${pendingEvidenceCount > 0 ? "orange" : "green"}">${pendingEvidenceCount > 0 ? "Review required →" : "Vault clear →"}</div>
-    </div>`;
-        
-        // My tasks preview
-        const preview = myTasks.slice(0, 4);
-        document.getElementById("my-tasks-preview").innerHTML =
-          preview.length === 0
-            ? '<div class="empty-state"><div class="empty-state-text">No tasks assigned</div></div>'
-            : preview
-                .map((t) => {
-                  let badgeClass = "badge-gray";
-                  if (t.status === "Completed") badgeClass = "badge-green";
-                  if (t.status === "In_Progress") badgeClass = "badge-blue";
-                  if (t.status === "Blocked") badgeClass = "badge-orange";
-
-                  // Find owner name from state.users (use integer userId)
-                  const owner = state.users.find(
-                    (u) => u.userId === t.assignedTo
-                  ) || { fullName: 'Unknown' };
-
-                  return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="window.location.href='my-tasks.html'">
-          <div>
-            <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px">${t.title || t.name}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Owner: <span style="font-weight:600;color:var(--text-secondary)">${owner.fullName || owner.name || 'Unknown'}</span> · Due ${t.dueDate || 'N/A'}</div>
-          </div>
-          <span class="badge ${badgeClass}">${t.status || t.statusLabel || 'Pending'}</span>
-        </div>`;
-                })
-                .join("");
-
-        // Project overview
-        if (myProject) {
-          let fc = "fill-blue";
-          if (myProject.status === "On_Hold") fc = "fill-red";
-          if (myProject.status === "Completed") fc = "fill-green";
-
-          document.getElementById("project-overview").innerHTML = `
-      <div style="margin-bottom:20px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:15px;font-weight:700;color:var(--text-primary)">${myProject.name}</div>
-          <span class="badge ${fc.replace("fill-", "badge-")}">${myProject.status || ''}</span>
-        </div>
-        <div class="progress-wrap">
-          <div class="progress-label"><span>Overall Progress</span><span class="progress-pct">${myProject.progress || 0}%</span></div>
-          <div class="progress-bar" style="background:#e2e8f0; border-radius:4px; height:8px;"><div class="progress-fill ${fc}" style="width:${myProject.progress || 0}%; height:100%; border-radius:4px;"></div></div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center">
-        <div style="background:var(--main-bg);padding:12px;border-radius:var(--r); border:1px solid var(--border)">
-          <div style="font-size:22px;font-weight:800;color:var(--text-primary)">${myProject.totalTasks || 0}</div>
-          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;margin-top:4px">Total</div>
-        </div>
-        <div style="background:#eff6ff;padding:12px;border-radius:var(--r); border:1px solid #bfdbfe">
-          <div style="font-size:22px;font-weight:800;color:var(--blue)">${myProject.inProgress || 0}</div>
-          <div style="font-size:10px;color:var(--blue);text-transform:uppercase;font-weight:700;margin-top:4px">In Prog</div>
-        </div>
-        <div style="background:#f0fdf4;padding:12px;border-radius:var(--r); border:1px solid #bbf7d0">
-          <div style="font-size:22px;font-weight:800;color:var(--green)">${myProject.completed || 0}</div>
-          <div style="font-size:10px;color:var(--green);text-transform:uppercase;font-weight:700;margin-top:4px">Done</div>
-        </div>
-        <div style="background:#fef2f2;padding:12px;border-radius:var(--r); border:1px solid #fecaca">
-          <div style="font-size:22px;font-weight:800;color:var(--red)">${myProject.overdue || 0}</div>
-          <div style="font-size:10px;color:var(--red);text-transform:uppercase;font-weight:700;margin-top:4px">Overdue</div>
-        </div>
-      </div>`;
-        } else {
-          document.getElementById("project-overview").innerHTML =
-            '<div class="empty-state"><div class="empty-state-text">No project assigned</div></div>';
-        }
-
-        // ✅ Initialize Escalation Log
-        renderEscalationLog();
-
-        window.Validator.attachLive("esc-quick-title", {
-          required: true,
-          minLength: 5,
-        });
-      });
-
-      function renderEscalationLog() {
-        const container = document.getElementById("tl-escalation-history");
-
-        const myEscalations = (state.escalations || []).filter((e) =>
-          String(e.reportedBy) === String(session.id)
-        );
-
-        if (myEscalations.length === 0) {
-          container.innerHTML = `
-      <div class="empty-state" style="padding-top:40px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;color:var(--text-muted);margin:0 auto 12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <div class="empty-state-text">No escalations raised</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">When you raise an alert, its status will appear here.</div>
-      </div>`;
-          return;
-        }
-
-        const sortedLog = [...myEscalations].reverse();
-
-        container.innerHTML = sortedLog
-          .map((esc) => {
-            const isResolved =
-              esc.status === "resolved" || esc.status === "closed";
-            const badgeClass = isResolved ? "badge-green" : "badge-orange";
-            const iconHTML = isResolved
-              ? `<svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" style="width:16px;height:16px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
-              : `<svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" style="width:16px;height:16px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-
-            return `
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:16px 0; border-bottom:1px solid var(--border);">
-        <div style="display:flex; gap:12px; align-items:flex-start;">
-          <div style="margin-top:2px;">${iconHTML}</div>
-          <div>
-            <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${esc.title}</div>
-            <div style="font-size:11px; color:var(--text-muted);">
-              <span style="font-weight:600;color:var(--text-secondary)">${esc.createdAt ? new Date(esc.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : ''}</span> · Blocker: ${esc.blockerType || 'Unknown'}
-            </div>
-          </div>
-        </div>
-        <span class="badge ${badgeClass}" style="flex-shrink:0;">${esc.statusLabel || esc.status}</span>
-      </div>`;
-          })
-          .join("");
-      }
-
-      async function raiseEscalation() {
-        const result = window.Validator.validateForm({
-          "esc-quick-title": { required: true, minLength: 5 },
-        });
-        if (!result.valid) {
-          window.Toast.error(
-            "Missing Information",
-            "Please provide a valid issue title (min 5 characters).",
-          );
-          return;
-        }
-
-        // Resolve TL's current project from tasks
-        const myProjectForEsc = myProjectTask
-          ? state.projects.find(p => String(p.projectId) === String(myProjectTask.projectId))
-          : null;
-        
-        const priority = window.Helpers.getVal("esc-quick-priority");
-
-        const newEsc = {
-          title:        window.Helpers.getVal("esc-quick-title"),
-          description:  window.Helpers.getVal("esc-quick-title"),
-          project_id:   myProjectForEsc ? myProjectForEsc.projectId : null,
-          blocker_type: window.Helpers.getVal("esc-quick-blocker") || "Unknown",
-          priority:     priority || 'Medium',
-          reported_by:  sessionNumericId,
-          status:       "Open",
-        };
-
-        try {
-          await window.Helpers.api.request('/escalations', 'POST', newEsc);
-          state = await window.Helpers.getState();
-
-          window.Toast.success(
-            "Escalation Raised",
-            "Your Project Manager has been notified.",
-          );
-
-          document.getElementById("esc-quick-title").value = "";
-          document.getElementById("esc-quick-blocker").selectedIndex = 0;
-          document.getElementById("esc-quick-priority").value = "medium";
-
-          renderEscalationLog();
-        } catch (e) {
-          console.error(e);
-          window.Toast.warning("Error", "Failed to raise escalation.");
-        }
-      }
-    </script>
+    <script src="./tl-dashboard.js"></script>
   </body>
 </html>

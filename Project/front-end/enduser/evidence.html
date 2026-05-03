@@ -218,30 +218,38 @@
 
         tbody.innerHTML = myEvidence
           .map(
-            (ev) => `
+            (ev) => {
+              const eType = ev.documentType || ev.document_type || ev.evidenceType || ev.type || 'Document';
+              const eDate = ev.createdAt || ev.created_at || ev.submittedAt || ev.submittedOn || 'Recently';
+              const eStatus = ev.status || 'pending';
+              const eLabel = ev.statusLabel || eStatus;
+              
+              return `
     <tr>
       <td>
-        <div class="td-label">${ev.title}</div>
+        <div class="td-label">${ev.title || 'Untitled'}</div>
         ${ev.notes ? `<div class="td-sub">${ev.notes}</div>` : ""}
       </td>
       <td style="font-size:12px;color:var(--text-secondary)">${ev.taskName || "—"}</td>
-      <td><span class="badge badge-gray">${ev.type}</span></td>
-      <td style="font-size:12px;color:var(--text-muted)">${ev.submittedOn}</td>
-      <td><span class="badge ${statusMap[ev.status] || "badge-gray"}">${ev.statusLabel}</span></td>
+      <td><span class="badge badge-gray">${eType}</span></td>
+      <td style="font-size:12px;color:var(--text-muted)">${eDate}</td>
+      <td><span class="badge ${statusMap[eStatus.toLowerCase()] || "badge-gray"}">${eLabel}</span></td>
       <td>
         <div style="display:flex;gap:6px">
           <button class="btn btn-secondary btn-sm" onclick="openEditModal(${ev.id})">Edit</button>
           <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteEvidence(${ev.id})">Delete</button>
         </div>
       </td>
-    </tr>`,
+    </tr>`;
+            }
           )
           .join("");
       }
 
       function openAddModal() {
+        const sessId = parseInt(String(session.id).replace(/[^0-9]/g, ''), 10);
         const myTasks = state.tasks.filter(
-          (t) => t.assignedUserId === session.id,
+          (t) => Number(t.assignedUserId) === sessId || Number(t.assignedTo) === sessId
         );
         window.Modal.create({
           id: "modal-ev-add",
@@ -257,7 +265,7 @@
           <label class="form-label" for="ev-task">Related Task</label>
           <select id="ev-task" class="form-select">
             <option value="">Select task (optional)</option>
-            ${myTasks.map((t) => `<option value="${t.id}" data-name="${t.name}">${t.name}</option>`).join("")}
+            ${myTasks.map((t) => `<option value="${t.id}" data-name="${t.title || t.name}">${t.title || t.name}</option>`).join("")}
           </select>
         </div>
         <div class="form-group">
@@ -266,6 +274,7 @@
             <option value="">Select type</option>
             <option value="Document">Document</option>
             <option value="Screenshot">Screenshot</option>
+            <option value="Image">Image</option>
             <option value="Report">Report</option>
             <option value="Archive">Archive</option>
             <option value="Email">Email</option>
@@ -286,6 +295,22 @@
       <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-ev-add')">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="submitEvidence()">Submit</button>`,
         });
+
+        const evType = document.getElementById("ev-type");
+        if (evType) {
+          evType.addEventListener("change", (e) => {
+            const fileInput = document.getElementById("ev-file");
+            if (!fileInput) return;
+            const val = e.target.value;
+            if (["Document", "Screenshot", "Archive", "Image"].includes(val)) {
+              fileInput.outerHTML = '<input type="file" id="ev-file" class="form-input" accept=".pdf,.png,.jpg,.zip">';
+            } else {
+              fileInput.outerHTML = '<input type="text" id="ev-file" class="form-input" placeholder="Paste URL here">';
+            }
+          });
+          evType.dispatchEvent(new Event("change"));
+        }
+
         window.Validator.attachLive("ev-title", {
           required: true,
           minLength: 5,
@@ -319,11 +344,31 @@
       <div class="form-group">
         <label class="form-label" for="eev-notes">Notes</label>
         <textarea id="eev-notes" class="form-textarea">${ev.notes || ""}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="eev-file">Attach File</label>
+        <input type="text" id="eev-file" class="form-input" placeholder="Paste URL here" value="${ev.file_url || ev.fileUrl || ""}">
       </div>`,
           footerHTML: `
       <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-ev-edit')">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="submitEdit(${evId})">Save Changes</button>`,
         });
+
+        const eevType = document.getElementById("eev-type");
+        if (eevType) {
+          eevType.addEventListener("change", (e) => {
+            const fileInput = document.getElementById("eev-file");
+            if (!fileInput) return;
+            const val = e.target.value;
+            if (["Document", "Screenshot", "Archive", "Image"].includes(val)) {
+              fileInput.outerHTML = '<input type="file" id="eev-file" class="form-input" accept=".pdf,.png,.jpg,.zip">';
+            } else {
+              fileInput.outerHTML = '<input type="text" id="eev-file" class="form-input" placeholder="Paste URL here">';
+            }
+          });
+          eevType.dispatchEvent(new Event("change"));
+        }
+
         window.Validator.attachLive("eev-title", {
           required: true,
           minLength: 5,
@@ -359,17 +404,29 @@
 
         try {
           await window.Helpers.api.request('/evidence', 'POST', newEv);
-          state = await window.Helpers.getState();
+          const currentState = await window.Helpers.getState();
+          state = currentState;
 
-          window.Modal.close("modal-ev-add");
-          window.Toast.success(
-            "Evidence Submitted",
-            "Your evidence is pending review.",
+          // Find real Compliance Officer or PM ID from state
+          const recipient = currentState.users.find(
+            (u) => u.roleName === 'Compliance_Officer' || u.roleName === 'Project_Manager'
           );
+          const recipientId = recipient ? Number(recipient.userId) : null;
+
+          if (recipientId) {
+            window.Helpers.pushNotification(recipientId, {
+              title:   'New Evidence Submitted',
+              message: `New Evidence Submitted: "${newEv.title}" by ${session.name || session.fullName || 'User'}.`,
+              type:    'info',
+            });
+          }
+
+          window.Modal.close('modal-ev-add');
+          window.Toast.success('Evidence Submitted', 'Your evidence is pending review.');
           render();
         } catch (e) {
           console.error(e);
-          window.Toast.warning("Error", "Failed to submit evidence: " + e.message);
+          window.Toast.warning('Error', 'Failed to submit evidence: ' + e.message);
         }
       }
       async function submitEdit(evId) {
@@ -386,28 +443,28 @@
 
         try {
           await window.Helpers.api.request(`/evidence/${evId}`, 'PATCH', payload);
-          state = await window.Helpers.getState();
+          const currentState = await window.Helpers.getState();
+          state = currentState;
 
-          // ✅ FIXED: Corrected variable names for notifications
-          if (!state.notifications) state.notifications = [];
+          // Notify Compliance Officer/PM about the update
+          const recipient = currentState.users.find(
+            (u) => u.roleName === 'Compliance_Officer' || u.roleName === 'Project_Manager'
+          );
+          const recipientId = recipient ? Number(recipient.userId) : null;
+          if (recipientId) {
+            window.Helpers.pushNotification(recipientId, {
+              title:   'Evidence Updated',
+              message: `${session.name || session.fullName || 'User'} updated evidence: "${payload.title || 'Untitled'}".`,
+              type:    'info',
+            });
+          }
 
-          state.notifications.unshift({
-            id: Date.now(),
-            userId: "u5", // Compliance Officer
-            type: "info",
-            title: "Evidence Updated",
-            message: `${session.name} updated the evidence: "${payload.title}"`,
-            time: "Just now",
-            isRead: false,
-          });
-
-          await window.Helpers.saveState(state); // For notifications
-          window.Modal.close("modal-ev-edit");
-          window.Toast.success("Evidence Updated");
+          window.Modal.close('modal-ev-edit');
+          window.Toast.success('Evidence Updated');
           render();
         } catch (e) {
           console.error(e);
-          window.Toast.warning("Error", "Failed to update evidence: " + e.message);
+          window.Toast.warning('Error', 'Failed to update evidence: ' + e.message);
         }
       }
       function deleteEvidence(evId) {

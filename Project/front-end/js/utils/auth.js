@@ -101,8 +101,14 @@ window.Auth = {
           .substring(0, 2)
       : "??";
 
+    const rawNumericId =
+      typeof u.id === "number"
+        ? u.id
+        : parseInt(String(u.id ?? "").replace(/\D/g, ""), 10) || null;
+
     return {
       id: u.id,
+      rawId: rawNumericId != null ? rawNumericId : u.id,
       name: u.name,
       email: u.email,
       roleId: rId,

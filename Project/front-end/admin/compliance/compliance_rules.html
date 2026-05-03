@@ -33,14 +33,14 @@
         protectPage(["compliance_officer"]);
       });
 
-      // --- 2. BULLETPROOF LOGOUT OVERRIDE ---
-      // This forces the logout button to clear everything and jump back exactly 2 folders.
+      // Bulletproof logout — clears session and redirects two folders up.
       window.Auth = window.Auth || {};
       window.Auth.logout = function () {
         sessionStorage.removeItem("currentUser");
-        localStorage.removeItem("currentUser"); // Clears any lingering local storage auth
+        localStorage.removeItem("currentUser");
         window.location.replace("../../login.html");
       };
+    </script>
     <style>
       .form-error {
         color: var(--danger-text, #ef4444);

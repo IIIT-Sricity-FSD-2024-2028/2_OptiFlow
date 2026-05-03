@@ -490,7 +490,7 @@
   <div class="sidebar-nav">
     <div class="sidebar-section">Workspace</div>
 
-    <a class="nav-item" href="#">
+    <a class="nav-item" href="#" onclick="routeToDashboard(event)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
       Dashboard
     </a>
@@ -839,6 +839,44 @@
     `;
     c.appendChild(t);
     setTimeout(() => t.remove(), 3000);
+  }
+
+  // Dynamic Role Routing
+  function routeToDashboard(e) {
+    if (e) e.preventDefault();
+    const userStr = sessionStorage.getItem("currentUser");
+    if (!userStr) {
+      window.location.href = "login.html";
+      return;
+    }
+    try {
+      const user = JSON.parse(userStr);
+      switch (user.roleName) {
+        case "Team_Leader":
+          window.location.href = "enduser/tl-dashboard.html";
+          break;
+        case "Team_Member":
+          window.location.href = "enduser/member-dashboard.html";
+          break;
+        case "Project_Manager":
+          window.location.href = "admin/pm/pm-dashboard.html";
+          break;
+        case "Compliance_Officer":
+          window.location.href = "admin/compliance/compliance_dashboard.html";
+          break;
+        case "SuperUser":
+          window.location.href = "superuser/dashboard.html";
+          break;
+        case "HR_Manager":
+          window.location.href = "admin/hr/dashboard.html";
+          break;
+        default:
+          window.location.href = "index.html";
+      }
+    } catch (err) {
+      console.error("Error routing user:", err);
+      window.location.href = "login.html";
+    }
   }
 </script>
 </body>

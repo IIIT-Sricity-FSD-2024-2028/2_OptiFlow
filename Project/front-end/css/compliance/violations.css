@@ -59,6 +59,7 @@
 .violations-queue-list {
   flex: 1;
   overflow-y: auto;
+  max-height: calc(100vh - 200px);
   list-style: none;
   padding: 0;
   margin: 0;
@@ -67,6 +68,7 @@
 .vq-item {
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
+  border-left: 3px solid transparent;
   cursor: pointer;
   transition: background 0.12s;
 }
@@ -164,7 +166,15 @@
   font-weight: 500;
 }
 
-.vd-info-value.danger { color: #dc2626; }
+.vd-info-value.danger { 
+  color: #dc2626; 
+  font-size: 13px;
+  font-weight: 600;
+}
+.vd-info-value.muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
 
 .vd-section {
   margin-bottom: 30px;
