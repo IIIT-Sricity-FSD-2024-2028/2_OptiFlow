@@ -28,7 +28,7 @@ export class ComplianceViolationsController {
   create(@Body() dto: CreateComplianceViolationDto) { return this.complianceViolationsService.create(dto); }
 
   @Patch(':id')
-  @Roles('superuser', 'compliance_officer')
+  @Roles('superuser', 'compliance_officer', 'project_manager')
   @ApiOperation({ summary: 'Update a compliance violation' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateComplianceViolationDto) { return this.complianceViolationsService.update(id, dto); }
 

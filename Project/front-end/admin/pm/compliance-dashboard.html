@@ -100,13 +100,13 @@
           (v) => v.status !== "Resolved",
         );
 
-        const clear = items.filter((i) => i.status === "clear").length;
+        const clear = items.filter((i) => i.status === "Resolved").length;
         const score =
           items.length > 0 ? Math.round((clear / items.length) * 100) : 100;
 
         // ✅ DYNAMIC PENDING REVIEWS: Count actual pending evidence from the vault
         const pendingEvidenceCount = (state.evidence || []).filter(
-          (e) => e.status === "pending" || e.status === "under_review",
+          (e) => e.status === "Pending" || e.status === "Under_Review",
         ).length;
 
         // Stats
@@ -117,7 +117,7 @@
             <div class="stat-sub ${score >= 80 ? "green" : score >= 60 ? "orange" : "red"}">${score >= 80 ? "Fully compliant" : score >= 60 ? "Needs attention" : "At risk"}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Clear Projects</div>
+            <div class="stat-label">Resolved Violations</div>
             <div class="stat-value"><div class="stat-number">${clear}</div></div>
             <div class="stat-sub green">Fully compliant</div>
           </div>
@@ -139,26 +139,44 @@
           clear: `<button class="btn btn-ghost btn-sm" onclick="window.location.href='evidence-review.html'">View Vault</button>`,
         };
 
+        // Build table from compliance violations with rule lookups
         const tbody = document.getElementById("compliance-table-body");
-        if (items.length === 0) {
+        if (viol.length === 0) {
           tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-state-text">No compliance items tracked.</div></div></td></tr>`;
         } else {
-          tbody.innerHTML = items
+          tbody.innerHTML = viol
             .map(
-              (item) => `
+              (item) => {
+                const rule = state.complianceRules.find(r => String(r.ruleId) === String(item.ruleId));
+                const ruleName = rule ? rule.name : `Rule #${item.ruleId}`;
+                const severity = rule ? rule.severity : 'Medium';
+                const isOverdue = item.dueDate && new Date(item.dueDate) < new Date();
+                const detectedDate = window.Helpers.formatDate(item.detectedAt);
+                const statusBadge = item.status === 'Resolved' ? 'status-done' : item.status === 'Under_Review' ? 'badge-orange' : 'badge-red';
+                // Look up linked evidence count
+                const linkedEvidence = (state.evidence || []).filter(e => String(e.violationId) === String(item.violationId));
+                const evidenceLabel = linkedEvidence.length > 0 ? `${linkedEvidence.length} file(s)` : 'None';
+                const evidenceBadge = linkedEvidence.length > 0 ? 'status-active' : 'badge-gray';
+                const actionBtn = item.status === 'Open'
+                  ? `<button class="btn btn-danger btn-sm" onclick="document.getElementById('violations-section').scrollIntoView({behavior:'smooth'})">Resolve ↓</button>`
+                  : item.status === 'Under_Review'
+                  ? `<button class="btn btn-secondary btn-sm" onclick="window.location.href='evidence-review.html'">Review Evidence</button>`
+                  : `<button class="btn btn-ghost btn-sm" onclick="window.location.href='evidence-review.html'">View Vault</button>`;
+                return `
             <tr>
               <td>
-                <div class="td-label">${item.projectName}</div>
-                <div class="td-sub">${item.projectSub || "General"}</div>
+                <div class="td-label">${item.entityType} #${item.entityId}</div>
+                <div class="td-sub">General</div>
               </td>
-              <td><span style="font-size:13px;font-weight:500">${item.policy}</span></td>
-              <td><span class="badge ${window.Helpers.statusClass(item.status)}">${item.statusLabel}</span></td>
-              <td><span class="badge ${window.Helpers.statusClass(item.status === "clear" ? "Active" : "Draft")}">${item.evidenceLabel}</span></td>
+              <td><span style="font-size:13px;font-weight:500">${ruleName}</span></td>
+              <td><span class="badge ${statusBadge}">${item.status}</span></td>
+              <td><span class="badge ${evidenceBadge}">${evidenceLabel}</span></td>
               <td>
-                <span ${item.hasWarning ? 'style="color:var(--orange);font-weight:600"' : 'style="color:var(--text-muted)"'}>${item.lastAudited}${item.hasWarning ? " ⚠" : ""}</span>
+                <span style="color:${isOverdue ? 'var(--orange)' : 'var(--text-muted)'}; font-weight:${isOverdue ? 600 : 400}">${detectedDate}${isOverdue ? ' ⚠' : ''}</span>
               </td>
-              <td>${actionMap[item.status] || ""}</td>
-            </tr>`,
+              <td>${actionBtn}</td>
+            </tr>`;
+              },
             )
             .join("");
         }
@@ -169,24 +187,32 @@
         document.getElementById("violation-count-badge").className =
           viol.length > 0 ? "badge badge-red" : "badge badge-green";
 
-        // Violations list (✅ Fixed the 'undefined' projectName bug)
+        // Violations list
         document.getElementById("violations-list").innerHTML =
           viol
             .map(
-              (v) => `
+              (v) => {
+                // Lookup rule name for title
+                const rule = state.complianceRules.find(r => String(r.ruleId) === String(v.ruleId));
+                const vTitle = rule ? rule.name : `Violation #${v.violationId}`;
+                const vDetail = `${v.entityType || 'Entity'} #${v.entityId || '—'}`;
+                const severityLabel = rule ? rule.severity : v.status;
+                const isOverdue = v.dueDate && new Date(v.dueDate) < new Date();
+                return `
           <div style="display:flex; align-items:flex-start; gap:16px; padding:20px 24px; border-bottom:1px solid var(--border);">
             <div style="width:32px; height:32px; background:#fef2f2; color:#ef4444; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px; height:16px;"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </div>
             <div style="flex:1;">
-              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${v.title}</div>
-              <div style="font-size:12px; color:var(--text-muted);">${v.projectName || "System Audit"} · ${v.detail}</div>
+              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${vTitle}</div>
+              <div style="font-size:12px; color:var(--text-muted);">System Audit · ${vDetail}</div>
             </div>
             <div style="display:flex; align-items:center; gap:12px;">
-              <span class="badge ${v.severity === "overdue" ? "badge-red" : "badge-orange"}">${v.severityLabel}</span>
-              <button class="btn btn-primary btn-sm" onclick="openResolveModal(${v.id})">Take Action</button>
+              <span class="badge ${isOverdue ? 'badge-red' : 'badge-orange'}">${severityLabel}</span>
+              <button class="btn btn-primary btn-sm" onclick="openResolveModal('${v.id}')">Take Action</button>
             </div>
-          </div>`,
+          </div>`;
+              },
             )
             .join("") ||
           '<div class="empty-state" style="padding:40px 0;"><div class="empty-state-text">No active violations</div><div class="empty-state-sub">All compliance checks passed.</div></div>';
@@ -209,7 +235,7 @@
           `,
           footerHTML: `
             <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-resolve-violation')">Cancel</button>
-            <button class="btn btn-primary btn-sm" style="background:var(--green); border-color:var(--green);" onclick="submitViolationResolution(${id})">Mark Resolved</button>
+            <button class="btn btn-primary btn-sm" style="background:var(--green); border-color:var(--green);" onclick="submitViolationResolution('${id}')">Mark Resolved</button>
           `,
         });
       }
@@ -229,29 +255,38 @@
         const notes = document.getElementById("violation-notes").value;
         const state = await window.Helpers.getState();
 
-        // Find the violation and mark it resolved
-        const vIdx = state.complianceViolations.findIndex((v) => v.id === id);
-        if (vIdx > -1) {
-          state.complianceViolations[vIdx].status = "Resolved";
-          state.complianceViolations[vIdx].statusLabel = "Resolved";
-          state.complianceViolations[vIdx].resolutionNotes = notes;
-          state.complianceViolations[vIdx].resolvedAt =
-            new Date().toISOString();
+        try {
+          // 1. Send the resolution to the backend API
+          await window.Helpers.api.request(`/compliance-violations/${id}`, "PATCH", {
+            status: "Resolved",
+            resolution_remarks: notes,
+            resolved_at: new Date().toISOString()
+          });
+
+          // 2. Update local state for immediate UI reflection
+          const vIdx = state.complianceViolations.findIndex((v) => String(v.id) === String(id));
+          if (vIdx > -1) {
+            state.complianceViolations[vIdx].status = "Resolved";
+            state.complianceViolations[vIdx].statusLabel = "Resolved";
+            state.complianceViolations[vIdx].resolutionRemarks = notes;
+            state.complianceViolations[vIdx].resolvedAt = new Date().toISOString();
+          }
+
+          window.Helpers.log(
+            `Resolved compliance violation #${id}. Notes: ${notes}`,
+            "Compliance",
+          );
+          window.Modal.close("modal-resolve-violation");
+          window.Toast.success(
+            "Violation Resolved",
+            "The compliance audit log has been updated.",
+          );
+
+          // Refresh the UI
+          renderPage();
+        } catch (err) {
+          window.Toast.error("Failed to Resolve", err.message || "An API error occurred");
         }
-
-        window.Helpers.saveState(state);
-        window.Helpers.log(
-          `Resolved compliance violation #${id}. Notes: ${notes}`,
-          "Compliance",
-        );
-        window.Modal.close("modal-resolve-violation");
-        window.Toast.success(
-          "Violation Resolved",
-          "The compliance audit log has been updated.",
-        );
-
-        // Refresh the UI without reloading the page!
-        renderPage();
       }
     </script>
   </body>

@@ -41,7 +41,11 @@ window.ProjectsPage = {
     const projectTasks    = this.state.tasks.filter(t => parseInt(t.projectId) === parseInt(p.projectId));
     const assignedUserIds = [...new Set(projectTasks.map(t => t.assignedUserId))];
     const team            = this.state.users.filter(u => assignedUserIds.includes(String(u.userId)) || assignedUserIds.includes(u.userId));
-    
+
+    // Compute progress: completed tasks / total tasks
+    const completedCount = projectTasks.filter(t => ['Completed', 'Resolved', 'Closed', 'resolved', 'closed'].includes(t.status)).length;
+    const progress = projectTasks.length > 0 ? Math.round((completedCount / projectTasks.length) * 100) : 0;
+
     // Create compact overlapping avatars
     const avatars = team.slice(0, 3).map((u, i) => `<div style="width:28px;height:28px;border-radius:50%;background:var(--${u.avatarColor || 'blue'});border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;${i>0?'margin-left:-10px':''}">${u.avatar}</div>`).join('');
     const extraAvatar = team.length > 3 ? `<div style="width:28px;height:28px;border-radius:50%;background:#94a3b8;border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-left:-10px">+${team.length - 3}</div>` : '';
@@ -68,35 +72,41 @@ window.ProjectsPage = {
       ? `<div style="font-size:12px;color:#64748b">Due <span style="color:#ef4444;font-weight:700">${dateLabel} <svg style="display:inline;margin-bottom:-2px" width="12" height="12" viewBox="0 0 24 24" fill="#f59e0b"><path d="M12 2L1 21h22L12 2zm0 3.5l8.5 14h-17L12 5.5z"/><path d="M11 10h2v5h-2zM11 16h2v2h-2z"/></svg></span></div>` 
       : `<div style="font-size:12px;color:#64748b">Due <span style="color:#0f172a;font-weight:600">${dateLabel}</span></div>`;
 
-    const overdueCount = projectTasks.filter(t => t.overdue).length;
+    // Real open escalations for this project
+    const openEscalations = (this.state.escalations || []).filter(
+      e => String(e.projectId) === String(p.projectId) && e.status === 'Open'
+    ).length;
 
     // Footer SVGs
     const pathCheck = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:text-bottom"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
     const pathClock = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:text-bottom"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
     const pathShield = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:text-bottom"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`;
 
-    const badgeTasks = `<div style="font-size:11px;font-weight:500;color:#64748b;display:flex;align-items:center"><span style="color:#94a3b8">${pathCheck}</span> ${p.totalTasks || projectTasks.length} tasks</div>`;
-    const badgeEscalations = overdueCount > 0 
-      ? `<div style="font-size:11px;font-weight:600;color:#ef4444;display:flex;align-items:center">${pathClock} ${overdueCount} escalation${overdueCount > 1 ? 's' : ''}</div>` 
+    const badgeTasks = `<div style="font-size:11px;font-weight:500;color:#64748b;display:flex;align-items:center"><span style="color:#94a3b8">${pathCheck}</span> ${projectTasks.length} tasks</div>`;
+    const badgeEscalations = openEscalations > 0
+      ? `<div style="font-size:11px;font-weight:600;color:#ef4444;display:flex;align-items:center">${pathClock} ${openEscalations} escalation${openEscalations > 1 ? 's' : ''}</div>`
       : `<div style="font-size:11px;font-weight:500;color:#94a3b8;display:flex;align-items:center">${pathClock} 0 escalations</div>`;
-    
-    // Simulate a compliance flag based on department or status
+
+    // Real compliance badge from violations linked to this project's tasks
+    const projectTaskIds = projectTasks.map(t => String(t.taskId));
+    const openViolations = (this.state.complianceViolations || []).filter(v =>
+      v.status === 'Open' && v.entityType === 'Task' && projectTaskIds.includes(String(v.entityId))
+    ).length;
     let compText, compColor;
-    if (p.departmentId === 1) { compText = 'GDPR flag'; compColor = '#f59e0b'; }
-    else if (p.status === 'On_Hold') { compText = 'SOX violation'; compColor = '#ef4444'; }
+    if (openViolations > 0) { compText = `${openViolations} violation${openViolations > 1 ? 's' : ''}`; compColor = '#ef4444'; }
     else { compText = 'ISO clear'; compColor = '#10b981'; }
     const badgeCompliance = `<div style="font-size:11px;font-weight:600;color:${compColor};display:flex;align-items:center">${pathShield} ${compText}</div>`;
 
     return `
-      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-top:5px solid ${borderColor};padding:24px;display:flex;flex-direction:column;gap:12px;cursor:pointer;position:relative;border-left:1px solid #f1f5f9;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9" onclick="window.location.href='tasks.html?project=${p.projectId}'" class="hover-elevate">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-top:5px solid ${borderColor};padding:24px;display:flex;flex-direction:column;gap:12px;cursor:pointer;position:relative;border-left:1px solid #f1f5f9;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9" onclick="localStorage.setItem('selectedProjectId', '${p.id}'); window.location.href='tasks.html?project=${p.id}'" class="hover-elevate">
 
         <div style="position:absolute;top:16px;right:16px">
-          <button class="btn" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px" onclick="window.ProjectsPage.toggleMenu(event, ${p.projectId})">
+          <button class="btn" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px" onclick="window.ProjectsPage.toggleMenu(event, ${p.id})">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
           </button>
-          <div id="proj-menu-${p.projectId}" class="proj-dropdown hidden" style="position:absolute;right:0;top:24px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:10;width:140px;overflow:hidden">
-            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#475569" onclick="event.stopPropagation();window.ProjectsPage.openEditModal(${p.projectId})">Edit Project</div>
-            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#ef4444;border-top:1px solid #f1f5f9" onclick="event.stopPropagation();window.ProjectsPage.confirmDelete(${p.projectId})">Delete</div>
+          <div id="proj-menu-${p.id}" class="proj-dropdown hidden" style="position:absolute;right:0;top:24px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:10;width:140px;overflow:hidden">
+            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#475569" onclick="event.stopPropagation();window.ProjectsPage.openEditModal(${p.id})">Edit Project</div>
+            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#ef4444;border-top:1px solid #f1f5f9" onclick="event.stopPropagation();window.ProjectsPage.confirmDelete(${p.id})">Delete</div>
           </div>
         </div>
 
@@ -113,10 +123,10 @@ window.ProjectsPage = {
         <div style="margin-top:4px">
           <div style="display:flex;justify-content:space-between;margin-bottom:6px">
             <span style="font-size:11px;font-weight:500;color:#64748b">Progress</span>
-            <span style="font-size:11px;font-weight:600;color:#64748b">${p.progress || 0}%</span>
+            <span style="font-size:11px;font-weight:600;color:#64748b">${progress}%</span>
           </div>
           <div style="width:100%;height:4px;background:#f1f5f9;overflow:hidden">
-            <div style="width:${p.progress || 0}%;height:100%;background:${progressColor}"></div>
+            <div style="width:${progress}%;height:100%;background:${progressColor}"></div>
           </div>
         </div>
 
@@ -151,6 +161,7 @@ window.ProjectsPage = {
       all:       projects.length,
       active:    projects.filter(p => p.status === 'Active').length,
       on_hold:   projects.filter(p => p.status === 'On_Hold').length,
+      planning:  projects.filter(p => p.status === 'Planning').length,
       completed: projects.filter(p => p.status === 'Completed').length
     };
     document.querySelectorAll('.filter-tab').forEach(tab => {
@@ -196,6 +207,7 @@ window.ProjectsPage = {
         filter === 'all' ||
         (filter === 'active'    && p.status === 'Active') ||
         (filter === 'on_hold'   && p.status === 'On_Hold') ||
+        (filter === 'planning'  && p.status === 'Planning') ||
         (filter === 'completed' && p.status === 'Completed');
 
       const dept = this.state.departments.find(d => d.id === p.departmentId);
@@ -279,10 +291,10 @@ window.ProjectsPage = {
     const labelMap  = { Active: 'Active', Planning: 'Planning', On_Hold: 'On Hold', Completed: 'Completed' };
 
     const newProject = {
-      name:         window.Helpers.getVal('proj-name'),
-      description:  window.Helpers.getVal('proj-desc'),
+      project_name:  window.Helpers.getVal('proj-name'),
+      description:   window.Helpers.getVal('proj-desc'),
       department_id: deptId,
-      status:       statusVal,
+      status:        statusVal,
       start_date:    new Date().toISOString().split('T')[0],
       end_date:      window.Helpers.getVal('proj-due'),
       created_by:    session ? parseInt(String(session.id).replace(/[^0-9]/g, ''), 10) || 1 : 1
@@ -301,7 +313,7 @@ window.ProjectsPage = {
       }
       
       window.Modal.close('modal-add-project');
-      window.Toast.success('Project Created', `"${newProject.name}" has been created.`);
+      window.Toast.success('Project Created', `"${newProject.project_name}" has been created.`);
       
       this.filtered = [...this.state.projects];
       this.renderAll();
