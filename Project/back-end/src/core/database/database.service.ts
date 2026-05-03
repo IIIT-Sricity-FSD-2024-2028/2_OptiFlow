@@ -29,6 +29,7 @@ export interface Role {
   description: string | null;
   is_system: boolean;
   created_at: string;
+  permissions?: Record<string, boolean>;
 }
 
 export interface RolePermission {
@@ -43,12 +44,21 @@ export interface Department {
   created_at: string;
 }
 
+export interface Team {
+  team_id: number;
+  team_name: string;
+  department_id: number;
+  created_at: string;
+}
+
 export interface User {
   user_id: number;
   full_name: string;
   email: string;
+  phone: string | null;
   password_hash: string;
   department_id: number | null;
+  team_id: number | null;
   manager_id: number | null;
   is_active: boolean;
   created_at: string;
@@ -279,8 +289,91 @@ export interface ComplianceEvidence {
 
 // ─── DatabaseService ───────────────────────────────────────────────────────────
 
+export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> = {
+  "Team Member": {
+    view_assigned_tasks: true,  assign_subtasks: false,
+    review_member_submissions: false, create_subtasks: false,
+    create_top_level_tasks: false, delete_tasks: false,
+    escalate_to_pm: true, resolve_escalations: false,
+    view_assigned_projects: true, view_process_stages: false,
+    create_projects: false, edit_processes: false,
+    submit_evidence: true, view_compliance_status: true,
+    approve_evidence: false, manage_compliance_rules: false,
+    change_own_password: true, manage_team_members: false,
+  },
+  "Team Leader": {
+    view_assigned_tasks: true,  assign_subtasks: true,
+    review_member_submissions: true, create_subtasks: true,
+    create_top_level_tasks: false, delete_tasks: false,
+    escalate_to_pm: true, resolve_escalations: false,
+    view_assigned_projects: true, view_process_stages: true,
+    create_projects: false, edit_processes: false,
+    submit_evidence: true, view_compliance_status: true,
+    approve_evidence: false, manage_compliance_rules: false,
+    change_own_password: false, manage_team_members: false,
+  },
+  "Project Manager": {
+    view_assigned_tasks: true,  assign_subtasks: true,
+    review_member_submissions: true, create_subtasks: true,
+    create_top_level_tasks: true, delete_tasks: true,
+    escalate_to_pm: false, resolve_escalations: true,
+    view_assigned_projects: true, view_process_stages: true,
+    create_projects: true, edit_processes: true,
+    submit_evidence: true, view_compliance_status: true,
+    approve_evidence: false, manage_compliance_rules: false,
+    change_own_password: true, manage_team_members: true,
+  },
+  "Process Admin": {
+    view_assigned_tasks: true,  assign_subtasks: false,
+    review_member_submissions: false, create_subtasks: false,
+    create_top_level_tasks: false, delete_tasks: false,
+    escalate_to_pm: true, resolve_escalations: false,
+    view_assigned_projects: true, view_process_stages: true,
+    create_projects: true, edit_processes: true,
+    submit_evidence: false, view_compliance_status: true,
+    approve_evidence: false, manage_compliance_rules: false,
+    change_own_password: true, manage_team_members: false,
+  },
+  "Compliance Officer": {
+    view_assigned_tasks: false, assign_subtasks: false,
+    review_member_submissions: false, create_subtasks: false,
+    create_top_level_tasks: false, delete_tasks: false,
+    escalate_to_pm: true, resolve_escalations: false,
+    view_assigned_projects: false, view_process_stages: false,
+    create_projects: false, edit_processes: false,
+    submit_evidence: true, view_compliance_status: true,
+    approve_evidence: true, manage_compliance_rules: true,
+    change_own_password: true, manage_team_members: false,
+  },
+  "HR Manager": {
+    view_assigned_tasks: false, assign_subtasks: false,
+    review_member_submissions: false, create_subtasks: false,
+    create_top_level_tasks: false, delete_tasks: false,
+    escalate_to_pm: false, resolve_escalations: false,
+    view_assigned_projects: false, view_process_stages: false,
+    create_projects: false, edit_processes: false,
+    submit_evidence: false, view_compliance_status: false,
+    approve_evidence: false, manage_compliance_rules: false,
+    change_own_password: true, manage_team_members: true,
+  },
+  "HR Ops": {
+    view_assigned_tasks: false, assign_subtasks: false,
+    review_member_submissions: false, create_subtasks: false,
+    create_top_level_tasks: false, delete_tasks: false,
+    escalate_to_pm: false, resolve_escalations: false,
+    view_assigned_projects: false, view_process_stages: false,
+    create_projects: false, edit_processes: false,
+    submit_evidence: false, view_compliance_status: false,
+    approve_evidence: false, manage_compliance_rules: false,
+    change_own_password: true, manage_team_members: false,
+  },
+};
+
 @Injectable()
 export class DatabaseService {
+
+  public user_overrides: Record<number, Record<string, boolean>> = {};
+
 
   // 1. Permissions
   public permissions: Permission[] = [
@@ -295,12 +388,13 @@ export class DatabaseService {
 
   // 2. Roles
   public roles: Role[] = [
-    { role_id: 1, role_name: 'superuser', description: 'Full system access', is_system: true, created_at: '2024-01-01T00:00:00Z' },
-    { role_id: 2, role_name: 'project_manager', description: 'Manages projects', is_system: true, created_at: '2024-01-01T00:00:00Z' },
-    { role_id: 3, role_name: 'compliance_officer', description: 'Manages compliance and evidence', is_system: true, created_at: '2024-01-01T00:00:00Z' },
-    { role_id: 4, role_name: 'hr_manager', description: 'Manages HR and onboarding', is_system: true, created_at: '2024-01-01T00:00:00Z' },
-    { role_id: 5, role_name: 'team_leader', description: 'Leads a team, assigns tasks', is_system: false, created_at: '2024-01-01T00:00:00Z' },
-    { role_id: 6, role_name: 'team_member', description: 'Executes tasks', is_system: false, created_at: '2024-01-01T00:00:00Z' }
+    { role_id: 1, role_name: 'superuser', description: 'Full system access', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Process Admin"] } },
+    { role_id: 2, role_name: 'project_manager', description: 'Manages projects', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Project Manager"] } },
+    { role_id: 3, role_name: 'compliance_officer', description: 'Manages compliance and evidence', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Compliance Officer"] } },
+    { role_id: 4, role_name: 'hr_manager', description: 'Manages HR and onboarding', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["HR Manager"] } },
+    { role_id: 5, role_name: 'team_leader', description: 'Leads a team, assigns tasks', is_system: false, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Team Leader"] } },
+    { role_id: 6, role_name: 'team_member', description: 'Executes tasks', is_system: false, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Team Member"] } },
+    { role_id: 7, role_name: 'hr_ops', description: 'HR Operations', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["HR Ops"] } }
   ];
 
   // 3. Role_Permissions
@@ -314,25 +408,36 @@ export class DatabaseService {
 
   // 4. Departments
   public departments: Department[] = [
-    { department_id: 1, department_name: 'Operations', manager_id: 2, created_at: '2024-01-10T09:00:00Z' },
-    { department_id: 2, department_name: 'IT Security', manager_id: 3, created_at: '2024-01-10T09:00:00Z' },
-    { department_id: 3, department_name: 'Finance', manager_id: 6, created_at: '2024-01-12T09:00:00Z' },
+    { department_id: 1, department_name: 'Operations', manager_id: 1, created_at: '2024-01-01T09:00:00Z' },
+    { department_id: 2, department_name: 'IT Security', manager_id: 3, created_at: '2024-01-05T09:00:00Z' },
+    { department_id: 3, department_name: 'Finance', manager_id: 6, created_at: '2024-01-10T09:00:00Z' },
     { department_id: 4, department_name: 'Human Resources', manager_id: 7, created_at: '2024-01-12T09:00:00Z' },
     { department_id: 5, department_name: 'Engineering', manager_id: 10, created_at: '2024-01-15T09:00:00Z' }
   ];
 
+  // 4.5 Teams
+  public teams: Team[] = [
+    { team_id: 1, team_name: 'Ops-Admin', department_id: 1, created_at: '2024-01-01T09:00:00Z' },
+    { team_id: 2, team_name: 'PMO', department_id: 1, created_at: '2024-01-01T09:00:00Z' },
+    { team_id: 3, team_name: 'IT-Security', department_id: 2, created_at: '2024-01-05T09:00:00Z' },
+    { team_id: 4, team_name: 'Finance-Audit', department_id: 3, created_at: '2024-01-10T09:00:00Z' },
+    { team_id: 5, team_name: 'HR-Talent', department_id: 4, created_at: '2024-01-12T09:00:00Z' },
+    { team_id: 6, team_name: 'HR-Ops', department_id: 4, created_at: '2024-01-12T09:00:00Z' },
+    { team_id: 7, team_name: 'Compliance-Core', department_id: 5, created_at: '2024-01-15T09:00:00Z' }
+  ];
+
   // 5. Users
   public users: User[] = [
-    { user_id: 1, full_name: 'Arjun Mehta', email: 'arjun@officesync.in', password_hash: 'hashed_pw', department_id: 1, manager_id: null, is_active: true, created_at: '2024-01-15T08:00:00Z', updated_at: '2024-01-15T08:00:00Z', deleted_at: null },
-    { user_id: 2, full_name: 'Priya Sharma', email: 'priya@officesync.in', password_hash: 'hashed_pw', department_id: 1, manager_id: 1, is_active: true, created_at: '2024-01-16T08:00:00Z', updated_at: '2024-01-16T08:00:00Z', deleted_at: null },
-    { user_id: 3, full_name: 'Rohan Nair', email: 'rohan@officesync.in', password_hash: 'hashed_pw', department_id: 2, manager_id: 1, is_active: true, created_at: '2024-01-17T08:00:00Z', updated_at: '2024-01-17T08:00:00Z', deleted_at: null },
-    { user_id: 4, full_name: 'Sneha Kapoor', email: 'sneha@officesync.in', password_hash: 'hashed_pw', department_id: 1, manager_id: 2, is_active: true, created_at: '2024-01-18T08:00:00Z', updated_at: '2024-01-18T08:00:00Z', deleted_at: null },
-    { user_id: 5, full_name: 'Vikram Desai', email: 'vikram@officesync.in', password_hash: 'hashed_pw', department_id: 1, manager_id: 4, is_active: true, created_at: '2024-01-19T08:00:00Z', updated_at: '2024-01-19T08:00:00Z', deleted_at: null },
-    { user_id: 6, full_name: 'Anjali Rao', email: 'anjali@officesync.in', password_hash: 'hashed_pw', department_id: 3, manager_id: 1, is_active: true, created_at: '2024-01-20T08:00:00Z', updated_at: '2024-01-20T08:00:00Z', deleted_at: null },
-    { user_id: 7, full_name: 'Kiran Patel', email: 'kiran@officesync.in', password_hash: 'hashed_pw', department_id: 4, manager_id: 1, is_active: true, created_at: '2024-01-21T08:00:00Z', updated_at: '2024-01-21T08:00:00Z', deleted_at: null },
-    { user_id: 8, full_name: 'Divya Menon', email: 'divya@officesync.in', password_hash: 'hashed_pw', department_id: 2, manager_id: 3, is_active: true, created_at: '2024-01-22T08:00:00Z', updated_at: '2024-01-22T08:00:00Z', deleted_at: null },
-    { user_id: 9, full_name: 'Rahul Iyer', email: 'rahul@officesync.in', password_hash: 'hashed_pw', department_id: 2, manager_id: 8, is_active: true, created_at: '2024-01-23T08:00:00Z', updated_at: '2024-01-23T08:00:00Z', deleted_at: null },
-    { user_id: 10, full_name: 'Meera Krishnan', email: 'meera@officesync.in', password_hash: 'hashed_pw', department_id: 5, manager_id: 1, is_active: true, created_at: '2024-02-01T08:00:00Z', updated_at: '2024-02-01T08:00:00Z', deleted_at: null }
+    { user_id: 1, full_name: 'Arjun Mehta', email: 'arjun@officesync.in', phone: '+91 9876543210', password_hash: 'hashed_pw', department_id: 1, team_id: 1, manager_id: null, is_active: true, created_at: '2024-01-15T08:00:00Z', updated_at: '2024-01-15T08:00:00Z', deleted_at: null },
+    { user_id: 2, full_name: 'Priya Sharma', email: 'priya@officesync.in', phone: '+91 9876543211', password_hash: 'hashed_pw', department_id: 1, team_id: 2, manager_id: 1, is_active: true, created_at: '2024-01-16T08:00:00Z', updated_at: '2024-01-16T08:00:00Z', deleted_at: null },
+    { user_id: 3, full_name: 'Rohan Nair', email: 'rohan@officesync.in', phone: '+91 9876543212', password_hash: 'hashed_pw', department_id: 2, team_id: 3, manager_id: 1, is_active: true, created_at: '2024-01-17T08:00:00Z', updated_at: '2024-01-17T08:00:00Z', deleted_at: null },
+    { user_id: 4, full_name: 'Sneha Kapoor', email: 'sneha@officesync.in', phone: '+91 9876543213', password_hash: 'hashed_pw', department_id: 1, team_id: 2, manager_id: 2, is_active: true, created_at: '2024-01-18T08:00:00Z', updated_at: '2024-01-18T08:00:00Z', deleted_at: null },
+    { user_id: 5, full_name: 'Vikram Desai', email: 'vikram@officesync.in', phone: '+91 9876543214', password_hash: 'hashed_pw', department_id: 1, team_id: 2, manager_id: 4, is_active: true, created_at: '2024-01-19T08:00:00Z', updated_at: '2024-01-19T08:00:00Z', deleted_at: null },
+    { user_id: 6, full_name: 'Anjali Rao', email: 'anjali@officesync.in', phone: '+91 9876543215', password_hash: 'hashed_pw', department_id: 3, team_id: 4, manager_id: 1, is_active: true, created_at: '2024-01-20T08:00:00Z', updated_at: '2024-01-20T08:00:00Z', deleted_at: null },
+    { user_id: 7, full_name: 'Kiran Patel', email: 'kiran@officesync.in', phone: '+91 9876543216', password_hash: 'hashed_pw', department_id: 4, team_id: 5, manager_id: 1, is_active: true, created_at: '2024-01-21T08:00:00Z', updated_at: '2024-01-21T08:00:00Z', deleted_at: null },
+    { user_id: 8, full_name: 'Divya Menon', email: 'divya@officesync.in', phone: '+91 9876543217', password_hash: 'hashed_pw', department_id: 2, team_id: 3, manager_id: 3, is_active: true, created_at: '2024-01-22T08:00:00Z', updated_at: '2024-01-22T08:00:00Z', deleted_at: null },
+    { user_id: 9, full_name: 'Rahul Iyer', email: 'rahul@officesync.in', phone: '+91 9876543218', password_hash: 'hashed_pw', department_id: 2, team_id: 3, manager_id: 8, is_active: true, created_at: '2024-01-23T08:00:00Z', updated_at: '2024-01-23T08:00:00Z', deleted_at: null },
+    { user_id: 10, full_name: 'Meera Krishnan', email: 'meera@officesync.in', phone: '+91 9876543219', password_hash: 'hashed_pw', department_id: 5, team_id: 7, manager_id: 1, is_active: true, created_at: '2024-02-01T08:00:00Z', updated_at: '2024-02-01T08:00:00Z', deleted_at: null }
   ];
 
   // 6. User_Roles

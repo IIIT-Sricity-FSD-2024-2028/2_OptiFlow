@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './core/guards/roles.guard';
+import { TransformInterceptor } from './core/interceptors/transform.interceptor';
 
 async function bootstrap() {
   // 1. Enable CORS so your vanilla JS frontend can actually talk to this server
@@ -21,6 +22,9 @@ async function bootstrap() {
   // header checked automatically — no per-module wiring needed.
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new RolesGuard(reflector));
+
+  // 4. Apply Global Interceptor for API Standardization
+  app.useGlobalInterceptors(new TransformInterceptor());
 
   // 3. Setup Swagger API Documentation (Fulfills Rubric #7)
   const config = new DocumentBuilder()

@@ -15,4 +15,8 @@ export class CreateRoleDto {
   @IsOptional()
   @IsBoolean()
   is_system?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  permissions?: Record<string, boolean>;
 }

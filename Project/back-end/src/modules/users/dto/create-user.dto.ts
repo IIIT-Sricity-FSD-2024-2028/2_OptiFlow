@@ -29,4 +29,19 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  @ApiProperty({ example: 'team_member', required: false })
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @ApiProperty({ example: 'Ops-Admin', required: false })
+  @IsOptional()
+  @IsString()
+  team?: string;
+
+  @ApiProperty({ example: '+91 9876543210', required: false })
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

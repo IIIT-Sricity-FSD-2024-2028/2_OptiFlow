@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService, User } from '../../core/database/database.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -22,12 +22,28 @@ export class UsersService {
   }
 
   create(dto: CreateUserDto): User {
+    if (this.db.users.some(u => u.email.toLowerCase() === dto.email.toLowerCase())) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    let teamId: number | null = null;
+    if (dto.team) {
+      const teamObj = this.db.teams.find(t => t.team_name.toLowerCase() === dto.team?.toLowerCase());
+      if (teamObj) teamId = teamObj.team_id;
+    }
+
+    if (dto.manager_id && !this.db.users.find(u => u.user_id === dto.manager_id)) {
+      throw new BadRequestException(`Manager with ID ${dto.manager_id} not found`);
+    }
+
     const newUser: User = {
       user_id: this.db.users.length ? Math.max(...this.db.users.map(u => u.user_id)) + 1 : 1,
       full_name: dto.full_name,
       email: dto.email,
+      phone: dto.phone ?? null,
       password_hash: dto.password_hash ?? 'default_hash',
       department_id: dto.department_id,
+      team_id: teamId,
       manager_id: dto.manager_id ?? null,
       is_active: dto.is_active ?? true,
       created_at: new Date().toISOString(),
@@ -35,13 +51,67 @@ export class UsersService {
       deleted_at: null,
     };
     this.db.users.push(newUser);
+
+    if (dto.role) {
+      const roleStr = dto.role;
+      const roleObj = this.db.roles.find(r => r.role_name === roleStr || r.role_name === roleStr.replace(/ /g, '_').toLowerCase());
+      if (roleObj) {
+        this.db.user_roles.push({
+          user_id: newUser.user_id,
+          role_id: roleObj.role_id,
+          assigned_by: null,
+          assigned_at: new Date().toISOString()
+        });
+      }
+    }
+
     return newUser;
   }
 
   update(id: number, dto: UpdateUserDto): User {
     const index = this.db.users.findIndex(u => u.user_id === id);
     if (index === -1) throw new NotFoundException(`User with ID ${id} not found`);
-    this.db.users[index] = { ...this.db.users[index], ...dto };
+
+    if (dto.email && this.db.users.some(u => u.user_id !== id && u.email.toLowerCase() === dto.email?.toLowerCase())) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    let teamId = this.db.users[index].team_id;
+    if (dto.team !== undefined) {
+      if (dto.team === null || dto.team === '') {
+        teamId = null;
+      } else {
+        const teamObj = this.db.teams.find(t => t.team_name.toLowerCase() === dto.team?.toLowerCase());
+        if (teamObj) teamId = teamObj.team_id;
+      }
+    }
+
+    if (dto.manager_id !== undefined && dto.manager_id !== null && !this.db.users.find(u => u.user_id === dto.manager_id)) {
+      throw new BadRequestException(`Manager with ID ${dto.manager_id} not found`);
+    }
+
+    const updatedPhone = dto.phone !== undefined ? dto.phone : this.db.users[index].phone;
+
+    this.db.users[index] = { ...this.db.users[index], ...dto, team_id: teamId, phone: updatedPhone };
+
+    if (dto.role) {
+      const roleStr = dto.role;
+      const roleObj = this.db.roles.find(r => r.role_name === roleStr || r.role_name === roleStr.replace(/ /g, '_').toLowerCase());
+      if (roleObj) {
+        const urIndex = this.db.user_roles.findIndex(ur => ur.user_id === id);
+        if (urIndex !== -1) {
+          this.db.user_roles[urIndex].role_id = roleObj.role_id;
+        } else {
+          this.db.user_roles.push({
+            user_id: id,
+            role_id: roleObj.role_id,
+            assigned_by: null,
+            assigned_at: new Date().toISOString()
+          });
+        }
+      }
+    }
+
     return this.db.users[index];
   }
 
