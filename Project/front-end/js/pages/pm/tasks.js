@@ -8,7 +8,9 @@ window.TasksPage = {
 
   async init() {
     this.state = await window.Helpers.getState();
-    const pid = parseInt(window.Helpers.getParam("project") || "1");
+    const urlParam = window.Helpers.getParam("project");
+    const localParam = localStorage.getItem("selectedProjectId");
+    const param = urlParam || localParam || "1";
 
     // SAFETY GUARD: Prevent crash if the project database is empty
     if (!this.state.projects || this.state.projects.length === 0) {
@@ -17,13 +19,13 @@ window.TasksPage = {
     }
 
     this.project =
-      this.state.projects.find((p) => p.projectId === pid) || this.state.projects[0];
+      this.state.projects.find((p) => String(p.projectId) === String(param)) || this.state.projects[0];
 
     // SAFETY GUARD: Stop rendering if project doesn't exist
     if (!this.project) return;
 
     this.tasks = this.state.tasks.filter(
-      (t) => parseInt(t.projectId) === parseInt(this.project.projectId),
+      (t) => String(t.projectId) === String(this.project.projectId),
     );
     this.render();
     this.bindEvents();
@@ -33,6 +35,7 @@ window.TasksPage = {
     const p = this.project;
     if (!p) return;
 
+    const param = window.Helpers.getParam("project") || "none";
     // Header Breadcrumb
     window.Helpers.setHTML(
       "page-breadcrumb",
@@ -212,29 +215,29 @@ window.TasksPage = {
   renderCompliancePanel() {
     const parentContainer = document.getElementById("compliance-panel");
     if (!parentContainer) return;
-
     parentContainer.style.padding = "0";
 
-    let compItems = this.state.complianceItems.filter(
-      (c) => c.projectName.toLowerCase() === this.project.name.toLowerCase(),
+    // Filter violations linked to tasks in this project
+    const projectTaskIds = this.tasks.map(t => String(t.taskId));
+    const projectViolations = this.state.complianceViolations.filter(v =>
+      v.entityType === 'Task' && projectTaskIds.includes(String(v.entityId))
     );
 
-    if (compItems.length === 0) {
-      compItems = [
-        {
-          policy: "GDPR Verification",
-          status: "at_risk",
-          evidenceLabel: "Evidence pending",
-        },
-        {
-          policy: "ISO Access Control",
-          status: "clear",
-          evidenceLabel: "All clear",
-        },
-      ];
-    }
+    const compItems = projectViolations.map(v => {
+      const rule = this.state.complianceRules.find(r => String(r.ruleId) === String(v.ruleId));
+      return {
+        policy: rule ? rule.name : `Rule #${v.ruleId}`,
+        status: v.status === 'Open' ? 'violation' : v.status === 'Under_Review' ? 'at_risk' : 'clear',
+        evidenceLabel: v.status,
+      };
+    });
 
-    const html = compItems
+    // Fallback if no violations linked to this project's tasks
+    const displayItems = compItems.length > 0 ? compItems : [
+      { policy: 'No active violations', status: 'clear', evidenceLabel: 'All checks passed' }
+    ];
+
+    const html = displayItems
       .map((c) => {
         let icon = "";
         let subText = c.evidenceLabel || "";
@@ -243,12 +246,11 @@ window.TasksPage = {
           subText += " · Critical";
         } else if (c.status === "at_risk") {
           icon = `<div style="width:24px;height:24px;border-radius:50%;background:#fffbeb;color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800">·</div>`;
-          subText += " · At risk";
+          subText += " · Under Review";
         } else {
           icon = `<div style="width:24px;height:24px;border-radius:50%;background:#f0fdf4;color:#10b981;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800">✓</div>`;
           subText += " · Clear";
         }
-
         return `
         <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f5f9">
           ${icon}
@@ -271,17 +273,16 @@ window.TasksPage = {
   },
 
   openAddModal() {
-    const users = this.state.users.filter(
-      (u) => u.roleId >= 4 && u.departmentId === this.project.departmentId,
-    );
-    let userOptions = users
-      .map((u) => `<option value="${u.id}">${u.fullName}</option>`)
+    // Filter team members: use userRoles join since users don't have roleId directly
+    let users = this.state.users.filter(u => {
+      const ur = this.state.userRoles.find(r => String(r.userId) === String(u.userId));
+      return ur && ur.roleId >= 4;
+    });
+    // Fallback: show all users if filter returns empty
+    if (!users.length) users = this.state.users;
+    const userOptions = users
+      .map((u) => `<option value="${u.userId}">${u.fullName}</option>`)
       .join("");
-    if (!userOptions) {
-      userOptions = this.state.users
-        .map((u) => `<option value="${u.id}">${u.fullName}</option>`)
-        .join("");
-    }
 
     window.Modal.create({
       id: "modal-add-task",
@@ -506,7 +507,7 @@ window.TasksPage = {
         "Task Updated",
         "Status saved successfully.",
       );
-      this.tasks = this.state.tasks.filter((t) => parseInt(t.projectId) === parseInt(this.project.projectId));
+      this.tasks = this.state.tasks.filter((t) => String(t.projectId) === String(this.project.projectId));
       this.render();
     } catch (e) {
       console.error(e);
