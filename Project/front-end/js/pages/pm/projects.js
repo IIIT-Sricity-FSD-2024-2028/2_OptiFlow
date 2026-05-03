@@ -10,8 +10,17 @@ window.ProjectsPage = {
   async init() {
     this.state = await window.Helpers.getState();
     this.filtered = [...this.state.projects];
+    this.populateDeptFilter();
     this.renderAll();
     this.bindEvents();
+  },
+
+  populateDeptFilter() {
+    const el = document.getElementById('dept-filter');
+    if (!el) return;
+    const depts = this.state.departments || [];
+    const options = depts.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+    el.innerHTML = `<option value="">All Departments</option>` + options;
   },
 
   renderAll() {

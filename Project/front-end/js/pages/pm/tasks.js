@@ -267,19 +267,32 @@ window.TasksPage = {
   },
 
   bindEvents() {
+    // Robust event delegation for "Add Task" buttons
     document.addEventListener("click", (e) => {
-      if (e.target.id === "btn-add-task") this.openAddModal();
+      const btn = e.target.closest("#btn-add-task") || (e.target.id === "btn-add-task" ? e.target : null);
+      if (btn) {
+        e.preventDefault();
+        this.openAddModal();
+      }
     });
   },
 
   openAddModal() {
     // Filter team members: use userRoles join since users don't have roleId directly
+    // Restriction: PM can only assign to Team Leaders (roleId 5)
+    // Restriction: Must belong to the same domain (department) as the project
     let users = this.state.users.filter(u => {
       const ur = this.state.userRoles.find(r => String(r.userId) === String(u.userId));
-      return ur && ur.roleId >= 4;
+      const isTL = ur && ur.roleId === 5;
+      const sameDept = String(u.departmentId) === String(this.project.departmentId);
+      return isTL && sameDept;
     });
-    // Fallback: show all users if filter returns empty
-    if (!users.length) users = this.state.users;
+    
+    // If no specific TL found in dept, show a message or fallback? 
+    // The user said "can only be assigned to TL belonging to that domain", so no fallback.
+    if (!users.length) {
+      console.warn("No Team Leaders found in this project's domain!");
+    }
     const userOptions = users
       .map((u) => `<option value="${u.userId}">${u.fullName}</option>`)
       .join("");
@@ -347,11 +360,12 @@ window.TasksPage = {
     const session = window.Auth.getSession();
     const priority = window.Helpers.getVal("task-priority") || "Medium";
     const deadline = window.Helpers.getVal("task-deadline");
-    const assignedId = parseInt(String(window.Helpers.getVal("task-assigned")).replace(/\D/g, '')) || null;
-    const creatorId = session && session.id ? parseInt(String(session.id).replace(/\D/g, '')) : 1;
+    const assignedId = parseInt(window.Helpers.getVal("task-assigned"), 10) || null;
+    const creatorId = session && session.id ? parseInt(String(session.id).replace(/\D/g, ''), 10) : 1;
+    const projectId = this.project.projectId || parseInt(String(this.project.id).replace(/\D/g, ''), 10);
 
     const newTask = {
-      project_id: parseInt(String(this.project.id).replace(/\D/g, '')) || 1,
+      project_id: projectId,
       title: window.Helpers.getVal("task-name"),
       assigned_to: assignedId,
       created_by: creatorId,
@@ -370,6 +384,18 @@ window.TasksPage = {
           "PM",
           `Created task: "${newTask.title}" for Project ${newTask.project_id}`,
           "Info",
+        );
+      }
+
+      // Send notification to the assigned Team Leader
+      if (newTask.assigned_to) {
+        const dept = this.state.departments.find(d => String(d.id) === String(this.project.departmentId));
+        const deptName = dept ? dept.name : "General";
+        
+        window.Helpers.sendSystemNotification(
+          newTask.assigned_to,
+          `New Task: ${deptName} Department`,
+          `Project Manager assigned you: ${newTask.title}`
         );
       }
 
@@ -426,11 +452,15 @@ window.TasksPage = {
           <div style="background:#f0f4f8;padding:16px;border-radius:12px">
             <label style="display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">STATUS</label>
             <select id="etask-status" class="form-select" style="background:#fff;border-color:#e2e8f0;padding:8px 12px;font-weight:500;color:#0f172a">
-              <option value="open"    ${task.status === "open" ? "selected" : ""}>Open</option>
-              <option value="in_progress" ${task.status === "in_progress" ? "selected" : ""}>In Progress</option>
-              <option value="resolved" ${task.status === "resolved" ? "selected" : ""}>Resolved</option>
-              <option value="closed"  ${task.status === "closed" ? "selected" : ""}>Closed</option>
-              <option value="Blocked" ${task.status === "Blocked" ? "selected" : ""}>Blocked</option>
+              <option value="Pending"    ${task.status === "Pending" ? "selected" : ""}>Pending</option>
+              <option value="In_Progress" ${task.status === "In_Progress" ? "selected" : ""}>In Progress</option>
+              <option value="In_Review" ${task.status === "In_Review" ? "selected" : ""}>In Review</option>
+              <option value="Pending_TL_Review" ${task.status === "Pending_TL_Review" ? "selected" : ""}>TL Review</option>
+              <option value="Pending_PM_Review" ${task.status === "Pending_PM_Review" ? "selected" : ""}>PM Review</option>
+              <option value="Pending_Compliance" ${task.status === "Pending_Compliance" ? "selected" : ""}>Compliance Check</option>
+              <option value="Completed"  ${task.status === "Completed" ? "selected" : ""}>Completed</option>
+              <option value="Blocked"    ${task.status === "Blocked" ? "selected" : ""}>Blocked</option>
+              <option value="Cancelled"  ${task.status === "Cancelled" ? "selected" : ""}>Cancelled</option>
             </select>
           </div>
           <div style="background:#f0f4f8;padding:16px;border-radius:12px">
@@ -488,17 +518,14 @@ window.TasksPage = {
 
     const numericTaskId = this.state.tasks[idx].taskId || parseInt(String(taskId).replace(/[^0-9]/g, ''), 10);
 
-    let newStatus = window.Helpers.getVal("etask-status");
-    if (newStatus === "open") newStatus = "Pending";
-    if (newStatus === "in_progress") newStatus = "In_Progress";
-    if (newStatus === "resolved") newStatus = "Completed";
-    if (newStatus === "closed") newStatus = "Completed";
+    const newStatus = window.Helpers.getVal("etask-status");
+    const actualHours = parseFloat(window.Helpers.getVal("etask-actual")) || 0;
 
     try {
       const pureTaskId = numericTaskId;
       await window.Helpers.api.request(`/tasks/${pureTaskId}`, 'PATCH', { 
         status: newStatus,
-        estimated_hours: parseFloat(window.Helpers.getVal("etask-actual")) || undefined
+        actual_hours: actualHours
       });
       this.state = await window.Helpers.getState();
 

@@ -61,7 +61,7 @@ export class TasksController {
   }
 
   @Patch(':id')
-  @Roles('team_member', 'team_leader')
+  @Roles('team_member', 'team_leader', 'project_manager')
   @ApiOperation({ summary: 'Update a task' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
   @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })

@@ -59,14 +59,16 @@ window.Validator = {
     for (const [rule, param] of Object.entries(config)) {
       if (rule === "required" && param === true && !this.rules.required(val))
         return { valid: false, error: this.messages.required };
-      if (
-        rule === "email" &&
-        param === true &&
-        this.rules.required(val) &&
-        !this.rules.email(val)
-      )
+      if (rule === "email" && param === true && this.rules.required(val) && !this.rules.email(val))
         return { valid: false, error: this.messages.email };
-      // (Add other specific rule checks here if needed by the PM module)
+      if (rule === "minLength" && this.rules.required(val) && !this.rules.minLength(val, param))
+        return { valid: false, error: this.messages.minLength(param) };
+      if (rule === "numeric" && param === true && this.rules.required(val) && !this.rules.numeric(val))
+        return { valid: false, error: this.messages.numeric };
+      if (rule === "date" && param === true && this.rules.required(val) && !this.rules.date(val))
+        return { valid: false, error: this.messages.date };
+      if (rule === "futureDate" && param === true && this.rules.required(val) && !this.rules.futureDate(val))
+        return { valid: false, error: this.messages.futureDate };
     }
     return { valid: true, error: "" };
   },

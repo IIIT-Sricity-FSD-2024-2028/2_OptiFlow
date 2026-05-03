@@ -47,7 +47,7 @@ export class TasksService {
 
   create(dto: CreateTaskDto, actorUserId: number): TaskWithRelations {
     const newTask: Task = {
-      task_id: this.db.tasks.length ? Math.max(...this.db.tasks.map((t) => t.task_id)) + 1 : 1,
+      task_id: Date.now(),
       project_id: dto.project_id ?? null,
       workflow_instance_id: null,
       title: dto.title,

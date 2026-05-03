@@ -61,6 +61,8 @@ function initNotifications() {
   if (!sessionRaw) return;
   const session = JSON.parse(sessionRaw);
 
+  if (document.getElementById("globalNotificationPanel")) return;
+
   const dropdown = document.createElement("div");
   dropdown.id = "globalNotificationPanel";
   dropdown.style.cssText = `
@@ -110,7 +112,7 @@ function initNotifications() {
               <div>
                   <div style="font-size: 13px; font-weight: 600; color: var(--text-primary, #0f172a); margin-bottom: 4px;">${n.title}</div>
                   <div style="font-size: 12px; color: var(--text-secondary, #475569); line-height: 1.4;">${n.message}</div>
-                  <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${n.date}</div>
+                  <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${window.Helpers.timeAgo(n.date || n.time)}</div>
               </div>
           </div>
         `;
@@ -683,7 +685,8 @@ window.Helpers = {
 
       const headers = {
         'Content-Type': 'application/json',
-        'x-user-role': role
+        'x-user-role': role,
+        'x-user-id': sessionRaw ? String(JSON.parse(sessionRaw).id) : '0'
       };
 
       const config = { method, headers };
@@ -715,4 +718,34 @@ window.Helpers = {
       }
     }
   },
+  
+  sendSystemNotification(targetUserId, title, message) {
+    const allNotifs = JSON.parse(localStorage.getItem("system_notifications")) || [];
+    allNotifs.unshift({
+      id: Date.now(),
+      targetUserId: String(targetUserId),
+      title,
+      message,
+      date: new Date().toISOString(),
+      read: false
+    });
+    localStorage.setItem("system_notifications", JSON.stringify(allNotifs));
+  },
+
+  timeAgo(dateString) {
+    if (!dateString) return "";
+    const now = new Date();
+    const past = new Date(dateString);
+    const diffMs = now - past;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+
+    if (diffSec < 60) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return past.toLocaleDateString();
+  }
 };
