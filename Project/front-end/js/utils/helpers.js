@@ -219,7 +219,8 @@ window.Helpers = {
       '/user-roles',             // 11
       '/workflow-instances',     // 12
       '/workflow-templates',     // 13
-      '/workflow-instance-steps' // 14
+      '/workflow-instance-steps',// 14
+      '/teams'                   // 15
     ];
 
     const settled = await Promise.allSettled(
@@ -249,6 +250,7 @@ window.Helpers = {
       rawWorkflowInstances,      // 12 matches '/workflow-instances'
       rawWorkflowTemplates,      // 13 matches '/workflow-templates'
       rawWorkflowInstanceSteps,  // 14 matches '/workflow-instance-steps'
+      rawTeams,                  // 15 matches '/teams'
     ] = settled.map((r, i) => unwrap(r, ENDPOINTS[i]));
 
     console.log("DEBUG - RAW USERS:", rawUsers);
@@ -292,6 +294,8 @@ window.Helpers = {
       const ur = userRoles.find(ur => String(ur.userId) === String(u.user_id));
       const roleObj = ur ? roles.find(r => String(r.roleId) === String(ur.roleId)) : null;
 
+      const teamObj = rawTeams.find(t => String(t.team_id) === String(u.team_id));
+
       const initials = u.full_name
         ? u.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2)
         : '??';
@@ -303,8 +307,11 @@ window.Helpers = {
         roleId:       roleObj ? roleObj.roleId : null,
         roleName:     roleObj ? roleObj.roleName : 'Team Member',
         departmentId: u.department_id  || null,
+        teamId:       u.team_id        || null,
+        teamName:     teamObj ? teamObj.team_name : null,
         managerId:    u.manager_id     || null,
         reportsTo:    u.manager_id     ? String(u.manager_id) : null,
+        phone:        u.phone          || '',
         isActive:     u.is_active      !== undefined ? u.is_active : true,
         status:       u.is_active === false ? 'inactive' : 'active',
         avatar:       initials,
@@ -322,6 +329,16 @@ window.Helpers = {
       departmentName: d.department_name || '',
       managerId:      d.manager_id      || null,
       createdAt:      d.created_at      || null,
+    }));
+
+    // ── Teams ─────────────────────────────────────────────────────────────────
+    const teams = rawTeams.map((t) => ({
+      id:             String(t.team_id),
+      teamId:         t.team_id,
+      name:           t.team_name || '',
+      teamName:       t.team_name || '',
+      departmentId:   t.department_id || null,
+      createdAt:      t.created_at || null,
     }));
 
     // ── Projects ──────────────────────────────────────────────────────────────
@@ -512,6 +529,7 @@ window.Helpers = {
       users,
       userRoles,
       departments,
+      teams,
       roles,
       projects,
       tasks,
@@ -686,7 +704,11 @@ window.Helpers = {
           throw new Error(errorMsg);
         }
 
-        return await response.json();
+        const json = await response.json();
+        if (json && typeof json.success === 'boolean' && 'data' in json) {
+          return json.data;
+        }
+        return json;
       } catch (error) {
         console.error(`API Request Failed [${method} ${endpoint}]:`, error);
         throw error;

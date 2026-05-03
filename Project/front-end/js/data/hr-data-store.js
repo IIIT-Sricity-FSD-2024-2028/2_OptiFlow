@@ -71,7 +71,7 @@
       role:        ROLE_DISPLAY[u.role] || u.role,
       roleSlug:    u.role,
       department:  deptName,
-      team:        null,
+      team:        u.teamName || null,
       parentId:    u.manager_id
         ? `EMP-${String(u.manager_id).padStart(3, "0")}`
         : null,
@@ -81,7 +81,7 @@
         : new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
       joinDateRaw: u.created_at || "",
       email:       u.email || "",
-      phone:       "+91 00000 00000",
+      phone:       u.phone || "",
     };
   }
 
@@ -106,8 +106,10 @@
     return {
       full_name:     emp.name,
       email:         emp.email,
+      phone:         emp.phone || null,
       role:          roleSlug,
       department_id: deptId,
+      team:          emp.team || null,
       manager_id:    parentNumericId || null,
       is_active:     emp.status !== "inactive",
     };
@@ -154,7 +156,7 @@
               roleSlug:    u.roleName, 
               
               department:  DEPT_MAP[u.departmentId] || `Dept ${u.departmentId}`,
-              team:        null,
+              team:        u.teamName || null,
               
               // FIX: Re-add the manager connection so the Org Chart Tree works!
               parentId:    u.managerId ? `EMP-${String(u.managerId).padStart(3, "0")}` : null,
@@ -162,7 +164,7 @@
               status:      u.status,
               joined:      u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : "—",
               email:       u.email || "",
-              phone:       "+91 00000 00000",
+              phone:       u.phone || "",
             };
         });
 
