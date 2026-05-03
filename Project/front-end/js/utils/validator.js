@@ -59,18 +59,46 @@ window.Validator = {
     for (const [rule, param] of Object.entries(config)) {
       if (rule === "required" && param === true && !this.rules.required(val))
         return { valid: false, error: this.messages.required };
-      if (rule === "email" && param === true && this.rules.required(val) && !this.rules.email(val))
+      if (
+        rule === "email" &&
+        param === true &&
+        this.rules.required(val) &&
+        !this.rules.email(val)
+      )
         return { valid: false, error: this.messages.email };
-      if (rule === "minLength" && this.rules.required(val) && !this.rules.minLength(val, param))
-        return { valid: false, error: this.messages.minLength(param) };
-      if (rule === "numeric" && param === true && this.rules.required(val) && !this.rules.numeric(val))
-        return { valid: false, error: this.messages.numeric };
-      if (rule === "date" && param === true && this.rules.required(val) && !this.rules.date(val))
-        return { valid: false, error: this.messages.date };
-      if (rule === "futureDate" && param === true && this.rules.required(val) && !this.rules.futureDate(val))
-        return { valid: false, error: this.messages.futureDate };
+      // (Add other specific rule checks here if needed by the PM module)
     }
     return { valid: true, error: "" };
+  },
+
+  /** Live blur/input validation tied to `#${fieldId}-error` if present */
+  attachLive(fieldId, config) {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+
+    const run = () => {
+      const result = this.validate(el, config);
+      const err = document.getElementById(`${fieldId}-error`);
+      if (!result.valid) {
+        el.classList.add("error");
+        if (err) {
+          err.textContent =
+            typeof result.error === "string"
+              ? result.error
+              : String(result.error || this.messages.required);
+          err.classList.remove("hidden");
+        }
+      } else {
+        el.classList.remove("error");
+        if (err) {
+          err.textContent = "";
+          err.classList.add("hidden");
+        }
+      }
+    };
+
+    el.addEventListener("blur", run);
+    el.addEventListener("input", run);
   },
 
   validateForm(fields) {

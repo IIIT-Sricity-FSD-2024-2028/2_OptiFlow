@@ -202,11 +202,20 @@
    BADGE VARIANTS  (components.css has .badge base + gray/purple/green/yellow)
    Compliance needs: urgent, due-soon, pending, critical, warning
    -------------------------------------------------- */
-.badge.urgent   { background-color: var(--danger-bg);  color: var(--danger-text); }
-.badge.due-soon { background-color: var(--warning-bg); color: var(--warning-text); }
-.badge.pending  { background-color: #f1f5f9;           color: #475569; }
-.badge.critical { background-color: var(--danger-bg);  color: var(--danger-text); }
-.badge.warning  { background-color: var(--warning-bg); color: var(--warning-text); }
+.badge.urgent    { background-color: var(--danger-bg);  color: var(--danger-text); }
+.badge.due-soon  { background-color: var(--warning-bg); color: var(--warning-text); }
+.badge.pending   { background-color: #f1f5f9;           color: #475569; }
+.badge.critical  { background-color: var(--danger-bg);  color: var(--danger-text); }
+.badge.warning   { background-color: var(--warning-bg); color: var(--warning-text); }
+/* Status badges used by violations.js & audit-log.js */
+.badge.open      { background-color: #fee2e2; color: #991b1b; }
+.badge.resolved  { background-color: #dcfce7; color: #166534; }
+/* Hyphen-prefixed aliases for cross-page consistency */
+.badge-red       { background-color: #fee2e2; color: #991b1b; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; }
+.badge-green     { background-color: #dcfce7; color: #166534; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; }
+.badge-orange    { background-color: #fff7ed; color: #c2410c; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; }
+.badge-blue      { background-color: #eff6ff; color: #1d4ed8; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; }
+.badge-gray      { background-color: #f1f5f9; color: #475569; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; }
 
 /* --------------------------------------------------
    OPEN VIOLATIONS LIST

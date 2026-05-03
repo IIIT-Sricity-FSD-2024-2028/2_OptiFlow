@@ -38,7 +38,7 @@ export class EvidenceController {
   }
 
   @Patch(':id')
-  @Roles('superuser', 'compliance_officer', 'project_manager')
+  @Roles('superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Update evidence status/content' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
   @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
@@ -47,7 +47,7 @@ export class EvidenceController {
   }
 
   @Delete(':id')
-  @Roles('superuser', 'compliance_officer')
+  @Roles('superuser', 'compliance_officer', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Delete evidence' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
   @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })

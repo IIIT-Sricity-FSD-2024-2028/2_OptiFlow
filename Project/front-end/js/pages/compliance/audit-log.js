@@ -89,6 +89,27 @@ function renderAuditLog() {
     };
   });
 
+  const escalations = (state.escalations || []).map((esc) => {
+    return {
+      timestamp:  fmtTimestamp(esc.createdAt),
+      rawDate:    new Date(esc.createdAt || 0),
+      title:      `Escalation #${esc.id} — ${esc.title || "Report"}`,
+      subtitle:   (esc.description || "Escalation reported").substring(0, 60),
+      actor:      userName(esc.reportedBy),
+      initials:   userInitials(esc.reportedBy),
+      color:      avatarColor(esc.reportedBy),
+      policy:     "Escalation",
+      project:    `Project ${esc.projectId || "General"}`,
+      outcome:    esc.status || "Open",
+      badgeClass: esc.status === "Resolved" ? "outcome-resolved" : "outcome-pending",
+      iconClass:  esc.status === "Resolved" ? "icon-success" : "icon-warning",
+      svg:        esc.status === "Resolved" ? '<polyline points="20 6 9 17 4 12"/>' : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+      rawText:    `escalation ${esc.id} ${esc.status} ${userName(esc.reportedBy)}`.toLowerCase(),
+    };
+  });
+
+  logs = [...logs, ...escalations];
+
   // Filter by date range
   logs = logs.filter((l) => l.rawDate >= cutoff);
 

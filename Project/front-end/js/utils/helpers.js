@@ -178,6 +178,21 @@ function initNotifications() {
 // PART 2: PM Module Helpers
 // ─────────────────────────────────────────
 
+function unwrapApiListForCollections(res) {
+  if (
+    typeof window !== "undefined" &&
+    window.TasksStore &&
+    typeof window.TasksStore.unwrapApiList === "function"
+  ) {
+    return window.TasksStore.unwrapApiList(res);
+  }
+  let v = res;
+  if (v && !Array.isArray(v) && typeof v === "object" && Array.isArray(v.data)) {
+    v = v.data;
+  }
+  return Array.isArray(v) ? v : [];
+}
+
 /**
  * window.Helpers.getState()
  * ─────────────────────────
@@ -230,7 +245,7 @@ window.Helpers = {
     );
 
     const unwrap = (result, endpoint) => {
-      if (result.status === 'fulfilled') return Array.isArray(result.value) ? result.value : [];
+      if (result.status === "fulfilled") return unwrapApiListForCollections(result.value);
       console.warn(`[getState] Failed to fetch ${endpoint}:`, result.reason?.message ?? result.reason);
       return [];
     };
@@ -551,8 +566,39 @@ window.Helpers = {
     };
   },
 
+  /**
+   * pushNotification(targetUserId, payload)
+   * ─────────────────────────────────────────
+   * The single, canonical way to send a notification to another user.
+   * Persists to localStorage["system_notifications"] using targetUserId,
+   * which is the exact field read by initNotifications() in the bell dropdown.
+   *
+   * @param {number|string} targetUserId - The numeric/string ID of the recipient.
+   * @param {{ title: string, message: string, type?: string }} payload
+   */
+  pushNotification(targetUserId, payload) {
+    if (!targetUserId) {
+      console.warn('[pushNotification] No targetUserId provided — notification dropped.');
+      return;
+    }
+    const notifs = JSON.parse(localStorage.getItem('system_notifications') || '[]');
+    notifs.unshift({
+      id:           Date.now() + Math.random(),
+      targetUserId: String(targetUserId),
+      title:        payload.title   || 'Notification',
+      message:      payload.message || '',
+      type:         payload.type    || 'info',
+      date:         new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }),
+      read:         false,
+    });
+    // Keep max 100 notifications to avoid localStorage bloat
+    localStorage.setItem('system_notifications', JSON.stringify(notifs.slice(0, 100)));
+  },
+
   async saveState(state) {
-    console.warn("saveState deprecated. Use direct async API mutations via Helpers.api.request().");
+    // saveState is a legacy no-op. Use Helpers.pushNotification() for notifications
+    // and Helpers.api.request() for API mutations.
+    console.warn('[saveState] Deprecated — use Helpers.pushNotification() for notifications.');
   },
 
   getParam(name) {
@@ -603,6 +649,22 @@ window.Helpers = {
     if (el) el.value = val;
   },
 
+  notifyApiError(err, fallbackMsg) {
+    const msg =
+      err && err.message
+        ? String(err.message)
+        : typeof fallbackMsg === "string" && fallbackMsg
+          ? fallbackMsg
+          : "Request failed.";
+    const lower = msg.toLowerCase();
+    let title = "Request failed";
+    if (/\b403\b/.test(msg) || lower.includes("forbidden")) title = "Access denied";
+    else if (/\b404\b/.test(msg) || lower.includes("not found")) title = "Not found";
+    if (typeof window !== "undefined" && window.Toast && typeof window.Toast.error === "function") {
+      window.Toast.error(title, msg);
+    }
+  },
+
   statusClass(status) {
     const map = {
       Active: "status-active",
@@ -610,6 +672,7 @@ window.Helpers = {
       Pending: "status-not-started",
       In_Progress: "status-in-progress",
       In_Review: "status-pending",
+      Pending_TL_Review: "status-pending",
       Cancelled: "status-blocked",
       On_Hold: "status-at-risk",
       Draft: "badge-gray",
@@ -673,11 +736,18 @@ window.Helpers = {
 
     async request(endpoint, method = 'GET', body = null) {
       const sessionRaw = sessionStorage.getItem("currentUser");
-      let role = 'guest';
+      let role = "guest";
+      let numericActorId = null;
       if (sessionRaw) {
         try {
           const session = JSON.parse(sessionRaw);
-          role = session.role || 'guest';
+          role = session.role || "guest";
+          numericActorId =
+            window.TasksStore && typeof window.TasksStore.parseNumericUserId === "function"
+              ? window.TasksStore.parseNumericUserId(session)
+              : typeof session.id === "number"
+                ? session.id
+                : parseInt(String(session.id).replace(/\D/g, ""), 10) || null;
         } catch (e) {
           console.warn("Failed to parse currentUser from sessionStorage");
         }
@@ -685,9 +755,17 @@ window.Helpers = {
 
       const headers = {
         'Content-Type': 'application/json',
-        'x-user-role': role,
-        'x-user-id': sessionRaw ? String(JSON.parse(sessionRaw).id) : '0'
+        'x-user-role': role
       };
+
+      const m = String(method).toUpperCase();
+      if (
+        ["POST", "PATCH", "PUT", "DELETE"].includes(m) &&
+        numericActorId != null &&
+        Number.isFinite(numericActorId)
+      ) {
+        headers["x-user-id"] = String(numericActorId);
+      }
 
       const config = { method, headers };
       if (body) config.body = JSON.stringify(body);
