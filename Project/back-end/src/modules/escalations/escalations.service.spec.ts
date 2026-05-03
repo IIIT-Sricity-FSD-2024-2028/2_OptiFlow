@@ -1,20 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TasksService } from './tasks.service';
+import { EscalationsService } from './escalations.service';
 import { DatabaseService } from '../../core/database/database.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
-describe('TasksService', () => {
-  let service: TasksService;
+describe('EscalationsService', () => {
+  let service: EscalationsService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        TasksService,
+        EscalationsService,
         {
           provide: DatabaseService,
           useValue: {
-            tasks: [],
-            subtasks: [],
             escalations: [],
           },
         },
@@ -22,7 +20,7 @@ describe('TasksService', () => {
       ],
     }).compile();
 
-    service = module.get<TasksService>(TasksService);
+    service = module.get<EscalationsService>(EscalationsService);
   });
 
   it('should be defined', () => {

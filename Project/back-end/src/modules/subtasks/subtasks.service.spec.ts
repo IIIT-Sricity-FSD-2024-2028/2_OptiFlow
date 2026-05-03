@@ -1,28 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TasksService } from './tasks.service';
+import { SubtasksService } from './subtasks.service';
 import { DatabaseService } from '../../core/database/database.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
-describe('TasksService', () => {
-  let service: TasksService;
+describe('SubtasksService', () => {
+  let service: SubtasksService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        TasksService,
+        SubtasksService,
         {
           provide: DatabaseService,
           useValue: {
-            tasks: [],
             subtasks: [],
-            escalations: [],
           },
         },
         { provide: AuditLogsService, useValue: { create: jest.fn() } },
       ],
     }).compile();
 
-    service = module.get<TasksService>(TasksService);
+    service = module.get<SubtasksService>(SubtasksService);
   });
 
   it('should be defined', () => {

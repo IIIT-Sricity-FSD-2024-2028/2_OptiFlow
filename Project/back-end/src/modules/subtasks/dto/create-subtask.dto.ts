@@ -1,9 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsInt, IsOptional, Min, IsNumber } from 'class-validator';
 
 export class CreateSubtaskDto {
   @ApiProperty({ example: 101 })
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   task_id: number;
 
   @ApiProperty({ example: 'Export invoice data from ERP' })
@@ -16,8 +19,17 @@ export class CreateSubtaskDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ example: 4, description: 'Defaults to x-user-id actor when omitted' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  created_by?: number;
+
   @ApiProperty({ example: 5 })
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   assigned_to: number;
 
   @ApiProperty({ example: 'Pending', required: false })
@@ -27,7 +39,9 @@ export class CreateSubtaskDto {
 
   @ApiProperty({ example: 2.5, required: false })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
+  @Min(0)
   estimated_hours?: number;
 
   @ApiProperty({ example: '2024-11-18', required: false })

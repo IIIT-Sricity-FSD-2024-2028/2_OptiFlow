@@ -1,21 +1,30 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsInt, IsOptional, Min } from 'class-validator';
 
 export class CreateEscalationDto {
   @ApiProperty({ example: 104 })
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   task_id: number;
 
   @ApiProperty({ example: 2 })
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   project_id: number;
 
   @ApiProperty({ example: 9 })
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   reported_by: number;
 
   @ApiProperty({ example: 8 })
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   target_manager_id: number;
 
   @ApiProperty({ example: 'Staging server down' })

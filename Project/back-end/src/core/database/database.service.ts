@@ -5,11 +5,27 @@ export type ProjectStatus = 'Planning' | 'Active' | 'On_Hold' | 'Completed' | 'C
 export type StepType = 'Approval' | 'Input_Required' | 'Automated_Task';
 export type InstanceStatus = 'Draft' | 'Active' | 'Completed' | 'Cancelled' | 'Rejected';
 export type StepExecutionStatus = 'Pending' | 'Approved' | 'Rejected' | 'Skipped';
-export type TaskStatus = 'Pending' | 'In_Progress' | 'In_Review' | 'Blocked' | 'Completed' | 'Cancelled';
+export type TaskStatus =
+  | 'Pending'
+  | 'In_Progress'
+  | 'In_Review'
+  | 'Pending_TL_Review'
+  | 'Blocked'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Pending_PM_Review'
+  | 'Pending_Compliance';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 export type RuleSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
 export type ViolationStatus = 'Open' | 'Under_Review' | 'Resolved' | 'Ignored';
-export type SystemEntity = 'User' | 'Project' | 'Task' | 'Subtask' | 'Workflow_Instance' | 'Workflow_Step';
+export type SystemEntity =
+  | 'User'
+  | 'Project'
+  | 'Task'
+  | 'Subtask'
+  | 'Escalation'
+  | 'Workflow_Instance'
+  | 'Workflow_Step';
 export type EscalationStatus = 'Open' | 'Reviewed' | 'Resolved' | 'Closed';
 export type EvidenceStatus = 'Pending' | 'Under_Review' | 'Approved' | 'Rejected';
 

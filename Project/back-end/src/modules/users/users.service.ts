@@ -53,7 +53,7 @@ export class UsersService {
     this.db.users.push(newUser);
 
     if (dto.role) {
-      const roleStr = dto.role;
+      const roleStr = String(dto.role);
       const roleObj = this.db.roles.find(r => r.role_name === roleStr || r.role_name === roleStr.replace(/ /g, '_').toLowerCase());
       if (roleObj) {
         this.db.user_roles.push({
@@ -95,7 +95,7 @@ export class UsersService {
     this.db.users[index] = { ...this.db.users[index], ...dto, team_id: teamId, phone: updatedPhone };
 
     if (dto.role) {
-      const roleStr = dto.role;
+      const roleStr = String(dto.role);
       const roleObj = this.db.roles.find(r => r.role_name === roleStr || r.role_name === roleStr.replace(/ /g, '_').toLowerCase());
       if (roleObj) {
         const urIndex = this.db.user_roles.findIndex(ur => ur.user_id === id);

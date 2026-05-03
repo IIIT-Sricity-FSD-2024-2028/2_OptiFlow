@@ -38,6 +38,12 @@ async function bootstrap() {
       name: 'x-user-role',
       description: 'Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)',
     })
+    .addGlobalParameters({
+      in: 'header',
+      required: false,
+      name: 'x-user-id',
+      description: 'Integer user id for the acting user (required on task/subtask/escalation mutations)',
+    })
     .build();
     
   const document = SwaggerModule.createDocument(app, config);
