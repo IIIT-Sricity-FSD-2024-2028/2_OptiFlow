@@ -1,0 +1,3467 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "AppController_getHello",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "App"
+        ]
+      }
+    },
+    "/users": {
+      "get": {
+        "operationId": "UsersController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get all users",
+        "tags": [
+          "Users"
+        ]
+      },
+      "post": {
+        "operationId": "UsersController_create",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created."
+          }
+        },
+        "summary": "Create a new user",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/roles/mapping": {
+      "get": {
+        "operationId": "UsersController_findAllUserRoles",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get user roles mapping",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "operationId": "UsersController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get a user by ID",
+        "tags": [
+          "Users"
+        ]
+      },
+      "patch": {
+        "operationId": "UsersController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Update a user",
+        "tags": [
+          "Users"
+        ]
+      },
+      "delete": {
+        "operationId": "UsersController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Delete a user",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/tasks": {
+      "get": {
+        "operationId": "TasksController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get all tasks",
+        "tags": [
+          "Tasks"
+        ]
+      },
+      "post": {
+        "operationId": "TasksController_create",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor user id (integer)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created."
+          }
+        },
+        "summary": "Create a new task",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
+    "/tasks/assignee/{userId}": {
+      "get": {
+        "operationId": "TasksController_findByAssignee",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get tasks assigned to a specific user",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "operationId": "TasksController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get a task by ID (includes subtasks and active escalations)",
+        "tags": [
+          "Tasks"
+        ]
+      },
+      "patch": {
+        "operationId": "TasksController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor user id (integer)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Update a task",
+        "tags": [
+          "Tasks"
+        ]
+      },
+      "delete": {
+        "operationId": "TasksController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor user id (integer)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Delete a task",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "operationId": "AuditLogsController_findAll",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all audit logs",
+        "tags": [
+          "Audit Logs"
+        ]
+      },
+      "post": {
+        "operationId": "AuditLogsController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAuditLogDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create an audit log entry",
+        "tags": [
+          "Audit Logs"
+        ]
+      }
+    },
+    "/audit-logs/by-user/{userId}": {
+      "get": {
+        "operationId": "AuditLogsController_findByUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get logs for a specific user",
+        "tags": [
+          "Audit Logs"
+        ]
+      }
+    },
+    "/audit-logs/by-entity/{entityType}/{entityId}": {
+      "get": {
+        "operationId": "AuditLogsController_findByEntity",
+        "parameters": [
+          {
+            "name": "entityType",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get logs for a specific entity",
+        "tags": [
+          "Audit Logs"
+        ]
+      }
+    },
+    "/projects": {
+      "get": {
+        "operationId": "ProjectsController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get all projects",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "post": {
+        "operationId": "ProjectsController_create",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor User ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created."
+          }
+        },
+        "summary": "Create a new project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "operationId": "ProjectsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get a project by ID",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor User ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Update a project",
+        "tags": [
+          "Projects"
+        ]
+      },
+      "delete": {
+        "operationId": "ProjectsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor User ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Delete a project",
+        "tags": [
+          "Projects"
+        ]
+      }
+    },
+    "/escalations": {
+      "get": {
+        "operationId": "EscalationsController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get all escalations",
+        "tags": [
+          "Escalations"
+        ]
+      },
+      "post": {
+        "operationId": "EscalationsController_create",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor user id (integer)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEscalationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created."
+          }
+        },
+        "summary": "Create a new escalation",
+        "tags": [
+          "Escalations"
+        ]
+      }
+    },
+    "/escalations/{id}": {
+      "get": {
+        "operationId": "EscalationsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get an escalation by ID",
+        "tags": [
+          "Escalations"
+        ]
+      },
+      "patch": {
+        "operationId": "EscalationsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor user id (integer)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEscalationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Update an escalation",
+        "tags": [
+          "Escalations"
+        ]
+      },
+      "delete": {
+        "operationId": "EscalationsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "description": "Actor user id (integer)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Delete an escalation",
+        "tags": [
+          "Escalations"
+        ]
+      }
+    },
+    "/evidence": {
+      "get": {
+        "operationId": "EvidenceController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get all evidence",
+        "tags": [
+          "Evidence"
+        ]
+      },
+      "post": {
+        "operationId": "EvidenceController_create",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEvidenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created."
+          }
+        },
+        "summary": "Submit new evidence",
+        "tags": [
+          "Evidence"
+        ]
+      }
+    },
+    "/evidence/{id}": {
+      "get": {
+        "operationId": "EvidenceController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get evidence by ID",
+        "tags": [
+          "Evidence"
+        ]
+      },
+      "patch": {
+        "operationId": "EvidenceController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEvidenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Update evidence status/content",
+        "tags": [
+          "Evidence"
+        ]
+      },
+      "delete": {
+        "operationId": "EvidenceController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Delete evidence",
+        "tags": [
+          "Evidence"
+        ]
+      }
+    },
+    "/departments": {
+      "get": {
+        "operationId": "DepartmentsController_findAll",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all departments",
+        "tags": [
+          "Departments"
+        ]
+      },
+      "post": {
+        "operationId": "DepartmentsController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDepartmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a department",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/departments/{id}": {
+      "get": {
+        "operationId": "DepartmentsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get a department by ID",
+        "tags": [
+          "Departments"
+        ]
+      },
+      "patch": {
+        "operationId": "DepartmentsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDepartmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a department",
+        "tags": [
+          "Departments"
+        ]
+      },
+      "delete": {
+        "operationId": "DepartmentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a department",
+        "tags": [
+          "Departments"
+        ]
+      }
+    },
+    "/roles": {
+      "get": {
+        "operationId": "RolesController_findAll",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all roles",
+        "tags": [
+          "Roles"
+        ]
+      },
+      "post": {
+        "operationId": "RolesController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a role",
+        "tags": [
+          "Roles"
+        ]
+      }
+    },
+    "/roles/{id}": {
+      "get": {
+        "operationId": "RolesController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get a role by ID or Slug",
+        "tags": [
+          "Roles"
+        ]
+      },
+      "patch": {
+        "operationId": "RolesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a role",
+        "tags": [
+          "Roles"
+        ]
+      },
+      "delete": {
+        "operationId": "RolesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a role",
+        "tags": [
+          "Roles"
+        ]
+      }
+    },
+    "/roles/overrides/{id}": {
+      "get": {
+        "operationId": "RolesController_getOverrides",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get employee overrides",
+        "tags": [
+          "Roles"
+        ]
+      },
+      "put": {
+        "operationId": "RolesController_setOverrides",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Set employee overrides",
+        "tags": [
+          "Roles"
+        ]
+      },
+      "delete": {
+        "operationId": "RolesController_deleteOverrides",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete employee overrides",
+        "tags": [
+          "Roles"
+        ]
+      }
+    },
+    "/roles/reset": {
+      "post": {
+        "operationId": "RolesController_resetRoles",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Reset all roles to default",
+        "tags": [
+          "Roles"
+        ]
+      }
+    },
+    "/subtasks": {
+      "get": {
+        "operationId": "SubtasksController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all subtasks",
+        "tags": [
+          "Subtasks"
+        ]
+      },
+      "post": {
+        "operationId": "SubtasksController_create",
+        "parameters": [
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubtaskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a subtask",
+        "tags": [
+          "Subtasks"
+        ]
+      }
+    },
+    "/subtasks/by-task/{taskId}": {
+      "get": {
+        "operationId": "SubtasksController_findByTask",
+        "parameters": [
+          {
+            "name": "taskId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get subtasks for a task",
+        "tags": [
+          "Subtasks"
+        ]
+      }
+    },
+    "/subtasks/{id}": {
+      "get": {
+        "operationId": "SubtasksController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get a subtask by ID",
+        "tags": [
+          "Subtasks"
+        ]
+      },
+      "patch": {
+        "operationId": "SubtasksController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubtaskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a subtask",
+        "tags": [
+          "Subtasks"
+        ]
+      },
+      "delete": {
+        "operationId": "SubtasksController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a subtask",
+        "tags": [
+          "Subtasks"
+        ]
+      }
+    },
+    "/compliance-rules": {
+      "get": {
+        "operationId": "ComplianceRulesController_findAll",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all compliance rules",
+        "tags": [
+          "Compliance Rules"
+        ]
+      },
+      "post": {
+        "operationId": "ComplianceRulesController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComplianceRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a compliance rule",
+        "tags": [
+          "Compliance Rules"
+        ]
+      }
+    },
+    "/compliance-rules/{id}": {
+      "get": {
+        "operationId": "ComplianceRulesController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get a compliance rule by ID",
+        "tags": [
+          "Compliance Rules"
+        ]
+      },
+      "patch": {
+        "operationId": "ComplianceRulesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateComplianceRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a compliance rule",
+        "tags": [
+          "Compliance Rules"
+        ]
+      },
+      "delete": {
+        "operationId": "ComplianceRulesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a compliance rule",
+        "tags": [
+          "Compliance Rules"
+        ]
+      }
+    },
+    "/compliance-violations": {
+      "get": {
+        "operationId": "ComplianceViolationsController_findAll",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all compliance violations",
+        "tags": [
+          "Compliance Violations"
+        ]
+      },
+      "post": {
+        "operationId": "ComplianceViolationsController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComplianceViolationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a compliance violation",
+        "tags": [
+          "Compliance Violations"
+        ]
+      }
+    },
+    "/compliance-violations/{id}": {
+      "get": {
+        "operationId": "ComplianceViolationsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get a violation by ID",
+        "tags": [
+          "Compliance Violations"
+        ]
+      },
+      "patch": {
+        "operationId": "ComplianceViolationsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateComplianceViolationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a compliance violation",
+        "tags": [
+          "Compliance Violations"
+        ]
+      },
+      "delete": {
+        "operationId": "ComplianceViolationsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a compliance violation",
+        "tags": [
+          "Compliance Violations"
+        ]
+      }
+    },
+    "/user-roles": {
+      "get": {
+        "operationId": "UserRolesController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "User Roles"
+        ]
+      }
+    },
+    "/workflow-instances": {
+      "get": {
+        "operationId": "WorkflowInstancesController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Workflow Instances"
+        ]
+      }
+    },
+    "/workflow-templates": {
+      "get": {
+        "operationId": "WorkflowTemplatesController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Workflow Templates"
+        ]
+      }
+    },
+    "/workflow-instance-steps": {
+      "get": {
+        "operationId": "WorkflowInstanceStepsController_findAll",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Workflow Instance Steps"
+        ]
+      }
+    },
+    "/teams": {
+      "get": {
+        "operationId": "TeamsController_findAll",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all teams",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "post": {
+        "operationId": "TeamsController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a team",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/teams/{id}": {
+      "get": {
+        "operationId": "TeamsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get a team by ID",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "patch": {
+        "operationId": "TeamsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a team",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "delete": {
+        "operationId": "TeamsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a team",
+        "tags": [
+          "Teams"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "OfficeSync API",
+    "description": "Backend API for the OfficeSync HR and PM Dashboard",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "example": "Arjun Mehta"
+          },
+          "email": {
+            "type": "string",
+            "example": "arjun@officesync.in"
+          },
+          "password_hash": {
+            "type": "string",
+            "example": "hashed_password"
+          },
+          "department_id": {
+            "type": "number",
+            "example": 1
+          },
+          "manager_id": {
+            "type": "number",
+            "example": 4
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          },
+          "role": {
+            "type": "string",
+            "example": "team_member"
+          },
+          "team": {
+            "type": "string",
+            "example": "Ops-Admin"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+91 9876543210"
+          }
+        },
+        "required": [
+          "full_name",
+          "email",
+          "department_id"
+        ]
+      },
+      "UpdateUserDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateTaskDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Reconcile vendor invoices"
+          },
+          "description": {
+            "type": "string",
+            "example": "Cross-check all vendor invoices against PO records."
+          },
+          "project_id": {
+            "type": "number",
+            "example": 1
+          },
+          "created_by": {
+            "type": "number",
+            "example": 4
+          },
+          "assigned_to": {
+            "type": "number",
+            "example": 5
+          },
+          "priority": {
+            "type": "string",
+            "example": "High"
+          },
+          "status": {
+            "type": "string",
+            "example": "Pending",
+            "enum": [
+              "Pending",
+              "In_Progress",
+              "In_Review",
+              "Blocked",
+              "Completed",
+              "Cancelled",
+              "Pending_TL_Review",
+              "Pending_PM_Review",
+              "Pending_Compliance"
+            ]
+          },
+          "estimated_hours": {
+            "type": "number",
+            "example": 8
+          },
+          "actual_hours": {
+            "type": "number",
+            "example": 4.5
+          },
+          "due_date": {
+            "type": "string",
+            "example": "2024-11-20"
+          }
+        },
+        "required": [
+          "title",
+          "created_by",
+          "assigned_to"
+        ]
+      },
+      "UpdateTaskDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Reconcile vendor invoices"
+          },
+          "description": {
+            "type": "string",
+            "example": "Cross-check all vendor invoices against PO records."
+          },
+          "project_id": {
+            "type": "number",
+            "example": 1
+          },
+          "created_by": {
+            "type": "number",
+            "example": 4
+          },
+          "assigned_to": {
+            "type": "number",
+            "example": 5
+          },
+          "priority": {
+            "type": "string",
+            "example": "High"
+          },
+          "status": {
+            "type": "string",
+            "example": "Pending",
+            "enum": [
+              "Pending",
+              "In_Progress",
+              "In_Review",
+              "Blocked",
+              "Completed",
+              "Cancelled",
+              "Pending_TL_Review",
+              "Pending_PM_Review",
+              "Pending_Compliance"
+            ]
+          },
+          "estimated_hours": {
+            "type": "number",
+            "example": 8
+          },
+          "actual_hours": {
+            "type": "number",
+            "example": 4.5
+          },
+          "due_date": {
+            "type": "string",
+            "example": "2024-11-20"
+          }
+        }
+      },
+      "CreateAuditLogDto": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "number",
+            "example": 5
+          },
+          "entity_type": {
+            "type": "string",
+            "example": "User"
+          },
+          "action": {
+            "type": "string",
+            "example": "STATUS_CHANGE"
+          },
+          "performed_by": {
+            "type": "number",
+            "example": 2
+          },
+          "ip_address": {
+            "type": "string",
+            "example": "10.0.1.22"
+          },
+          "old_value": {
+            "type": "object"
+          },
+          "new_value": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "entity_id",
+          "entity_type",
+          "action"
+        ]
+      },
+      "CreateProjectDto": {
+        "type": "object",
+        "properties": {
+          "project_name": {
+            "type": "string",
+            "example": "ISO 27001 Certification"
+          },
+          "description": {
+            "type": "string",
+            "example": "Achieve ISO 27001 certification by Q2 2025."
+          },
+          "department_id": {
+            "type": "number",
+            "example": 2
+          },
+          "status": {
+            "type": "string",
+            "example": "Active"
+          },
+          "start_date": {
+            "type": "string",
+            "example": "2024-11-01"
+          },
+          "end_date": {
+            "type": "string",
+            "example": "2025-05-31"
+          },
+          "created_by": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "project_name",
+          "department_id",
+          "start_date",
+          "created_by"
+        ]
+      },
+      "UpdateProjectDto": {
+        "type": "object",
+        "properties": {
+          "project_name": {
+            "type": "string",
+            "example": "ISO 27001 Certification"
+          },
+          "description": {
+            "type": "string",
+            "example": "Achieve ISO 27001 certification by Q2 2025."
+          },
+          "department_id": {
+            "type": "number",
+            "example": 2
+          },
+          "status": {
+            "type": "string",
+            "example": "Active"
+          },
+          "start_date": {
+            "type": "string",
+            "example": "2024-11-01"
+          },
+          "end_date": {
+            "type": "string",
+            "example": "2025-05-31"
+          },
+          "created_by": {
+            "type": "number",
+            "example": 3
+          }
+        }
+      },
+      "CreateEscalationDto": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "number",
+            "example": 104
+          },
+          "project_id": {
+            "type": "number",
+            "example": 2
+          },
+          "reported_by": {
+            "type": "number",
+            "example": 9
+          },
+          "target_manager_id": {
+            "type": "number",
+            "example": 8
+          },
+          "title": {
+            "type": "string",
+            "example": "Staging server down"
+          },
+          "description": {
+            "type": "string",
+            "example": "Staging has been unreachable for 3 days."
+          },
+          "blocker_type": {
+            "type": "string",
+            "example": "System Issue"
+          },
+          "priority": {
+            "type": "string",
+            "example": "Critical"
+          }
+        },
+        "required": [
+          "task_id",
+          "project_id",
+          "reported_by",
+          "target_manager_id",
+          "title"
+        ]
+      },
+      "UpdateEscalationDto": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "number",
+            "example": 104
+          },
+          "project_id": {
+            "type": "number",
+            "example": 2
+          },
+          "reported_by": {
+            "type": "number",
+            "example": 9
+          },
+          "target_manager_id": {
+            "type": "number",
+            "example": 8
+          },
+          "title": {
+            "type": "string",
+            "example": "Staging server down"
+          },
+          "description": {
+            "type": "string",
+            "example": "Staging has been unreachable for 3 days."
+          },
+          "blocker_type": {
+            "type": "string",
+            "example": "System Issue"
+          },
+          "priority": {
+            "type": "string",
+            "example": "Critical"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Open",
+              "Reviewed",
+              "Resolved",
+              "Closed"
+            ],
+            "example": "Resolved"
+          }
+        }
+      },
+      "CreateEvidenceDto": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "number",
+            "example": 9
+          },
+          "task_id": {
+            "type": "number",
+            "example": 104
+          },
+          "violation_id": {
+            "type": "number",
+            "example": 2
+          },
+          "title": {
+            "type": "string",
+            "example": "Server patch test results"
+          },
+          "evidence_type": {
+            "type": "string",
+            "example": "Document"
+          },
+          "file_url": {
+            "type": "string",
+            "example": "https://storage.officesync.in/evidence/report.pdf"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Partial test results from staging."
+          }
+        },
+        "required": [
+          "user_id",
+          "title",
+          "file_url"
+        ]
+      },
+      "UpdateEvidenceDto": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "number",
+            "example": 9
+          },
+          "task_id": {
+            "type": "number",
+            "example": 104
+          },
+          "violation_id": {
+            "type": "number",
+            "example": 2
+          },
+          "title": {
+            "type": "string",
+            "example": "Server patch test results"
+          },
+          "evidence_type": {
+            "type": "string",
+            "example": "Document"
+          },
+          "file_url": {
+            "type": "string",
+            "example": "https://storage.officesync.in/evidence/report.pdf"
+          },
+          "notes": {
+            "type": "string",
+            "example": "Partial test results from staging."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "Under_Review",
+              "Approved",
+              "Rejected"
+            ],
+            "example": "Approved"
+          }
+        }
+      },
+      "CreateDepartmentDto": {
+        "type": "object",
+        "properties": {
+          "department_name": {
+            "type": "string",
+            "example": "Finance"
+          },
+          "manager_id": {
+            "type": "number",
+            "example": 6
+          }
+        },
+        "required": [
+          "department_name"
+        ]
+      },
+      "UpdateDepartmentDto": {
+        "type": "object",
+        "properties": {
+          "department_name": {
+            "type": "string",
+            "example": "Finance"
+          },
+          "manager_id": {
+            "type": "number",
+            "example": 6
+          }
+        }
+      },
+      "CreateRoleDto": {
+        "type": "object",
+        "properties": {
+          "role_name": {
+            "type": "string",
+            "example": "team_leader"
+          },
+          "description": {
+            "type": "string",
+            "example": "Leads a team and assigns tasks"
+          },
+          "is_system": {
+            "type": "boolean",
+            "example": false
+          },
+          "permissions": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "role_name",
+          "description"
+        ]
+      },
+      "UpdateRoleDto": {
+        "type": "object",
+        "properties": {
+          "role_name": {
+            "type": "string",
+            "example": "team_leader"
+          },
+          "description": {
+            "type": "string",
+            "example": "Leads a team and assigns tasks"
+          },
+          "is_system": {
+            "type": "boolean",
+            "example": false
+          },
+          "permissions": {
+            "type": "object"
+          }
+        }
+      },
+      "CreateSubtaskDto": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "number",
+            "example": 101
+          },
+          "title": {
+            "type": "string",
+            "example": "Export invoice data from ERP"
+          },
+          "description": {
+            "type": "string",
+            "example": "Pull all Q4 invoices from SAP into a CSV."
+          },
+          "created_by": {
+            "type": "number",
+            "example": 4,
+            "description": "Defaults to x-user-id actor when omitted"
+          },
+          "assigned_to": {
+            "type": "number",
+            "example": 5
+          },
+          "status": {
+            "type": "string",
+            "example": "Pending"
+          },
+          "estimated_hours": {
+            "type": "number",
+            "example": 2.5
+          },
+          "due_date": {
+            "type": "string",
+            "example": "2024-11-18"
+          }
+        },
+        "required": [
+          "task_id",
+          "title",
+          "assigned_to"
+        ]
+      },
+      "UpdateSubtaskDto": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "number",
+            "example": 101
+          },
+          "title": {
+            "type": "string",
+            "example": "Export invoice data from ERP"
+          },
+          "description": {
+            "type": "string",
+            "example": "Pull all Q4 invoices from SAP into a CSV."
+          },
+          "created_by": {
+            "type": "number",
+            "example": 4,
+            "description": "Defaults to x-user-id actor when omitted"
+          },
+          "assigned_to": {
+            "type": "number",
+            "example": 5
+          },
+          "status": {
+            "type": "string",
+            "example": "Pending"
+          },
+          "estimated_hours": {
+            "type": "number",
+            "example": 2.5
+          },
+          "due_date": {
+            "type": "string",
+            "example": "2024-11-18"
+          }
+        }
+      },
+      "CreateComplianceRuleDto": {
+        "type": "object",
+        "properties": {
+          "rule_name": {
+            "type": "string",
+            "example": "Task Due Date Overdue > 7 Days"
+          },
+          "description": {
+            "type": "string",
+            "example": "Any task overdue by more than 7 days must be escalated."
+          },
+          "remediation_steps": {
+            "type": "string",
+            "example": "Reassign task or extend deadline with PM approval."
+          },
+          "severity": {
+            "type": "string",
+            "example": "High",
+            "enum": [
+              "Low",
+              "Medium",
+              "High",
+              "Critical"
+            ]
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "rule_name",
+          "description",
+          "remediation_steps",
+          "severity"
+        ]
+      },
+      "UpdateComplianceRuleDto": {
+        "type": "object",
+        "properties": {
+          "rule_name": {
+            "type": "string",
+            "example": "Task Due Date Overdue > 7 Days"
+          },
+          "description": {
+            "type": "string",
+            "example": "Any task overdue by more than 7 days must be escalated."
+          },
+          "remediation_steps": {
+            "type": "string",
+            "example": "Reassign task or extend deadline with PM approval."
+          },
+          "severity": {
+            "type": "string",
+            "example": "High",
+            "enum": [
+              "Low",
+              "Medium",
+              "High",
+              "Critical"
+            ]
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "CreateComplianceViolationDto": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "number",
+            "example": 1
+          },
+          "entity_id": {
+            "type": "number",
+            "example": 10
+          },
+          "entity_type": {
+            "type": "string",
+            "example": "User"
+          },
+          "reported_by": {
+            "type": "number",
+            "example": 9
+          },
+          "due_date": {
+            "type": "string",
+            "example": "2024-12-10"
+          }
+        },
+        "required": [
+          "rule_id",
+          "entity_id",
+          "entity_type"
+        ]
+      },
+      "UpdateComplianceViolationDto": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "number",
+            "example": 1
+          },
+          "entity_id": {
+            "type": "number",
+            "example": 10
+          },
+          "entity_type": {
+            "type": "string",
+            "example": "User"
+          },
+          "reported_by": {
+            "type": "number",
+            "example": 9
+          },
+          "due_date": {
+            "type": "string",
+            "example": "2024-12-10"
+          }
+        }
+      },
+      "CreateTeamDto": {
+        "type": "object",
+        "properties": {
+          "team_name": {
+            "type": "string",
+            "example": "Ops-Admin"
+          },
+          "department_id": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "team_name",
+          "department_id"
+        ]
+      },
+      "UpdateTeamDto": {
+        "type": "object",
+        "properties": {
+          "team_name": {
+            "type": "string",
+            "example": "Ops-Admin"
+          },
+          "department_id": {
+            "type": "number",
+            "example": 1
+          }
+        }
+      }
+    }
+  }
+}

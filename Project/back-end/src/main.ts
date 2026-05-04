@@ -1,10 +1,11 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './core/guards/roles.guard';
 import { TransformInterceptor } from './core/interceptors/transform.interceptor';
+import * as fs from 'fs';       // Added for file system operations
+import * as path from 'path';   // Added for path resolution
 
 async function bootstrap() {
   // 1. Enable CORS so your vanilla JS frontend can actually talk to this server
@@ -26,7 +27,7 @@ async function bootstrap() {
   // 4. Apply Global Interceptor for API Standardization
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // 3. Setup Swagger API Documentation (Fulfills Rubric #7)
+  // 5. Setup Swagger API Documentation (Fulfills Rubric #7)
   const config = new DocumentBuilder()
     .setTitle('OfficeSync API')
     .setDescription('Backend API for the OfficeSync HR and PM Dashboard')
@@ -47,6 +48,25 @@ async function bootstrap() {
     .build();
     
   const document = SwaggerModule.createDocument(app, config);
+
+  // ==========================================
+  // CREATE THE docs/swagger.json FILE
+  // ==========================================
+  // Define the path (goes up one level from 'src' into the root folder)
+  const docsFolderPath = path.join(__dirname, '..', 'docs');
+  
+  // Check if the 'docs' folder exists; if not, create it
+  if (!fs.existsSync(docsFolderPath)) {
+    fs.mkdirSync(docsFolderPath, { recursive: true });
+  }
+
+  // Write the document object to a file formatted with 2 spaces
+  fs.writeFileSync(
+    path.join(docsFolderPath, 'swagger.json'),
+    JSON.stringify(document, null, 2)
+  );
+  // ==========================================
+
   SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(process.env.PORT ?? 3000);
