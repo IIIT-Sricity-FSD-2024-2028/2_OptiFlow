@@ -229,7 +229,25 @@
           const isMine = t.assignedTo === sessionNumericId;
           const isTeam = myTeamIds.includes(t.assignedTo);
           return isMine || isTeam;
+        }).map(t => ({...t, isSubtask: false}));
+
+        // 3. Add Subtasks assigned to me or my team
+        const mySubtasks = (state.subtasks || []).filter((st) => {
+          const isMine = st.assignedTo === sessionNumericId;
+          const isTeam = myTeamIds.includes(st.assignedTo);
+          return isMine || isTeam;
+        }).map(st => {
+           const parentTask = state.tasks.find(t => t.taskId === st.taskId || t.id === st.taskId);
+           return {
+             ...st,
+             projectId: parentTask ? parentTask.projectId : null,
+             category: "Subtask",
+             isSubtask: true,
+             title: `↳ ${st.title} (Subtask)`
+           };
         });
+        
+        allMyTasks.push(...mySubtasks);
 
         populateProcessFilter();
         renderFilters();

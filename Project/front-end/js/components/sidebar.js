@@ -203,6 +203,7 @@ window.Sidebar = {
     // Cross-reference user with the global state for the most up-to-date name & role
     const freshUser = state.users.find(u => String(u.userId) === String(session.id)) || session;
     const displayName = freshUser.fullName || session.name || "Unknown User";
+
     const rawRole = freshUser.roleName || session.roleName || "User";
     const displayRole = rawRole.replace(/_/g, " ");
 
@@ -301,24 +302,21 @@ window.Sidebar = {
 // This wires up the #btn-notifications icon on the top header of every page
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(async () => {
-    const bellBtn = document.getElementById("btn-notifications");
+    const bellBtn = document.getElementById("btn-notifications") || document.querySelector(".bell-btn");
     if (!bellBtn) return;
 
     const session = window.Auth ? window.Auth.getSession() : null;
     const state = window.Helpers ? await window.Helpers.getState() : null;
     if (!session || !state) return;
 
-    // Ensure notifications array exists
-    if (!state.notifications) {
-      state.notifications = [];
-      await window.Helpers.saveState(state);
-    }
+    // Load notifications from localStorage as defined by pushNotification
+    const allNotifs = JSON.parse(localStorage.getItem('system_notifications') || '[]');
 
     // Filter for ONLY this user's notifications and sort newest to oldest
-    const myNotifs = state.notifications
-      .filter((n) => String(n.userId) === String(session.id))
+    const myNotifs = allNotifs
+      .filter((n) => String(n.targetUserId) === String(session.id) || String(n.targetUserId) === String(session.rawId))
       .sort((a, b) => b.id - a.id); // Sorts by timestamp, newest first
-    const unreadCount = myNotifs.filter((n) => !n.isRead).length;
+    const unreadCount = myNotifs.filter((n) => !n.read).length;
 
     // 1. Add Red Dot if there are unread notifications
     if (unreadCount > 0) {
@@ -356,10 +354,10 @@ document.addEventListener("DOMContentLoaded", () => {
         html += `<div style="max-height:350px; overflow-y:auto;">`;
         myNotifs.forEach((n) => {
           html += `
-            <div style="padding:14px 16px; border-bottom:1px solid #f1f5f9; background:${n.isRead ? "white" : "#eff6ff"};">
+            <div style="padding:14px 16px; border-bottom:1px solid #f1f5f9; background:${n.read ? "white" : "#eff6ff"};">
               <div style="font-size:13px; font-weight:600; color:#0f172a; margin-bottom:4px;">${n.title}</div>
               <div style="font-size:12px; color:#475569; line-height:1.5;">${n.message}</div>
-              <div style="font-size:10px; color:#94a3b8; margin-top:8px; text-transform:uppercase; letter-spacing:0.5px;">${n.time}</div>
+              <div style="font-size:10px; color:#94a3b8; margin-top:8px; text-transform:uppercase; letter-spacing:0.5px;">${n.date}</div>
             </div>`;
         });
         html += `</div>`;
@@ -370,16 +368,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // 3. Mark as read in the database
       if (unreadCount > 0) {
-        state.notifications.forEach((n) => {
-          if (String(n.userId) === String(session.id)) n.isRead = true;
+        let currentNotifs = JSON.parse(localStorage.getItem('system_notifications') || '[]');
+        currentNotifs.forEach((n) => {
+          if (String(n.targetUserId) === String(session.id) || String(n.targetUserId) === String(session.rawId)) n.read = true;
         });
-        await window.Helpers.saveState(state);
+        localStorage.setItem('system_notifications', JSON.stringify(currentNotifs));
 
         // Remove the red dot visually
         const dot = bellBtn.querySelector("span");
         if (dot) dot.remove();
       }
     });
+    
+    // 4. Periodically refresh the bell (real-time feel)
+    setInterval(() => {
+      const all = JSON.parse(localStorage.getItem('system_notifications') || '[]');
+      const mine = all.filter((n) => String(n.targetUserId) === String(session.id) || String(n.targetUserId) === String(session.rawId));
+      const unread = mine.filter((n) => !n.read).length;
+      
+      const existingDot = bellBtn.querySelector("span");
+      if (unread > 0 && !existingDot) {
+        const redDot = document.createElement("span");
+        redDot.style.cssText = "position:absolute; top:-2px; right:-2px; width:10px; height:10px; background:#ef4444; border-radius:50%; border:2px solid white;";
+        bellBtn.appendChild(redDot);
+      } else if (unread === 0 && existingDot) {
+        existingDot.remove();
+      }
+    }, 5000); // Check every 5 seconds
+
 
     // Close dropdown when clicking anywhere else on the page
     document.addEventListener("click", () => {

@@ -379,13 +379,7 @@ window.TasksPage = {
       await window.Helpers.api.request('/tasks', 'POST', newTask);
       this.state = await window.Helpers.getState();
       
-      if (window.AuditStore) {
-        window.AuditStore.add(
-          "PM",
-          `Created task: "${newTask.title}" for Project ${newTask.project_id}`,
-          "Info",
-        );
-      }
+
 
       // Send notification to the assigned Team Leader
       if (newTask.assigned_to) {

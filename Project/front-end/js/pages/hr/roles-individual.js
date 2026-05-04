@@ -161,7 +161,7 @@ async function renderEmpInfo(emp) {
       </div>
 
       <div style="margin-top:16px;">
-        <a href="employee-detail.html?id=${encodeURIComponent(emp.id)}"
+        <a href="employee-detail?id=${encodeURIComponent(emp.id)}"
            style="font-size:13px;color:var(--primary-color);display:flex;align-items:center;gap:5px;">
           <i class="ri-external-link-line"></i> View Full Profile
         </a>

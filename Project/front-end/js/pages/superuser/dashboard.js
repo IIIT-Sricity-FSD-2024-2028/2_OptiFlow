@@ -177,8 +177,7 @@ function renderProcessTable(data) {
             <td>${renderUsageBar(wf.runs)}</td>
             <td style="color: var(--text-muted);">${wf.lastModified}</td>
             <td>
-                <button class="action-btn view" onclick="viewProcess('${wf.id}')">View</button>
-                <button class="action-btn edit" onclick="editProcess('${wf.id}')">Edit</button>
+                <a href="workflow-builder?id=${wf.id}" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:8px 16px;">View</a>
             </td>
         `;
 
@@ -187,10 +186,10 @@ function renderProcessTable(data) {
 }
 
 function viewProcess(id) {
-  // Redirect to the Process detail view or workflow builder
-  window.location.href = `workflows.html?id=${id}`;
+  const target = 'workflow-builder.html?id=' + encodeURIComponent(id);
+  window.location.href = target;
 }
 
 function editProcess(id) {
-  window.location.href = `workflows.html?id=${id}&edit=true`;
+  window.location.href = `workflow-builder.html?id=${id}`;
 }

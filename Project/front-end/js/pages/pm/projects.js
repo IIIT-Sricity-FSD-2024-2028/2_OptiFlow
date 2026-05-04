@@ -194,8 +194,6 @@ window.ProjectsPage = {
     const searchEl = document.getElementById('project-search');
     if (searchEl) searchEl.addEventListener('input', () => this.applyFilter());
 
-    const deptEl = document.getElementById('dept-filter');
-    if (deptEl) deptEl.addEventListener('change', () => this.applyFilter());
 
     const addBtn = document.getElementById('btn-add-project');
     if (addBtn) addBtn.addEventListener('click', () => this.openAddModal());
@@ -209,7 +207,6 @@ window.ProjectsPage = {
   applyFilter() {
     const query    = (document.getElementById('project-search')?.value || '').toLowerCase();
     const filter   = this.activeFilter;
-    const deptName = (document.getElementById('dept-filter')?.value || '').toLowerCase();
 
     this.filtered = this.state.projects.filter(p => {
       const matchStatus =
@@ -219,14 +216,12 @@ window.ProjectsPage = {
         (filter === 'planning'  && p.status === 'Planning') ||
         (filter === 'completed' && p.status === 'Completed');
 
-      const dept = this.state.departments.find(d => d.id === p.departmentId);
-      const matchDept = !deptName || (dept && dept.name.toLowerCase().includes(deptName));
 
       const matchQuery = !query ||
         p.name.toLowerCase().includes(query) ||
         p.description.toLowerCase().includes(query);
 
-      return matchStatus && matchQuery && matchDept;
+      return matchStatus && matchQuery;
     });
     this.renderProjects();
   },
@@ -313,13 +308,7 @@ window.ProjectsPage = {
       await window.Helpers.api.request('/projects', 'POST', newProject);
       this.state = await window.Helpers.getState();
 
-      if (window.AuditStore) {
-        window.AuditStore.add(
-          "PM",
-          `Created project: "${newProject.name}"`,
-          "Info",
-        );
-      }
+
       
       window.Modal.close('modal-add-project');
       window.Toast.success('Project Created', `"${newProject.project_name}" has been created.`);

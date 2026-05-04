@@ -61,7 +61,7 @@ function renderLibraryTable(workflows) {
             <td><span class="badge ${statusBadge}">${wf.status}</span></td>
             <td style="color:var(--text-muted)">${wf.lastModified}</td>
             <td>
-                <button class="action-btn view" onclick="window.location.href='workflows.html?id=${wf.id}'">View</button>
+                <a href="workflow-builder?id=${wf.id}" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:8px 16px;">View</a>
             </td>
         `;
     tbody.appendChild(tr);

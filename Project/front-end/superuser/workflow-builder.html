@@ -447,10 +447,10 @@
             <span>Settings</span>
           </a>
           <div class="user-profile">
-            <div class="avatar">VP</div>
+            <div class="avatar" id="sidebar-user-avatar">AM</div>
             <div class="user-info">
-              <span class="user-name">Vikram Patel</span>
-              <span class="user-role">Process Admin</span>
+              <span class="user-name" id="sidebar-user-name">Arjun Mehta</span>
+              <span class="user-role" id="sidebar-user-role">Process Admin</span>
             </div>
           </div>
           <!-- Logout Demarcation -->
@@ -461,11 +461,7 @@
               padding-top: 16px;
             "
           >
-            <button
-              class="logout-btn"
-              onclick="logout()"
-              style="width: 100%; justify-content: flex-start; margin-top: 0"
-            >
+            <button class="logout-btn" onclick="logout()">
               <svg
                 width="14"
                 height="14"
@@ -597,5 +593,25 @@
     <script src="../js/data/workflows.js"></script>
     <script src="../js/utils/helpers.js"></script>
     <script src="../js/pages/superuser/workflow-builder.js"></script>
-  </body>
+      <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const sessionRaw = sessionStorage.getItem("currentUser");
+        if (sessionRaw) {
+          try {
+            const session = JSON.parse(sessionRaw);
+            const nameEl = document.getElementById("sidebar-user-name");
+            const roleEl = document.getElementById("sidebar-user-role");
+            const avatarEl = document.getElementById("sidebar-user-avatar");
+            
+            if (nameEl) nameEl.textContent = session.fullName || session.name || "Arjun Mehta";
+            if (roleEl) roleEl.textContent = session.displayRole || session.roleName || "Process Admin";
+            if (avatarEl) {
+              const name = session.fullName || session.name || "AM";
+              avatarEl.textContent = name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+            }
+          } catch(e) {}
+        }
+      });
+    </script>
+</body>
 </html>
