@@ -21,7 +21,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Create Task
             </button>
-            <div class="bell-btn" title="Notifications">
+            <div class="bell-btn" id="btn-notifications" title="Notifications">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -147,6 +147,7 @@
     <script src="../../js/components/sidebar.js"></script>
     <script src="../../js/components/toast.js"></script>
     <script src="../../js/components/modal.js"></script>
+    <script src="../../js/components/notifications.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", async () => {
         // Ensure only PM or Superuser can access
@@ -163,6 +164,7 @@
 
         window.Sidebar.render("dashboard");
         window.Toast.init();
+        if (window.Notifications) await window.Notifications.init();
 
         const state = await window.Helpers.getState();
 

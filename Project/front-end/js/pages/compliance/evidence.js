@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
   });
 
-  renderQueue("pending");
+  renderQueue("all");
 });
 
 // ── Tab Counts ────────────────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ window.updateEvidenceStatus = async function (status, label, reason) {
   await _recordAuditEntry(ev, status, numericId, reason);
 
   // 5. Toast
-  if (window.Toast) window.Toast.show(`Evidence ${label}`, status === "Approved" ? "success" : "error");
+  if (window.Toast) window.Toast.show(status === "Approved" ? "success" : "error", `Evidence ${label}`, `Status updated to ${label}.`);
 
   renderQueue(document.querySelector(".queue-tab.active")?.dataset?.tab || "pending");
 };
@@ -327,7 +327,7 @@ window.rejectEvidence = function () {
             if (!reason) {
               const errEl = document.getElementById("reject-reason-error");
               if (errEl) errEl.style.display = "block";
-              if (window.Toast) window.Toast.show("Please provide a rejection reason.", "error");
+              if (window.Toast) window.Toast.show("error", "Reason Required", "Please provide a rejection reason.");
               return false; // Keep modal open
             }
             await window.updateEvidenceStatus("Rejected", "Rejected", reason);
@@ -383,7 +383,7 @@ window.requestMoreInfo = function () {
                 type:    "warning",
               });
             }
-            if (window.Toast) window.Toast.show("Information request sent to submitter.", "info");
+            if (window.Toast) window.Toast.show("info", "Request Sent", "Information request sent to submitter.");
             return true;
           },
         },
@@ -397,7 +397,7 @@ window.requestMoreInfo = function () {
         type:    "warning",
       });
     }
-    if (window.Toast) window.Toast.show("Information request sent to submitter.", "info");
+    if (window.Toast) window.Toast.show("info", "Request Sent", "Information request sent to submitter.");
   }
 };
 

@@ -199,21 +199,36 @@ window.markResolved = async function () {
         "PATCH",
         { status: "Resolved", resolution_remarks: state.complianceViolations[idx].resolutionRemarks },
       );
+
+      // ── INTERLINKING: If this is a Task violation, try to "Unblock" the task ──
+      const v = state.complianceViolations[idx];
+      if (v.entityType === 'Task' && v.entityId) {
+        try {
+          await window.Helpers.api.request(`/tasks/${v.entityId}`, "PATCH", { status: 'In_Progress' });
+          window.Helpers.pushNotification(v.reportedBy || 1, {
+            title: "Task Unblocked",
+            message: `Violation for Task #${v.entityId} resolved. Task moved to In Progress.`,
+            type: "success"
+          });
+        } catch (taskErr) {
+          console.warn("Could not auto-update task status:", taskErr);
+        }
+      }
     } catch (e) {
       console.warn("Could not persist violation update to backend:", e);
     }
 
-    if (window.Toast) window.Toast.show("Violation marked as resolved.", "success");
+    if (window.Toast) window.Toast.show("success", "Violation Resolved", "Violation marked as resolved.");
     renderQueue(document.querySelector(".pill-tab.active")?.dataset.tab || "open");
   }
 };
 
 window.viewProject = function () {
-  if (window.Toast) window.Toast.show("Redirecting to Project detail view...", "info");
+  if (window.Toast) window.Toast.show("info", "Navigation", "Redirecting to Project detail view...");
 };
 
 window.escalateViolation = function () {
   if (confirm("Escalate this violation to the regulatory team?")) {
-    if (window.Toast) window.Toast.show("Violation escalated successfully.", "warning");
+    if (window.Toast) window.Toast.show("warning", "Violation Escalated", "Violation escalated successfully.");
   }
 };

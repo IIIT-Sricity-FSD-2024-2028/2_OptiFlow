@@ -190,7 +190,6 @@
     const previewEl = document.getElementById("tl-team-overview-list");
     if (previewEl) {
       const preview = teamOverviewTasks.slice(0, 6);
-      console.log("[tl-dashboard] teamOverviewTasks:", preview.length, "| memberIds:", teamMemberIds, "| first task:", preview[0] ? {id: preview[0].id, taskId: preview[0].taskId, title: preview[0].title} : null);
       previewEl.innerHTML =
         preview.length === 0
           ? '<div class="empty-state"><div class="empty-state-text">No tasks allocated to your team yet</div></div>'
@@ -209,7 +208,7 @@
                 const name = owner.fullName || owner.name || "Assignee";
 
                 return `
-        <div data-task-id="${tid}" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="window.location.href='task-detail?id=${tid}'">
+        <div data-task-id="${tid}" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="window.location.href='task-detail.html?id=${tid}'">
           <div style="flex:1">
             <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px">${taskTitle(t)}</div>
             <div style="font-size:11px;color:var(--text-muted)">${name} · Due ${t.dueDate ? new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "N/A"}</div>
@@ -237,7 +236,7 @@
             const tid = t.isSubtask ? (t.subtaskId || t.id) : (t.taskId || t.id || '');
             const isSub = t.isSubtask ? 'true' : 'false';
             return `
-          <div data-task-id="${tid}" style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);gap:12px;cursor:pointer" onclick="window.location.href='task-detail?id=${t.taskId}'">
+          <div data-task-id="${tid}" style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border);gap:12px;cursor:pointer" onclick="window.location.href='task-detail.html?id=${t.taskId}'">
             <div style="flex:1">
               <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px">${taskTitle(t)}</div>
               <div style="font-size:11px;color:var(--text-muted)">Submitted by ${name}</div>
@@ -284,20 +283,6 @@
 
     populateTlEscalationTaskSelect();
     renderTeamEscalationLog();
-
-    const sessNotify = window.Auth.getSession();
-    const myNotifyId = sessNotify.rawId ?? sessNotify.id;
-    const unread =
-      JSON.parse(localStorage.getItem("system_notifications") || "[]").filter(
-        (n) => String(n.targetUserId) === String(myNotifyId) && !n.read,
-      );
-    if (unread.length > 0) {
-      window.Toast.info(unread[0].title, unread[0].message);
-      const bell = document.querySelector(".bell-btn");
-      if (bell && !bell.querySelector(".bell-dot")) {
-        bell.innerHTML += `<span class="bell-dot" style="position:absolute; top:4px; right:6px; width:8px; height:8px; background:var(--red); border-radius:50%; border:2px solid white;"></span>`;
-      }
-    }
   }
 
   async function bootstrapTlDashboard() {
@@ -312,6 +297,7 @@
 
     window.Sidebar.render("dashboard");
     window.Toast.init();
+    await window.Notifications.init();
 
     await loadTlStateAndRender();
     setupTlEscQuickFieldListeners();
@@ -334,6 +320,16 @@
           title:   'Task Approved',
           message: `Your work on "${task.title || task.taskName || 'Untitled'}" was approved by your Team Leader.`,
           type:    'success',
+        });
+      }
+
+      // ── Notify Project Manager (the project creator) ──────────────────
+      const project = (stateRef.projects || []).find(p => p.projectId === task.projectId);
+      if (project && project.createdBy) {
+        window.Helpers.pushNotification(Number(project.createdBy), {
+          title:   'Task Finalized',
+          message: `Team Leader has approved task: "${task.title || task.taskName || 'Untitled'}" in project "${project.name}".`,
+          type:    'info',
         });
       }
       

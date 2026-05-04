@@ -2,7 +2,7 @@
 
 let builderStages = [];
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   let wfId = params.get("id") || params.get("wfId");
   
@@ -10,7 +10,8 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log('[WorkflowBuilder] URL Params:', window.location.search);
   console.log('[WorkflowBuilder] Detected ID:', wfId);
   
-  const workflows = getWorkflows();
+  const state = await window.Helpers.getState();
+  const workflows = state.workflowTemplates || [];
   console.log('[WorkflowBuilder] Total Workflows Loaded:', workflows.length);
 
   if (wfId) {
@@ -29,11 +30,11 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("metaProcessDept").innerText = wf.department;
       if (document.getElementById("metaProcessCompliance"))
         document.getElementById("metaProcessCompliance").innerText =
-          wf.compliance.join(" · ");
+          (wf.compliance || []).join(" · ");
 
       // Map stages for builder with mock roles for a "fully functional" look
       const mockRoles = ["Team Member", "Team Member", "Team Leader", "Compliance Officer", "Manager", "Admin"];
-      builderStages = wf.stages.map((stg, idx) => ({
+      builderStages = (wf.stages || []).map((stg, idx) => ({
         name: stg.replace("+2", "Optional Step").replace("+3", "Cleanup"),
         role: mockRoles[idx] || "Unassigned",
         tags: [...(wf.compliance || [])],

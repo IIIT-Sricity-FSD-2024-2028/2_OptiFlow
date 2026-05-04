@@ -93,8 +93,9 @@ async function renderOmniscientMetrics() {
   setText("metricPendingReviewTag", "HR pending provisions");
 }
 
-function updateTabCounts() {
-  const all = getWorkflows();
+async function updateTabCounts() {
+  const state = await window.Helpers.getState();
+  const all = state.workflowTemplates || [];
   const counts = {
     "": all.length,
     Active: all.filter((w) => w.status === "Active").length,
@@ -116,8 +117,9 @@ function updateTabCounts() {
   });
 }
 
-function refreshProcessTable() {
-  let workflows = getWorkflows();
+async function refreshProcessTable() {
+  const state = await window.Helpers.getState();
+  let workflows = state.workflowTemplates || [];
 
   // Search Term
   const searchInput = document.getElementById("searchInput");
@@ -177,7 +179,7 @@ function renderProcessTable(data) {
             <td>${renderUsageBar(wf.runs)}</td>
             <td style="color: var(--text-muted);">${wf.lastModified}</td>
             <td>
-                <a href="workflow-builder?id=${wf.id}" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:8px 16px;">View</a>
+                <a href="workflow-builder.html?id=${wf.id}" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:8px 16px;">View</a>
             </td>
         `;
 

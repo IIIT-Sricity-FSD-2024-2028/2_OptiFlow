@@ -18,6 +18,7 @@ import { WorkflowInstancesModule } from './modules/workflow-instances/workflow-i
 import { WorkflowTemplatesModule } from './modules/workflow-templates/workflow-templates.module';
 import { WorkflowInstanceStepsModule } from './modules/workflow-instance-steps/workflow-instance-steps.module';
 import { TeamsModule } from './modules/teams/teams.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { TeamsModule } from './modules/teams/teams.module';
     WorkflowTemplatesModule,
     WorkflowInstanceStepsModule,
     TeamsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

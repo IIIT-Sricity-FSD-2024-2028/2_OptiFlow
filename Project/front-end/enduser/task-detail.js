@@ -83,6 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   session = window.Auth.getSession();
   window.Sidebar.render("tasks");
   window.Toast.init();
+  if (window.Notifications) await window.Notifications.init();
 
   // ── Step 1: Get task ID from URL ──────────────────────────────────────
   const params = new URLSearchParams(window.location.search);
