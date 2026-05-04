@@ -138,7 +138,7 @@ async function populateFilters() {
 // Navigation helpers
 // ─────────────────────────────────────────
 function goToEmployee(empId) {
-  window.location.href = `employee-detail.html?id=${empId}`;
+  window.location.href = `employee-detail?id=${empId}`;
 }
 
 function goToProvision(empId) {

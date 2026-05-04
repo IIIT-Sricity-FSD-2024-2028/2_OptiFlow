@@ -160,10 +160,10 @@
             <span>Settings</span>
           </a>
           <div class="user-profile">
-            <div class="avatar">VP</div>
+            <div class="avatar" id="sidebar-user-avatar">AM</div>
             <div class="user-info">
-              <span class="user-name">Vikram Patel</span>
-              <span class="user-role">Process Admin</span>
+              <span class="user-name" id="sidebar-user-name">Arjun Mehta</span>
+              <span class="user-role" id="sidebar-user-role">Process Admin</span>
             </div>
           </div>
           <!-- Logout Demarcation -->
@@ -415,5 +415,25 @@
     <script src="../js/data/audit-store.js"></script>
     <script src="../js/utils/auth.js"></script>
     <script src="../js/pages/superuser/users.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const sessionRaw = sessionStorage.getItem("currentUser");
+        if (sessionRaw) {
+          try {
+            const session = JSON.parse(sessionRaw);
+            const nameEl = document.getElementById("sidebar-user-name");
+            const roleEl = document.getElementById("sidebar-user-role");
+            const avatarEl = document.getElementById("sidebar-user-avatar");
+            
+            if (nameEl) nameEl.textContent = session.fullName || session.name || "Process Admin";
+            if (roleEl) roleEl.textContent = session.displayRole || session.roleName || "Process Admin";
+            if (avatarEl) {
+              const name = session.fullName || session.name || "PA";
+              avatarEl.textContent = name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+            }
+          } catch(e) {}
+        }
+      });
+    </script>
   </body>
 </html>

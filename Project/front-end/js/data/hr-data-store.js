@@ -259,6 +259,22 @@ async getById(id) {
         body.password_hash = "default_hash";
         const u = await window.Helpers.api.request("/users", "POST", body);
         const emp = mapIn(u);
+
+        // ── Audit Log: Employee Created ──────────────────────────────────
+        if (emp && emp.rawId) {
+          const actorId = (() => {
+            try { const s = JSON.parse(sessionStorage.getItem("currentUser") || "{}"); return typeof s.id === "number" ? s.id : parseInt(String(s.id||"").replace(/\D/g,""),10)||null; } catch { return null; }
+          })();
+          if (window.AuditStore) {
+            window.AuditStore.add(
+              "USER_CREATED",
+              "User",
+              emp.rawId,
+              { performedBy: actorId, newValue: { name: emp.name, role: body.role, email: emp.email, department_id: body.department_id } }
+            );
+          }
+        }
+
         return { ok: true, employee: emp, stats: await this.getStats() };
       } catch (e) {
         console.error("HRStore.add failed:", e);
@@ -271,6 +287,20 @@ async getById(id) {
         const numericId = parseInt(String(id).replace("EMP-", ""), 10);
         const body = mapOut(payload);
         const u = await window.Helpers.api.request(`/users/${numericId}`, "PATCH", body);
+
+        // ── Audit Log: Employee Updated ──────────────────────────────────
+        const actorId = (() => {
+          try { const s = JSON.parse(sessionStorage.getItem("currentUser") || "{}"); return typeof s.id === "number" ? s.id : parseInt(String(s.id||"").replace(/\D/g,""),10)||null; } catch { return null; }
+        })();
+        if (window.AuditStore) {
+          window.AuditStore.add(
+            "USER_UPDATED",
+            "User",
+            numericId,
+            { performedBy: actorId, newValue: body }
+          );
+        }
+
         return { ok: true, employee: mapIn(u) };
       } catch (e) {
         return { ok: false, errors: { server: e.message } };
@@ -284,6 +314,20 @@ async getById(id) {
         const u = await window.Helpers.api.request(
           `/users/${numericId}`, "PATCH", { is_active }
         );
+
+        // ── Audit Log: Status Changed ─────────────────────────────────────
+        const actorId = (() => {
+          try { const s = JSON.parse(sessionStorage.getItem("currentUser") || "{}"); return typeof s.id === "number" ? s.id : parseInt(String(s.id||"").replace(/\D/g,""),10)||null; } catch { return null; }
+        })();
+        if (window.AuditStore) {
+          window.AuditStore.add(
+            "STATUS_CHANGE",
+            "User",
+            numericId,
+            { performedBy: actorId, oldValue: { is_active: !is_active }, newValue: { is_active } }
+          );
+        }
+
         return { ok: true, employee: mapIn(u) };
       } catch (e) {
         return { ok: false };

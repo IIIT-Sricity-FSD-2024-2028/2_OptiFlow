@@ -4,11 +4,17 @@ let builderStages = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
-  const wfId = params.get("id");
+  let wfId = params.get("id") || params.get("wfId");
+  
+  // Debug logging
+  console.log('[WorkflowBuilder] URL Params:', window.location.search);
+  console.log('[WorkflowBuilder] Detected ID:', wfId);
+  
   const workflows = getWorkflows();
+  console.log('[WorkflowBuilder] Total Workflows Loaded:', workflows.length);
 
   if (wfId) {
-    let wf = workflows.find((w) => w.id === wfId);
+    let wf = workflows.find((w) => String(w.id) === String(wfId));
     if (wf) {
       document.getElementById("builderTitle").innerHTML =
         `<span class="muted">${wf.name}</span> › Workflow Builder`;
@@ -25,14 +31,20 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("metaProcessCompliance").innerText =
           wf.compliance.join(" · ");
 
-      // Map stages for builder
+      // Map stages for builder with mock roles for a "fully functional" look
+      const mockRoles = ["Team Member", "Team Member", "Team Leader", "Compliance Officer", "Manager", "Admin"];
       builderStages = wf.stages.map((stg, idx) => ({
         name: stg.replace("+2", "Optional Step").replace("+3", "Cleanup"),
-        role: "Unassigned",
-        tags: wf.compliance || [],
+        role: mockRoles[idx] || "Unassigned",
+        tags: [...(wf.compliance || [])],
         active: false,
       }));
       if (builderStages.length > 0) builderStages[0].active = true;
+    } else {
+      // Fallback if ID provided but not found
+      builderStages = [
+        { name: "New Draft Stage", role: "Unassigned", tags: [], active: true },
+      ];
     }
   } else {
     // New Process

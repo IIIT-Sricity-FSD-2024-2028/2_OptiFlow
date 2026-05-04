@@ -52,10 +52,10 @@
         </nav>
         <div class="sidebar-footer">
           <div class="user-profile">
-            <div class="avatar">DN</div>
+            <div class="avatar" id="sidebarAvatar">??</div>
             <div class="user-info">
-              <span class="user-name">Divya Nair</span
-              ><span class="user-role">HR Manager</span>
+              <span class="user-name" id="sidebarName">Loading...</span>
+              <span class="user-role" id="sidebarRole">HR</span>
             </div>
           </div>
           <button class="logout-btn" id="logoutBtn">
@@ -225,5 +225,25 @@
     <script src="../../js/data/roles-store.js?v=999"></script>
     <script src="../../js/data/audit-store.js?v=999"></script>
     <script src="../../js/pages/hr/employee-detail.js?v=999"></script>
+    <script>
+      // Populate sidebar from session (not from viewed employee)
+      (function() {
+        const raw = sessionStorage.getItem('currentUser');
+        if (!raw) return;
+        try {
+          const u = JSON.parse(raw);
+          const name = u.name || u.full_name || 'HR';
+          const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || '??';
+          const roleMap = { 1:'Superuser', 2:'Project Manager', 3:'Compliance Officer', 4:'HR Manager', 5:'Team Leader', 6:'Team Member' };
+          const roleStr = roleMap[u.roleId] || (u.role ? u.role.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : 'HR');
+          const el = document.getElementById('sidebarName');
+          const av = document.getElementById('sidebarAvatar');
+          const ro = document.getElementById('sidebarRole');
+          if (el) el.textContent = name;
+          if (av) av.textContent = initials;
+          if (ro) ro.textContent = roleStr;
+        } catch(e) {}
+      })();
+    </script>
   </body>
 </html>

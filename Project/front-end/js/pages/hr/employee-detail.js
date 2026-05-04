@@ -246,7 +246,7 @@ async function renderRolePermissions() {
     : "";
 
   const manageLink = canEdit
-    ? `<a href="roles-individual.html?emp=${emp.id}" class="ed-card-link"><i class="ri-user-settings-line"></i> Manage</a>`
+    ? `<a href="roles-individual?emp=${emp.id}" class="ed-card-link"><i class="ri-user-settings-line"></i> Manage</a>`
     : "";
 
   return `
@@ -339,8 +339,7 @@ async function openEditModal() {
     "Team Member",
     "Compliance Officer",
     "Process Admin",
-    "HR Manager",
-    "HR Ops",
+    "HR",
   ];
 
   const deptOpts = depts
@@ -699,22 +698,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   await renderPage();
   setupNotifications();
-// --- DYNAMIC SIDEBAR UPDATER ---
-  // Fetch the live, mapped user from the backend
-  const currentUser = await HRStore.getCurrentUser();
-  if (currentUser) {
-    // We cast a wide net to catch whatever CSS class your HTML is using
-    const nameEls = document.querySelectorAll(".sidebar-user-name, .user-info h4, .profile-name, .name, .user-name");
-    const roleEls = document.querySelectorAll(".sidebar-user-role, .user-info p, .profile-role, .role, .user-role");
-    const avatarEls = document.querySelectorAll(".sidebar-avatar, .user-avatar, .avatar, .profile-avatar");
-
-    // Update all matching elements on the page
-    nameEls.forEach(el => el.textContent = currentUser.name);
-    roleEls.forEach(el => el.textContent = currentUser.role);
-    avatarEls.forEach(el => {
-      el.textContent = currentUser.initials;
-      el.style.backgroundColor = currentUser.color;
-    });
-  }
-  // -------------------------------
 });

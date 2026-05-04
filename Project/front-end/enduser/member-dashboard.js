@@ -186,7 +186,7 @@
           const tname = escapeHtml(taskDisplayTitle(t) || "Untitled");
 
           return `
-          <div class="hover-bg" style="display:flex; justify-content:space-between; align-items:center; padding:14px 12px; border-bottom:1px solid var(--border); cursor:pointer; margin: 0 -12px; border-radius: 8px; transition: background 0.2s;" onclick="window.location.href='task-detail.html?id=${tid}'">
+          <div class="hover-bg" style="display:flex; justify-content:space-between; align-items:center; padding:14px 12px; border-bottom:1px solid var(--border); cursor:pointer; margin: 0 -12px; border-radius: 8px; transition: background 0.2s;" onclick="window.location.href='task-detail?id=${tid}'">
             <div style="display:flex; align-items:center; gap:12px; flex:1">
               <div>
                 <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px">${tname}</div>

@@ -36,9 +36,11 @@
   // superuser/hr page code that expects { id, name, email, role, department, status, joined }
   async function getUsers() {
     try {
-      const [rawUsers, deptMap] = await Promise.all([
+      const [rawUsers, deptMap, roles, userRoles] = await Promise.all([
         window.Helpers.api.request('/users'),
         getDeptMap(),
+        window.Helpers.api.request('/roles'),
+        window.Helpers.api.request('/user-roles'),
       ]);
 
       return (rawUsers || []).map(u => {
@@ -47,6 +49,18 @@
         const joined = u.created_at
           ? new Date(u.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
           : new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+
+        const ur = (userRoles || []).find(r => r.user_id === numericId);
+        const roleObj = ur ? (roles || []).find(r => r.role_id === ur.role_id) : null;
+        let roleStr = roleObj ? roleObj.role_name : 'team_member';
+        
+        // Normalize role string to match legacy mapping
+        if (roleStr === 'Process Admin') roleStr = 'superuser';
+        if (roleStr === 'Project Manager') roleStr = 'project_manager';
+        if (roleStr === 'Team Leader') roleStr = 'team_leader';
+        if (roleStr === 'Team Member') roleStr = 'team_member';
+        if (roleStr === 'HR Manager') roleStr = 'hr_manager';
+        if (roleStr === 'Compliance Officer') roleStr = 'compliance_officer';
 
         return {
           // ── Primary key (both formats for compat) ──────────────────────
@@ -57,8 +71,8 @@
           fullName:    u.full_name || 'Unknown',
           email:       u.email    || '',
           // ── Role ───────────────────────────────────────────────────────
-          role:        u.role     || 'team_member',
-          displayRole: ROLE_DISPLAY[u.role] || u.role,
+          role:        roleStr,
+          displayRole: ROLE_DISPLAY[roleStr] || roleStr,
           // ── Department (resolved to string name) ────────────────────────
           department:  deptMap[u.department_id] || `Dept ${u.department_id}`,
           department_id: u.department_id,

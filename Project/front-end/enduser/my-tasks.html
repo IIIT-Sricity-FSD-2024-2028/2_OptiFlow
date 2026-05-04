@@ -229,7 +229,25 @@
           const isMine = t.assignedTo === sessionNumericId;
           const isTeam = myTeamIds.includes(t.assignedTo);
           return isMine || isTeam;
+        }).map(t => ({...t, isSubtask: false}));
+
+        // 3. Add Subtasks assigned to me or my team
+        const mySubtasks = (state.subtasks || []).filter((st) => {
+          const isMine = st.assignedTo === sessionNumericId;
+          const isTeam = myTeamIds.includes(st.assignedTo);
+          return isMine || isTeam;
+        }).map(st => {
+           const parentTask = state.tasks.find(t => t.taskId === st.taskId || t.id === st.taskId);
+           return {
+             ...st,
+             projectId: parentTask ? parentTask.projectId : null,
+             category: "Subtask",
+             isSubtask: true,
+             title: `↳ ${st.title} (Subtask)`
+           };
         });
+        
+        allMyTasks.push(...mySubtasks);
 
         populateProcessFilter();
         renderFilters();
@@ -377,7 +395,7 @@
                   : "green";
 
             return `
-            <tr onclick="window.location.href='task-detail.html?id=${t.taskId}'" style="cursor:pointer; border-bottom:1px solid var(--border)">
+            <tr onclick="window.location.href='task-detail?id=${t.taskId}'" style="cursor:pointer; border-bottom:1px solid var(--border)">
               <td style="padding:16px 20px">
                 <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px">${t.title}</div>
                 <div style="font-size:11px; color:var(--text-muted)">Standalone task</div>
@@ -390,7 +408,7 @@
               <td style="font-size:13px; font-weight:600; color:var(--text-primary)">${ownerFormatted}</td>
               
               <td style="text-align:right">
-                <button class="btn btn-secondary view-btn" style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:6px 16px; border-radius:6px; font-weight:600" onclick="event.stopPropagation(); window.location.href='task-detail.html?id=${t.taskId}'">View →</button>
+                <button class="btn btn-secondary view-btn" style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:6px 16px; border-radius:6px; font-weight:600" onclick="event.stopPropagation(); window.location.href='task-detail?id=${t.taskId}'">View →</button>
               </td>
             </tr>`;
           })

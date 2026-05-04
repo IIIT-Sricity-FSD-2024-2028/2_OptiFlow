@@ -55,7 +55,7 @@
         title:           payload.title,
         project_id:      toInt(payload.projectId),
         assigned_to:     payload.assignedTo ? toInt(payload.assignedTo) : null,
-        created_by:      payload.createdBy  ? toInt(payload.createdBy)  : 1,
+        created_by:      payload.createdBy  ? toInt(payload.createdBy)  : (window.Auth?.getSession()?.rawId || toInt(window.Auth?.getSession()?.id)),
         priority:        payload.priority   || 'Medium',
         status:          'Pending',           // Rule 3: exact backend enum
         estimated_hours: payload.estimatedHours || 0,

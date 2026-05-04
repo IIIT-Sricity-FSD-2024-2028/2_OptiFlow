@@ -90,44 +90,57 @@
       async function render() {
         const state = await window.Helpers.getState();
         const query = document.getElementById("emp-search").value.toLowerCase();
-        const endusers = state.users.filter(
-          (u) => {
-            const ur = state.userRoles.find(r => r.userId === u.id);
-            const isEndUser = ur && (ur.roleId === 5 || ur.roleId === 6);
-            return isEndUser &&
+        
+        // Filter users who are Team Leaders (5) or Team Members (6)
+        const endusers = state.users.filter((u) => {
+          const ur = state.userRoles.find(r => String(r.userId) === String(u.userId));
+          const isEndUser = ur && (ur.roleId === 5 || ur.roleId === 6);
+          
+          const dept = state.departments.find(d => String(d.id) === String(u.departmentId));
+          const deptName = dept ? dept.name : 'Unknown';
+
+          return isEndUser &&
             (!query ||
-              u.name.toLowerCase().includes(query) ||
-              u.department.toLowerCase().includes(query))
-          }
-        );
+              u.fullName.toLowerCase().includes(query) ||
+              deptName.toLowerCase().includes(query));
+        });
+
         document.getElementById("emp-count").textContent =
           endusers.length + " members";
-        const subMap = { team_leader: "Team Leader", member: "Team Member" };
+
         const tbody = document.getElementById("emp-table-body");
         tbody.innerHTML =
           endusers
             .map((u) => {
-              const userTasks = state.tasks.filter(t => String(t.assignedUserId) === String(u.id));
+              const userTasks = state.tasks.filter(t => String(t.assignedUserId) === String(u.userId));
               const proj = state.projects.find((p) =>
-                userTasks.some(t => t.projectId === p.projectId)
+                userTasks.some(t => String(t.projectId) === String(p.projectId))
               );
-              const ur = state.userRoles.find(r => r.userId === u.id);
+              
+              const dept = state.departments.find(d => String(d.id) === String(u.departmentId));
+              const deptName = dept ? dept.name : '—';
+              
+              const ur = state.userRoles.find(r => String(r.userId) === String(u.userId));
               const roleDisplay = ur && ur.roleId === 5 ? "Team Leader" : "Team Member";
+
               return `<tr>
-      <td>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="avatar avatar-sm avatar-${u.avatarColor}">${u.avatar}</div>
-          <div><div class="td-label">${u.name}</div><div class="td-sub">${u.email}</div></div>
-        </div>
-      </td>
-      <td>${roleDisplay}</td>
-      <td>${u.department}</td>
-      <td>${proj ? `<a href="tasks.html?project=${proj.id}" style="color:var(--blue);font-weight:500">${proj.name}</a>` : '<span class="text-muted">—</span>'}</td>
-      <td><span class="badge ${window.Helpers.statusClass(u.status)}">${u.status}</span></td>
-    </tr>`;
+                <td>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div class="avatar avatar-sm avatar-${u.avatarColor || 'blue'}">${u.avatar}</div>
+                    <div>
+                      <div class="td-label">${u.fullName}</div>
+                      <div class="td-sub">${u.email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>${roleDisplay}</td>
+                <td>${deptName}</td>
+                <td>${proj ? `<a href="tasks.html?project=${proj.id}" style="color:var(--blue);font-weight:500">${proj.name}</a>` : '<span class="text-muted">—</span>'}</td>
+                <td><span class="badge ${window.Helpers.statusClass(u.status)}">${u.status}</span></td>
+              </tr>`;
             })
             .join("") ||
-          `<tr><td colspan="5"><div class="empty-state"><div class="empty-state-text">No employees found</div></div></td></tr>`;
+          `<tr><td colspan="5"><div class="empty-state" style="padding:40px;text-align:center;color:#64748b"><div class="empty-state-text">No employees found</div></div></td></tr>`;
       }
     </script>
   </body>

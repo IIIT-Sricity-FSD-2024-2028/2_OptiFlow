@@ -55,37 +55,19 @@ window.Validator = {
   },
 
   validate(el, config) {
-    const val = el.value != null ? el.value : "";
-
-    if (config.required === true && !this.rules.required(val))
-      return { valid: false, error: this.messages.required };
-
-    const nonEmpty = this.rules.required(val);
-    if (config.minLength != null && typeof config.minLength === "number") {
-      if (nonEmpty && !this.rules.minLength(val, config.minLength))
-        return {
-          valid: false,
-          error: this.messages.minLength(config.minLength),
-        };
+    const val = el.value;
+    for (const [rule, param] of Object.entries(config)) {
+      if (rule === "required" && param === true && !this.rules.required(val))
+        return { valid: false, error: this.messages.required };
+      if (
+        rule === "email" &&
+        param === true &&
+        this.rules.required(val) &&
+        !this.rules.email(val)
+      )
+        return { valid: false, error: this.messages.email };
+      // (Add other specific rule checks here if needed by the PM module)
     }
-    if (config.maxLength != null && typeof config.maxLength === "number") {
-      if (nonEmpty && !this.rules.maxLength(val, config.maxLength))
-        return {
-          valid: false,
-          error: this.messages.maxLength(config.maxLength),
-        };
-    }
-
-    if (
-      config.email === true &&
-      nonEmpty &&
-      !this.rules.email(val)
-    )
-      return { valid: false, error: this.messages.email };
-
-    if (config.numeric === true && nonEmpty && !this.rules.numeric(val))
-      return { valid: false, error: this.messages.numeric };
-
     return { valid: true, error: "" };
   },
 

@@ -46,131 +46,7 @@ function openNewProcessModal() {
   window.location.href = "workflow-builder.html";
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  initNotifications();
-});
-
-function initNotifications() {
-  const bell =
-    document.querySelector('button[aria-label="Notifications"]') ||
-    document.querySelector(".bell-btn");
-  if (!bell) return;
-
-  // Get current user session
-  const sessionRaw = sessionStorage.getItem("currentUser");
-  if (!sessionRaw) return;
-  const session = JSON.parse(sessionRaw);
-
-  const dropdown = document.createElement("div");
-  dropdown.id = "globalNotificationPanel";
-  dropdown.style.cssText = `
-        position: absolute; width: 380px; background: var(--card-bg, #fff); border: 1px solid var(--border, #e2e8f0);
-        border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.1); z-index: 9999; display: none;
-        flex-direction: column; overflow: hidden; cursor: default; top: 60px; right: 20px;
-    `;
-
-  document.body.appendChild(dropdown);
-
-  function renderNotifs() {
-    const allNotifs =
-      JSON.parse(localStorage.getItem("system_notifications")) || [];
-    // Only show notifications meant for ME
-    const myNotifs = allNotifs
-      .filter((n) => String(n.targetUserId) === String(session.id))
-      .reverse();
-    const unreadCount = myNotifs.filter((n) => !n.read).length;
-
-    // Manage the red dot on the bell icon
-    let existingDot = bell.querySelector(".bell-dot");
-    if (unreadCount > 0) {
-      if (!existingDot) {
-        bell.innerHTML += `<span class="bell-dot" style="position:absolute; top:2px; right:4px; width:10px; height:10px; background:var(--red, #ef4444); border-radius:50%; border:2px solid #fff;"></span>`;
-      }
-    } else if (existingDot) {
-      existingDot.remove();
-    }
-
-    // Build the list HTML
-    let listHTML = "";
-    if (myNotifs.length === 0) {
-      listHTML = `<div style="padding: 30px; text-align: center; color: var(--text-muted, #64748b); font-size: 13px;">No new notifications</div>`;
-    } else {
-      listHTML = myNotifs
-        .map((n) => {
-          const dotColor =
-            n.type === "error"
-              ? "#ef4444"
-              : n.type === "success"
-                ? "#10b981"
-                : "#3b82f6";
-          const opacity = n.read ? "0.6" : "1";
-          return `
-          <div style="padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0); display: flex; gap: 14px; align-items: flex-start; opacity: ${opacity}; background: ${n.read ? "transparent" : "#f8fafc"}">
-              <div style="width: 8px; height: 8px; background: ${n.read ? "transparent" : dotColor}; border-radius: 50%; margin-top: 6px; flex-shrink: 0;"></div>
-              <div>
-                  <div style="font-size: 13px; font-weight: 600; color: var(--text-primary, #0f172a); margin-bottom: 4px;">${n.title}</div>
-                  <div style="font-size: 12px; color: var(--text-secondary, #475569); line-height: 1.4;">${n.message}</div>
-                  <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${n.date}</div>
-              </div>
-          </div>
-        `;
-        })
-        .slice(0, 5)
-        .join(""); // Show max 5
-    }
-
-    dropdown.innerHTML = `
-          <div style="padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0); display: flex; justify-content: space-between; align-items: center; background: var(--bg-color, #f8fafc);">
-              <span style="font-weight: 600; font-size: 14px; color: var(--text-primary, #0f172a);">Notifications</span>
-              ${unreadCount > 0 ? `<span id="markAllReadBtn" style="font-size: 12px; color: var(--blue, #2563eb); cursor: pointer; font-weight: 600;">Mark all as read</span>` : ""}
-          </div>
-          <div id="notifyList" style="max-height: 350px; overflow-y: auto;">
-              ${listHTML}
-          </div>
-      `;
-
-    const markReadBtn = document.getElementById("markAllReadBtn");
-    if (markReadBtn) {
-      markReadBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        // Mark all as read in database
-        const updatedNotifs = allNotifs.map((n) => {
-          if (String(n.targetUserId) === String(session.id)) n.read = true;
-          return n;
-        });
-        localStorage.setItem(
-          "system_notifications",
-          JSON.stringify(updatedNotifs),
-        );
-        renderNotifs(); // Re-render dropdown
-      });
-    }
-  }
-
-  // Initial render
-  renderNotifs();
-
-  bell.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (dropdown.style.display === "flex") {
-      dropdown.style.display = "none";
-    } else {
-      // Re-render to catch any new notifications that arrived while closed
-      renderNotifs();
-      const rect = bell.getBoundingClientRect();
-      dropdown.style.top = rect.bottom + 12 + "px";
-      // Adjust positioning based on screen size so it doesn't flow off-screen
-      dropdown.style.right = "20px";
-      dropdown.style.display = "flex";
-    }
-  });
-
-  document.addEventListener("click", (e) => {
-    if (dropdown.style.display === "flex" && !dropdown.contains(e.target)) {
-      dropdown.style.display = "none";
-    }
-  });
-}
+// Legacy notification logic removed. Handled by sidebar.js.
 
 // ─────────────────────────────────────────
 // PART 2: PM Module Helpers
@@ -752,8 +628,8 @@ window.Helpers = {
       }
 
       const headers = {
-        "Content-Type": "application/json",
-        "x-user-role": role,
+        'Content-Type': 'application/json',
+        'x-user-role': role
       };
 
       const m = String(method).toUpperCase();
@@ -794,4 +670,34 @@ window.Helpers = {
       }
     }
   },
+  
+  sendSystemNotification(targetUserId, title, message) {
+    const allNotifs = JSON.parse(localStorage.getItem("system_notifications")) || [];
+    allNotifs.unshift({
+      id: Date.now(),
+      targetUserId: String(targetUserId),
+      title,
+      message,
+      date: new Date().toISOString(),
+      read: false
+    });
+    localStorage.setItem("system_notifications", JSON.stringify(allNotifs));
+  },
+
+  timeAgo(dateString) {
+    if (!dateString) return "";
+    const now = new Date();
+    const past = new Date(dateString);
+    const diffMs = now - past;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+
+    if (diffSec < 60) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return past.toLocaleDateString();
+  }
 };

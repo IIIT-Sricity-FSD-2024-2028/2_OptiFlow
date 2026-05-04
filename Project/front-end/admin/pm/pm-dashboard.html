@@ -17,6 +17,10 @@
         <header class="top-header">
           <h1 class="page-title">Dashboard</h1>
           <div class="header-actions">
+            <button class="btn btn-primary" id="btn-global-add-task" style="margin-right: 16px; background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Create Task
+            </button>
             <div class="bell-btn" title="Notifications">
               <svg
                 viewBox="0 0 24 24"
@@ -99,6 +103,8 @@
               </div>
               <div id="escalation-alerts-list" style="padding: 12px 24px"></div>
             </div>
+
+
 
             <!-- Compliance Flags -->
             <div class="card" style="padding: 0">
@@ -341,6 +347,140 @@
             .join("") ||
           '<div style="padding:20px;color:#94a3b8;font-size:13px">No compliance flags</div>';
         document.getElementById("compliance-flags-list").innerHTML = compHTML;
+
+        // --- GLOBAL TASK CREATION LOGIC ---
+        const btnGlobalAdd = document.getElementById("btn-global-add-task");
+        if (btnGlobalAdd) {
+          btnGlobalAdd.onclick = () => {
+            const projectOptions = myProjects
+              .map((p) => `<option value="${p.id}">${p.name}</option>`)
+              .join("");
+
+            const userOptions = "";
+
+            window.Modal.create({
+              id: "modal-global-add-task",
+              title: "+ Create New Task",
+              body: `
+                <div class="form-group">
+                  <label class="form-label" for="gtask-project">Project *</label>
+                  <select id="gtask-project" class="form-select">
+                    <option value="">Select project</option>
+                    ${projectOptions}
+                  </select>
+                  <span class="form-error hidden" id="gtask-project-error"></span>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="gtask-name">Task Name *</label>
+                  <input type="text" id="gtask-name" class="form-input" placeholder="Enter task name">
+                  <span class="form-error hidden" id="gtask-name-error"></span>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="gtask-assigned">Assign To *</label>
+                    <select id="gtask-assigned" class="form-select">
+                      <option value="">Select member</option>
+                      ${userOptions}
+                    </select>
+                    <span class="form-error hidden" id="gtask-assigned-error"></span>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="gtask-priority">Priority</label>
+                    <select id="gtask-priority" class="form-select">
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="gtask-est">Estimated Hours</label>
+                    <input type="number" id="gtask-est" class="form-input" value="0" step="0.5">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="gtask-deadline">Deadline *</label>
+                    <input type="date" id="gtask-deadline" class="form-input">
+                    <span class="form-error hidden" id="gtask-deadline-error"></span>
+                  </div>
+                </div>`,
+              footerHTML: `
+                <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-global-add-task')">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="btn-submit-global-task">Add Task</button>`,
+            });
+
+            // Handle dynamic TL filtering based on project domain
+            const projSelect = document.getElementById("gtask-project");
+            const assignSelect = document.getElementById("gtask-assigned");
+            
+            projSelect.onchange = () => {
+              const pId = projSelect.value;
+              const project = myProjects.find(p => String(p.id) === String(pId));
+              if (!project) {
+                assignSelect.innerHTML = '<option value="">Select member</option>';
+                return;
+              }
+              
+              const filteredTLs = state.users.filter(u => {
+                const ur = state.userRoles.find(r => String(r.userId) === String(u.userId));
+                const isTL = ur && ur.roleId === 5;
+                const sameDept = String(u.departmentId) === String(project.departmentId);
+                return isTL && sameDept;
+              });
+              
+              assignSelect.innerHTML = '<option value="">Select member</option>' + 
+                filteredTLs.map(u => `<option value="${u.userId}">${u.fullName}</option>`).join("");
+            };
+
+            // Handle submission
+            document.getElementById("btn-submit-global-task").onclick = async () => {
+              const res = window.Validator.validateForm({
+                "gtask-project": { required: true },
+                "gtask-name": { required: true, minLength: 3 },
+                "gtask-assigned": { required: true },
+                "gtask-deadline": { required: true, date: true },
+              });
+              if (!res.valid) return;
+
+              const newTask = {
+                project_id: parseInt(window.Helpers.getVal("gtask-project"), 10),
+                title: window.Helpers.getVal("gtask-name"),
+                assigned_to: parseInt(window.Helpers.getVal("gtask-assigned"), 10),
+                created_by: parseInt(session.id, 10),
+                priority: window.Helpers.getVal("gtask-priority") || "Medium",
+                status: "Pending",
+                estimated_hours: parseFloat(window.Helpers.getVal("gtask-est")) || 0,
+                due_date: window.Helpers.getVal("gtask-deadline")
+              };
+
+              try {
+                await window.Helpers.api.request('/tasks', 'POST', newTask);
+                
+                // Send notification to the assigned Team Leader
+                if (newTask.assigned_to) {
+                  const project = myProjects.find(p => String(p.id) === String(newTask.project_id));
+                  const dept = state.departments.find(d => String(d.id) === String(project?.departmentId));
+                  const deptName = dept ? dept.name : "General";
+
+                  window.Helpers.sendSystemNotification(
+                    newTask.assigned_to,
+                    `New Task: ${deptName} Department`,
+                    `Project Manager assigned you: ${newTask.title}`
+                  );
+                }
+
+                window.Modal.close("modal-global-add-task");
+                window.Toast.success("Task Created", `"${newTask.title}" added successfully.`);
+                // Refresh dashboard state to show updated counts
+                setTimeout(() => window.location.reload(), 1500);
+              } catch (e) {
+                console.error(e);
+                window.Toast.warning("Error", "Failed to create task.");
+              }
+            };
+          };
+        }
       });
     </script>
   </body>

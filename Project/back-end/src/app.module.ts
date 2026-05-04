@@ -17,6 +17,7 @@ import { UserRolesModule } from './modules/user-roles/user-roles.module';
 import { WorkflowInstancesModule } from './modules/workflow-instances/workflow-instances.module';
 import { WorkflowTemplatesModule } from './modules/workflow-templates/workflow-templates.module';
 import { WorkflowInstanceStepsModule } from './modules/workflow-instance-steps/workflow-instance-steps.module';
+import { TeamsModule } from './modules/teams/teams.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { WorkflowInstanceStepsModule } from './modules/workflow-instance-steps/w
     WorkflowInstancesModule,
     WorkflowTemplatesModule,
     WorkflowInstanceStepsModule,
+    TeamsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
