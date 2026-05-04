@@ -19,8 +19,10 @@ function getStoredUserRoleSlug() {
 }
 
 function isTeamLeaderRole() {
-  const slug = getStoredUserRoleSlug();
-  return slug === "team_leader" || slug === "team-leader";
+  const sess = window.Auth ? window.Auth.getSession() : null;
+  if (!sess) return false;
+  // Check roleId 4 (auth.js Team Leader) or subRole
+  return sess.roleId === 4 || sess.subRole === "team_leader" || sess.roleName === "Team_Leader";
 }
 
 function taskDisplayTitle(t) {
@@ -82,21 +84,55 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.Sidebar.render("tasks");
   window.Toast.init();
 
-  state = await window.Helpers.getState();
-
+  // ── Step 1: Get task ID from URL ──────────────────────────────────────
   const params = new URLSearchParams(window.location.search);
   const taskIdParam = params.get("id");
+  console.log("[task-detail] taskIdParam:", taskIdParam);
 
-  task =
-    state.tasks.find(
-      (t) =>
-        String(t.taskId) === String(taskIdParam) ||
-        String(t.id) === String(taskIdParam),
+  // ── Step 2: Fetch task DIRECTLY from API (most reliable) ──────────────
+  if (taskIdParam && taskIdParam !== "null" && taskIdParam !== "undefined") {
+    try {
+      const rawTask = await window.Helpers.api.request(`/tasks/${taskIdParam}`, "GET");
+      // api.request already unwraps { success, data } — rawTask IS the task object
+      if (rawTask && rawTask.task_id) {
+        task = {
+          id:             String(rawTask.task_id),
+          taskId:         rawTask.task_id,
+          title:          rawTask.title          || '',
+          description:    rawTask.description    || '',
+          projectId:      rawTask.project_id     || null,
+          createdBy:      rawTask.created_by     || null,
+          assignedTo:     rawTask.assigned_to    || null,
+          assignedUserId: rawTask.assigned_to    ? String(rawTask.assigned_to) : null,
+          priority:       rawTask.priority       || 'Medium',
+          status:         rawTask.status         || 'Pending',
+          estimatedHours: rawTask.estimated_hours || 0,
+          dueDate:        rawTask.due_date       || null,
+          completedAt:    rawTask.completed_at   || null,
+          createdAt:      rawTask.created_at     || null,
+          subtasks:       rawTask.subtasks       || [],
+        };
+        console.log("[task-detail] Task loaded from API:", task.title, "| status:", task.status);
+      }
+    } catch (taskErr) {
+      console.warn("[task-detail] Direct task fetch failed:", taskErr.message);
+    }
+  }
+
+  // ── Step 3: Load full state for supplementary data (project, users) ───
+  try {
+    state = await window.Helpers.getState();
+  } catch (stateErr) {
+    console.warn("[task-detail] getState() failed, using minimal state:", stateErr.message);
+    state = { tasks: [], projects: [], users: [], subtasks: [], escalations: [], evidence: [], departments: [], roles: [], userRoles: [], complianceRules: [], complianceViolations: [], auditLogs: [], workflowInstances: [], workflowTemplates: [], workflowInstanceSteps: [], teams: [] };
+  }
+
+  // ── Step 4: Fallback to state lookup if direct fetch failed ───────────
+  if (!task && taskIdParam) {
+    task = state.tasks.find(
+      (t) => String(t.taskId) === String(taskIdParam) || String(t.id) === String(taskIdParam)
     ) || null;
-
-  if (!task) {
-    const uid = numericSessionUserId(session);
-    task = state.tasks.find((t) => Number(t.assignedTo) === Number(uid));
+    console.log("[task-detail] State fallback lookup:", task ? "found" : "not found");
   }
 
   if (!task) {
@@ -201,8 +237,19 @@ function renderPage() {
 
     let actionsHTML = "";
     if (!showAcceptanceFlow && task.status !== "Completed" && task.status !== "done") {
-      const isPending = ["Pending_TL_Review", "Pending_PM_Review", "Pending_Compliance", "In_Review", "Under_Review"].includes(task.status);
+      let isPending = ["Pending_TL_Review", "Pending_PM_Review", "Pending_Compliance", "In_Review", "Under_Review"].includes(task.status);
       const isTm = !tl;
+      const isAssignedToTmTask = isTm && (Number(task.assignedTo) === numericSessionUserId(session));
+      
+      // If TM is not assigned to the parent task, check if their subtasks are pending
+      if (isTm && !isAssignedToTmTask) {
+         const mySubtasks = (state.subtasks || []).filter(s => Number(s.taskId) === Number(task.taskId) && Number(s.assignedTo) === numericSessionUserId(session));
+         const activeSubtasks = mySubtasks.filter(s => s.status !== "Completed");
+         if (activeSubtasks.length > 0 && activeSubtasks.every(s => ["Pending_TL_Review", "In_Review"].includes(s.status))) {
+            isPending = true;
+         }
+      }
+
       const isAssignedToTm = tl && (Number(task.assignedTo) !== numericSessionUserId(session));
       const isAssignedToTl = tl && (Number(task.assignedTo) === numericSessionUserId(session));
 
@@ -489,6 +536,15 @@ async function saveSubtask() {
     closeSubtaskModal();
     renderPage();
     window.Toast.success("Subtask created", "Assigned to your team.");
+
+    // ── Notify the assigned team member ──────────────────────────────────
+    if (Number(assigneeRaw) && window.Helpers.pushNotification) {
+      window.Helpers.pushNotification(Number(assigneeRaw), {
+        title:   'New Subtask Assigned',
+        message: `You have been assigned a new subtask: "${title}" under task "${task ? (task.title || task.taskName || 'Unknown') : 'Unknown'}".`,
+        type:    'info',
+      });
+    }
   } catch (e) {
     console.error(e);
     window.Helpers.notifyApiError(e, (e && e.message) || "Cannot create subtask.");
@@ -655,7 +711,18 @@ async function submitAct(type) {
       : "Pending_TL_Review";
 
     try {
-      await window.Helpers.api.request(`/tasks/${task.taskId}`, "PATCH", { status: nextStatus });
+      const isTm = !tl;
+      const isAssignedToTmTask = isTm && (Number(task.assignedTo) === numericSessionUserId(session));
+
+      if (isTm && !isAssignedToTmTask) {
+        const mySubtasks = (state.subtasks || []).filter(s => Number(s.taskId) === Number(task.taskId) && Number(s.assignedTo) === numericSessionUserId(session) && s.status !== "Completed");
+        for (const st of mySubtasks) {
+          await window.Helpers.api.request(`/subtasks/${st.subtaskId || st.id}`, "PATCH", { status: nextStatus });
+        }
+      } else {
+        await window.Helpers.api.request(`/tasks/${task.taskId}`, "PATCH", { status: nextStatus });
+      }
+
       window.Toast.success(
         "Submitted",
         tl
@@ -664,16 +731,23 @@ async function submitAct(type) {
       );
       closeModals();
       state = await window.Helpers.getState();
-      task = state.tasks.find((t) => Number(t.taskId) === Number(task.taskId));
+      task = state.tasks.find((t) => Number(t.taskId) === Number(task.taskId)) || task;
+      project = state.projects.find(p => Number(p.projectId || p.id) === Number(task.projectId || task.project_id)) || project;
       renderPage();
 
       try {
         const tTitle = task.taskName || task.task_name || task.title || 'Task';
         const sessionUser = window.Auth.getSession();
         const p = project || {};
-        let targetId = task.createdBy;
+        let targetId = null;
+        
         if (tl) {
-          targetId = p.createdBy; // Project Manager
+          // If Team Leader, notify the Project Manager
+          const proj = p.projectId ? p : (state.projects.find(prj => Number(prj.projectId || prj.id) === Number(task.projectId || task.project_id)) || {});
+          targetId = proj.createdBy || proj.created_by || (state.users.find(u => u.roleId === 2 || u.roleName === "Project_Manager")?.userId);
+        } else {
+          // If Team Member, notify their Team Leader (managerId) or the task creator
+          targetId = sessionUser.reportsTo || sessionUser.managerId || task.createdBy || task.created_by;
         }
         
         if (targetId) {

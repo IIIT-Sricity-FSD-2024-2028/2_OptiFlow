@@ -176,7 +176,7 @@ function renderUserTable(data) {
     tbody.appendChild(tr);
   });
 }
-function openUserModal(id = null) {
+async function openUserModal(id = null) {
   const modal = document.getElementById("userModal");
   const title = document.getElementById("modalTitle");
 
@@ -187,7 +187,7 @@ function openUserModal(id = null) {
   showError("userEmail", true);
 
   if (id) {
-    const users = getUsers();
+    const users = await getUsers();
     const u = users.find((x) => x.id === id);
     if (u) {
       document.getElementById("userId").value = u.id;
@@ -239,7 +239,7 @@ async function saveUser() {
 
   if (!isNameValid || !isEmailValid) return;
 
-  const users = getUsers();
+  const users = await getUsers();
 
   // Grab the human-readable text from the dropdown (e.g. "HR Manager")
   const roleSelect = document.getElementById("userRole");
@@ -276,13 +276,7 @@ async function saveUser() {
         });
       }
 
-      if (window.AuditStore) {
-        window.AuditStore.add(
-          "User Management",
-          `Updated user: ${users[idx].name} (${users[idx].email})`,
-          "Info",
-        );
-      }
+
     }
   } else {
     const newDate = new Date().toLocaleDateString("en-US", {
@@ -310,13 +304,7 @@ async function saveUser() {
     // Sync to HR employee store
     await upsertEmployeeFromAuthUser(newUser);
 
-    if (window.AuditStore) {
-      window.AuditStore.add(
-        "User Management",
-        `Created user: ${newUser.name} (${newUser.email}) — ${newUser.role}`,
-        "Info",
-      );
-    }
+
   }
 
   saveUsers(users); // Saves to master db.js
@@ -330,7 +318,7 @@ async function deleteUser(id) {
       "Are you sure you want to deactivate this user? They will be unable to log in, and their HR profile will be marked inactive.",
     )
   ) {
-    const users = getUsers(); // Get master db list
+    const users = await getUsers(); // Get master db list
 
     // 1. Find the user so we know their email/details before deleting
     const userToDelete = users.find((u) => u.id === id);
@@ -364,13 +352,7 @@ async function deleteUser(id) {
         type: "error",
       });
 
-      if (window.AuditStore) {
-        window.AuditStore.add(
-          "User Management",
-          `Deactivated user: ${userToDelete.name} (${userToDelete.email})`,
-          "Medium",
-        );
-      }
+
       refreshTable();
     }
   }

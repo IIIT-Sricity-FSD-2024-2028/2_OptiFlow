@@ -72,6 +72,13 @@ export class CreateTaskDto {
   @Min(0)
   estimated_hours?: number;
 
+  @ApiProperty({ example: 4.5, required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  actual_hours?: number;
+
   @ApiProperty({ example: '2024-11-20', required: false })
   @IsOptional()
   @IsString()

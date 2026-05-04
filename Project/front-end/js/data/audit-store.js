@@ -3,79 +3,88 @@
 (function (global) {
   "use strict";
 
-  function _getActor() {
+  function _getActorId() {
     try {
       const raw = sessionStorage.getItem("currentUser");
-      if (!raw) return { id: null, name: "System" };
+      if (!raw) return null;
       const u = JSON.parse(raw);
-      return { id: u.id || null, name: u.name || u.email || "Unknown" };
+      return typeof u.id === "number" ? u.id : parseInt(String(u.id || "").replace(/\D/g, ""), 10) || null;
     } catch {
-      return { id: null, name: "System" };
+      return null;
     }
   }
 
-  function _nowDisplay() {
-    const d = new Date();
-    const time = d.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const date = d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-    return `${time}, ${date}`;
+  function _getActorName() {
+    try {
+      const raw = sessionStorage.getItem("currentUser");
+      if (!raw) return "System";
+      const u = JSON.parse(raw);
+      return u.name || u.email || "System";
+    } catch {
+      return "System";
+    }
+  }
+
+  function _formatTime(isoString) {
+    if (!isoString) return "";
+    const d = new Date(isoString);
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) +
+      ", " + d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
   }
 
   const AuditStore = {
-    async add(type, description, severity = "Info", meta = {}) {
-      const actor = _getActor();
+    /**
+     * Write an audit log entry to the backend.
+     * @param {string} action       e.g. "USER_CREATED", "USER_UPDATED", "STATUS_CHANGE"
+     * @param {string} entityType   e.g. "User", "Project", "Task"
+     * @param {number} entityId     numeric ID of the affected entity
+     * @param {object} [opts]       { oldValue, newValue, performedBy }
+     */
+    async add(action, entityType, entityId, opts = {}) {
+      const performedBy = opts.performedBy != null ? opts.performedBy : _getActorId();
       const payload = {
-        type: type || "System",
-        description: description || "",
-        severity: severity || "Info",
-        user_name: meta.user || actor.name || "System",
-        ip: meta.ip || "localhost",
-        module: meta.module || null,
-        actor_id: meta.actorId || actor.id,
+        action:       action || "SYSTEM_ACTION",
+        entity_type:  entityType || "System",
+        entity_id:    Number(entityId) || 0,
+        performed_by: performedBy,
+        old_value:    opts.oldValue  || undefined,
+        new_value:    opts.newValue  || undefined,
       };
 
       try {
         await window.Helpers.api.request('/audit-logs', 'POST', payload);
+        console.log("[AuditStore] Log written:", action, entityType, entityId);
       } catch (error) {
-        console.warn("AuditStore: Backend API write failed.", error);
+        console.warn("[AuditStore] Backend write failed:", error.message || error);
       }
     },
 
     async list() {
       try {
         const logs = await window.Helpers.api.request('/audit-logs', 'GET');
-        // Map backend snake_case to frontend UI expectations
-        return logs.map((log) => ({
-          id: log.id,
-          timestampISO: log.created_at || new Date().toISOString(),
-          timestamp: _nowDisplay(), // Fallback formatting, ideal to format the created_at string
-          type: log.type,
-          user: log.user_name,
-          ip: log.ip,
-          desc: log.description,
-          severity: log.severity,
-          module: log.module,
-          actorId: log.actor_id,
-        })).reverse(); // Assuming API returns oldest -> newest, reverse for UI
+        return (Array.isArray(logs) ? logs : []).map((log) => ({
+          id:           log.log_id || log.id,
+          timestampISO: log.performed_at || log.created_at || new Date().toISOString(),
+          timestamp:    _formatTime(log.performed_at || log.created_at),
+          type:         log.entity_type  || "System",
+          action:       log.action       || "",
+          user:         log.performed_by != null ? `User #${log.performed_by}` : "System",
+          actorId:      log.performed_by,
+          entityId:     log.entity_id,
+          desc:         `${log.action || ""} on ${log.entity_type || ""} #${log.entity_id || ""}`,
+          oldValue:     log.old_value,
+          newValue:     log.new_value,
+          ip:           log.ip_address || "—",
+        })).reverse();
       } catch (error) {
-        console.warn("AuditStore: Failed to fetch API logs.");
+        console.warn("[AuditStore] Failed to fetch logs:", error.message || error);
         return [];
       }
     },
 
     async clear() {
-      try {
-        await window.Helpers.api.request('/audit-logs', 'DELETE');
-      } catch (error) {
-        console.warn("AuditStore: Failed to clear API logs.");
-      }
+      // DELETE not implemented in backend; no-op
+      console.warn("[AuditStore] clear() is not supported by the backend.");
     },
   };
 
