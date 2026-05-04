@@ -246,7 +246,7 @@ async function renderRolePermissions() {
     : "";
 
   const manageLink = canEdit
-    ? `<a href="roles-individual?emp=${emp.id}" class="ed-card-link"><i class="ri-user-settings-line"></i> Manage</a>`
+    ? `<a href="roles-individual.html?emp=${emp.id}" class="ed-card-link"><i class="ri-user-settings-line"></i> Manage</a>`
     : "";
 
   return `

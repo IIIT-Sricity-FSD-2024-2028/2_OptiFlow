@@ -54,7 +54,7 @@
             ${esc.createdAt ? new Date(esc.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""} · ${esc.blockerType || "Blocker"}
           </div>
           <div style="margin-top:8px">
-            <a href="task-detail?id=${esc.taskId}" style="font-size:11px; color:var(--blue); text-decoration:none; font-weight:600" onclick="event.stopPropagation()">View task →</a>
+            <a href="task-detail.html?id=${esc.taskId}" style="font-size:11px; color:var(--blue); text-decoration:none; font-weight:600" onclick="event.stopPropagation()">View task →</a>
           </div>
         </div>
         <span class="badge ${badgeClass}" style="flex-shrink:0;">${st.replace(/_/g, " ")}</span>

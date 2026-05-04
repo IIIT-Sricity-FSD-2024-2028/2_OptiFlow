@@ -7,8 +7,10 @@ function createBadge(text, colorClass) {
 }
 
 function processComplianceTags(compliances) {
+  if (!Array.isArray(compliances)) return "";
   return compliances
     .map((c) => {
+      if (typeof c !== 'string') return "";
       if (c.includes("SOX")) return createBadge(c, "purple");
       if (c.includes("ISO")) return createBadge(c, "yellow");
       return createBadge(c, "green");
@@ -17,6 +19,7 @@ function processComplianceTags(compliances) {
 }
 
 function processStageTags(stages) {
+  if (!Array.isArray(stages)) return "";
   return stages.map((s) => createBadge(s, "gray")).join("");
 }
 
@@ -423,10 +426,15 @@ window.Helpers = {
       name:          t.template_name || '',
       department:    t.category || 'General',
       stages:        t.stages || [],
+      totalStages:   t.stages ? t.stages.length : 0,
       description:   t.description || '',
-      createdBy:     t.created_by || null,
+      compliance:    t.compliance || [],
+      runs:          t.runs || 0,
       status:        t.status || 'Active',
+      lastModified:  t.updated_at ? this.formatDate(t.updated_at) : (t.created_at ? this.formatDate(t.created_at) : 'Recently'),
       createdAt:     t.created_at || null,
+      updatedAt:     t.updated_at || null,
+      createdBy:     t.created_by || null,
     }));
 
     const workflowInstanceSteps = rawWorkflowInstanceSteps.map(s => ({

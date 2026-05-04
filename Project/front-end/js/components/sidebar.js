@@ -46,7 +46,7 @@ window.Sidebar = {
         id: "global-hr",
         label: "HR Portal",
         icon: "hr",
-        href: "admin/pm/hr-dashboard.html",
+        href: "admin/hr/dashboard.html",
         absolute: true,
       },
       {
