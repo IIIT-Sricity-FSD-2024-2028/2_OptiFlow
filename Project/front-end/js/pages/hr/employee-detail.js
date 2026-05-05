@@ -24,7 +24,7 @@ window.addEventListener("pageshow", (event) => {
 // ─────────────────────────────────────────
 
 // ─── State ───────────────────────────────────────────────────
-let emp = null; 
+let emp = null;
 let empId = null;
 let canEdit = false;
 
@@ -72,11 +72,11 @@ function fmtDateLong(isoStr) {
 }
 
 const PERM_GROUP_COLOR = {
-  tasks:      "",        
+  tasks: "",
   escalation: "orange",
-  projects:   "purple",
+  projects: "purple",
   compliance: "green",
-  settings:   "red",
+  settings: "red",
 };
 
 function permLabel(permId) {
@@ -206,18 +206,18 @@ async function renderPersonalDetails() {
 
 async function renderRolePermissions() {
   const groups = RolesStore.getPermissionGroups();
-  
+
   // BULLETPROOF ID EXTRACTION: Force it to be a pure integer (e.g., 1 instead of "EMP-001")
   const numericId = emp.rawId || parseInt(String(emp.id).replace("EMP-", ""), 10);
-  
+
   // Safely fetch permissions
   let effective = {};
   try {
-     if (emp.roleSlug && emp.roleSlug !== "undefined") {
-         effective = await RolesStore.getEmployeePermissions(numericId, emp.roleSlug);
-     }
+    if (emp.roleSlug && emp.roleSlug !== "undefined") {
+      effective = await RolesStore.getEmployeePermissions(numericId, emp.roleSlug);
+    }
   } catch (e) {
-     console.warn("Could not fetch permissions, skipping.");
+    console.warn("Could not fetch permissions, skipping.");
   }
 
   const enabledPerms = [];
@@ -239,14 +239,14 @@ async function renderRolePermissions() {
   } catch (err) {
     console.warn("Overrides endpoint missing. Skipping.");
   }
-  
+
   const hasOverride = !!overrides;
   const overrideBadge = hasOverride
     ? `<span style="font-size:11px;background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:8px;font-weight:500;">Custom</span>`
     : "";
 
   const manageLink = canEdit
-    ? `<a href="roles-individual?emp=${emp.id}" class="ed-card-link"><i class="ri-user-settings-line"></i> Manage</a>`
+    ? `<a href="roles-individual.html?emp=${emp.id}" class="ed-card-link"><i class="ri-user-settings-line"></i> Manage</a>`
     : "";
 
   return `
@@ -278,8 +278,8 @@ async function renderActivity() {
   const activities = await HRStore.getActivity(emp.id);
   const itemsHtml = activities.length
     ? activities
-        .map(
-          (a) => `
+      .map(
+        (a) => `
         <div class="ed-activity-item">
           <div class="ed-activity-dot"></div>
           <div>
@@ -288,8 +288,8 @@ async function renderActivity() {
           </div>
         </div>
       `,
-        )
-        .join("")
+      )
+      .join("")
     : `<div class="ed-activity-empty">No activity recorded yet.</div>`;
 
   return `
@@ -331,8 +331,8 @@ async function renderPage() {
 
 async function openEditModal() {
   const managers = await HRStore.getManagers(emp.id);
-  const depts = HRStore.getDepartments();
-  const teams = HRStore.getTeamsForDept(emp.department);
+  const depts = await HRStore.getDepartments();
+  const teams = await HRStore.getTeamsForDept(emp.department);
   const roles = [
     "Project Manager",
     "Team Leader",
@@ -436,8 +436,8 @@ async function openEditModal() {
     </form>
   `;
 
-  document.getElementById("ef_dept").addEventListener("change", function () {
-    const newTeams = HRStore.getTeamsForDept(this.value);
+  document.getElementById("ef_dept").addEventListener("change", async function () {
+    const newTeams = await HRStore.getTeamsForDept(this.value);
     const sel = document.getElementById("ef_team");
     sel.innerHTML =
       `<option value="">— No Team —</option>` +
@@ -556,7 +556,7 @@ async function saveEdit() {
     await HRStore.setStatus(emp.id, statusVal);
   }
 
-  emp = await HRStore.getById(emp.id); 
+  emp = await HRStore.getById(emp.id);
   closeModal("editModal");
   await renderPage();
   showToast(`${emp.name}'s profile updated.`);
@@ -692,10 +692,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("viewonlyBanner").style.display = "flex";
     document.querySelector(".main-content").style.paddingTop = "42px";
   }
-  
+
   setupLogout();
   setupModals();
-  
+
   await renderPage();
   setupNotifications();
 });
