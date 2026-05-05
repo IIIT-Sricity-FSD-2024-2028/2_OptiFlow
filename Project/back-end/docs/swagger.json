@@ -7,13 +7,6 @@
         "parameters": [
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -35,15 +28,6 @@
         "operationId": "UsersController_findAll",
         "parameters": [
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -64,15 +48,6 @@
       "post": {
         "operationId": "UsersController_create",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -107,15 +82,6 @@
         "operationId": "UsersController_findAllUserRoles",
         "parameters": [
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -147,15 +113,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -182,15 +139,6 @@
             "in": "path",
             "schema": {
               "type": "number"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
             }
           },
           {
@@ -233,15 +181,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -264,15 +203,6 @@
       "get": {
         "operationId": "TasksController_findAll",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -298,15 +228,6 @@
             "name": "x-user-id",
             "in": "header",
             "description": "Actor user id (integer)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
             "required": true,
             "schema": {
               "type": "string"
@@ -347,15 +268,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -384,15 +296,6 @@
             "in": "path",
             "schema": {
               "type": "number"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
             }
           },
           {
@@ -428,15 +331,6 @@
             "name": "x-user-id",
             "in": "header",
             "description": "Actor user id (integer)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
             "required": true,
             "schema": {
               "type": "string"
@@ -482,15 +376,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -508,13 +393,6 @@
       "get": {
         "operationId": "AuditLogsController_findAll",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -536,13 +414,6 @@
       "post": {
         "operationId": "AuditLogsController_create",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -586,13 +457,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -632,13 +496,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -660,15 +517,6 @@
       "get": {
         "operationId": "ProjectsController_findAll",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -694,15 +542,6 @@
             "name": "x-user-id",
             "in": "header",
             "description": "Actor User ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
             "required": true,
             "schema": {
               "type": "string"
@@ -743,15 +582,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -784,15 +614,6 @@
             "name": "x-user-id",
             "in": "header",
             "description": "Actor User ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
             "required": true,
             "schema": {
               "type": "string"
@@ -838,15 +659,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -864,15 +676,6 @@
       "get": {
         "operationId": "EscalationsController_findAll",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -898,15 +701,6 @@
             "name": "x-user-id",
             "in": "header",
             "description": "Actor user id (integer)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
             "required": true,
             "schema": {
               "type": "string"
@@ -947,15 +741,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -988,15 +773,6 @@
             "name": "x-user-id",
             "in": "header",
             "description": "Actor user id (integer)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
             "required": true,
             "schema": {
               "type": "string"
@@ -1042,15 +818,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -1068,15 +835,6 @@
       "get": {
         "operationId": "EvidenceController_findAll",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -1098,15 +856,6 @@
       "post": {
         "operationId": "EvidenceController_create",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -1149,15 +898,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -1184,15 +924,6 @@
             "in": "path",
             "schema": {
               "type": "number"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
             }
           },
           {
@@ -1235,15 +966,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "description": "Role-Based Access Control",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -1268,13 +990,6 @@
         "parameters": [
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1294,13 +1009,6 @@
       "post": {
         "operationId": "DepartmentsController_create",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -1344,13 +1052,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1377,13 +1078,6 @@
             "schema": {
               "type": "number"
             }
-          },
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
           },
           {
             "in": "header",
@@ -1426,13 +1120,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1456,13 +1143,6 @@
         "parameters": [
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1482,13 +1162,6 @@
       "post": {
         "operationId": "RolesController_create",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -1532,13 +1205,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1565,13 +1231,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
           },
           {
             "in": "header",
@@ -1614,13 +1273,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1649,13 +1301,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
           },
           {
             "in": "header",
@@ -1688,13 +1333,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1724,13 +1362,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -1752,13 +1383,6 @@
       "post": {
         "operationId": "RolesController_resetRoles",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -1783,14 +1407,6 @@
         "operationId": "SubtasksController_findAll",
         "parameters": [
           {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -1813,14 +1429,6 @@
         "parameters": [
           {
             "name": "x-user-id",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
             "in": "header",
             "required": true,
             "schema": {
@@ -1862,14 +1470,6 @@
             }
           },
           {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -1898,14 +1498,6 @@
             "in": "path",
             "schema": {
               "type": "number"
-            }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
             }
           },
           {
@@ -1939,14 +1531,6 @@
           },
           {
             "name": "x-user-id",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-user-role",
             "in": "header",
             "required": true,
             "schema": {
@@ -1992,14 +1576,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -2017,13 +1593,6 @@
       "get": {
         "operationId": "ComplianceRulesController_findAll",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -2045,13 +1614,6 @@
       "post": {
         "operationId": "ComplianceRulesController_create",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -2095,13 +1657,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2128,13 +1683,6 @@
             "schema": {
               "type": "number"
             }
-          },
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
           },
           {
             "in": "header",
@@ -2177,13 +1725,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2207,13 +1748,6 @@
         "parameters": [
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2233,13 +1767,6 @@
       "post": {
         "operationId": "ComplianceViolationsController_create",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -2283,13 +1810,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2316,13 +1836,6 @@
             "schema": {
               "type": "number"
             }
-          },
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
           },
           {
             "in": "header",
@@ -2365,13 +1878,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2393,14 +1899,6 @@
       "get": {
         "operationId": "UserRolesController_findAll",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -2424,14 +1922,6 @@
         "operationId": "WorkflowInstancesController_findAll",
         "parameters": [
           {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -2454,14 +1944,6 @@
         "operationId": "WorkflowTemplatesController_findAll",
         "parameters": [
           {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -2483,14 +1965,6 @@
       "get": {
         "operationId": "WorkflowInstanceStepsController_findAll",
         "parameters": [
-          {
-            "name": "x-user-role",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "required": false,
@@ -2515,13 +1989,6 @@
         "parameters": [
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2541,13 +2008,6 @@
       "post": {
         "operationId": "TeamsController_create",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -2591,13 +2051,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2624,13 +2077,6 @@
             "schema": {
               "type": "number"
             }
-          },
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
           },
           {
             "in": "header",
@@ -2673,13 +2119,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -2707,6 +2146,14 @@
   "tags": [],
   "servers": [],
   "components": {
+    "securitySchemes": {
+      "Role-Based-Access": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-user-role",
+        "description": "Enter your role to unlock the endpoints (e.g., superuser, hr_manager, team_leader, team_member)"
+      }
+    },
     "schemas": {
       "CreateUserDto": {
         "type": "object",
@@ -3463,5 +2910,10 @@
         }
       }
     }
-  }
+  },
+  "security": [
+    {
+      "Role-Based-Access": []
+    }
+  ]
 }

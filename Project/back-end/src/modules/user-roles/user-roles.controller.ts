@@ -12,7 +12,6 @@ export class UserRolesController {
 
   @Get()
   @Roles('guest', 'superuser', 'project_manager', 'hr_manager', 'compliance_officer', 'team_leader', 'team_member', 'hr_ops')
-  @ApiHeader({ name: 'x-user-role', required: true })
   findAll() {
     return this.userRolesService.findAll();
   }

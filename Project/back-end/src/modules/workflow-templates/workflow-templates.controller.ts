@@ -10,7 +10,6 @@ export class WorkflowTemplatesController {
   constructor(private readonly workflowTemplatesService: WorkflowTemplatesService) {}
 
   @Get()
-  @ApiHeader({ name: 'x-user-role', required: true })
   findAll() {
     return this.workflowTemplatesService.findAll();
   }

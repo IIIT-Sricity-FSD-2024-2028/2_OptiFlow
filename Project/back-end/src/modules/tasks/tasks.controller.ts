@@ -27,7 +27,6 @@ export class TasksController {
   @Roles('project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Get all tasks' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findAll() {
     return this.tasksService.findAll();
   }
@@ -36,7 +35,6 @@ export class TasksController {
   @Roles('project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Get tasks assigned to a specific user' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findByAssignee(@Param('userId', ParseIntPipe) userId: number) {
     return this.tasksService.findByAssignee(userId);
   }
@@ -45,7 +43,6 @@ export class TasksController {
   @Roles('project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Get a task by ID (includes subtasks and active escalations)' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.tasksService.findOne(id);
   }
@@ -54,7 +51,6 @@ export class TasksController {
   @Roles('team_leader', 'project_manager')
   @ApiOperation({ summary: 'Create a new task' })
   @ApiResponse({ status: 201, description: 'Successfully created.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   @ApiHeader({ name: 'x-user-id', required: true, description: 'Actor user id (integer)' })
   create(@Body() createTaskDto: CreateTaskDto, @ActorUserId() actorUserId: number) {
     return this.tasksService.create(createTaskDto, actorUserId);
@@ -64,7 +60,6 @@ export class TasksController {
   @Roles('team_member', 'team_leader', 'project_manager')
   @ApiOperation({ summary: 'Update a task' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   @ApiHeader({ name: 'x-user-id', required: true, description: 'Actor user id (integer)' })
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -79,7 +74,6 @@ export class TasksController {
   @Roles('project_manager', 'team_leader')
   @ApiOperation({ summary: 'Delete a task' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   @ApiHeader({ name: 'x-user-id', required: true, description: 'Actor user id (integer)' })
   remove(@Param('id', ParseIntPipe) id: number, @ActorUserId() actorUserId: number) {
     return this.tasksService.remove(id, actorUserId);

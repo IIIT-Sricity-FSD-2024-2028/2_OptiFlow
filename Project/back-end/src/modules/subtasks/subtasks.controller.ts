@@ -26,7 +26,6 @@ export class SubtasksController {
   @Get()
   @Roles('project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Get all subtasks' })
-  @ApiHeader({ name: 'x-user-role', required: true })
   findAll() {
     return this.subtasksService.findAll();
   }
@@ -34,7 +33,6 @@ export class SubtasksController {
   @Get('by-task/:taskId')
   @Roles('project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Get subtasks for a task' })
-  @ApiHeader({ name: 'x-user-role', required: true })
   findByTask(@Param('taskId', ParseIntPipe) taskId: number) {
     return this.subtasksService.findByTask(taskId);
   }
@@ -42,7 +40,6 @@ export class SubtasksController {
   @Get(':id')
   @Roles('project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Get a subtask by ID' })
-  @ApiHeader({ name: 'x-user-role', required: true })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.subtasksService.findOne(id);
   }
@@ -50,7 +47,6 @@ export class SubtasksController {
   @Post()
   @Roles('team_leader', 'project_manager')
   @ApiOperation({ summary: 'Create a subtask' })
-  @ApiHeader({ name: 'x-user-role', required: true })
   @ApiHeader({ name: 'x-user-id', required: true })
   create(@Body() dto: CreateSubtaskDto, @ActorUserId() actorUserId: number) {
     return this.subtasksService.create(dto, actorUserId);
@@ -59,7 +55,6 @@ export class SubtasksController {
   @Patch(':id')
   @Roles('team_member', 'team_leader')
   @ApiOperation({ summary: 'Update a subtask' })
-  @ApiHeader({ name: 'x-user-role', required: true })
   @ApiHeader({ name: 'x-user-id', required: true })
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -73,7 +68,6 @@ export class SubtasksController {
   @Delete(':id')
   @Roles('team_leader', 'project_manager')
   @ApiOperation({ summary: 'Delete a subtask' })
-  @ApiHeader({ name: 'x-user-role', required: true })
   @ApiHeader({ name: 'x-user-id', required: true })
   remove(@Param('id', ParseIntPipe) id: number, @ActorUserId() actorUserId: number) {
     return this.subtasksService.remove(id, actorUserId);

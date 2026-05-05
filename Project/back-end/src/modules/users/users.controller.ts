@@ -16,7 +16,6 @@ export class UsersController {
   @Roles('guest', 'superuser', 'hr_manager', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findAll() {
     return this.usersService.findAll();
   }
@@ -25,7 +24,6 @@ export class UsersController {
   @Roles('guest', 'superuser', 'hr_manager', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
   @ApiOperation({ summary: 'Get user roles mapping' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findAllUserRoles() {
     return this.usersService.findAllUserRoles();
   }
@@ -33,7 +31,6 @@ export class UsersController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a user by ID' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.findOne(id);
   }
@@ -42,7 +39,6 @@ export class UsersController {
   @Roles('superuser', 'hr_manager')
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({ status: 201, description: 'Successfully created.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
@@ -51,7 +47,6 @@ export class UsersController {
   @Roles('superuser', 'hr_manager')
   @ApiOperation({ summary: 'Update a user' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   update(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
@@ -60,7 +55,6 @@ export class UsersController {
   @Roles('superuser', 'hr_manager')
   @ApiOperation({ summary: 'Delete a user' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.remove(id);
   }

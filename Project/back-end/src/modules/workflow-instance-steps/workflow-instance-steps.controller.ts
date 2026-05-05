@@ -10,7 +10,6 @@ export class WorkflowInstanceStepsController {
   constructor(private readonly workflowInstanceStepsService: WorkflowInstanceStepsService) {}
 
   @Get()
-  @ApiHeader({ name: 'x-user-role', required: true })
   findAll() {
     return this.workflowInstanceStepsService.findAll();
   }

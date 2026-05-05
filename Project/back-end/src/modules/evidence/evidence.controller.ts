@@ -15,7 +15,6 @@ export class EvidenceController {
   @Get()
   @ApiOperation({ summary: 'Get all evidence' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findAll() {
     return this.evidenceService.findAll();
   }
@@ -23,7 +22,6 @@ export class EvidenceController {
   @Get(':id')
   @ApiOperation({ summary: 'Get evidence by ID' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.evidenceService.findOne(id);
   }
@@ -32,7 +30,6 @@ export class EvidenceController {
   @Roles('superuser', 'project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Submit new evidence' })
   @ApiResponse({ status: 201, description: 'Successfully created.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   create(@Body() createEvidenceDto: CreateEvidenceDto) {
     return this.evidenceService.create(createEvidenceDto);
   }
@@ -41,7 +38,6 @@ export class EvidenceController {
   @Roles('superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Update evidence status/content' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   update(@Param('id', ParseIntPipe) id: number, @Body() updateEvidenceDto: UpdateEvidenceDto) {
     return this.evidenceService.update(id, updateEvidenceDto);
   }
@@ -50,7 +46,6 @@ export class EvidenceController {
   @Roles('superuser', 'compliance_officer', 'team_leader', 'team_member')
   @ApiOperation({ summary: 'Delete evidence' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
-  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.evidenceService.remove(id);
   }

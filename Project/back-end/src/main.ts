@@ -32,13 +32,17 @@ async function bootstrap() {
     .setTitle('OfficeSync API')
     .setDescription('Backend API for the OfficeSync HR and PM Dashboard')
     .setVersion('1.0')
-    // Crucial: This documents the RBAC header your evaluators asked for
-    .addGlobalParameters({
+    // ========================================================
+    // NEW: Security Scheme for the Padlock Symbols & Authorize Button
+    // ========================================================
+    .addSecurity('Role-Based-Access', {
+      type: 'apiKey',
       in: 'header',
-      required: true,
       name: 'x-user-role',
-      description: 'Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)',
+      description: 'Enter your role to unlock the endpoints (e.g., superuser, hr_manager, team_leader, team_member)',
     })
+    .addSecurityRequirements('Role-Based-Access') // This applies the locks globally
+    // ========================================================
     .addGlobalParameters({
       in: 'header',
       required: false,
