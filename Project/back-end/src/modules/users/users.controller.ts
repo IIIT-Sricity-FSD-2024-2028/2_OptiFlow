@@ -35,6 +35,14 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
+  @Get(':id/activities')
+  @ApiOperation({ summary: 'Get activities for a user' })
+  @ApiResponse({ status: 200, description: 'Successful operation.' })
+  @ApiHeader({ name: 'x-user-role', required: true, description: 'Role-Based Access Control' })
+  getActivities(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.getActivities(id);
+  }
+
   @Post()
   @Roles('superuser', 'hr_manager')
   @ApiOperation({ summary: 'Create a new user' })

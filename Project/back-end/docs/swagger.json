@@ -199,6 +199,46 @@
         ]
       }
     },
+    "/users/{id}/activities": {
+      "get": {
+        "operationId": "UsersController_getActivities",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "Role-Based Access Control",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation."
+          }
+        },
+        "summary": "Get activities for a user",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
     "/tasks": {
       "get": {
         "operationId": "TasksController_findAll",
@@ -669,6 +709,140 @@
         "summary": "Delete a project",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "NotificationsController_findAll",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all notifications (or filter by userId)",
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "post": {
+        "operationId": "NotificationsController_create",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a new notification",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/{id}/read": {
+      "patch": {
+        "operationId": "NotificationsController_markAsRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Mark a notification as read",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationsController_markAllAsRead",
+        "parameters": [
+          {
+            "in": "header",
+            "required": true,
+            "name": "x-user-role",
+            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Mark all notifications as read for a user",
+        "tags": [
+          "Notifications"
         ]
       }
     },
@@ -2203,7 +2377,44 @@
       },
       "UpdateUserDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "example": "Arjun Mehta"
+          },
+          "email": {
+            "type": "string",
+            "example": "arjun@officesync.in"
+          },
+          "password_hash": {
+            "type": "string",
+            "example": "hashed_password"
+          },
+          "department_id": {
+            "type": "number",
+            "example": 1
+          },
+          "manager_id": {
+            "type": "number",
+            "example": 4
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          },
+          "role": {
+            "type": "string",
+            "example": "team_member"
+          },
+          "team": {
+            "type": "string",
+            "example": "Ops-Admin"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+91 9876543210"
+          }
+        }
       },
       "CreateTaskDto": {
         "type": "object",
@@ -2388,6 +2599,10 @@
           "created_by": {
             "type": "number",
             "example": 3
+          },
+          "template_id": {
+            "type": "number",
+            "example": 1
           }
         },
         "required": [
@@ -2427,6 +2642,10 @@
           "created_by": {
             "type": "number",
             "example": 3
+          },
+          "template_id": {
+            "type": "number",
+            "example": 1
           }
         }
       },

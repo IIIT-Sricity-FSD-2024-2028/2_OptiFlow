@@ -34,4 +34,9 @@ export class CreateProjectDto {
   @ApiProperty({ example: 3 })
   @IsNumber()
   created_by: number;
+
+  @ApiProperty({ example: 1, required: false })
+  @IsOptional()
+  @IsNumber()
+  template_id?: number;
 }

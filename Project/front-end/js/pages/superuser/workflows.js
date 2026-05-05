@@ -1,12 +1,14 @@
 // js/pages/workflows.js
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const wfId = params.get("id");
-  const workflows = getWorkflows();
+  
+  const state = await window.Helpers.getState();
+  const workflows = state.workflowTemplates || [];
 
   if (wfId) {
-    let wf = workflows.find((w) => w.id === wfId);
+    let wf = workflows.find((w) => String(w.id) === String(wfId));
     if (wf) {
       document.getElementById("processListView").style.display = "none";
       document.getElementById("processDetailView").style.display = "flex";
@@ -61,7 +63,7 @@ function renderLibraryTable(workflows) {
             <td><span class="badge ${statusBadge}">${wf.status}</span></td>
             <td style="color:var(--text-muted)">${wf.lastModified}</td>
             <td>
-                <a href="workflow-builder?id=${wf.id}" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:8px 16px;">View</a>
+                <a href="workflow-builder.html?id=${wf.id}" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:8px 16px;">View</a>
             </td>
         `;
     tbody.appendChild(tr);

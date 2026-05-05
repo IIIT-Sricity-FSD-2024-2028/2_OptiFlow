@@ -7,8 +7,10 @@ function createBadge(text, colorClass) {
 }
 
 function processComplianceTags(compliances) {
+  if (!Array.isArray(compliances)) return "";
   return compliances
     .map((c) => {
+      if (typeof c !== 'string') return "";
       if (c.includes("SOX")) return createBadge(c, "purple");
       if (c.includes("ISO")) return createBadge(c, "yellow");
       return createBadge(c, "green");
@@ -17,6 +19,7 @@ function processComplianceTags(compliances) {
 }
 
 function processStageTags(stages) {
+  if (!Array.isArray(stages)) return "";
   return stages.map((s) => createBadge(s, "gray")).join("");
 }
 
@@ -111,7 +114,8 @@ window.Helpers = {
       '/workflow-instances',     // 12
       '/workflow-templates',     // 13
       '/workflow-instance-steps',// 14
-      '/teams'                   // 15
+      '/teams',                  // 15
+      '/notifications'           // 16
     ];
 
     const settled = await Promise.allSettled(
@@ -142,6 +146,7 @@ window.Helpers = {
       rawWorkflowTemplates,      // 13 matches '/workflow-templates'
       rawWorkflowInstanceSteps,  // 14 matches '/workflow-instance-steps'
       rawTeams,                  // 15 matches '/teams'
+      rawNotifications,          // 16 matches '/notifications'
     ] = settled.map((r, i) => unwrap(r, ENDPOINTS[i]));
 
     console.log("DEBUG - RAW USERS:", rawUsers);
@@ -186,6 +191,7 @@ window.Helpers = {
       const roleObj = ur ? roles.find(r => String(r.roleId) === String(ur.roleId)) : null;
 
       const teamObj = rawTeams.find(t => String(t.team_id) === String(u.team_id));
+      const deptObj = rawDepartments.find(d => String(d.department_id) === String(u.department_id));
 
       const initials = u.full_name
         ? u.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2)
@@ -198,6 +204,7 @@ window.Helpers = {
         roleId:       roleObj ? roleObj.roleId : null,
         roleName:     roleObj ? roleObj.roleName : 'Team Member',
         departmentId: u.department_id  || null,
+        departmentName: deptObj ? deptObj.department_name : null,
         teamId:       u.team_id        || null,
         teamName:     teamObj ? teamObj.team_name : null,
         managerId:    u.manager_id     || null,
@@ -235,41 +242,57 @@ window.Helpers = {
     // ── Projects ──────────────────────────────────────────────────────────────
     // Backend: { project_id, project_name, description, department_id,
     //            status, start_date, end_date, created_by, created_at }
-    const projects = rawProjects.map((p) => ({
-      id:           String(p.project_id),
-      projectId:    p.project_id,
-      name:         p.project_name  || '',
-      projectName:  p.project_name  || '',
-      description:  p.description   || '',
-      departmentId: p.department_id || null,
-      status:       p.status        || 'Active',
-      startDate:    p.start_date    || null,
-      endDate:      p.end_date      || null,
-      createdBy:    p.created_by    || null,
-      createdAt:    p.created_at    || null,
-    }));
+    const projects = rawProjects.map((p) => {
+      const projectTasks = rawTasks.filter(t => t.project_id === p.project_id);
+      const completedTasks = projectTasks.filter(t => t.status === 'Completed').length;
+      const progressPct = projectTasks.length > 0 
+        ? Math.round((completedTasks / projectTasks.length) * 100) 
+        : 0;
+
+      return {
+        id:           String(p.project_id),
+        projectId:    p.project_id,
+        name:         p.project_name  || '',
+        projectName:  p.project_name  || '',
+        description:  p.description   || '',
+        departmentId: p.department_id || null,
+        status:       p.status        || 'Active',
+        progress:     progressPct,
+        startDate:    p.start_date    || null,
+        endDate:      p.end_date      || null,
+        createdBy:    p.created_by    || null,
+        createdAt:    p.created_at    || null,
+      };
+    });
 
     // ── Tasks ─────────────────────────────────────────────────────────────────
     // Backend: { task_id, title, description, project_id, created_by,
     //            assigned_to, priority, status, estimated_hours,
     //            due_date, completed_at, created_at }
     // Note: actual_hours is NOT in the backend schema; omitted.
-    const tasks = rawTasks.map((t) => ({
-      id:             String(t.task_id),
-      taskId:         t.task_id,
-      title:          t.title          || '',
-      description:    t.description    || '',
-      projectId:      t.project_id     || null,
-      createdBy:      t.created_by     || null,
-      assignedTo:     t.assigned_to    || null,
-      assignedUserId: t.assigned_to    ? String(t.assigned_to) : null,
-      priority:       t.priority       || 'Medium',
-      status:         t.status         || 'Pending',
-      estimatedHours: t.estimated_hours || 0,
-      dueDate:        t.due_date       || null,
-      completedAt:    t.completed_at   || null,
-      createdAt:      t.created_at     || null,
-    }));
+    const tasks = rawTasks.map((t) => {
+      const proj = rawProjects.find(p => p.project_id === t.project_id);
+      const user = rawUsers.find(u => u.user_id === t.assigned_to);
+      return {
+        id:             String(t.task_id),
+        taskId:         t.task_id,
+        title:          t.title          || '',
+        description:    t.description    || '',
+        projectId:      t.project_id     || null,
+        projectName:    proj ? proj.project_name : 'General',
+        createdBy:      t.created_by     || null,
+        assignedTo:     t.assigned_to    || null,
+        assigneeName:   user ? user.full_name : 'Unassigned',
+        assignedUserId: t.assigned_to    ? String(t.assigned_to) : null,
+        priority:       t.priority       || 'Medium',
+        status:         t.status         || 'Pending',
+        estimatedHours: t.estimated_hours || 0,
+        dueDate:        t.due_date       || null,
+        completedAt:    t.completed_at   || null,
+        createdAt:      t.created_at     || null,
+        overdue:        t.due_date ? new Date(t.due_date) < new Date() : false,
+      };
+    });
 
     // ── Subtasks ──────────────────────────────────────────────────────────────
     // Backend: { subtask_id, task_id, title, description, assigned_to,
@@ -343,20 +366,27 @@ window.Helpers = {
     // Backend: { violation_id, rule_id, entity_id, entity_type, status,
     //            detected_at, reported_by, resolved_by, resolved_at,
     //            resolution_remarks, due_date }
-    const complianceViolations = rawViolations.map((v) => ({
-      id:                 String(v.violation_id),
-      violationId:        v.violation_id,
-      ruleId:             v.rule_id             || null,
-      entityId:           v.entity_id           || null,
-      entityType:         v.entity_type         || '',
-      status:             v.status              || 'Open',
-      detectedAt:         v.detected_at         || null,
-      reportedBy:         v.reported_by         || null,
-      resolvedBy:         v.resolved_by         || null,
-      resolvedAt:         v.resolved_at         || null,
-      resolutionRemarks:  v.resolution_remarks  || null,
-      dueDate:            v.due_date            || null,
-    }));
+    const complianceViolations = rawViolations.map((v) => {
+      const rule = rawComplianceRules.find(r => r.rule_id === v.rule_id);
+      const proj = rawProjects.find(p => p.project_id === v.entity_id && v.entity_type === 'Project');
+      return {
+        id:                 String(v.violation_id),
+        violationId:        v.violation_id,
+        ruleId:             v.rule_id             || null,
+        ruleName:           rule ? rule.rule_name : 'General Policy',
+        entityId:           v.entity_id           || null,
+        entityType:         v.entity_type         || '',
+        projectName:        proj ? proj.project_name : 'General',
+        status:             v.status              || 'Open',
+        detectedAt:         v.detected_at         || null,
+        reportedBy:         v.reported_by         || null,
+        resolvedBy:         v.resolved_by         || null,
+        resolvedAt:         v.resolved_at         || null,
+        resolutionRemarks:  v.resolution_remarks  || null,
+        dueDate:            v.due_date            || null,
+        evidenceLabel:      v.status === 'Open' ? 'At Risk' : 'Compliant'
+      };
+    });
 
     // ── Evidence ──────────────────────────────────────────────────────────────
     // Backend: { evidence_id, user_id, task_id, violation_id, title,
@@ -396,10 +426,17 @@ window.Helpers = {
       id:            String(t.template_id),
       templateId:    t.template_id,
       name:          t.template_name || '',
+      department:    t.category || 'General',
+      stages:        t.stages || [],
+      totalStages:   t.stages ? t.stages.length : 0,
       description:   t.description || '',
-      createdBy:     t.created_by || null,
+      compliance:    t.compliance || [],
+      runs:          t.runs || 0,
       status:        t.status || 'Active',
+      lastModified:  t.updated_at ? this.formatDate(t.updated_at) : (t.created_at ? this.formatDate(t.created_at) : 'Recently'),
       createdAt:     t.created_at || null,
+      updatedAt:     t.updated_at || null,
+      createdBy:     t.created_by || null,
     }));
 
     const workflowInstanceSteps = rawWorkflowInstanceSteps.map(s => ({
@@ -413,6 +450,18 @@ window.Helpers = {
       actionedBy:      s.actioned_by || null,
       createdAt:       s.created_at  || null,
       actionedAt:      s.actioned_at || null,
+    }));
+
+    const notifications = rawNotifications.map(n => ({
+      id:             String(n.notification_id),
+      notificationId: n.notification_id,
+      userId:         n.user_id,
+      title:          n.title || '',
+      message:        n.message || '',
+      type:           n.type || 'System',
+      isRead:         n.is_read || false,
+      link:           n.link || '',
+      createdAt:      n.created_at || null,
     }));
 
     // ── 4. Assemble and return the unified application state ──────────────────
@@ -433,6 +482,7 @@ window.Helpers = {
       workflowInstances,
       workflowTemplates,
       workflowInstanceSteps,
+      notifications,
       // Legacy aliases for backward-compat with older dashboard pages
       complianceItems:    complianceViolations,
       activeViolations:   complianceViolations.filter((v) => v.status === 'Open'),
@@ -450,23 +500,19 @@ window.Helpers = {
    * @param {number|string} targetUserId - The numeric/string ID of the recipient.
    * @param {{ title: string, message: string, type?: string }} payload
    */
-  pushNotification(targetUserId, payload) {
-    if (!targetUserId) {
-      console.warn('[pushNotification] No targetUserId provided — notification dropped.');
-      return;
+  async pushNotification(targetUserId, payload) {
+    if (!targetUserId) return;
+    try {
+      await this.api.request('/notifications', 'POST', {
+        user_id: Number(targetUserId),
+        title: payload.title || 'Notification',
+        message: payload.message || '',
+        type: payload.type || 'System',
+        link: payload.link || '#'
+      });
+    } catch (e) {
+      console.error('[pushNotification] API failed:', e);
     }
-    const notifs = JSON.parse(localStorage.getItem('system_notifications') || '[]');
-    notifs.unshift({
-      id:           Date.now() + Math.random(),
-      targetUserId: String(targetUserId),
-      title:        payload.title   || 'Notification',
-      message:      payload.message || '',
-      type:         payload.type    || 'info',
-      date:         new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }),
-      read:         false,
-    });
-    // Keep max 100 notifications to avoid localStorage bloat
-    localStorage.setItem('system_notifications', JSON.stringify(notifs.slice(0, 100)));
   },
 
   async saveState(state) {

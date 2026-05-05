@@ -161,7 +161,7 @@ async function renderEmpInfo(emp) {
       </div>
 
       <div style="margin-top:16px;">
-        <a href="employee-detail?id=${encodeURIComponent(emp.id)}"
+        <a href="employee-detail.html?id=${encodeURIComponent(emp.id)}"
            style="font-size:13px;color:var(--primary-color);display:flex;align-items:center;gap:5px;">
           <i class="ri-external-link-line"></i> View Full Profile
         </a>
@@ -402,9 +402,9 @@ async function resetToDefault() {
   showToast(`${activeEmp.name} reset to role default.`);
 }
 
-function populateDeptFilter() {
+async function populateDeptFilter() {
   const sel = document.getElementById("deptFilterInd");
-  const deps = HRStore.getDepartments();
+  const deps = await HRStore.getDepartments();
   sel.innerHTML = '<option value="">All Departments</option>';
   deps.forEach((d) => {
     const opt = document.createElement("option");
@@ -471,7 +471,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.head.appendChild(style);
 
   setupLogout();
-  populateDeptFilter();
+  await populateDeptFilter();
   await renderEmpList();
   setupNotifications();
 // --- DYNAMIC SIDEBAR UPDATER ---

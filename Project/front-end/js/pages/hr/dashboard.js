@@ -116,7 +116,8 @@ async function populateFilters() {
 
   const deptSel = document.getElementById("deptFilter");
   deptSel.innerHTML = '<option value="">All Departments</option>';
-  HRStore.getDepartments().forEach((d) => {
+  const departments = await HRStore.getDepartments();
+  departments.forEach((d) => {
     const opt = document.createElement("option");
     opt.value = d;
     opt.textContent = d;
@@ -138,7 +139,7 @@ async function populateFilters() {
 // Navigation helpers
 // ─────────────────────────────────────────
 function goToEmployee(empId) {
-  window.location.href = `employee-detail?id=${empId}`;
+  window.location.href = `employee-detail.html?id=${empId}`;
 }
 
 function goToProvision(empId) {

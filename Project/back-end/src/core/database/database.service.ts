@@ -29,7 +29,18 @@ export type SystemEntity =
 export type EscalationStatus = 'Open' | 'Reviewed' | 'Resolved' | 'Closed';
 export type EvidenceStatus = 'Pending' | 'Under_Review' | 'Approved' | 'Rejected';
 
-// ─── Interfaces (23 Tables) ────────────────────────────────────────────────
+export interface AppNotification {
+  notification_id: number;
+  user_id: number;
+  title: string;
+  message: string;
+  type: 'Task' | 'Project' | 'Compliance' | 'System';
+  is_read: boolean;
+  link?: string;
+  created_at: string;
+}
+
+// ─── Interfaces (24 Tables) ────────────────────────────────────────────────
 
 export interface Permission {
   permission_id: number;
@@ -488,17 +499,46 @@ export class DatabaseService {
 
   // 9. Workflow_Templates
   public workflow_templates: WorkflowTemplate[] = [
-    { template_id: 1, template_name: 'Annual Leave Approval', category: 'HR', description: 'Standard leave approval', is_active: true, version: 1, created_by: 7, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
-    { template_id: 2, template_name: 'Hardware Requisition', category: 'IT', description: 'Request new laptops or phones', is_active: true, version: 2, created_by: 3, created_at: '2024-03-01T00:00:00Z', updated_at: '2024-05-01T00:00:00Z' },
-    { template_id: 3, template_name: 'Budget Approval', category: 'Finance', description: 'Approve large expenses', is_active: true, version: 1, created_by: 6, created_at: '2024-02-01T00:00:00Z', updated_at: '2024-02-01T00:00:00Z' }
+    { template_id: 1, template_name: 'Finance Q4 Reporting', category: 'Finance', description: 'End-of-year financial reconciliation and audit.', is_active: true, version: 3, created_by: 1, created_at: '2024-10-01T00:00:00Z', updated_at: '2024-12-10T00:00:00Z' },
+    { template_id: 2, template_name: 'Employee Onboarding', category: 'HR', description: 'Standard onboarding flow for new hires.', is_active: true, version: 3, created_by: 7, created_at: '2024-10-01T00:00:00Z', updated_at: '2024-12-05T00:00:00Z' },
+    { template_id: 3, template_name: 'IT Security Audit Protocol', category: 'IT', description: 'Protocol for scanning and assessing IT infrastructure security.', is_active: true, version: 3, created_by: 3, created_at: '2024-10-01T00:00:00Z', updated_at: '2024-11-20T00:00:00Z' },
+    { template_id: 4, template_name: 'GDPR Client Verification', category: 'Operations', description: 'Verification steps to ensure GDPR compliance for client data.', is_active: true, version: 3, created_by: 10, created_at: '2024-10-01T00:00:00Z', updated_at: '2025-01-08T00:00:00Z' },
+    { template_id: 5, template_name: 'Vendor Invoice Verification', category: 'Finance', description: 'Matching and approving vendor invoices.', is_active: true, version: 3, created_by: 6, created_at: '2024-10-01T00:00:00Z', updated_at: '2025-01-15T00:00:00Z' }
   ];
 
   // 10. Workflow_Template_Steps
   public workflow_template_steps: WorkflowTemplateStep[] = [
-    { step_id: 1, template_id: 1, step_order: 1, step_name: 'Direct Manager Approval', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 48, on_reject_goto_step_id: null },
-    { step_id: 2, template_id: 1, step_order: 2, step_name: 'HR Processing', step_type: 'Automated_Task', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
-    { step_id: 3, template_id: 2, step_order: 1, step_name: 'IT Security Verification', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 72, on_reject_goto_step_id: null },
-    { step_id: 4, template_id: 3, step_order: 1, step_name: 'Finance Director Signoff', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 96, on_reject_goto_step_id: null }
+    // Finance Q4 Reporting
+    { step_id: 1, template_id: 1, step_order: 1, step_name: 'Data Collection', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 48, on_reject_goto_step_id: null },
+    { step_id: 2, template_id: 1, step_order: 2, step_name: 'Draft', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 48, on_reject_goto_step_id: null },
+    { step_id: 3, template_id: 1, step_order: 3, step_name: 'Review', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 48, on_reject_goto_step_id: 2 },
+    { step_id: 4, template_id: 1, step_order: 4, step_name: 'Audit', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 48, on_reject_goto_step_id: 3 },
+
+    // Employee Onboarding
+    { step_id: 5, template_id: 2, step_order: 1, step_name: 'Documents', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+    { step_id: 6, template_id: 2, step_order: 2, step_name: 'HR Verify', step_type: 'Approval', required_permission_id: 5, escalation_timeout_hours: 24, on_reject_goto_step_id: 5 },
+    { step_id: 7, template_id: 2, step_order: 3, step_name: 'IT Setup', step_type: 'Automated_Task', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+    { step_id: 8, template_id: 2, step_order: 4, step_name: 'Account Setup', step_type: 'Automated_Task', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+    { step_id: 9, template_id: 2, step_order: 5, step_name: 'Orientation', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+
+    // IT Security Audit Protocol
+    { step_id: 10, template_id: 3, step_order: 1, step_name: 'Scan', step_type: 'Automated_Task', required_permission_id: null, escalation_timeout_hours: 12, on_reject_goto_step_id: null },
+    { step_id: 11, template_id: 3, step_order: 2, step_name: 'Assess', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 24, on_reject_goto_step_id: 10 },
+    { step_id: 12, template_id: 3, step_order: 3, step_name: 'Report', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+    { step_id: 13, template_id: 3, step_order: 4, step_name: 'Remediation', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 72, on_reject_goto_step_id: null },
+    { step_id: 14, template_id: 3, step_order: 5, step_name: 'Verify', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 24, on_reject_goto_step_id: 13 },
+    { step_id: 15, template_id: 3, step_order: 6, step_name: 'Sign-off', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+
+    // GDPR Client Verification
+    { step_id: 16, template_id: 4, step_order: 1, step_name: 'Data Request', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 48, on_reject_goto_step_id: null },
+    { step_id: 17, template_id: 4, step_order: 2, step_name: 'Identity Check', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 48, on_reject_goto_step_id: 16 },
+    { step_id: 18, template_id: 4, step_order: 3, step_name: 'Consent Review', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 48, on_reject_goto_step_id: 17 },
+    { step_id: 19, template_id: 4, step_order: 4, step_name: 'Compliance Sign-off', step_type: 'Approval', required_permission_id: 6, escalation_timeout_hours: 48, on_reject_goto_step_id: 18 },
+
+    // Vendor Invoice Verification
+    { step_id: 20, template_id: 5, step_order: 1, step_name: 'Invoice Receipt', step_type: 'Input_Required', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+    { step_id: 21, template_id: 5, step_order: 2, step_name: 'PO Matching', step_type: 'Automated_Task', required_permission_id: null, escalation_timeout_hours: 24, on_reject_goto_step_id: null },
+    { step_id: 22, template_id: 5, step_order: 3, step_name: 'Finance Approval', step_type: 'Approval', required_permission_id: 1, escalation_timeout_hours: 24, on_reject_goto_step_id: 20 }
   ];
 
   // 11. Workflow_Instances
@@ -627,6 +667,11 @@ export class DatabaseService {
     { evidence_id: 1, user_id: 5, task_id: 101, violation_id: null, title: 'Invoice reconciliation sheet', evidence_type: 'Document', file_url: 'https://storage.officesync.in/evidence/q4_invoice_recon.xlsx', notes: 'Excel sheet attached.', status: 'Under_Review', reviewed_by: null, submitted_at: '2024-11-17T14:00:00Z', reviewed_at: null },
     { evidence_id: 2, user_id: 8, task_id: 105, violation_id: null, title: 'ISO Gap Report Final', evidence_type: 'Document', file_url: 'https://storage.officesync.in/evidence/iso_gap_report_final.pdf', notes: 'Signed off by CTO.', status: 'Approved', reviewed_by: 3, submitted_at: '2024-02-14T17:05:00Z', reviewed_at: '2024-02-15T09:00:00Z' },
     { evidence_id: 3, user_id: 9, task_id: 104, violation_id: 2, title: 'Firewall rules dump', evidence_type: 'Archive', file_url: 'https://storage.officesync.in/evidence/fw_rules.tar.gz', notes: 'Raw iptables dump.', status: 'Pending', reviewed_by: null, submitted_at: '2024-11-16T11:30:00Z', reviewed_at: null }
+  ];
+
+  // 24. Notifications
+  public notifications: AppNotification[] = [
+    { notification_id: 1, user_id: 5, title: 'New Task Assigned', message: 'You have been assigned to "Data Collection" in Finance Q4.', type: 'Task', is_read: false, link: 'tasks.html?id=1', created_at: '2024-11-20T10:00:00Z' }
   ];
 
 }

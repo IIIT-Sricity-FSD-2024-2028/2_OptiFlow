@@ -71,10 +71,22 @@ function renderAuditLog() {
     const newV = log.newValue ? JSON.stringify(log.newValue) : "";
     const changeText = oldV && newV ? `${oldV} → ${newV}` : "—";
 
+    let entityName = `#${log.entityId}`;
+    if (log.entityType === 'Project') {
+      const p = (state.projects || []).find(x => String(x.id) === String(log.entityId));
+      if (p) entityName = p.name;
+    } else if (log.entityType === 'Task') {
+      const t = (state.tasks || []).find(x => String(x.taskId) === String(log.entityId));
+      if (t) entityName = t.title;
+    } else if (log.entityType === 'User') {
+      const u = (state.users || []).find(x => String(x.userId) === String(log.entityId));
+      if (u) entityName = u.fullName;
+    }
+
     return {
       timestamp:  fmtTimestamp(log.performedAt),
       rawDate:    new Date(log.performedAt || 0),
-      title:      `${log.entityType} #${log.entityId} — ${log.action}`,
+      title:      `${log.entityType}: ${entityName} — ${log.action}`,
       subtitle:   changeText.substring(0, 60) + (changeText.length > 60 ? "…" : ""),
       actor:      userName(log.performedBy),
       initials:   userInitials(log.performedBy),
@@ -162,5 +174,5 @@ function renderAuditLog() {
 
 // ── Export button ─────────────────────────────────────────────────────────────
 document.getElementById("btn-export")?.addEventListener("click", () => {
-  if (window.Toast) window.Toast.show("Exporting Audit Log as CSV…", "info");
+  if (window.Toast) window.Toast.show("info", "Exporting", "Exporting Audit Log as CSV…");
 });

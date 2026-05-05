@@ -26,7 +26,7 @@ async function loadData() {
   try {
     if (HRStore && HRStore.syncWithMaster) await HRStore.syncWithMaster();
     ALL_EMPLOYEES = await HRStore.getAll();
-    DEPARTMENTS = ["All Departments", ...HRStore.getDepartments()];
+    DEPARTMENTS = ["All Departments", ...(await HRStore.getDepartments())];
     return true;
   } catch (err) {
     console.error("HRStore read failed:", err);
@@ -178,7 +178,7 @@ function renderNode(node, isRoot = false) {
   `;
 
   function navigate() {
-    window.location.href = `employee-detail?id=${encodeURIComponent(node.id)}`;
+    window.location.href = `employee-detail.html?id=${encodeURIComponent(node.id)}`;
   }
   card.addEventListener("click", navigate);
   card.addEventListener("keydown", (e) => {
@@ -247,7 +247,7 @@ async function renderTree(employees) {
         <span class="card-role-badge ${roleClass(emp.role, emp.status)}">${emp.role}</span>
       `;
       function navigate() {
-        window.location.href = `employee-detail?id=${encodeURIComponent(emp.id)}`;
+        window.location.href = `employee-detail.html?id=${encodeURIComponent(emp.id)}`;
       }
       card.addEventListener("click", navigate);
       card.addEventListener("keydown", (e) => {

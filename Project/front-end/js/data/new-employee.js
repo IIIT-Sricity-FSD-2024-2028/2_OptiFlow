@@ -143,9 +143,9 @@ async function validateAll() {
 // DYNAMIC DROPDOWNS — all populated from HRStore
 // ═══════════════════════════════════════════════════════
 
-function populateDepartments() {
+async function populateDepartments() {
   const sel = document.getElementById("department");
-  const deps = HRStore.getDepartments();
+  const deps = await HRStore.getDepartments();
   sel.innerHTML = '<option value="">— Select Department —</option>';
   deps.forEach((d) => {
     const opt = document.createElement("option");
@@ -155,9 +155,9 @@ function populateDepartments() {
   });
 }
 
-function populateTeams(dept) {
+async function populateTeams(dept) {
   const sel = document.getElementById("team");
-  const teams = HRStore.getTeamsForDept(dept);
+  const teams = await HRStore.getTeamsForDept(dept);
   sel.innerHTML = '<option value="">— Select Team —</option>';
   teams.forEach((t) => {
     const opt = document.createElement("option");
@@ -356,12 +356,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     .toISOString()
     .split("T")[0];
 
-  populateDepartments();
+  await populateDepartments();
   await populateSystemRoles();
   await populateReportsTo();
 
-  document.getElementById("department").addEventListener("change", function () {
-    populateTeams(this.value);
+  document.getElementById("department").addEventListener("change", async function () {
+    await populateTeams(this.value);
     clearError("department");
     clearError("team");
   });
