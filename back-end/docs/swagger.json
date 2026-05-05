@@ -726,13 +726,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -752,13 +745,6 @@
       "post": {
         "operationId": "NotificationsController_create",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
@@ -792,13 +778,6 @@
           },
           {
             "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
-          {
-            "in": "header",
             "required": false,
             "name": "x-user-id",
             "description": "Integer user id for the acting user (required on task/subtask/escalation mutations)",
@@ -820,13 +799,6 @@
       "post": {
         "operationId": "NotificationsController_markAllAsRead",
         "parameters": [
-          {
-            "in": "header",
-            "required": true,
-            "name": "x-user-role",
-            "description": "Role-Based Access Control (e.g., superuser, hr_manager, team_leader, team_member)",
-            "schema": {}
-          },
           {
             "in": "header",
             "required": false,
