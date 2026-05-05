@@ -240,37 +240,39 @@ function renderPage() {
     if (!showAcceptanceFlow && task.status !== "Completed" && task.status !== "done") {
       let isPending = ["Pending_TL_Review", "Pending_PM_Review", "Pending_Compliance", "In_Review", "Under_Review"].includes(task.status);
       const isTm = !tl;
-      const isAssignedToTmTask = isTm && (Number(task.assignedTo) === numericSessionUserId(session));
+      let isAssignedToMe = (Number(task.assignedTo) === numericSessionUserId(session));
       
-      // If TM is not assigned to the parent task, check if their subtasks are pending
-      if (isTm && !isAssignedToTmTask) {
-         const mySubtasks = (state.subtasks || []).filter(s => Number(s.taskId) === Number(task.taskId) && Number(s.assignedTo) === numericSessionUserId(session));
-         const activeSubtasks = mySubtasks.filter(s => s.status !== "Completed");
-         if (activeSubtasks.length > 0 && activeSubtasks.every(s => ["Pending_TL_Review", "In_Review"].includes(s.status))) {
-            isPending = true;
-         }
+      const mySubtasks = (state.subtasks || []).filter(s => Number(s.taskId) === Number(task.taskId) && Number(s.assignedTo) === numericSessionUserId(session));
+      if (isTm && !isAssignedToMe && mySubtasks.length > 0) {
+        isAssignedToMe = true;
+        // Check if all their active subtasks are pending review
+        const activeSubtasks = mySubtasks.filter(s => s.status !== "Completed");
+        if (activeSubtasks.length > 0 && activeSubtasks.every(s => ["Pending_TL_Review", "In_Review", "Under_Review"].includes(s.status))) {
+           isPending = true;
+        }
       }
 
       const isAssignedToTm = tl && (Number(task.assignedTo) !== numericSessionUserId(session));
-      const isAssignedToTl = tl && (Number(task.assignedTo) === numericSessionUserId(session));
+      const isBlocked = task.status === "Blocked";
 
-      if (isTm) {
+      if (isTm && isAssignedToMe) {
         actionsHTML = `
           <div style="display:flex; gap:12px; align-items:center">
+            <button class="btn btn-secondary" onclick="openModal('extension')">Request extension</button>
             <button class="btn btn-secondary" onclick="openModal('blocker')">Report blocker</button>
             ${isPending ? `<button class="btn btn-primary" disabled style="opacity:0.6;cursor:not-allowed;">Under review</button>` : `<button class="btn btn-primary" onclick="openModal('submit')">Submit work</button>`}
           </div>`;
       } else if (isAssignedToTm) {
         actionsHTML = `
           <div style="display:flex; gap:12px; align-items:center">
+            ${isBlocked ? `<button class="btn btn-success" onclick="resolveTaskBlocker()">Resolve Blocker</button>` : ""}
             <button class="btn btn-primary" onclick="approveTaskWork()">Approve Work</button>
             <button class="btn btn-secondary" onclick="openRejectModal()">Reject / Request Changes</button>
-            <button class="btn btn-danger" onclick="openModal('blocker')">Escalate to PM</button>
           </div>`;
-      } else if (isAssignedToTl) {
+      } else if (tl && isAssignedToMe) {
         actionsHTML = `
           <div style="display:flex; gap:12px; align-items:center">
-            <button class="btn btn-secondary" onclick="openModal('blocker')">Report blocker</button>
+            ${isBlocked ? `<button class="btn btn-success" onclick="resolveTaskBlocker()">Resolve Blocker</button>` : ""}
             ${isPending ? `<button class="btn btn-primary" disabled style="opacity:0.6;cursor:not-allowed;">Under review</button>` : `<button class="btn btn-primary" onclick="openModal('submit')">Submit to PM</button>`}
           </div>`;
       }
@@ -553,6 +555,24 @@ async function saveSubtask() {
 }
 
 function openModal(type) {
+  const isTl = isTeamLeaderRole();
+  const isBlocked = task.status === "Blocked";
+  
+  const extTab = document.getElementById("tab-extension");
+  if (extTab) {
+    extTab.style.display = isTl ? "none" : "block";
+  }
+  
+  const blockTab = document.getElementById("tab-blocker");
+  if (blockTab) {
+    blockTab.style.display = isTl ? "none" : "block";
+  }
+
+  const resolveTab = document.getElementById("tab-resolve");
+  if (resolveTab) {
+     resolveTab.style.display = (isTl && isBlocked) ? "block" : "none";
+  }
+
   document.getElementById("blocker-modal").classList.add("open");
   switchTab(type);
 }
@@ -617,10 +637,42 @@ function switchTab(type) {
   } else if (type === "extension") {
     document.getElementById("tab-extension").style.color = "var(--blue)";
     document.getElementById("tab-extension").style.borderBottom = "2px solid var(--blue)";
-    document.getElementById("modal-content-area").innerHTML =
-      '<div style="font-size:13px;color:var(--text-muted);">Extension workflow is not connected to an API endpoint yet.</div>';
-    document.getElementById("modal-footer-area").innerHTML =
-      '<button class="btn btn-secondary" onclick="closeModals()">Close</button>';
+    document.getElementById("modal-content-area").innerHTML = `
+        <div style="background:#eff6ff; padding:12px; border-radius:8px; color:#1e40af; font-size:12px; margin-bottom:24px;">
+          Extension requests are sent to your manager for approval.
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label" for="extension-date">Proposed new deadline *</label>
+          <input type="date" id="extension-date" class="form-select">
+          <span class="form-error hidden" id="extension-date-error"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="extension-desc">Reason for extension *</label>
+          <textarea id="extension-desc" class="form-textarea" placeholder="Explain why an extension is needed…"></textarea> 
+          <span class="form-error hidden" id="extension-desc-error"></span>
+        </div>
+      `;
+    document.getElementById("modal-footer-area").innerHTML = `
+        <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAct('extension')">Send Request</button>
+      `;
+  } else if (type === "resolve") {
+    document.getElementById("tab-resolve").style.color = "var(--blue)";
+    document.getElementById("tab-resolve").style.borderBottom = "2px solid var(--blue)";
+    document.getElementById("modal-content-area").innerHTML = `
+        <div style="background:#f0fdf4; padding:12px; border-radius:8px; color:#166534; font-size:12px; margin-bottom:24px;">
+          Unblocking this task will notify the team member and set the status back to In Progress.
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="resolve-notes">Resolution message *</label>
+          <textarea id="resolve-notes" class="form-textarea" placeholder="How was this resolved? e.g. Access granted, data provided..."></textarea> 
+          <span class="form-error hidden" id="resolve-notes-error"></span>
+        </div>
+      `;
+    document.getElementById("modal-footer-area").innerHTML = `
+        <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-success" onclick="confirmResolveBlocker()">Resolve Blocker</button>
+      `;
   }
 }
 
@@ -765,6 +817,132 @@ async function submitAct(type) {
       console.error(e);
       window.Helpers.notifyApiError(e, (e && e.message) || "Submit failed.");
     }
+    return;
+  }
+
+  if (type === "extension") {
+    const dateEl = document.getElementById("extension-date");
+    const descEl = document.getElementById("extension-desc");
+    const date = dateEl ? dateEl.value : "";
+    const notes = descEl ? descEl.value.trim() : "";
+
+    if (!date) {
+      const err = document.getElementById("extension-date-error");
+      if (err) { err.textContent = "Select a date."; err.classList.remove("hidden"); }
+      window.Toast.error("Missing info", "Select a new deadline.");
+      return;
+    }
+    if (!notes) {
+      const err = document.getElementById("extension-desc-error");
+      if (err) { err.textContent = "Provide a reason."; err.classList.remove("hidden"); }
+      window.Toast.error("Missing info", "Explain the reason for extension.");
+      return;
+    }
+
+    try {
+      const pid = strictNumericId(task.projectId);
+      const raw = numericSessionUserId(session);
+      const sessionUser = state.users.find((u) => Number(u.userId) === Number(raw));
+      const tlOrPm =
+        strictNumericId(sessionUser?.managerId) ||
+        strictNumericId(sessionUser?.reportsTo) ||
+        (state.users[0] ? strictNumericId(state.users[0].userId) : null) ||
+        1;
+
+      if (pid) {
+        const body = {
+          task_id: strictNumericId(task.taskId) || Number(task.taskId),
+          project_id: pid,
+          reported_by: strictNumericId(raw) || Number(raw),
+          target_manager_id: tlOrPm,
+          title: `Extension Request: ${taskDisplayTitle(task)}`,
+          description: `Requested new date: ${date}. Reason: ${notes}`,
+          blocker_type: "Extension",
+          priority: "Medium",
+        };
+        await window.Helpers.api.request("/escalations", "POST", body);
+
+        if (tlOrPm) {
+          window.Helpers.pushNotification(tlOrPm, {
+            title:   'Extension Requested',
+            message: `Task: "${taskDisplayTitle(task)}". New date requested: ${date}`,
+            type:    'info',
+          });
+        }
+      }
+
+      window.Toast.success(
+        "Request sent",
+        "Extension request submitted to your manager."
+      );
+      closeModals();
+    } catch (e) {
+      console.error(e);
+      window.Helpers.notifyApiError(e, (e && e.message) || "Extension request failed.");
+    }
+    return;
+  }
+}
+
+async function resolveTaskBlocker() {
+  openModal('resolve');
+}
+
+async function confirmResolveBlocker() {
+  const notes = window.Helpers.getVal("resolve-notes");
+  if (!notes) {
+    document.getElementById("resolve-notes-error").textContent = "Please provide a resolution message.";
+    document.getElementById("resolve-notes-error").classList.remove("hidden");
+    return;
+  }
+
+  if (!task) return;
+  try {
+    // 1. Unblock the task
+    await window.Helpers.api.request(`/tasks/${task.taskId}`, "PATCH", { status: "In_Progress" });
+
+    // 2. Resolve the escalation linked to this task
+    const activeEsc = (state.escalations || []).find(
+      e => Number(e.taskId) === Number(task.taskId) && (e.status === "Open" || e.status === "Escalated")
+    );
+    
+    let reporterId = null;
+    if (activeEsc) {
+      reporterId = activeEsc.reportedBy || activeEsc.reported_by;
+      await window.Helpers.api.request(`/escalations/${activeEsc.id || activeEsc.escalation_id}`, "PATCH", {
+        status: "Resolved",
+        notes: notes
+      });
+    }
+
+    // 3. Notify the person who reported it (Crucial!)
+    if (reporterId) {
+      window.Helpers.pushNotification(Number(reporterId), {
+        title:   'Blocker Resolved',
+        message: `The blocker you reported on "${taskDisplayTitle(task)}" has been resolved. Message: ${notes}`,
+        type:    'success',
+      });
+    }
+
+    // 4. Also notify the main assignee if different
+    if (task.assignedTo && Number(task.assignedTo) !== Number(reporterId)) {
+      window.Helpers.pushNotification(Number(task.assignedTo), {
+        title:   'Task Unblocked',
+        message: `The blocker on "${taskDisplayTitle(task)}" has been resolved. Message: ${notes}`,
+        type:    'success',
+      });
+    }
+
+    window.Toast.success("Unblocked", "Task is now In Progress and reporter notified.");
+    closeModals();
+    
+    // Refresh state and page
+    state = await window.Helpers.getState();
+    task = state.tasks.find((t) => Number(t.taskId) === Number(task.taskId));
+    renderPage();
+  } catch (e) {
+    console.error(e);
+    window.Helpers.notifyApiError(e, (e && e.message) || "Could not resolve blocker.");
   }
 }
 

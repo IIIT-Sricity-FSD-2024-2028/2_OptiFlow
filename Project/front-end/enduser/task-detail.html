@@ -62,12 +62,19 @@
       .detail-meta-row {
         display: flex;
         align-items: center;
-        gap: 8px;
-        font-size: 12px;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 13px;
         color: var(--text-secondary);
+      }
+      .detail-meta-row span {
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
       }
       .meta-divider {
         color: var(--border-hover);
+        opacity: 0.5;
       }
 
       .accept-row {
@@ -592,6 +599,20 @@
             "
           >
             Request Extension
+          </div>
+          <div
+            class="modal-tab"
+            id="tab-resolve"
+            onclick="switchTab('resolve')"
+            style="
+              font-size: 13px;
+              font-weight: 600;
+              padding-bottom: 12px;
+              cursor: pointer;
+              color: var(--text-muted);
+            "
+          >
+            Resolve Blocker
           </div>
         </div>
 
