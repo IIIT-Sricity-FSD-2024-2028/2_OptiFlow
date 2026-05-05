@@ -3,9 +3,31 @@ import { DatabaseService, User } from '../../core/database/database.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
+export interface UserActivity {
+  id: string;
+  employeeId: number;
+  action: string;
+  timestamp: string;
+}
+
 @Injectable()
 export class UsersService {
   constructor(private readonly db: DatabaseService) {}
+
+  private activities: UserActivity[] = [];
+
+  getActivities(employeeId: number): UserActivity[] {
+    return this.activities.filter(a => a.employeeId === employeeId).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  private logActivity(employeeId: number, action: string) {
+    this.activities.push({
+      id: Math.random().toString(36).substr(2, 9),
+      employeeId,
+      action,
+      timestamp: new Date().toISOString()
+    });
+  }
 
   findAll(): User[] {
     return this.db.users;
@@ -65,6 +87,8 @@ export class UsersService {
       }
     }
 
+    this.logActivity(newUser.user_id, 'Employee created');
+
     return newUser;
   }
 
@@ -112,12 +136,20 @@ export class UsersService {
       }
     }
 
+    if (dto.role) {
+      this.logActivity(id, `Role updated to ${dto.role}`);
+    }
+    if (dto.is_active !== undefined && dto.is_active !== this.db.users[index].is_active) {
+      this.logActivity(id, dto.is_active ? 'Employee activated' : 'Employee deactivated');
+    }
+
     return this.db.users[index];
   }
 
   remove(id: number): void {
     const index = this.db.users.findIndex(u => u.user_id === id);
     if (index === -1) throw new NotFoundException(`User with ID ${id} not found`);
+    this.logActivity(id, 'Employee deactivated');
     this.db.users.splice(index, 1);
   }
 }

@@ -2,22 +2,7 @@
 (function (global) {
   "use strict";
 
-  // ── Department ID → name (matches DatabaseService.departments) ─────────────
-  const DEPT_MAP = {
-    1: "Operations",
-    2: "IT Security",
-    3: "Finance",
-    4: "HR",
-    5: "Compliance",
-  };
 
-  const DEPT_TEAMS = {
-    Operations:   ["Ops-Admin", "PMO"],
-    Finance:      ["Finance-Audit"],
-    "IT Security":["IT-Security"],
-    HR:           ["HR-Talent", "HR-Ops"],
-    Compliance:   ["Compliance-Core"],
-  };
 
   const MANAGER_ROLES = [
     "project_manager",
@@ -49,12 +34,14 @@
   }
 
   // ── Map backend User → HR employee object ──────────────────────────────────
-  function mapIn(u) {
+  async function mapIn(u) {
     if (!u) return null;
+    const globalState = await window.Helpers.getState();
 
     // PK is user_id in the new schema
     const numericId = u.user_id ?? u.id;
-    const deptName  = DEPT_MAP[u.department_id] || `Dept ${u.department_id}`;
+    const deptObj = globalState.departments.find(d => String(d.departmentId) === String(u.department_id));
+    const deptName  = deptObj ? deptObj.departmentName : `Dept ${u.department_id}`;
     const nameParts = String(u.full_name || "").trim().split(/\s+/);
     const initials  =
       ((nameParts[0] || "")[0] || "").toUpperCase() +
@@ -86,7 +73,9 @@
   }
 
   // ── Map HR employee → backend PATCH/POST body ──────────────────────────────
-  function mapOut(emp) {
+  async function mapOut(emp) {
+    const globalState = await window.Helpers.getState();
+
     // Reverse ROLE_DISPLAY to find the slug
     const DISPLAY_TO_SLUG = Object.fromEntries(
       Object.entries(ROLE_DISPLAY).map(([k, v]) => [v, k])
@@ -94,10 +83,8 @@
     const roleSlug = DISPLAY_TO_SLUG[emp.role] || emp.roleSlug || emp.role;
 
     // Reverse DEPT_MAP
-    const DEPT_TO_ID = Object.fromEntries(
-      Object.entries(DEPT_MAP).map(([id, name]) => [name, parseInt(id)])
-    );
-    const deptId = DEPT_TO_ID[emp.department] || 1;
+    const deptObj = globalState.departments.find(d => d.departmentName === emp.department);
+    const deptId = deptObj ? deptObj.departmentId : 1;
 
     const parentNumericId = emp.parentId
       ? parseInt(emp.parentId.replace("EMP-", ""), 10)
@@ -155,7 +142,7 @@
               role:        ROLE_DISPLAY[u.roleName] || u.roleName, 
               roleSlug:    u.roleName, 
               
-              department:  DEPT_MAP[u.departmentId] || `Dept ${u.departmentId}`,
+              department:  u.departmentName || `Dept ${u.departmentId}`,
               team:        u.teamName || null,
               
               // FIX: Re-add the manager connection so the Org Chart Tree works!
@@ -188,9 +175,8 @@ async getById(id) {
     },
     async getStats() {
       const emps = await this.getAll();
-      const teamSet = new Set(emps.map(e => e.team).filter(Boolean));
-      // Fall back to unique departments count when no team assignments exist
-      const teamCount = teamSet.size || new Set(emps.map(e => e.department).filter(Boolean)).size;
+      const globalState = await window.Helpers.getState();
+      const teamCount = globalState.teams.length;
       return {
         totalMembers: emps.length,
         activeTeams:  teamCount,
@@ -199,16 +185,30 @@ async getById(id) {
       };
     },
 
-    getDepartments() {
-      return Object.values(DEPT_MAP);
+    async getDepartments() {
+      const globalState = await window.Helpers.getState();
+      return globalState.departments.map(d => d.departmentName);
     },
 
-    getTeamsForDept(dept) {
-      return [...(DEPT_TEAMS[dept] || [])];
+    async getTeamsForDept(dept) {
+      const globalState = await window.Helpers.getState();
+      const deptObj = globalState.departments.find(d => d.departmentName === dept);
+      if (!deptObj) return [];
+      return globalState.teams.filter(t => t.departmentId === deptObj.departmentId).map(t => t.teamName);
     },
 
-    getDeptTeamsMap() {
-      return JSON.parse(JSON.stringify(DEPT_TEAMS));
+    async getDeptTeamsMap() {
+      const globalState = await window.Helpers.getState();
+      const map = {};
+      globalState.teams.forEach(t => {
+         const dept = globalState.departments.find(d => String(d.departmentId) === String(t.departmentId));
+         if (dept) {
+            const dName = dept.departmentName;
+            if (!map[dName]) map[dName] = [];
+            map[dName].push(t.teamName);
+         }
+      });
+      return map;
     },
 
     async getManagers(excludeId) {
@@ -243,9 +243,21 @@ async getById(id) {
       return u ? HR_EDIT_ROLES.includes(u.roleSlug) : false;
     },
 
-    async getActivity() {
-      // Activity log not yet implemented in backend; return empty
-      return [];
+    async getActivity(empId) {
+      try {
+        const numericId = parseInt(String(empId).replace('EMP-', ''), 10);
+        const acts = await window.Helpers.api.request(`/users/${numericId}/activities`, "GET");
+        return acts.map(a => {
+          const date = new Date(a.timestamp);
+          return {
+            text: a.action,
+            date: date.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+          };
+        });
+      } catch (err) {
+        console.warn("[HRStore] Activity fetch failed:", err);
+        return [];
+      }
     },
 
     async addActivity(empId, text) {
@@ -255,10 +267,10 @@ async getById(id) {
 
     async add(payload) {
       try {
-        const body = mapOut(payload);
+        const body = await mapOut(payload);
         body.password_hash = "default_hash";
         const u = await window.Helpers.api.request("/users", "POST", body);
-        const emp = mapIn(u);
+        const emp = await mapIn(u);
 
         // ── Audit Log: Employee Created ──────────────────────────────────
         if (emp && emp.rawId) {
@@ -285,7 +297,7 @@ async getById(id) {
     async update(id, payload) {
       try {
         const numericId = parseInt(String(id).replace("EMP-", ""), 10);
-        const body = mapOut(payload);
+        const body = await mapOut(payload);
         const u = await window.Helpers.api.request(`/users/${numericId}`, "PATCH", body);
 
         // ── Audit Log: Employee Updated ──────────────────────────────────
@@ -301,7 +313,7 @@ async getById(id) {
           );
         }
 
-        return { ok: true, employee: mapIn(u) };
+        return { ok: true, employee: await mapIn(u) };
       } catch (e) {
         return { ok: false, errors: { server: e.message } };
       }
@@ -328,7 +340,7 @@ async getById(id) {
           );
         }
 
-        return { ok: true, employee: mapIn(u) };
+        return { ok: true, employee: await mapIn(u) };
       } catch (e) {
         return { ok: false };
       }

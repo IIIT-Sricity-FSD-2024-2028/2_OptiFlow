@@ -186,6 +186,7 @@ window.Helpers = {
       const roleObj = ur ? roles.find(r => String(r.roleId) === String(ur.roleId)) : null;
 
       const teamObj = rawTeams.find(t => String(t.team_id) === String(u.team_id));
+      const deptObj = rawDepartments.find(d => String(d.department_id) === String(u.department_id));
 
       const initials = u.full_name
         ? u.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2)
@@ -198,6 +199,7 @@ window.Helpers = {
         roleId:       roleObj ? roleObj.roleId : null,
         roleName:     roleObj ? roleObj.roleName : 'Team Member',
         departmentId: u.department_id  || null,
+        departmentName: deptObj ? deptObj.department_name : null,
         teamId:       u.team_id        || null,
         teamName:     teamObj ? teamObj.team_name : null,
         managerId:    u.manager_id     || null,
