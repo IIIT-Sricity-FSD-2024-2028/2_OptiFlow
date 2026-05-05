@@ -62,12 +62,19 @@
       .detail-meta-row {
         display: flex;
         align-items: center;
-        gap: 8px;
-        font-size: 12px;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 13px;
         color: var(--text-secondary);
+      }
+      .detail-meta-row span {
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
       }
       .meta-divider {
         color: var(--border-hover);
+        opacity: 0.5;
       }
 
       .accept-row {
@@ -256,7 +263,7 @@
             >
           </div>
           <div class="header-actions">
-            <div class="bell-btn">
+            <div class="bell-btn" id="btn-notifications">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -593,6 +600,20 @@
           >
             Request Extension
           </div>
+          <div
+            class="modal-tab"
+            id="tab-resolve"
+            onclick="switchTab('resolve')"
+            style="
+              font-size: 13px;
+              font-weight: 600;
+              padding-bottom: 12px;
+              cursor: pointer;
+              color: var(--text-muted);
+            "
+          >
+            Resolve Blocker
+          </div>
         </div>
 
         <div class="modal-body" id="modal-content-area" style="padding: 24px">
@@ -728,6 +749,7 @@
     <script src="../js/components/sidebar.js"></script>
     <script src="../js/components/toast.js"></script>
     <script src="../js/components/modal.js"></script>
+    <script src="../js/components/notifications.js"></script>
     <script src="./task-detail.js"></script>
   </body>
 </html>

@@ -9,6 +9,7 @@ window.ProjectsPage = {
 
   async init() {
     this.state = await window.Helpers.getState();
+    if (window.Notifications) await window.Notifications.init();
     this.filtered = [...this.state.projects];
     this.populateDeptFilter();
     this.renderAll();
@@ -231,6 +232,9 @@ window.ProjectsPage = {
     const depts = this.state.departments;
     const deptOptions = depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
 
+    const templates = this.state.workflowTemplates || [];
+    const templateOptions = templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
     window.Modal.create({
       id: 'modal-add-project',
       title: '+ New Project',
@@ -255,19 +259,32 @@ window.ProjectsPage = {
             <span class="form-error hidden" id="proj-dept-error"></span>
           </div>
           <div class="form-group">
+            <label class="form-label" for="proj-template">Workflow Template (Optional)</label>
+            <select id="proj-template" class="form-select" onchange="window.ProjectsPage.onTemplateChange(this.value)">
+              <option value="">No Template (Manual Tasks)</option>
+              ${templateOptions}
+            </select>
+          </div>
+        </div>
+        <div id="template-preview" class="hidden" style="margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">
+           <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Auto-generated Stages:</div>
+           <div id="template-stages-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+        <div class="form-row" style="margin-top: 16px;">
+          <div class="form-group">
             <label class="form-label" for="proj-due">End Date *</label>
             <input type="date" id="proj-due" class="form-input">
             <span class="form-error hidden" id="proj-due-error"></span>
           </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="proj-status">Status</label>
-          <select id="proj-status" class="form-select">
-            <option value="Active">Active</option>
-            <option value="Planning">Planning</option>
-            <option value="On_Hold">On Hold</option>
-            <option value="Completed">Completed</option>
-          </select>
+          <div class="form-group">
+            <label class="form-label" for="proj-status">Status</label>
+            <select id="proj-status" class="form-select">
+              <option value="Active">Active</option>
+              <option value="Planning">Planning</option>
+              <option value="On_Hold">On Hold</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
         </div>`,
       footerHTML: `
         <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-add-project')">Cancel</button>
@@ -278,6 +295,27 @@ window.ProjectsPage = {
     window.Validator.attachLive('proj-desc', { required: true, minLength: 10 });
     window.Validator.attachLive('proj-dept', { required: true });
     window.Validator.attachLive('proj-due',  { required: true });
+  },
+
+  onTemplateChange(templateId) {
+    const preview = document.getElementById('template-preview');
+    const list = document.getElementById('template-stages-list');
+    if (!preview || !list) return;
+
+    if (!templateId) {
+      preview.classList.add('hidden');
+      return;
+    }
+
+    const template = this.state.workflowTemplates.find(t => String(t.id) === String(templateId));
+    if (template && template.stages) {
+      list.innerHTML = template.stages.map((s, i) => `
+        <span style="font-size: 12px; background: #fff; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 4px; color: #475569;">
+          ${i + 1}. ${s}
+        </span>
+      `).join('');
+      preview.classList.remove('hidden');
+    }
   },
 
   async submitAdd() {
@@ -298,6 +336,7 @@ window.ProjectsPage = {
       project_name:  window.Helpers.getVal('proj-name'),
       description:   window.Helpers.getVal('proj-desc'),
       department_id: deptId,
+      template_id:   parseInt(window.Helpers.getVal('proj-template')) || null,
       status:        statusVal,
       start_date:    new Date().toISOString().split('T')[0],
       end_date:      window.Helpers.getVal('proj-due'),
@@ -460,6 +499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.Auth.requireRole('admin');
     window.Sidebar.render('projects');
     window.Toast.init();
+    await window.Notifications.init();
     await window.ProjectsPage.init();
   }
 });

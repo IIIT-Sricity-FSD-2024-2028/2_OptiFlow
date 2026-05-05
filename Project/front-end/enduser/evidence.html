@@ -177,21 +177,19 @@
       }
 
       function getMyEvidence() {
-        if (!state.evidence) state.evidence = getDefaultEvidence();
-        return state.evidence.filter((e) => e.userId === session.id);
+        if (!state.evidence) return [];
+        const sessId = Number(session.rawId);
+        return state.evidence.filter((e) => Number(e.userId) === sessId);
       }
 
       function render() {
         const myEvidence = getMyEvidence();
         const approved = myEvidence.filter(
-          (e) => e.status === "approved",
+          (e) => String(e.status || "").toLowerCase() === "approved",
         ).length;
-        const pending = myEvidence.filter((e) => e.status === "pending").length;
+        const pending = myEvidence.filter((e) => ["pending", "under_review", "needs_info"].includes(String(e.status || "").toLowerCase())).length;
         const rejected = myEvidence.filter(
-          (e) => e.status === "rejected",
-        ).length;
-        const review = myEvidence.filter(
-          (e) => e.status === "under_review",
+          (e) => String(e.status || "").toLowerCase() === "rejected",
         ).length;
 
         document.getElementById("ev-count").textContent =
@@ -200,7 +198,7 @@
         document.getElementById("ev-stats").innerHTML = `
     <div class="stat-card"><div class="stat-label">Total Submitted</div><div class="stat-value"><div class="stat-number">${myEvidence.length}</div></div><div class="stat-sub blue">All items</div></div>
     <div class="stat-card"><div class="stat-label">Approved</div><div class="stat-value"><div class="stat-number">${approved}</div></div><div class="stat-sub green">Verified</div></div>
-    <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value"><div class="stat-number">${pending + review}</div></div><div class="stat-sub orange">Awaiting review</div></div>
+    <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value"><div class="stat-number">${pending}</div></div><div class="stat-sub orange">Awaiting review</div></div>
     <div class="stat-card"><div class="stat-label">Rejected</div><div class="stat-value"><div class="stat-number">${rejected}</div></div><div class="stat-sub ${rejected > 0 ? "red" : "green"}">${rejected > 0 ? "Needs resubmission" : "None"}</div></div>`;
 
         const tbody = document.getElementById("ev-table-body");
@@ -214,30 +212,31 @@
           pending: "status-pending",
           under_review: "status-in-progress",
           rejected: "status-blocked",
+          needs_info: "status-at-risk"
         };
 
         tbody.innerHTML = myEvidence
           .map(
             (ev) => {
-              const eType = ev.documentType || ev.document_type || ev.evidenceType || ev.type || 'Document';
-              const eDate = ev.createdAt || ev.created_at || ev.submittedAt || ev.submittedOn || 'Recently';
-              const eStatus = ev.status || 'pending';
-              const eLabel = ev.statusLabel || eStatus;
+              const eType = ev.evidenceType || ev.type || 'Document';
+              const eDate = ev.submittedAt ? new Date(ev.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Recently";
+              const eStatus = String(ev.status || 'pending').toLowerCase();
+              const eLabel = (ev.statusLabel || ev.status || 'Pending').replace('_', ' ');
               
               return `
     <tr>
       <td>
         <div class="td-label">${ev.title || 'Untitled'}</div>
-        ${ev.notes ? `<div class="td-sub">${ev.notes}</div>` : ""}
+        ${ev.notes ? `<div class="td-sub" style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${ev.notes}">${ev.notes}</div>` : ""}
       </td>
       <td style="font-size:12px;color:var(--text-secondary)">${ev.taskName || "—"}</td>
       <td><span class="badge badge-gray">${eType}</span></td>
       <td style="font-size:12px;color:var(--text-muted)">${eDate}</td>
-      <td><span class="badge ${statusMap[eStatus.toLowerCase()] || "badge-gray"}">${eLabel}</span></td>
+      <td><span class="badge ${statusMap[eStatus] || "badge-gray"}">${eLabel}</span></td>
       <td>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-secondary btn-sm" onclick="openEditModal(${ev.id})">Edit</button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteEvidence(${ev.id})">Delete</button>
+          <button class="btn btn-secondary btn-sm" onclick="openEditModal('${ev.id}')">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteEvidence('${ev.id}')">Delete</button>
         </div>
       </td>
     </tr>`;
@@ -247,7 +246,7 @@
       }
 
       function openAddModal() {
-        const sessId = parseInt(String(session.id).replace(/[^0-9]/g, ''), 10);
+        const sessId = Number(session.rawId);
         const myTasks = state.tasks.filter(
           (t) => Number(t.assignedUserId) === sessId || Number(t.assignedTo) === sessId
         );
@@ -265,13 +264,12 @@
           <label class="form-label" for="ev-task">Related Task</label>
           <select id="ev-task" class="form-select">
             <option value="">Select task (optional)</option>
-            ${myTasks.map((t) => `<option value="${t.id}" data-name="${t.title || t.name}">${t.title || t.name}</option>`).join("")}
+            ${myTasks.map((t) => `<option value="${t.taskId || t.id}" data-name="${t.title || t.name}">${t.title || t.name}</option>`).join("")}
           </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="ev-type">Evidence Type *</label>
           <select id="ev-type" class="form-select">
-            <option value="">Select type</option>
             <option value="Document">Document</option>
             <option value="Screenshot">Screenshot</option>
             <option value="Image">Image</option>
@@ -319,7 +317,7 @@
       }
 
       function openEditModal(evId) {
-        const ev = state.evidence.find((e) => e.id === evId);
+        const ev = state.evidence.find((e) => String(e.id) === String(evId));
         if (!ev) return;
         window.Modal.create({
           id: "modal-ev-edit",
@@ -327,18 +325,18 @@
           body: `
       <div class="form-group">
         <label class="form-label" for="eev-title">Title *</label>
-        <input type="text" id="eev-title" class="form-input" value="${ev.title}">
+        <input type="text" id="eev-title" class="form-input" value="${ev.title || ''}">
         <span class="form-error hidden" id="eev-title-error"></span>
       </div>
       <div class="form-group">
         <label class="form-label" for="eev-type">Type</label>
         <select id="eev-type" class="form-select">
-          <option value="Document"   ${ev.type === "Document" ? "selected" : ""}>Document</option>
-          <option value="Screenshot" ${ev.type === "Screenshot" ? "selected" : ""}>Screenshot</option>
-          <option value="Report"     ${ev.type === "Report" ? "selected" : ""}>Report</option>
-          <option value="Archive"    ${ev.type === "Archive" ? "selected" : ""}>Archive</option>
-          <option value="Email"      ${ev.type === "Email" ? "selected" : ""}>Email</option>
-          <option value="Other"      ${ev.type === "Other" ? "selected" : ""}>Other</option>
+          <option value="Document"   ${ev.evidenceType === "Document" ? "selected" : ""}>Document</option>
+          <option value="Screenshot" ${ev.evidenceType === "Screenshot" ? "selected" : ""}>Screenshot</option>
+          <option value="Report"     ${ev.evidenceType === "Report" ? "selected" : ""}>Report</option>
+          <option value="Archive"    ${ev.evidenceType === "Archive" ? "selected" : ""}>Archive</option>
+          <option value="Email"      ${ev.evidenceType === "Email" ? "selected" : ""}>Email</option>
+          <option value="Other"      ${ev.evidenceType === "Other" ? "selected" : ""}>Other</option>
         </select>
       </div>
       <div class="form-group">
@@ -347,27 +345,12 @@
       </div>
       <div class="form-group">
         <label class="form-label" for="eev-file">Attach File</label>
-        <input type="text" id="eev-file" class="form-input" placeholder="Paste URL here" value="${ev.file_url || ev.fileUrl || ""}">
+        <input type="text" id="eev-file" class="form-input" placeholder="Paste URL here" value="${ev.file_url || ""}">
       </div>`,
           footerHTML: `
       <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-ev-edit')">Cancel</button>
-      <button class="btn btn-primary btn-sm" onclick="submitEdit(${evId})">Save Changes</button>`,
+      <button class="btn btn-primary btn-sm" onclick="submitEdit('${evId}')">Save & Resubmit</button>`,
         });
-
-        const eevType = document.getElementById("eev-type");
-        if (eevType) {
-          eevType.addEventListener("change", (e) => {
-            const fileInput = document.getElementById("eev-file");
-            if (!fileInput) return;
-            const val = e.target.value;
-            if (["Document", "Screenshot", "Archive", "Image"].includes(val)) {
-              fileInput.outerHTML = '<input type="file" id="eev-file" class="form-input" accept=".pdf,.png,.jpg,.zip">';
-            } else {
-              fileInput.outerHTML = '<input type="text" id="eev-file" class="form-input" placeholder="Paste URL here">';
-            }
-          });
-          eevType.dispatchEvent(new Event("change"));
-        }
 
         window.Validator.attachLive("eev-title", {
           required: true,
@@ -384,17 +367,9 @@
 
         const taskEl = document.getElementById("ev-task");
         const taskId = parseInt(taskEl.value) || 0;
-        const taskName =
-          taskEl.options[taskEl.selectedIndex]?.dataset?.name || "";
-        const now = new Date();
-        const dateStr = now.toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        });
 
         const newEv = {
-          user_id:       parseInt(String(session.id).replace(/[^0-9]/g, ''), 10) || 1,
+          user_id:       Number(session.rawId),
           task_id:       taskId ? parseInt(taskId) : null,
           title:         window.Helpers.getVal("ev-title"),
           evidence_type: window.Helpers.getVal("ev-type"),
@@ -404,29 +379,24 @@
 
         try {
           await window.Helpers.api.request('/evidence', 'POST', newEv);
-          const currentState = await window.Helpers.getState();
-          state = currentState;
+          state = await window.Helpers.getState();
 
-          // Find real Compliance Officer or PM ID from state
-          const recipient = currentState.users.find(
-            (u) => u.roleName === 'Compliance_Officer' || u.roleName === 'Project_Manager'
-          );
-          const recipientId = recipient ? Number(recipient.userId) : null;
-
-          if (recipientId) {
-            window.Helpers.pushNotification(recipientId, {
-              title:   'New Evidence Submitted',
-              message: `New Evidence Submitted: "${newEv.title}" by ${session.name || session.fullName || 'User'}.`,
+          // Notify Compliance Officer
+          const recipient = state.users.find(u => u.roleName === 'Compliance_Officer');
+          if (recipient) {
+            window.Helpers.pushNotification(recipient.userId, {
+              title:   'New Evidence',
+              message: `New evidence submitted by ${session.name}: "${newEv.title}"`,
               type:    'info',
             });
           }
 
           window.Modal.close('modal-ev-add');
-          window.Toast.success('Evidence Submitted', 'Your evidence is pending review.');
+          window.Toast.success('Evidence Submitted');
           render();
         } catch (e) {
           console.error(e);
-          window.Toast.warning('Error', 'Failed to submit evidence: ' + e.message);
+          window.Toast.error('Failed to submit');
         }
       }
       async function submitEdit(evId) {
@@ -439,32 +409,19 @@
           title: window.Helpers.getVal("eev-title"),
           evidence_type: window.Helpers.getVal("eev-type"),
           notes: window.Helpers.getVal("eev-notes"),
+          status: 'Pending', // Resubmit!
         };
 
         try {
           await window.Helpers.api.request(`/evidence/${evId}`, 'PATCH', payload);
-          const currentState = await window.Helpers.getState();
-          state = currentState;
-
-          // Notify Compliance Officer/PM about the update
-          const recipient = currentState.users.find(
-            (u) => u.roleName === 'Compliance_Officer' || u.roleName === 'Project_Manager'
-          );
-          const recipientId = recipient ? Number(recipient.userId) : null;
-          if (recipientId) {
-            window.Helpers.pushNotification(recipientId, {
-              title:   'Evidence Updated',
-              message: `${session.name || session.fullName || 'User'} updated evidence: "${payload.title || 'Untitled'}".`,
-              type:    'info',
-            });
-          }
+          state = await window.Helpers.getState();
 
           window.Modal.close('modal-ev-edit');
-          window.Toast.success('Evidence Updated');
+          window.Toast.success('Evidence Resubmitted');
           render();
         } catch (e) {
           console.error(e);
-          window.Toast.warning('Error', 'Failed to update evidence: ' + e.message);
+          window.Toast.error('Failed to update');
         }
       }
       function deleteEvidence(evId) {

@@ -20,7 +20,7 @@
             <button class="btn btn-primary btn-sm" id="btn-add-esc">
               + New Escalation
             </button>
-            <div class="bell-btn">
+            <div class="bell-btn" id="btn-notifications">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -87,6 +87,7 @@
     <script src="../../js/components/sidebar.js"></script>
     <script src="../../js/components/toast.js"></script>
     <script src="../../js/components/modal.js"></script>
+    <script src="../../js/components/notifications.js"></script>
     <script>
       let state,
         escalations,
@@ -97,6 +98,7 @@
         window.Auth.requireRole("admin");
         window.Sidebar.render("escalations");
         window.Toast.init();
+        if (window.Notifications) await window.Notifications.init();
 
         state = await window.Helpers.getState();
         escalations = state.escalations;

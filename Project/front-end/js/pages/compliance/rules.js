@@ -72,7 +72,7 @@ async function saveNewRule() {
   });
 
   if (!result.valid) {
-    if (window.Toast) window.Toast.show("Please fix the errors in the form.", "error");
+    if (window.Toast) window.Toast.show("error", "Validation Error", "Please fix the errors in the form.");
     return;
   }
 
@@ -102,12 +102,12 @@ async function saveNewRule() {
       remediationSteps: r.remediationSteps || "",
       severity: r.severity || "Medium",
     }));
-    if (window.Toast) window.Toast.show("New rule created successfully", "success");
+    if (window.Toast) window.Toast.show("success", "Rule Created", "New rule created successfully");
     closeNewRuleModal();
     renderRules();
   } catch (e) {
     console.error("Failed to create rule:", e);
-    if (window.Toast) window.Toast.show("Failed to create rule.", "error");
+    if (window.Toast) window.Toast.show("error", "Error", "Failed to create rule.");
   }
 }
 
@@ -205,10 +205,10 @@ async function saveEdit(id) {
 
     try {
       await window.Helpers.api.request(`/compliance-rules/${numericId}`, 'PATCH', patch);
-      if (window.Toast) window.Toast.show("Rule updated successfully", "success");
+      if (window.Toast) window.Toast.show("success", "Rule Updated", "Rule updated successfully");
     } catch (e) {
       console.warn("Could not persist rule update to backend:", e);
-      if (window.Toast) window.Toast.show("Rule saved locally (backend unavailable).", "warning");
+      if (window.Toast) window.Toast.show("warning", "Local Save Only", "Rule saved locally (backend unavailable).");
     }
     renderRules();
   }

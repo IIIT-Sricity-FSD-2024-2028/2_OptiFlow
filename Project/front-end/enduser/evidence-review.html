@@ -216,21 +216,21 @@
     <script src="../js/components/modal.js"></script>
 
     <script>
-      let state,
+      let session, state,
         activeFilter = "pending",
         activeEvidenceId = null,
         currentRejectId = null;
 
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         if (!sessionStorage.getItem("currentUser")) {
           window.location.replace("../../login.html");
           return;
         }
-        window.Auth.requireRole("admin");
-        window.Sidebar.render("compliance"); // Highlight compliance in sidebar
+        session = window.Auth.getSession();
+        window.Sidebar.render("compliance"); 
         window.Toast.init();
 
-        state = window.Helpers.getState();
+        state = await window.Helpers.getState();
 
         // Ensure evidence array exists
         if (!state.evidence) state.evidence = [];
@@ -247,7 +247,7 @@
               .forEach((t) => t.classList.remove("active"));
             tab.classList.add("active");
             activeFilter = tab.dataset.filter;
-            activeEvidenceId = null; // Clear selection on tab change
+            activeEvidenceId = null; 
             document.getElementById("evidence-detail-pane").innerHTML = `
               <div class="empty-state" style="margin-top: 20vh">
                 <div class="empty-state-text">Select an item to review</div>
@@ -258,28 +258,34 @@
       }
 
       function renderList() {
-        // Filter by status (treat under_review as pending for the PM view)
-        let items = state.evidence.filter((e) => {
+        // Filter by status 
+        let items = (state.evidence || []).filter((e) => {
+          const st = String(e.status || "").toLowerCase();
           if (activeFilter === "pending")
-            return e.status === "pending" || e.status === "under_review";
-          return e.status === activeFilter;
+            return st === "pending" || st === "under_review" || st === "needs_info";
+          return st === activeFilter;
         });
 
         // Update Tab Counts
-        const pendingCount = state.evidence.filter(
-          (e) => e.status === "pending" || e.status === "under_review",
+        const pendingCount = (state.evidence || []).filter(
+          (e) => {
+             const st = String(e.status || "").toLowerCase();
+             return st === "pending" || st === "under_review" || st === "needs_info";
+          }
         ).length;
-        const approvedCount = state.evidence.filter(
-          (e) => e.status === "approved",
+        const approvedCount = (state.evidence || []).filter(
+          (e) => String(e.status || "").toLowerCase() === "approved",
         ).length;
-        const rejectedCount = state.evidence.filter(
-          (e) => e.status === "rejected",
+        const rejectedCount = (state.evidence || []).filter(
+          (e) => String(e.status || "").toLowerCase() === "rejected",
         ).length;
 
         const tabs = document.querySelectorAll("#vault-tabs .filter-tab");
-        tabs[0].textContent = `Pending Review (${pendingCount})`;
-        tabs[1].textContent = `Approved (${approvedCount})`;
-        tabs[2].textContent = `Rejected (${rejectedCount})`;
+        if (tabs.length >= 3) {
+          tabs[0].textContent = `Pending Review (${pendingCount})`;
+          tabs[1].textContent = `Approved (${approvedCount})`;
+          tabs[2].textContent = `Rejected (${rejectedCount})`;
+        }
 
         const container = document.getElementById("evidence-list");
         if (items.length === 0) {
@@ -287,45 +293,51 @@
           return;
         }
 
-        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-
         container.innerHTML = items
           .map((e) => {
-            const submitter = masterUsers.find(
-              (u) => String(u.id) === String(e.userId),
-            ) || { name: "Unknown User" };
+            const submitter = state.users.find(
+              (u) => Number(u.userId) === Number(e.userId),
+            ) || { fullName: "Unknown User" };
+            
             let badgeClass = "badge-gray";
-            if (e.status === "pending" || e.status === "under_review")
+            const st = String(e.status || "").toLowerCase();
+            if (st === "pending" || st === "under_review" || st === "needs_info")
               badgeClass = "badge-orange";
-            if (e.status === "approved") badgeClass = "badge-green";
-            if (e.status === "rejected") badgeClass = "badge-red";
+            if (st === "approved") badgeClass = "badge-green";
+            if (st === "rejected") badgeClass = "badge-red";
+
+            const dateStr = e.submittedAt ? new Date(e.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Recently";
 
             return `
-            <div style="padding:16px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; ${activeEvidenceId === e.id ? "background:#f8fafc; border-radius: var(--r-sm); margin:4px 0;" : ""}" onclick="selectEvidence(${e.id})">
+            <div style="padding:16px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; ${String(activeEvidenceId) === String(e.id) ? "background:#f8fafc; border-radius: var(--r-sm); margin:4px 0;" : ""}" onclick="selectEvidence('${e.id}')">
               <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">${submitter.name}</span>
-                <span style="font-size:11px; color:var(--text-muted);">${e.submittedOn}</span>
+                <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">${submitter.fullName || submitter.name}</span>
+                <span style="font-size:11px; color:var(--text-muted);">${dateStr}</span>
               </div>
-              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${e.title}</div>
+              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${e.title || 'Untitled Evidence'}</div>
               <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Task: ${e.taskName || "General Submission"}</div>
               <div style="display:flex; gap:8px;">
-                <span class="badge ${badgeClass}">${e.statusLabel || e.status}</span>
-                <span class="badge badge-gray">${e.type}</span>
+                <span class="badge ${badgeClass}">${(e.statusLabel || e.status || '').replace('_', ' ')}</span>
+                <span class="badge badge-gray">${e.evidenceType || e.type || 'Document'}</span>
               </div>
             </div>`;
           })
           .join("");
       }
 
-      function selectEvidence(id) {
+      async function selectEvidence(id) {
         activeEvidenceId = id;
-
-        // Mark as "under review" if it was just pending
-        const evIdx = state.evidence.findIndex((x) => x.id === id);
-        if (evIdx > -1 && state.evidence[evIdx].status === "pending") {
-          state.evidence[evIdx].status = "under_review";
-          state.evidence[evIdx].statusLabel = "Under Review";
-          window.Helpers.saveState(state);
+        const ev = state.evidence.find(x => String(x.id) === String(id));
+        
+        if (ev && String(ev.status).toLowerCase() === "pending") {
+          try {
+            await window.Helpers.api.request(`/evidence/${id}`, 'PATCH', { 
+              status: 'Under_Review' 
+            });
+            ev.status = 'Under_Review';
+          } catch (e) {
+            console.warn("Failed to mark evidence as under review:", e);
+          }
         }
 
         renderList();
@@ -333,24 +345,26 @@
       }
 
       function renderDetail(id) {
-        const e = state.evidence.find((x) => x.id === id);
+        const e = state.evidence.find((x) => String(x.id) === String(id));
         if (!e) return;
 
-        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-        const submitter = masterUsers.find(
-          (u) => String(u.id) === String(e.userId),
-        ) || { name: "Unknown User", email: "" };
+        const submitter = state.users.find(
+          (u) => Number(u.userId) === Number(e.userId),
+        ) || { fullName: "Unknown User", email: "" };
 
         const pane = document.getElementById("evidence-detail-pane");
+        const st = String(e.status || "").toLowerCase();
+        const dateStr = e.submittedAt ? new Date(e.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Recently";
+
         pane.innerHTML = `
           <div style="background:var(--card-bg); max-width:800px; margin:0 auto; padding:32px 40px; border-radius:var(--r-xl); box-shadow:var(--shadow-sm); margin-top:16px; min-height:80vh;">
             
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:16px;">
               <div>
-                <h2 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0 0 4px 0;">${e.title}</h2>
-                <div style="font-size:13px; color:var(--text-muted);">Submitted by ${submitter.name} on ${e.submittedOn}</div>
+                <h2 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0 0 4px 0;">${e.title || 'Untitled Evidence'}</h2>
+                <div style="font-size:13px; color:var(--text-muted);">Submitted by ${submitter.fullName || submitter.name} on ${dateStr}</div>
               </div>
-              <span class="badge ${e.status === "approved" ? "badge-green" : e.status === "rejected" ? "badge-red" : "badge-orange"}" style="padding:6px 12px; font-size:12px;">${e.statusLabel || e.status}</span>
+              <span class="badge ${st === "approved" ? "badge-green" : st === "rejected" ? "badge-red" : "badge-orange"}" style="padding:6px 12px; font-size:12px;">${(e.statusLabel || e.status || '').replace('_', ' ')}</span>
             </div>
             
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:32px;">
@@ -360,7 +374,7 @@
               </div>
               <div>
                 <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px;">Evidence Type</div>
-                <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">${e.type}</div>
+                <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">${e.evidenceType || e.type || 'Document'}</div>
               </div>
             </div>
 
@@ -372,9 +386,9 @@
                 <line x1="16" y1="17" x2="8" y2="17"></line>
                 <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
-              <div class="doc-name">${e.file || "attached_evidence_document.pdf"}</div>
+              <div class="doc-name">${e.file_url || e.file || "attached_evidence_document.pdf"}</div>
               <div class="doc-meta">Secure File · 2.4 MB</div>
-              <button class="btn btn-secondary btn-sm" style="margin-top:16px;">Download to View</button>
+              <button class="btn btn-secondary btn-sm" style="margin-top:16px;" onclick="window.open('${e.file_url || '#'}', '_blank')">View Document</button>
             </div>
 
             <div style="margin-bottom:32px;">
@@ -385,7 +399,7 @@
             </div>
 
             ${
-              e.status === "rejected"
+              st === "rejected"
                 ? `
             <div style="margin-bottom:32px;">
               <div style="font-size:10px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Rejection Reason</div>
@@ -398,11 +412,11 @@
             }
 
             ${
-              e.status === "pending" || e.status === "under_review"
+              st === "pending" || st === "under_review" || st === "needs_info"
                 ? `
             <div style="display:flex; gap:16px; border-top:1px solid var(--border); padding-top:24px;">
-              <button class="btn btn-danger btn-lg" style="flex:1; justify-content:center; background:white; color:#ef4444; border:1px solid #ef4444;" onclick="openRejectModal(${e.id})">Reject & Return</button>
-              <button class="btn btn-success btn-lg" style="flex:1; justify-content:center; background:#10b981; color:white; border:none;" onclick="approveEvidence(${e.id})">Approve Evidence</button>
+              <button class="btn btn-danger btn-lg" style="flex:1; justify-content:center; background:white; color:#ef4444; border:1px solid #ef4444;" onclick="openRejectModal('${e.id}')">Reject & Return</button>
+              <button class="btn btn-success btn-lg" style="flex:1; justify-content:center; background:#10b981; color:white; border:none;" onclick="approveEvidence('${e.id}')">Approve Evidence</button>
             </div>`
                 : ""
             }
@@ -410,30 +424,33 @@
         `;
       }
 
-      function approveEvidence(id) {
-        const evIdx = state.evidence.findIndex((x) => x.id === id);
-        if (evIdx === -1) return;
+      async function approveEvidence(id) {
+        try {
+          const ev = state.evidence.find((x) => String(x.id) === String(id));
+          if (!ev) return;
 
-        state.evidence[evIdx].status = "approved";
-        state.evidence[evIdx].statusLabel = "Approved";
+          await window.Helpers.api.request(`/evidence/${id}`, 'PATCH', {
+            status: 'Approved',
+            reviewed_by: session.rawId,
+            reviewed_at: new Date().toISOString()
+          });
 
-        window.Helpers.saveState(state);
-        window.Helpers.log(`Approved evidence #${id}`, "Compliance");
-        window.Toast.success(
-          "Evidence Approved",
-          "The compliance record has been verified.",
-        );
+          ev.status = "Approved";
+          window.Toast.success("Evidence Approved");
 
-        // Notification to submitter
-        notifySubmitter(
-          state.evidence[evIdx].userId,
-          "Evidence Approved",
-          `Your submission "${state.evidence[evIdx].title}" was approved.`,
-          "success",
-        );
+          // Notification to submitter
+          window.Helpers.pushNotification(ev.userId, {
+            title: "Evidence Approved",
+            message: `Your submission "${ev.title}" was approved by Compliance.`,
+            type: "success"
+          });
 
-        renderList();
-        renderDetail(id);
+          renderList();
+          renderDetail(id);
+        } catch (e) {
+          console.error(e);
+          window.Toast.error("Error", "Could not approve evidence.");
+        }
       }
 
       function openRejectModal(id) {
@@ -448,7 +465,7 @@
         currentRejectId = null;
       }
 
-      function confirmReject() {
+      async function confirmReject() {
         const reason = document.getElementById("reject-reason").value.trim();
         const errorSpan = document.getElementById("reject-reason-error");
 
@@ -458,52 +475,36 @@
           return;
         }
 
-        const evIdx = state.evidence.findIndex((x) => x.id === currentRejectId);
-        if (evIdx === -1) return;
+        try {
+          const ev = state.evidence.find((x) => String(x.id) === String(currentRejectId));
+          if (!ev) return;
 
-        state.evidence[evIdx].status = "rejected";
-        state.evidence[evIdx].statusLabel = "Rejected";
-        state.evidence[evIdx].rejectReason = reason;
+          await window.Helpers.api.request(`/evidence/${currentRejectId}`, 'PATCH', {
+            status: 'Rejected',
+            notes: (ev.notes || "") + "\n\nREJECTION REASON: " + reason,
+            reviewed_by: session.rawId,
+            reviewed_at: new Date().toISOString()
+          });
 
-        window.Helpers.saveState(state);
-        window.Helpers.log(
-          `Rejected evidence #${currentRejectId}. Reason: ${reason}`,
-          "Compliance",
-        );
-        window.Toast.warning(
-          "Evidence Rejected",
-          "The submitter has been notified to try again.",
-        );
+          ev.status = "Rejected";
+          ev.rejectReason = reason;
 
-        // Notification to submitter
-        notifySubmitter(
-          state.evidence[evIdx].userId,
-          "Evidence Rejected",
-          `Your submission "${state.evidence[evIdx].title}" requires changes.`,
-          "error",
-        );
+          window.Toast.warning("Evidence Rejected");
 
-        closeRejectModal();
-        renderList();
-        renderDetail(currentRejectId);
-      }
+          // Notification to submitter
+          window.Helpers.pushNotification(ev.userId, {
+            title: "Evidence Rejected",
+            message: `Your submission "${ev.title}" requires changes. Feedback: ${reason}`,
+            type: "error"
+          });
 
-      function notifySubmitter(userId, title, message, type) {
-        let notifications =
-          JSON.parse(localStorage.getItem("system_notifications")) || [];
-        notifications.push({
-          id: Date.now(),
-          targetUserId: String(userId),
-          title: title,
-          message: message,
-          type: type,
-          date: "Just now",
-          read: false,
-        });
-        localStorage.setItem(
-          "system_notifications",
-          JSON.stringify(notifications),
-        );
+          closeRejectModal();
+          renderList();
+          renderDetail(currentRejectId);
+        } catch (e) {
+          console.error(e);
+          window.Toast.error("Error", "Could not reject evidence.");
+        }
       }
     </script>
   </body>

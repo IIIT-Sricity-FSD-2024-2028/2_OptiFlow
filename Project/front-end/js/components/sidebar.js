@@ -46,7 +46,7 @@ window.Sidebar = {
         id: "global-hr",
         label: "HR Portal",
         icon: "hr",
-        href: "admin/pm/hr-dashboard.html",
+        href: "admin/hr/dashboard.html",
         absolute: true,
       },
       {
@@ -298,109 +298,3 @@ window.Sidebar = {
     if (container) container.innerHTML = html;
   },
 };
-// --- GLOBAL NOTIFICATION BELL SYSTEM ---
-// This wires up the #btn-notifications icon on the top header of every page
-document.addEventListener("DOMContentLoaded", () => {
-  setTimeout(async () => {
-    const bellBtn = document.getElementById("btn-notifications") || document.querySelector(".bell-btn");
-    if (!bellBtn) return;
-
-    const session = window.Auth ? window.Auth.getSession() : null;
-    const state = window.Helpers ? await window.Helpers.getState() : null;
-    if (!session || !state) return;
-
-    // Load notifications from localStorage as defined by pushNotification
-    const allNotifs = JSON.parse(localStorage.getItem('system_notifications') || '[]');
-
-    // Filter for ONLY this user's notifications and sort newest to oldest
-    const myNotifs = allNotifs
-      .filter((n) => String(n.targetUserId) === String(session.id) || String(n.targetUserId) === String(session.rawId))
-      .sort((a, b) => b.id - a.id); // Sorts by timestamp, newest first
-    const unreadCount = myNotifs.filter((n) => !n.read).length;
-
-    // 1. Add Red Dot if there are unread notifications
-    if (unreadCount > 0) {
-      const redDot = document.createElement("span");
-      redDot.style.cssText =
-        "position:absolute; top:-2px; right:-2px; width:10px; height:10px; background:#ef4444; border-radius:50%; border:2px solid white;";
-      bellBtn.appendChild(redDot);
-    }
-
-    // 2. Click to open Notification Dropdown
-    bellBtn.addEventListener("click", async (e) => {
-      e.stopPropagation(); // Prevent immediate closing
-
-      // Toggle off if already open
-      let existingDropdown = document.getElementById("notif-dropdown");
-      if (existingDropdown) {
-        existingDropdown.remove();
-        return;
-      }
-
-      // Build the dropdown UI
-      const dropdown = document.createElement("div");
-      dropdown.id = "notif-dropdown";
-      dropdown.style.cssText =
-        "position:absolute; top:60px; right:32px; width:320px; background:white; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.1); z-index:9999; overflow:hidden; font-family:var(--font-family);";
-
-      let html = `<div style="padding:14px 16px; border-bottom:1px solid #e2e8f0; background:#f8fafc; font-weight:700; font-size:13px; color:#0f172a; display:flex; justify-content:space-between;">
-                    <span>Notifications</span>
-                    <span style="color:#2563eb; font-weight:500; font-size:11px; cursor:pointer;" onclick="document.getElementById('notif-dropdown').remove()">Close</span>
-                  </div>`;
-
-      if (myNotifs.length === 0) {
-        html += `<div style="padding:30px 20px; text-align:center; color:#64748b; font-size:13px;">You're all caught up!</div>`;
-      } else {
-        html += `<div style="max-height:350px; overflow-y:auto;">`;
-        myNotifs.forEach((n) => {
-          html += `
-            <div style="padding:14px 16px; border-bottom:1px solid #f1f5f9; background:${n.read ? "white" : "#eff6ff"};">
-              <div style="font-size:13px; font-weight:600; color:#0f172a; margin-bottom:4px;">${n.title}</div>
-              <div style="font-size:12px; color:#475569; line-height:1.5;">${n.message}</div>
-              <div style="font-size:10px; color:#94a3b8; margin-top:8px; text-transform:uppercase; letter-spacing:0.5px;">${n.date}</div>
-            </div>`;
-        });
-        html += `</div>`;
-      }
-
-      dropdown.innerHTML = html;
-      document.body.appendChild(dropdown);
-
-      // 3. Mark as read in the database
-      if (unreadCount > 0) {
-        let currentNotifs = JSON.parse(localStorage.getItem('system_notifications') || '[]');
-        currentNotifs.forEach((n) => {
-          if (String(n.targetUserId) === String(session.id) || String(n.targetUserId) === String(session.rawId)) n.read = true;
-        });
-        localStorage.setItem('system_notifications', JSON.stringify(currentNotifs));
-
-        // Remove the red dot visually
-        const dot = bellBtn.querySelector("span");
-        if (dot) dot.remove();
-      }
-    });
-    
-    // 4. Periodically refresh the bell (real-time feel)
-    setInterval(() => {
-      const all = JSON.parse(localStorage.getItem('system_notifications') || '[]');
-      const mine = all.filter((n) => String(n.targetUserId) === String(session.id) || String(n.targetUserId) === String(session.rawId));
-      const unread = mine.filter((n) => !n.read).length;
-      
-      const existingDot = bellBtn.querySelector("span");
-      if (unread > 0 && !existingDot) {
-        const redDot = document.createElement("span");
-        redDot.style.cssText = "position:absolute; top:-2px; right:-2px; width:10px; height:10px; background:#ef4444; border-radius:50%; border:2px solid white;";
-        bellBtn.appendChild(redDot);
-      } else if (unread === 0 && existingDot) {
-        existingDot.remove();
-      }
-    }, 5000); // Check every 5 seconds
-
-
-    // Close dropdown when clicking anywhere else on the page
-    document.addEventListener("click", () => {
-      const drop = document.getElementById("notif-dropdown");
-      if (drop) drop.remove();
-    });
-  }, 200); // Small delay ensures HTML buttons exist before we attach code
-});
