@@ -25,19 +25,80 @@ export type SystemEntity =
   | 'Subtask'
   | 'Escalation'
   | 'Workflow_Instance'
-  | 'Workflow_Step';
+  | 'Workflow_Step'
+  | 'Support_Request';
 export type EscalationStatus = 'Open' | 'Reviewed' | 'Resolved' | 'Closed';
 export type EvidenceStatus = 'Pending' | 'Under_Review' | 'Approved' | 'Rejected';
+
+// ─── Support Types ────────────────────────────────────────────────────────────
+export type SupportStatus =
+  | 'Open'
+  | 'In_Progress'
+  | 'Pending_Reply'
+  | 'Resolved'
+  | 'Closed';
+export type SupportPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 
 export interface AppNotification {
   notification_id: number;
   user_id: number;
   title: string;
   message: string;
-  type: 'Task' | 'Project' | 'Compliance' | 'System';
+  type: 'Task' | 'Project' | 'Compliance' | 'System' | 'Support';
   is_read: boolean;
   link?: string;
   created_at: string;
+}
+
+// ─── Support Interfaces ──────────────────────────────────────────────────────
+
+export interface SupportRequest {
+  request_id: number;
+  requester_id: number;           // user who filed the ticket
+  assignee_id: number | null;     // RM team member handling it
+  category: string;               // e.g. 'Access Issue', 'HR Query', 'Technical'
+  subject: string;                // short title
+  description: string;
+  faq_matched: boolean;           // was a FAQ suggestion shown at submission?
+  faq_id: number | null;          // which FAQ item was surfaced (if any)
+  priority: SupportPriority;
+  status: SupportStatus;
+  reopen_count: number;           // increments on each reopen (for reporting)
+  first_response_at: string | null; // set on the first RM reply
+  resolved_at: string | null;
+  closed_at: string | null;       // set by auto-close logic
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupportReply {
+  reply_id: number;
+  request_id: number;
+  author_id: number;
+  body: string;
+  is_internal: boolean;   // true = RM-only note, not visible to requester
+  created_at: string;
+}
+
+export interface SupportAttachment {
+  attachment_id: number;
+  request_id: number;
+  file_name: string;
+  file_type: string | null;
+  file_size_bytes: number;
+  file_url: string;               // simulated URL (same pattern as TaskAttachment)
+  uploaded_by: number;
+  uploaded_at: string;
+}
+
+export interface FAQ {
+  faq_id: number;
+  category: string;
+  question: string;
+  answer: string;
+  created_by: number;             // must be a relationship_manager user
+  updated_at: string;
+  is_active: boolean;
 }
 
 // ─── Interfaces (24 Tables) ────────────────────────────────────────────────
@@ -327,6 +388,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     submit_evidence: true, view_compliance_status: true,
     approve_evidence: false, manage_compliance_rules: false,
     change_own_password: true, manage_team_members: false,
+    view_support_queue: false, assign_support_tickets: false,
+    reply_support_tickets: false, manage_faqs: false,
+    reopen_closed_tickets: false, view_support_reports: false,
   },
   "Team Leader": {
     view_assigned_tasks: true,  assign_subtasks: true,
@@ -338,6 +402,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     submit_evidence: true, view_compliance_status: true,
     approve_evidence: false, manage_compliance_rules: false,
     change_own_password: false, manage_team_members: false,
+    view_support_queue: false, assign_support_tickets: false,
+    reply_support_tickets: false, manage_faqs: false,
+    reopen_closed_tickets: false, view_support_reports: false,
   },
   "Project Manager": {
     view_assigned_tasks: true,  assign_subtasks: true,
@@ -349,6 +416,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     submit_evidence: true, view_compliance_status: true,
     approve_evidence: false, manage_compliance_rules: false,
     change_own_password: true, manage_team_members: true,
+    view_support_queue: false, assign_support_tickets: false,
+    reply_support_tickets: false, manage_faqs: false,
+    reopen_closed_tickets: false, view_support_reports: false,
   },
   "Process Admin": {
     view_assigned_tasks: true,  assign_subtasks: false,
@@ -360,6 +430,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     submit_evidence: false, view_compliance_status: true,
     approve_evidence: false, manage_compliance_rules: false,
     change_own_password: true, manage_team_members: false,
+    view_support_queue: false, assign_support_tickets: false,
+    reply_support_tickets: false, manage_faqs: false,
+    reopen_closed_tickets: false, view_support_reports: false,
   },
   "Compliance Officer": {
     view_assigned_tasks: false, assign_subtasks: false,
@@ -371,6 +444,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     submit_evidence: true, view_compliance_status: true,
     approve_evidence: true, manage_compliance_rules: true,
     change_own_password: true, manage_team_members: false,
+    view_support_queue: false, assign_support_tickets: false,
+    reply_support_tickets: false, manage_faqs: false,
+    reopen_closed_tickets: false, view_support_reports: false,
   },
   "HR Manager": {
     view_assigned_tasks: false, assign_subtasks: false,
@@ -382,6 +458,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     submit_evidence: false, view_compliance_status: false,
     approve_evidence: false, manage_compliance_rules: false,
     change_own_password: true, manage_team_members: true,
+    view_support_queue: false, assign_support_tickets: false,
+    reply_support_tickets: false, manage_faqs: false,
+    reopen_closed_tickets: false, view_support_reports: false,
   },
   "HR Ops": {
     view_assigned_tasks: false, assign_subtasks: false,
@@ -393,6 +472,23 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, Record<string, boolean>> =
     submit_evidence: false, view_compliance_status: false,
     approve_evidence: false, manage_compliance_rules: false,
     change_own_password: true, manage_team_members: false,
+    view_support_queue: false, assign_support_tickets: false,
+    reply_support_tickets: false, manage_faqs: false,
+    reopen_closed_tickets: false, view_support_reports: false,
+  },
+  "Relationship Manager": {
+    view_assigned_tasks: false, assign_subtasks: false,
+    review_member_submissions: false, create_subtasks: false,
+    create_top_level_tasks: false, delete_tasks: false,
+    escalate_to_pm: false, resolve_escalations: false,
+    view_assigned_projects: false, view_process_stages: false,
+    create_projects: false, edit_processes: false,
+    submit_evidence: false, view_compliance_status: false,
+    approve_evidence: false, manage_compliance_rules: false,
+    change_own_password: true, manage_team_members: false,
+    view_support_queue: true, assign_support_tickets: true,
+    reply_support_tickets: true, manage_faqs: true,
+    reopen_closed_tickets: true, view_support_reports: true,
   },
 };
 
@@ -421,7 +517,8 @@ export class DatabaseService {
     { role_id: 4, role_name: 'hr_manager', description: 'Manages HR and onboarding', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["HR Manager"] } },
     { role_id: 5, role_name: 'team_leader', description: 'Leads a team, assigns tasks', is_system: false, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Team Leader"] } },
     { role_id: 6, role_name: 'team_member', description: 'Executes tasks', is_system: false, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Team Member"] } },
-    { role_id: 7, role_name: 'hr_ops', description: 'HR Operations', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["HR Ops"] } }
+    { role_id: 7, role_name: 'hr_ops', description: 'HR Operations', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["HR Ops"] } },
+    { role_id: 8, role_name: 'relationship_manager', description: 'Support team — handles help requests from all roles', is_system: true, created_at: '2024-01-01T00:00:00Z', permissions: { ...DEFAULT_ROLE_PERMISSIONS["Relationship Manager"] } },
   ];
 
   // 3. Role_Permissions
@@ -673,5 +770,17 @@ export class DatabaseService {
   public notifications: AppNotification[] = [
     { notification_id: 1, user_id: 5, title: 'New Task Assigned', message: 'You have been assigned to "Data Collection" in Finance Q4.', type: 'Task', is_read: false, link: 'tasks.html?id=1', created_at: '2024-11-20T10:00:00Z' }
   ];
+
+  // 25. Support_Requests
+  public support_requests: SupportRequest[] = [];
+
+  // 26. Support_Replies
+  public support_replies: SupportReply[] = [];
+
+  // 27. Support_Attachments
+  public support_attachments: SupportAttachment[] = [];
+
+  // 28. FAQs
+  public faqs: FAQ[] = [];
 
 }

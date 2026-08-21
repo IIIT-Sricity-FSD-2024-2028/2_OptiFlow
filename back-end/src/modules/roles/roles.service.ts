@@ -15,7 +15,8 @@ export class RolesService {
       hr_manager: 'HR Manager',
       hr_ops: 'HR Ops',
       team_leader: 'Team Leader',
-      team_member: 'Team Member'
+      team_member: 'Team Member',
+      relationship_manager: 'Relationship Manager',
     };
     return map[role_name.toLowerCase()] || role_name;
   }

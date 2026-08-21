@@ -13,12 +13,12 @@ export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Get()
-  @Roles('guest', 'superuser', 'hr_manager', 'project_manager', 'compliance_officer', 'team_leader', 'team_member')
+  @Roles('guest', 'superuser', 'hr_manager', 'project_manager', 'compliance_officer', 'team_leader', 'team_member', 'hr_ops', 'relationship_manager')
   @ApiOperation({ summary: 'Get all roles' })
   findAll() { return this.rolesService.findAll(); }
 
   @Get(':id')
-  @Roles('guest', 'superuser', 'hr_manager', 'project_manager', 'compliance_officer', 'team_leader', 'team_member')
+  @Roles('guest', 'superuser', 'hr_manager', 'project_manager', 'compliance_officer', 'team_leader', 'team_member', 'hr_ops', 'relationship_manager')
   @ApiOperation({ summary: 'Get a role by ID or Slug' })
   findOne(@Param('id') id: string) { return this.rolesService.findOne(id); }
 
