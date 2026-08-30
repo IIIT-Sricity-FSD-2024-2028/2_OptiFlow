@@ -56,7 +56,14 @@ export class TasksController {
   }
 
   @Get('assignee/:userId')
-  @Roles('superuser', 'hr_manager', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'hr_manager',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get tasks assigned to a specific user' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
   findByAssignee(
@@ -67,7 +74,14 @@ export class TasksController {
   }
 
   @Get(':id')
-  @Roles('superuser', 'hr_manager', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'hr_manager',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({
     summary: 'Get a task by ID (includes subtasks and active escalations)',
   })
@@ -77,12 +91,7 @@ export class TasksController {
   }
 
   @Post()
-  @Roles(
-    'team_leader',
-    'project_manager',
-    'Branch Manager',
-    'branch_manager',
-  )
+  @Roles('team_leader', 'project_manager', 'Branch Manager', 'branch_manager')
   @ApiOperation({ summary: 'Create a new task' })
   @ApiResponse({ status: 201, description: 'Successfully created.' })
   @ApiHeader({
@@ -136,12 +145,7 @@ export class TasksController {
   }
 
   @Delete(':id')
-  @Roles(
-    'project_manager',
-    'team_leader',
-    'Branch Manager',
-    'branch_manager',
-  )
+  @Roles('project_manager', 'team_leader', 'Branch Manager', 'branch_manager')
   @ApiOperation({ summary: 'Delete a task' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
   @ApiHeader({

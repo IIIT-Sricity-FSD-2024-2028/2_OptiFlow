@@ -145,7 +145,7 @@
   let _allRoles = [];
   async function loadRoles() {
     try {
-      const res  = await fetch('http://localhost:3000/governance/roles', { headers });
+      const res  = await fetch('http://localhost:5500/governance/roles', { headers });
       if (!res.ok) return;
       const data = await res.json();
       _allRoles  = data.data || data;
@@ -196,7 +196,7 @@
         roleId: document.getElementById('inviteRoleSelect').value,
       };
       try {
-        const res = await fetch('http://localhost:3000/governance/invite', {
+        const res = await fetch('http://localhost:5500/governance/invite', {
           method: 'POST', headers, body: JSON.stringify(payload),
         });
         const invModal = document.getElementById('inviteModal');
@@ -224,7 +224,7 @@
         permissionIds: Array.from(checked).map(c => c.value),
       };
       try {
-        const res = await fetch('http://localhost:3000/governance/roles/clone', {
+        const res = await fetch('http://localhost:5500/governance/roles/clone', {
           method: 'POST', headers, body: JSON.stringify(payload),
         });
         document.getElementById('customRoleForm').reset();

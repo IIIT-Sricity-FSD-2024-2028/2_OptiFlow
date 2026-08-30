@@ -59,8 +59,8 @@ export class PlanLimitService {
     const billingCycle = sub?.billingCycle || 'MONTHLY';
     const priceInr =
       billingCycle.toUpperCase() === 'YEARLY'
-        ? plan?.annualPrice ?? plan?.monthlyPrice ?? 0
-        : plan?.monthlyPrice ?? 0;
+        ? (plan?.annualPrice ?? plan?.monthlyPrice ?? 0)
+        : (plan?.monthlyPrice ?? 0);
 
     return {
       subscription: sub

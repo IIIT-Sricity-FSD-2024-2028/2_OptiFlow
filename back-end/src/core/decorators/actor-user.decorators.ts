@@ -11,7 +11,13 @@ export const ActorUserId = createParamDecorator(
       .getRequest<{ headers: Record<string, string | string[] | undefined> }>();
     const raw = req.headers['x-user-id'];
     const v = Array.isArray(raw) ? raw[0] : raw;
-    if (v === undefined || v === null || v === '' || v === 'undefined' || v === 'null') {
+    if (
+      v === undefined ||
+      v === null ||
+      v === '' ||
+      v === 'undefined' ||
+      v === 'null'
+    ) {
       return undefined;
     }
     return String(v).trim();

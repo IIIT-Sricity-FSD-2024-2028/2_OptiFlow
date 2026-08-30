@@ -579,7 +579,7 @@
     }
 
     function viewEmployee(id) {
-      window.location.href = `employee-detail.html?id=${encodeURIComponent(id)}`;
+      window.location.href = `../hr/employee-detail.html?id=${encodeURIComponent(id)}`;
     }
 
     // ── Org Chart Builder ───────────────────────────────────────────
@@ -677,7 +677,7 @@
         'x-company-id': session.companyId,
       };
       try {
-        const res = await fetch('http://localhost:3000/governance/roles', { headers });
+        const res = await fetch('http://localhost:5500/governance/roles', { headers });
         if (!res.ok) return;
         const data = await res.json();
         _allRoles = normalizeRoleOptions(data);
@@ -716,7 +716,7 @@
           roleId: document.getElementById('inviteRoleSelect').value,
         };
         try {
-          const res = await fetch('http://localhost:3000/governance/invite', {
+          const res = await fetch('http://localhost:5500/governance/invite', {
             method: 'POST', headers, body: JSON.stringify(payload),
           });
           if (res.ok) {
@@ -773,7 +773,7 @@
           permissionIds: Array.from(checked).map(c => c.value),
         };
         try {
-          const res = await fetch('http://localhost:3000/governance/roles/clone', {
+          const res = await fetch('http://localhost:5500/governance/roles/clone', {
             method: 'POST', headers, body: JSON.stringify(payload),
           });
           if (res.ok) {

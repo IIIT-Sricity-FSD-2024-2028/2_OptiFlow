@@ -52,7 +52,8 @@ export class AuditLogsService {
 
     return this.prisma.auditLog.create({
       data: {
-        companyId: companyId || dto.companyId || 'b7744408-190c-4b83-82c5-ab0049afb6b2',
+        companyId:
+          companyId || dto.companyId || 'b7744408-190c-4b83-82c5-ab0049afb6b2',
         entityType: dto.entity_type,
         entityId: String(dto.entity_id),
         action: actionEnum,

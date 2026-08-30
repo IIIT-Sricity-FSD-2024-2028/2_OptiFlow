@@ -24,7 +24,13 @@ export class EscalationsController {
   constructor(private readonly escalationsService: EscalationsService) {}
 
   @Get()
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get all escalations' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
   findAll(@CompanyId() companyId: string) {
@@ -32,7 +38,13 @@ export class EscalationsController {
   }
 
   @Get(':id')
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get an escalation by ID' })
   @ApiResponse({ status: 200, description: 'Successful operation.' })
   findOne(@Param('id') id: string, @CompanyId() companyId: string) {

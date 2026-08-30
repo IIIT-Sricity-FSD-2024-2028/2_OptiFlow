@@ -71,7 +71,10 @@ export class ProcessController {
 
   @Get('templates/:id/steps')
   @ApiOperation({ summary: 'List all steps for a process template' })
-  async getSteps(@Param('id') templateId: string, @CompanyId() companyId: string) {
+  async getSteps(
+    @Param('id') templateId: string,
+    @CompanyId() companyId: string,
+  ) {
     return this.prisma.processTemplateStep.findMany({
       where: { templateId, template: { companyId } },
       include: {
@@ -86,7 +89,8 @@ export class ProcessController {
   @ApiOperation({ summary: 'Add a step to a process template' })
   async addStep(
     @Param('id') templateId: string,
-    @Body() body: {
+    @Body()
+    body: {
       name: string;
       stepOrder: number;
       stepType: string;

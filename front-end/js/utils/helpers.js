@@ -122,7 +122,7 @@ window.ACTIVE_PRESET_KEY = null;
 
 window.Helpers = window.Helpers || {};
 window.Helpers.api = window.Helpers.api || {
-  baseUrl: 'http://localhost:3000',
+  baseUrl: 'http://localhost:5500',
 
   async request(endpoint, method = 'GET', body = null, customHeaders = {}) {
     const preset = window.ACTIVE_PRESET_KEY && window.TEST_ACTOR_PRESETS[window.ACTIVE_PRESET_KEY];

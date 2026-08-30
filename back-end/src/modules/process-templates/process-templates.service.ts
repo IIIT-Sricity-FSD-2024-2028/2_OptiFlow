@@ -55,7 +55,7 @@ export class ProcessTemplatesService {
       return {
         stepOrder: s.stepOrder ?? index + 1,
         name: s.name,
-        stepType: (s.stepType as any) ?? 'Automated_Task',
+        stepType: s.stepType ?? 'Automated_Task',
         requiredPermissionId: s.requiredPermissionId ?? null,
         escalationTimeoutHours: s.escalationTimeoutHours ?? null,
         onRejectGotoStepId: s.onRejectGotoStepId ?? null,
@@ -71,9 +71,12 @@ export class ProcessTemplatesService {
         version: dto.version ?? 1,
         isActive: dto.isActive ?? true,
         createdById: dto.createdById || 'system',
-        steps: formattedSteps && formattedSteps.length > 0 ? {
-          create: formattedSteps,
-        } : undefined,
+        steps:
+          formattedSteps && formattedSteps.length > 0
+            ? {
+                create: formattedSteps,
+              }
+            : undefined,
       },
       include: {
         steps: {
@@ -111,7 +114,7 @@ export class ProcessTemplatesService {
             templateId: id,
             stepOrder: s.stepOrder ?? index + 1,
             name: s.name,
-            stepType: (s.stepType as any) ?? 'Automated_Task',
+            stepType: s.stepType ?? 'Automated_Task',
             requiredPermissionId: s.requiredPermissionId ?? null,
             escalationTimeoutHours: s.escalationTimeoutHours ?? null,
             onRejectGotoStepId: s.onRejectGotoStepId ?? null,
@@ -130,10 +133,14 @@ export class ProcessTemplatesService {
         data: {
           ...(rest.name !== undefined ? { name: rest.name } : {}),
           ...(rest.category !== undefined ? { category: rest.category } : {}),
-          ...(rest.compliance !== undefined ? { compliance: rest.compliance } : {}),
+          ...(rest.compliance !== undefined
+            ? { compliance: rest.compliance }
+            : {}),
           ...(rest.version !== undefined ? { version: rest.version } : {}),
           ...(rest.isActive !== undefined ? { isActive: rest.isActive } : {}),
-          ...(rest.createdById !== undefined ? { createdById: rest.createdById } : {}),
+          ...(rest.createdById !== undefined
+            ? { createdById: rest.createdById }
+            : {}),
         },
         include: {
           steps: {

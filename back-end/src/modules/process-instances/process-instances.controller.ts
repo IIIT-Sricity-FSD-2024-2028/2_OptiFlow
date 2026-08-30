@@ -24,7 +24,13 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 export class ProcessInstancesController {
   constructor(private readonly svc: ProcessInstancesService) {}
   @Get()
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiQuery({ name: 'templateId', required: false })
   @ApiQuery({ name: 'projectId', required: false })
   @ApiOperation({ summary: 'List process instances' })
@@ -36,7 +42,13 @@ export class ProcessInstancesController {
     return this.svc.findAll(companyId, templateId, projectId);
   }
   @Get(':id')
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get a process instance' })
   findOne(@Param('id') id: string, @CompanyId() companyId: string) {
     return this.svc.findOne(id, companyId);

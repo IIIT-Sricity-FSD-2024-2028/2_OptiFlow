@@ -166,7 +166,7 @@ window.selectEvidence = function (id) {
   // Render the actual fileUrl from Prisma; fall back to a safe placeholder
   const fileUrl  = d.fileUrl || d.file_url || '';
   const fileName = fileUrl ? fileUrl.split('/').pop() : 'No file attached';
-  const backendBase = 'http://localhost:3000';
+  const backendBase = 'http://localhost:5500';
 
   document.getElementById('attachedFiles').innerHTML = fileUrl ? `
     <div class="attached-file-item">
@@ -477,7 +477,7 @@ window.uploadEvidenceFile = async function () {
     }
 
     const response = await fetch(
-      `http://localhost:3000/evidence/${activeEvidenceId}/upload`,
+      `http://localhost:5500/evidence/${activeEvidenceId}/upload`,
       {
         method: 'POST',
         headers,

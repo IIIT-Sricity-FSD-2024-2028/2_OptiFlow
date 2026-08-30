@@ -23,7 +23,13 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 export class ProcessInstanceStepsController {
   constructor(private readonly svc: ProcessInstanceStepsService) {}
   @Get()
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiQuery({ name: 'processInstanceId', required: false })
   @ApiOperation({ summary: 'List steps' })
   findAll(
@@ -33,7 +39,13 @@ export class ProcessInstanceStepsController {
     return this.svc.findAll(processInstanceId);
   }
   @Get(':id')
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get a step' })
   findOne(@Param('id') id: string, @CompanyId() companyId: string) {
     return this.svc.findOne(id);

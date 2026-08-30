@@ -15,7 +15,9 @@ export class PlatformAdminGuard implements CanActivate {
     const platformAdminId = request.headers['x-platform-admin-id'];
 
     if (!platformAdminId) {
-      throw new UnauthorizedException('Missing x-platform-admin-id header for platform route');
+      throw new UnauthorizedException(
+        'Missing x-platform-admin-id header for platform route',
+      );
     }
 
     // Bypass check if bootstrap for dev/demo purposes, but strictly we should check DB

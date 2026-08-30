@@ -547,7 +547,7 @@ window.TasksPage = {
       if (userId) baseHeaders["x-user-id"] = String(userId);
 
       // 1. Create Evidence record in NestJS backend
-      const createRes = await fetch("http://localhost:3000/evidence", {
+      const createRes = await fetch("http://localhost:5500/evidence", {
         method: "POST",
         headers: {
           ...baseHeaders,
@@ -572,7 +572,7 @@ window.TasksPage = {
         const formData = new FormData();
         formData.append("file", file);
 
-        const uploadRes = await fetch(`http://localhost:3000/evidence/${evId}/upload`, {
+        const uploadRes = await fetch(`http://localhost:5500/evidence/${evId}/upload`, {
           method: "POST",
           headers: baseHeaders,
           body: formData,

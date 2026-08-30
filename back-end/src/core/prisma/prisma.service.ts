@@ -15,7 +15,9 @@ export class PrismaService
       } catch (err) {
         retries--;
         if (retries === 0) throw err;
-        console.warn(`[PrismaService] Database connection failed, retrying in 2s... (${retries} attempts remaining)`);
+        console.warn(
+          `[PrismaService] Database connection failed, retrying in 2s... (${retries} attempts remaining)`,
+        );
         await new Promise((r) => setTimeout(r, 2000));
       }
     }

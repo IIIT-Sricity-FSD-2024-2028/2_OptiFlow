@@ -192,7 +192,7 @@ export class TasksService {
       old_value: before as any,
       new_value: updated as any,
     });
-    
+
     if (statusChanged && updated.status === 'Completed') {
       this.eventEmitter.emit('task.completed', updated);
     }
@@ -228,11 +228,7 @@ export class TasksService {
       include: { team: { select: { branchId: true } } },
     });
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
-    assertBranchManagerScope(
-      user,
-      project.team?.branchId,
-      'manage tasks in',
-    );
+    assertBranchManagerScope(user, project.team?.branchId, 'manage tasks in');
   }
 
   private async assertTaskBranchAccess(taskId: string, user?: RequestUser) {

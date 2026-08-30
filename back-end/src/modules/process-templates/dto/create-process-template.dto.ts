@@ -13,9 +13,18 @@ export class CreateProcessTemplateStepDto {
   @ApiProperty() @IsString() @IsNotEmpty() name: string;
   @ApiProperty({ required: false }) @IsOptional() @IsInt() stepOrder?: number;
   @ApiProperty({ required: false }) @IsOptional() @IsString() stepType?: any;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() requiredPermissionId?: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsInt() escalationTimeoutHours?: number;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() onRejectGotoStepId?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  requiredPermissionId?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsInt()
+  escalationTimeoutHours?: number;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  onRejectGotoStepId?: string;
 }
 
 export class CreateProcessTemplateDto {

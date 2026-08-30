@@ -21,7 +21,13 @@ import { RolesGuard } from '../../core/guards/roles.guard';
 import { Roles } from '../../core/decorators/roles.decorator';
 import { CompanyId } from '../../core/decorators/company-id.decorator';
 import { ActorUserId } from '../../core/decorators/actor-user.decorators';
-import { ApiTags, ApiOperation, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 
 @ApiTags('Attachments')
 @Controller('attachments')
@@ -128,7 +134,9 @@ export class AttachmentsController {
     @ActorUserId() uploadedById: string,
   ) {
     if (!file) {
-      throw new BadRequestException('No file attached. Include a "file" field in the body.');
+      throw new BadRequestException(
+        'No file attached. Include a "file" field in the body.',
+      );
     }
 
     const fileUrl = `/uploads/${file.filename}`;

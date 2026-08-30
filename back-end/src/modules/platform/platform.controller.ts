@@ -13,20 +13,20 @@ export class PlatformAdminController {
   @ApiOperation({ summary: 'Get SaaS metrics for platform dashboard' })
   async getMetrics() {
     const totalCompanies = await this.prisma.company.count();
-    
+
     const activeSubscriptions = await this.prisma.subscription.groupBy({
       by: ['planId'],
       _count: { planId: true },
-      where: { status: 'Active' }
+      where: { status: 'Active' },
     });
 
     // To get plan names, we can fetch all plans and map them
     const plans = await this.prisma.plan.findMany();
-    const planMap = new Map(plans.map(p => [p.id, p.name]));
-    
-    const subscriptionsByPlan = activeSubscriptions.map(sub => ({
+    const planMap = new Map(plans.map((p) => [p.id, p.name]));
+
+    const subscriptionsByPlan = activeSubscriptions.map((sub) => ({
       planName: planMap.get(sub.planId) || 'Unknown Plan',
-      count: sub._count.planId
+      count: sub._count.planId,
     }));
 
     const recentLogs = await this.prisma.platformSupportAccess.findMany({
@@ -34,8 +34,8 @@ export class PlatformAdminController {
       take: 10,
       include: {
         company: { select: { legalName: true } },
-        adminUser: { select: { fullName: true, email: true } }
-      }
+        adminUser: { select: { fullName: true, email: true } },
+      },
     });
 
     const companies = await this.prisma.company.findMany({
@@ -43,13 +43,13 @@ export class PlatformAdminController {
       include: {
         subscriptions: {
           include: { plan: true },
-          where: { status: 'Active' }
+          where: { status: 'Active' },
         },
         _count: {
-          select: { users: true }
-        }
+          select: { users: true },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
 
     const totalAdmins = await this.prisma.platformAdminUser.count();
@@ -78,13 +78,13 @@ export class PlatformAdminController {
       include: {
         subscriptions: {
           include: { plan: true },
-          where: { status: 'Active' }
+          where: { status: 'Active' },
         },
         _count: {
-          select: { users: true }
-        }
+          select: { users: true },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

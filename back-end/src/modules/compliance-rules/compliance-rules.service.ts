@@ -60,8 +60,12 @@ export class ComplianceRulesService {
         ...(dto.rule_name !== undefined || (dto as any).name !== undefined
           ? { name: dto.rule_name || (dto as any).name }
           : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
-        ...(dto.severity !== undefined ? { severity: dto.severity as any } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
+        ...(dto.severity !== undefined
+          ? { severity: dto.severity as any }
+          : {}),
         ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
         ...(dto.is_active !== undefined || (dto as any).isActive !== undefined
           ? { isActive: dto.is_active ?? (dto as any).isActive }

@@ -12,12 +12,18 @@ export class CreatePlatformAdminUserDto {
   @IsEmail()
   email: string;
 
-  @ApiPropertyOptional({ example: 'PlatformAdmin123!', description: 'Plain text password (auto-hashed)' })
+  @ApiPropertyOptional({
+    example: 'PlatformAdmin123!',
+    description: 'Plain text password (auto-hashed)',
+  })
   @IsString()
   @IsOptional()
   password?: string;
 
-  @ApiPropertyOptional({ example: '$2a$10$...', description: 'Bcrypt password hash (legacy/migration)' })
+  @ApiPropertyOptional({
+    example: '$2a$10$...',
+    description: 'Bcrypt password hash (legacy/migration)',
+  })
   @IsString()
   @IsOptional()
   passwordHash?: string;

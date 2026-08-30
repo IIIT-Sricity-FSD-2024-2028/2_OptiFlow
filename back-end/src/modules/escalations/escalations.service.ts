@@ -41,10 +41,15 @@ export class EscalationsService {
     return escalation;
   }
 
-  async create(dto: CreateEscalationDto, actorUserId: string, companyId?: string) {
+  async create(
+    dto: CreateEscalationDto,
+    actorUserId: string,
+    companyId?: string,
+  ) {
     const newEscalation = await this.prisma.escalation.create({
       data: {
-        companyId: dto.companyId || companyId || 'b7744408-190c-4b83-82c5-ab0049afb6b2',
+        companyId:
+          dto.companyId || companyId || 'b7744408-190c-4b83-82c5-ab0049afb6b2',
         taskId: dto.task_id ?? null,
         projectId: dto.project_id ?? null,
         reportedById: dto.reported_by || actorUserId,
