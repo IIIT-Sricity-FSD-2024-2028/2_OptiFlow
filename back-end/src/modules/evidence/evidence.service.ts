@@ -38,11 +38,13 @@ export class EvidenceService {
   }
 
   async create(dto: CreateEvidenceDto, companyId?: string) {
-    const targetCompanyId = companyId || dto.companyId || (dto as any).company_id || null;
+    const targetCompanyId =
+      companyId || dto.companyId || (dto as any).company_id || null;
     const userId = dto.user_id || (dto as any).userId;
     const taskId = dto.task_id ?? (dto as any).taskId ?? null;
     const violationId = dto.violation_id ?? (dto as any).violationId ?? null;
-    const evidenceType = dto.evidence_type || (dto as any).evidenceType || 'Document';
+    const evidenceType =
+      dto.evidence_type || (dto as any).evidenceType || 'Document';
     const fileUrl = dto.file_url || (dto as any).fileUrl || '';
 
     return this.prisma.complianceEvidence.create({
@@ -108,7 +110,12 @@ export class EvidenceService {
   // Called by the real file upload endpoint.
   // Saves Attachment record in Prisma and updates fileUrl on ComplianceEvidence row.
   // ─────────────────────────────────────────────────────────────────────────────
-  async attachFile(id: string, file: Express.Multer.File, companyId?: string, actorUserId?: string) {
+  async attachFile(
+    id: string,
+    file: Express.Multer.File,
+    companyId?: string,
+    actorUserId?: string,
+  ) {
     const evidence = await this.findOne(id, companyId); // throws 404 if not found
     const fileUrl = `/uploads/${file.filename}`;
     const targetCompanyId = evidence.companyId || companyId;

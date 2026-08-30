@@ -18,6 +18,7 @@
 
   // ── Role hierarchy order (lower = higher rank) ────────────────────────────
   const ROLE_RANK = {
+    company_owner:      0,
     superuser:          0,
     hr_manager:         1,
     compliance_officer: 1,
@@ -28,6 +29,7 @@
 
   // ── Human-readable role labels ─────────────────────────────────────────────
   const ROLE_LABEL = {
+    company_owner:      'Company Owner',
     superuser:          'Superuser',
     hr_manager:         'HR Manager',
     compliance_officer: 'Compliance Officer',
@@ -38,6 +40,7 @@
 
   // ── Role → badge CSS class ─────────────────────────────────────────────────
   const ROLE_CSS = {
+    company_owner:      'role-su',
     superuser:          'role-su',
     hr_manager:         'role-hr',
     compliance_officer: 'role-co',
@@ -64,21 +67,22 @@
       const state = await window.Helpers.getState();
       const users = state.users || [];
       ALL_EMPLOYEES = users.map(u => {
-        const slug = u.roleName || 'team_member';
-        const initials = (u.fullName || '')
+        const slug = u.roleName || (u.roleSlug || 'team_member');
+        const initials = (u.fullName || u.name || '')
           .split(' ').map(n => (n[0] || '')).join('').toUpperCase().substring(0, 2) || '??';
+        const mgrId = u.managerId || u.managerUserId || u.reportsTo || null;
         return {
-          id:         String(u.id),
-          name:       u.fullName || 'Unknown',
+          id:         String(u.id || u.userId),
+          name:       u.fullName || u.name || 'Unknown',
           email:      u.email    || '',
           initials,
-          color:      colorFor(u.id),
+          color:      colorFor(u.id || u.userId),
           roleSlug:   slug,
-          role:       ROLE_LABEL[slug] || u.roleLabel || slug,
+          role:       ROLE_LABEL[slug] || u.roleLabel || u.role || slug,
           rank:       ROLE_RANK[slug] ?? 4,
-          managerId:  u.managerId ? String(u.managerId) : null,
+          managerId:  mgrId ? String(mgrId) : null,
           teamName:   u.teamName   || null,
-          branchName: u.departmentName || null,
+          branchName: u.departmentName || u.branchName || null,
           status:     u.isActive !== false ? 'active' : 'inactive',
         };
       });
@@ -112,61 +116,53 @@
   }
 
   // ── Build tree from employees ──────────────────────────────────────────────
-  // Strategy:
-  //   1. If managerId is set and resolves to a known employee → use it
-  //   2. Otherwise fall back to role-rank grouping:
-  //      - rank-0 (Owner) nodes are top-level
-  //      - rank-N employees report to the closest rank-(N-1) employee
   function buildOrgTree(employees) {
-    const byId = new Map(employees.map(e => [e.id, { ...e, children: [] }]));
+    if (!employees || !employees.length) return [];
 
-    // Pass 1: wire up explicit manager links
-    const unlinked = [];
-    byId.forEach(node => {
-      if (node.managerId && byId.has(node.managerId) && node.managerId !== node.id) {
-        byId.get(node.managerId).children.push(node);
-      } else {
-        unlinked.push(node);
-      }
-    });
-
-    // Pass 2: among unlinked nodes, group by role rank
-    // Find the best "parent" for each unlinked node: the highest-ranked node
-    // with a strictly lower rank number
-    const byRank = {};
-    byId.forEach(node => {
-      const r = node.rank ?? 4;
-      if (!byRank[r]) byRank[r] = [];
-      byRank[r].push(node);
-    });
+    const byId = new Map(employees.map(e => [String(e.id), { ...e, children: [] }]));
 
     const roots = [];
 
-    unlinked.forEach(node => {
-      if (node.rank === 0) {
+    // Pass 1: Attach children to known managers in this dataset
+    byId.forEach(node => {
+      const parentId = node.managerId ? String(node.managerId) : null;
+      if (parentId && byId.has(parentId) && parentId !== node.id) {
+        byId.get(parentId).children.push(node);
+      } else {
+        // No manager assigned, or manager is external to this filtered group → Root Node
         roots.push(node);
-        return;
       }
-      // Find a parent at rank - 1, then rank - 2, etc.
-      let attached = false;
-      for (let r = node.rank - 1; r >= 0; r--) {
-        const candidates = byRank[r] || [];
-        if (candidates.length > 0) {
-          // Attach to the first candidate (or distribute round-robin for many)
-          const parent = byId.get(candidates[0].id);
-          if (parent) { parent.children.push(node); attached = true; break; }
-        }
-      }
-      if (!attached) roots.push(node);
     });
 
-    // Cycle detection
-    function detectCycle(node, seen = new Set()) {
-      if (seen.has(node.id)) { node.children = []; return; }
-      seen.add(node.id);
-      node.children.forEach(c => detectCycle(c, new Set(seen)));
+    // Pass 2: Detect & Sever any cyclic references
+    function breakCycles(node, ancestors = new Set()) {
+      ancestors.add(node.id);
+      node.children = (node.children || []).filter(child => {
+        if (ancestors.has(child.id)) {
+          console.warn(`[Teams Org Chart] Cycle detected: ${node.name} <-> ${child.name}. Severing edge.`);
+          return false;
+        }
+        breakCycles(child, new Set(ancestors));
+        return true;
+      });
     }
-    roots.forEach(r => detectCycle(r));
+
+    // Pass 3: If no root had null manager (circular island), promote the highest-ranking node
+    if (roots.length === 0 && byId.size > 0) {
+      const candidates = Array.from(byId.values()).sort((a, b) => (a.rank ?? 4) - (b.rank ?? 4));
+      const promoted = candidates[0];
+      // Sever any parent link pointing to promoted
+      byId.forEach(parent => {
+        parent.children = (parent.children || []).filter(c => c.id !== promoted.id);
+      });
+      roots.push(promoted);
+    }
+
+    // Run cycle breaker on all roots
+    roots.forEach(r => breakCycles(r));
+
+    // Sort roots so highest rank (Company Owner / CEO / Superuser) appears first
+    roots.sort((a, b) => (a.rank ?? 4) - (b.rank ?? 4));
 
     return roots;
   }
@@ -193,6 +189,10 @@
 
     // Navigate on click — NOT logout
     const navigate = () => {
+      if (emp && emp.id) {
+        sessionStorage.setItem('selected_emp_id', String(emp.id));
+        sessionStorage.setItem('current_emp_id', String(emp.id));
+      }
       window.location.href = `employee-detail.html?id=${encodeURIComponent(emp.id)}`;
     };
     card.addEventListener('click', navigate);

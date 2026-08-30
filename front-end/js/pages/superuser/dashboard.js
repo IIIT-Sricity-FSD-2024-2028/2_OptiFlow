@@ -40,7 +40,7 @@ async function renderOmniscientMetrics() {
   };
 
   try {
-    const res = await fetch("http://localhost:3000/dashboard/metrics", { headers });
+    const res = await fetch("http://localhost:5500/dashboard/metrics", { headers });
     if (res.ok) {
       const data = await res.json();
       const metrics = data.data || data;

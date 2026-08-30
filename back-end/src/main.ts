@@ -5,12 +5,64 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { RolesGuard } from './core/guards/roles.guard';
 import { TransformInterceptor } from './core/interceptors/transform.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
 import * as path from 'path';
-import * as fs from 'fs'; // Added for file system operations
+import * as fs from 'fs';
 
 async function bootstrap() {
-  // 1. Enable CORS so your vanilla JS frontend can actually talk to this server
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { cors: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // 1. Enable Security Headers with Helmet (Security Requirement)
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https:'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+          imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+          connectSrc: ["'self'", 'http:', 'https:'],
+        },
+      },
+      hsts: process.env.NODE_ENV === 'production',
+    }),
+  );
+
+  // 2. Configure CORS explicitly (Security Requirement)
+  const envOrigins =
+    process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN;
+  const allowedOrigins = envOrigins
+    ? envOrigins
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean)
+    : [
+        'http://localhost:5500',
+        'http://127.0.0.1:5500',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:64064',
+      ];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-user-role',
+      'x-user-id',
+      'x-user-email',
+      'x-company-id',
+      'x-platform-admin-id',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+    ],
+    credentials: true,
+    optionsSuccessStatus: 204,
+  });
 
   // Serve uploaded evidence files at /uploads/...
   const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -18,17 +70,14 @@ async function bootstrap() {
   app.useStaticAssets(uploadsDir, { prefix: '/uploads' });
 
   // 2. Enable Global Validation (Fulfills Rubric #5)
-  // This ensures your DTOs automatically validate incoming requests
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
-      whitelist: true, // Strips out any extra data not defined in the DTO
+      whitelist: true,
     }),
   );
 
   // 3. Apply RolesGuard globally (Fulfills Rubric RBAC requirement)
-  // Every route decorated with @Roles(...) will now have its x-user-role
-  // header checked automatically — no per-module wiring needed.
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new RolesGuard(reflector));
 
@@ -40,9 +89,6 @@ async function bootstrap() {
     .setTitle('OfficeSync API')
     .setDescription('Backend API for the OfficeSync HR and PM Dashboard')
     .setVersion('1.0')
-    // ========================================================
-    // NEW: Security Scheme for the Padlock Symbols & Authorize Button
-    // ========================================================
     .addSecurity('Role-Based-Access', {
       type: 'apiKey',
       in: 'header',
@@ -50,8 +96,7 @@ async function bootstrap() {
       description:
         'Enter your role to unlock the endpoints (e.g., platform_admin, superuser, hr_manager, team_leader, team_member)',
     })
-    .addSecurityRequirements('Role-Based-Access') // This applies the locks globally
-    // ========================================================
+    .addSecurityRequirements('Role-Based-Access')
     .addGlobalParameters({
       in: 'header',
       required: false,
@@ -76,28 +121,21 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
 
-  // ==========================================
-  // CREATE THE docs/swagger.json FILE
-  // ==========================================
-  // Define the path (goes up one level from 'src' into the root folder)
   const docsFolderPath = path.join(__dirname, '..', 'docs');
-
-  // Check if the 'docs' folder exists; if not, create it
   if (!fs.existsSync(docsFolderPath)) {
     fs.mkdirSync(docsFolderPath, { recursive: true });
   }
 
-  // Write the document object to a file formatted with 2 spaces
   fs.writeFileSync(
     path.join(docsFolderPath, 'swagger.json'),
     JSON.stringify(document, null, 2),
   );
-  // ==========================================
 
-  SwaggerModule.setup('api/docs', app, document);
-
-  await app.listen(process.env.PORT ?? 3000);
-  console.log(`🚀 Application is running on: http://localhost:3000`);
-  console.log(`📄 Swagger Docs available at: http://localhost:3000/api/docs`);
+  const port = process.env.PORT ?? 5500;
+  await app.listen(port);
+  console.log(`🚀 Application is running on: http://localhost:${port}`);
+  console.log(
+    `📄 Swagger Docs available at: http://localhost:${port}/api/docs`,
+  );
 }
-bootstrap();
+void bootstrap();

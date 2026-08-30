@@ -408,7 +408,7 @@
         // Fetch plans on load
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                const res = await fetch('http://localhost:3000/auth/public-plans');
+                const res = await fetch('http://localhost:5500/auth/public-plans');
                 if (!res.ok) throw new Error('Failed to load plans');
                 const result = await res.json();
                 plansData = Array.isArray(result) ? result : (result.data || []);
@@ -544,7 +544,7 @@
                 };
 
                 try {
-                    const response = await fetch('http://localhost:3000/auth/register-company', {
+                    const response = await fetch('http://localhost:5500/auth/register-company', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)

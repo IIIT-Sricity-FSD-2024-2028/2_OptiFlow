@@ -31,7 +31,28 @@ let canEdit = false;
 // ─── Helpers ────────────────────────────────────────────────
 
 function getEmpId() {
-  return new URLSearchParams(window.location.search).get("id");
+  // 1. From ?id= query parameter
+  const fromQuery = new URLSearchParams(window.location.search).get("id");
+  if (fromQuery) return fromQuery;
+
+  // 2. From ?empId=, ?userId=, or ?emp=
+  const fromAlt = new URLSearchParams(window.location.search).get("empId") || 
+                  new URLSearchParams(window.location.search).get("userId") || 
+                  new URLSearchParams(window.location.search).get("emp");
+  if (fromAlt) return fromAlt;
+
+  // 3. From URL path segment (e.g. /admin/hr/employee-detail/<id>)
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  const lastPart = pathParts[pathParts.length - 1];
+  if (lastPart && !lastPart.includes('.html') && lastPart !== 'employee-detail') {
+    return lastPart;
+  }
+
+  // 4. From session storage
+  const fromSession = sessionStorage.getItem('selected_emp_id') || sessionStorage.getItem('current_emp_id');
+  if (fromSession) return fromSession;
+
+  return null;
 }
 
 function showToast(msg, isError = false) {
@@ -669,20 +690,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   canEdit = await HRStore.canEdit();
 
   if (!empId) {
-    document.getElementById("pageContent").innerHTML = `
-      <div class="ed-loading" style="flex-direction:column;gap:12px;">
-        <i class="ri-error-warning-line" style="font-size:40px;color:#ef4444;"></i>
-        <p>No employee ID specified. <a href="../../admin/pm/hr-dashboard.html" style="color:var(--primary-color);">Go to Dashboard</a></p>
-      </div>`;
-    return;
+    // If no employee ID in URL, gracefully load the first available employee from the database
+    const all = await HRStore.getAll();
+    if (all && all.length > 0) {
+      emp = all[0];
+      empId = emp.id;
+    }
   }
 
-  emp = await HRStore.getById(empId);
+  if (empId && !emp) {
+    emp = await HRStore.getById(empId);
+  }
+
   if (!emp) {
     document.getElementById("pageContent").innerHTML = `
       <div class="ed-loading" style="flex-direction:column;gap:12px;">
         <i class="ri-user-unfollow-line" style="font-size:40px;color:#ef4444;"></i>
-        <p>Employee <strong>${empId}</strong> not found. <a href="../../admin/pm/hr-dashboard.html" style="color:var(--primary-color);">Go to Dashboard</a></p>
+        <p>Employee <strong>${empId || ''}</strong> not found. <a href="hr-dashboard.html" style="color:var(--primary-color);">Go to Dashboard</a></p>
       </div>`;
     return;
   }

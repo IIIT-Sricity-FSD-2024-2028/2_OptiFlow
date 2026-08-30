@@ -6,7 +6,7 @@ import { PrismaModule } from '../../core/prisma/prisma.module';
 @Module({
   imports: [
     PrismaModule,
-    ProcessTemplatesModule,   // provides ProcessTemplatesService
+    ProcessTemplatesModule, // provides ProcessTemplatesService
   ],
   controllers: [ProcessController],
 })

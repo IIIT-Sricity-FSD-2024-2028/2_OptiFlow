@@ -191,7 +191,7 @@ async function populateSystemRoles() {
         "x-user-email": session.email,
         "x-company-id": session.companyId,
       };
-      const res = await fetch("http://localhost:3000/governance/roles", { headers });
+      const res = await fetch("http://localhost:5500/governance/roles", { headers });
       if (res.ok) {
         const data = await res.json();
         const roleList = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : (Array.isArray(data.roles) ? data.roles : Object.values(data || {})));

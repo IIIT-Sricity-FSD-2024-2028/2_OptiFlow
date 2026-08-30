@@ -59,7 +59,7 @@
       try {
         const api = (window.Helpers && window.Helpers.api) ? window.Helpers.api : {
           async request(endpoint, method = 'GET', body = null, customHeaders = {}) {
-            const res = await fetch(`http://localhost:3000${endpoint}`, {
+            const res = await fetch(`http://localhost:5500${endpoint}`, {
               method,
               headers: { 
                 'Content-Type': 'application/json', 

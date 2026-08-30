@@ -34,7 +34,9 @@ export class GovernanceController {
   ) {}
 
   @Get('users')
-  @ApiOperation({ summary: 'List all company users with their role assignments' })
+  @ApiOperation({
+    summary: 'List all company users with their role assignments',
+  })
   async getUsers(@CompanyId() companyId: string) {
     return this.prisma.user.findMany({
       where: { companyId },
@@ -53,12 +55,12 @@ export class GovernanceController {
     return this.prisma.role.findMany({
       where: { companyId },
       include: {
-        roleTemplate: { 
-          include: { 
+        roleTemplate: {
+          include: {
             defaultPermissions: {
-              include: { permission: true }
-            }
-          } 
+              include: { permission: true },
+            },
+          },
         },
       },
       orderBy: { label: 'asc' },
@@ -172,7 +174,8 @@ export class GovernanceController {
   @Post('roles/clone')
   @ApiOperation({ summary: 'Create a custom role based on permissions' })
   async cloneRole(
-    @Body() body: { sourceRoleId: string; newName: string; permissionIds: string[] },
+    @Body()
+    body: { sourceRoleId: string; newName: string; permissionIds: string[] },
     @CompanyId() companyId: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -188,7 +191,7 @@ export class GovernanceController {
       // Map the selected permissions
       if (body.permissionIds && body.permissionIds.length > 0) {
         await tx.roleTemplatePermission.createMany({
-          data: body.permissionIds.map(permissionId => ({
+          data: body.permissionIds.map((permissionId) => ({
             roleTemplateId: template.id,
             permissionId,
           })),

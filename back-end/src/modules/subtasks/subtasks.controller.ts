@@ -27,21 +27,39 @@ export class SubtasksController {
   constructor(private readonly subtasksService: SubtasksService) {}
 
   @Get()
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get all subtasks' })
   findAll(@CompanyId() companyId: string) {
     return this.subtasksService.findAll(companyId);
   }
 
   @Get('by-task/:taskId')
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get subtasks for a task' })
   findByTask(@Param('taskId') taskId: string, @CompanyId() companyId: string) {
     return this.subtasksService.findByTask(taskId);
   }
 
   @Get(':id')
-  @Roles('superuser', 'project_manager', 'team_leader', 'team_member', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'compliance_officer',
+  )
   @ApiOperation({ summary: 'Get a subtask by ID' })
   findOne(@Param('id') id: string, @CompanyId() companyId: string) {
     return this.subtasksService.findOne(id);

@@ -12,7 +12,13 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(companyId?: string) {
-    const filter = (companyId && companyId !== 'all' && companyId !== 'any' && companyId !== 'guest') ? { companyId } : undefined;
+    const filter =
+      companyId &&
+      companyId !== 'all' &&
+      companyId !== 'any' &&
+      companyId !== 'guest'
+        ? { companyId }
+        : undefined;
     return this.prisma.user.findMany({
       where: filter,
       include: {
@@ -29,7 +35,13 @@ export class UsersService {
   }
 
   async findAllUserRoles(companyId?: string) {
-    const filter = (companyId && companyId !== 'all' && companyId !== 'any' && companyId !== 'guest') ? { user: { companyId } } : undefined;
+    const filter =
+      companyId &&
+      companyId !== 'all' &&
+      companyId !== 'any' &&
+      companyId !== 'guest'
+        ? { user: { companyId } }
+        : undefined;
     return this.prisma.roleAssignment.findMany({
       where: filter,
       include: {
@@ -102,21 +114,33 @@ export class UsersService {
     });
 
     if (dto.role) {
-      const normalizedRole = dto.role.trim().toLowerCase().replace(/[\s-]+/g, '_');
+      const normalizedRole = dto.role
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_');
       const roles = await this.prisma.role.findMany({
         where: { companyId: dto.companyId },
       });
-      const role = roles.find((candidate) =>
-        candidate.id === dto.role ||
-        candidate.label.trim().toLowerCase().replace(/[\s-]+/g, '_') === normalizedRole ||
-        (normalizedRole === 'superuser' &&
-          ['superuser', 'process_admin'].includes(
-            candidate.label.trim().toLowerCase().replace(/[\s-]+/g, '_'),
-          ))
+      const role = roles.find(
+        (candidate) =>
+          candidate.id === dto.role ||
+          candidate.label
+            .trim()
+            .toLowerCase()
+            .replace(/[\s-]+/g, '_') === normalizedRole ||
+          (normalizedRole === 'superuser' &&
+            ['superuser', 'process_admin'].includes(
+              candidate.label
+                .trim()
+                .toLowerCase()
+                .replace(/[\s-]+/g, '_'),
+            )),
       );
       if (!role) {
         await this.prisma.user.delete({ where: { id: user.id } });
-        throw new BadRequestException(`Role ${dto.role} not found in this company`);
+        throw new BadRequestException(
+          `Role ${dto.role} not found in this company`,
+        );
       }
       await this.prisma.roleAssignment.create({
         data: {

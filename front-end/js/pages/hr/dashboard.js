@@ -144,11 +144,19 @@ function goToEmployee(empId) {
   if (!employeeId) {
     return;
   }
-  window.location.href = `employee-detail.html?id=${encodeURIComponent(String(employeeId))}`;
+  const isPmPath = window.location.pathname.includes('/admin/pm/');
+  const target = isPmPath
+    ? `../hr/employee-detail.html?id=${encodeURIComponent(String(employeeId))}`
+    : `employee-detail.html?id=${encodeURIComponent(String(employeeId))}`;
+  window.location.href = target;
 }
 
 function goToProvision(empId) {
-  window.location.href = `new-employee.html?provision=${empId}`;
+  const isPmPath = window.location.pathname.includes('/admin/pm/');
+  const target = isPmPath
+    ? `../hr/new-employee.html?provision=${empId}`
+    : `new-employee.html?provision=${empId}`;
+  window.location.href = target;
 }
 
 // ─────────────────────────────────────────
@@ -307,7 +315,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function loadRolesForAPI() {
       try {
-          const res = await fetch('http://localhost:3000/governance/roles', { headers });
+          const res = await fetch('http://localhost:5500/governance/roles', { headers });
           if (!res.ok) return;
           const data = await res.json();
           allRoles = normalizeRoleOptions(data);
@@ -362,7 +370,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               roleId: document.getElementById('inviteRoleSelect').value
           };
           try {
-              const res = await fetch('http://localhost:3000/governance/invite', {
+              const res = await fetch('http://localhost:5500/governance/invite', {
                   method: 'POST', headers, body: JSON.stringify(payload)
               });
               if (res.ok) {
@@ -394,7 +402,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           };
           
           try {
-              const res = await fetch('http://localhost:3000/governance/roles/clone', {
+              const res = await fetch('http://localhost:5500/governance/roles/clone', {
                   method: 'POST', headers, body: JSON.stringify(payload)
               });
               if (res.ok) {

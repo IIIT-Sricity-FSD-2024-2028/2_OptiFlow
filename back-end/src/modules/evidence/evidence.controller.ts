@@ -22,7 +22,14 @@ import { RolesGuard } from '../../core/guards/roles.guard';
 import { Roles } from '../../core/decorators/roles.decorator';
 import { CompanyId } from '../../core/decorators/company-id.decorator';
 import { ActorUserId } from '../../core/decorators/actor-user.decorators';
-import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiHeader } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+  ApiBody,
+  ApiHeader,
+} from '@nestjs/swagger';
 
 @ApiTags('Evidence')
 @Controller('evidence')
@@ -63,7 +70,13 @@ export class EvidenceController {
   }
 
   @Post()
-  @Roles('superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_member')
+  @Roles(
+    'superuser',
+    'compliance_officer',
+    'project_manager',
+    'team_leader',
+    'team_member',
+  )
   @ApiOperation({ summary: 'Submit new evidence' })
   @ApiResponse({ status: 201, description: 'Successfully created.' })
   create(
@@ -111,7 +124,13 @@ export class EvidenceController {
   // Saves the physical file to ./uploads, creates an Attachment record linked to Company, and ties to ComplianceEvidence.
   // ─────────────────────────────────────────────────────────────────────────────
   @Post(':id/upload')
-  @Roles('superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_member')
+  @Roles(
+    'superuser',
+    'compliance_officer',
+    'project_manager',
+    'team_leader',
+    'team_member',
+  )
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -145,7 +164,10 @@ export class EvidenceController {
         if (allowed.includes(file.mimetype)) {
           cb(null, true);
         } else {
-          cb(new BadRequestException(`Unsupported file type: ${file.mimetype}`), false);
+          cb(
+            new BadRequestException(`Unsupported file type: ${file.mimetype}`),
+            false,
+          );
         }
       },
     }),
@@ -155,13 +177,26 @@ export class EvidenceController {
     schema: {
       type: 'object',
       properties: {
-        file: { type: 'string', format: 'binary', description: 'Evidence file (PDF, DOCX, PNG, etc.)' },
-        notes: { type: 'string', description: 'Optional notes about this upload' },
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Evidence file (PDF, DOCX, PNG, etc.)',
+        },
+        notes: {
+          type: 'string',
+          description: 'Optional notes about this upload',
+        },
       },
     },
   })
-  @ApiOperation({ summary: 'Upload a file to an evidence record (real Multer upload)' })
-  @ApiResponse({ status: 201, description: 'File uploaded, Attachment created, and linked to evidence record.' })
+  @ApiOperation({
+    summary: 'Upload a file to an evidence record (real Multer upload)',
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      'File uploaded, Attachment created, and linked to evidence record.',
+  })
   async uploadFile(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -169,7 +204,9 @@ export class EvidenceController {
     @CompanyId() companyId: string,
   ) {
     if (!file) {
-      throw new BadRequestException('No file attached. Include a "file" field in the multipart/form-data body.');
+      throw new BadRequestException(
+        'No file attached. Include a "file" field in the multipart/form-data body.',
+      );
     }
 
     const result = await this.evidenceService.attachFile(

@@ -10,8 +10,10 @@ export class ComplianceObserverService {
 
   @OnEvent('task.completed')
   async handleTaskCompleted(task: any) {
-    this.logger.log(`Task ${task.id} marked as Completed. Running compliance checks...`);
-    
+    this.logger.log(
+      `Task ${task.id} marked as Completed. Running compliance checks...`,
+    );
+
     // Check if the task has evidence
     const evidenceCount = await this.prisma.complianceEvidence.count({
       where: { taskId: task.id },
@@ -48,8 +50,10 @@ export class ComplianceObserverService {
     });
 
     if (ruleBinding) {
-      this.logger.warn(`Task ${task.id} completed without evidence and violates '${ruleBinding.rule.name}'!`);
-      
+      this.logger.warn(
+        `Task ${task.id} completed without evidence and violates '${ruleBinding.rule.name}'!`,
+      );
+
       // Auto-flag violation
       await this.prisma.complianceViolation.create({
         data: {
@@ -60,7 +64,8 @@ export class ComplianceObserverService {
           status: 'Open',
           severity: ruleBinding.rule.severity,
           reportedById: null, // System generated
-          resolutionRemarks: 'Auto-flagged by Automated Compliance Engine: Task marked completed without required evidence.',
+          resolutionRemarks:
+            'Auto-flagged by Automated Compliance Engine: Task marked completed without required evidence.',
         },
       });
     }

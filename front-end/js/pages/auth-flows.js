@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const api = (window.Helpers && window.Helpers.api) ? window.Helpers.api : {
           async request(endpoint, method = 'GET', body = null, customHeaders = {}) {
-            const res = await fetch(`http://localhost:3000${endpoint}`, {
+            const res = await fetch(`http://localhost:5500${endpoint}`, {
               method,
               headers: { 'Content-Type': 'application/json', 'x-user-role': 'superuser', 'x-company-id': 'comp-1', ...customHeaders },
               body: body ? JSON.stringify(body) : null
@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // 1. Send Login Request to NestJS /auth/login Backend Endpoint
         try {
-          const authRes = await fetch("http://localhost:3000/auth/login", {
+          const authRes = await fetch("http://localhost:5500/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password })
@@ -253,7 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       try {
-        const res = await fetch("http://localhost:3000/companies/register", {
+        const res = await fetch("http://localhost:5500/companies/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

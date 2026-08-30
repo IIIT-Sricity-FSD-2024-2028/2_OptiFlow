@@ -54,19 +54,24 @@ export class TenantMiddleware implements NestMiddleware {
     }
 
     // Bypass for platform admin routes or requests
-    const isPlatformRoute = req.originalUrl && (
-      req.originalUrl.includes('/platform') ||
-      req.originalUrl.includes('/plans') ||
-      req.originalUrl.includes('/subscriptions') ||
-      req.originalUrl.includes('/platform-support-access') ||
-      req.originalUrl.includes('/platform-admin-users') ||
-      (req.originalUrl.includes('/companies') && !req.originalUrl.includes('/companies/register'))
-    );
-    const hasPlatformHeader = req.headers['x-platform-admin-id'] || req.headers['x-user-role'] === 'platform_admin';
+    const isPlatformRoute =
+      req.originalUrl &&
+      (req.originalUrl.includes('/platform') ||
+        req.originalUrl.includes('/plans') ||
+        req.originalUrl.includes('/subscriptions') ||
+        req.originalUrl.includes('/platform-support-access') ||
+        req.originalUrl.includes('/platform-admin-users') ||
+        (req.originalUrl.includes('/companies') &&
+          !req.originalUrl.includes('/companies/register')));
+    const hasPlatformHeader =
+      req.headers['x-platform-admin-id'] ||
+      req.headers['x-user-role'] === 'platform_admin';
 
     if (isPlatformRoute || hasPlatformHeader) {
       req.user = {
-        id: (req.headers['x-platform-admin-id'] as string) || 'platform-admin-system',
+        id:
+          (req.headers['x-platform-admin-id'] as string) ||
+          'platform-admin-system',
         companyId: 'all',
         role: 'platform_admin',
         roleLabel: 'Platform Admin',
@@ -144,13 +149,13 @@ export class TenantMiddleware implements NestMiddleware {
           l.includes('superuser'),
       );
       const branchManagerRa = find((l) => l.includes('branch manager'));
-      const hrRa = find(
-        (l) => l.includes('governance') || l.includes('hr'),
-      );
+      const hrRa = find((l) => l.includes('governance') || l.includes('hr'));
       const processRa = find((l) => l.includes('process'));
       const complianceRa = find((l) => l.includes('compliance'));
       const pmRa = find(
-        (l) => l.includes('project') || (l.includes('pm') && !l.includes('compliance')),
+        (l) =>
+          l.includes('project') ||
+          (l.includes('pm') && !l.includes('compliance')),
       );
       const tlRa = find((l) => l.includes('lead') || l.includes(' tl'));
 

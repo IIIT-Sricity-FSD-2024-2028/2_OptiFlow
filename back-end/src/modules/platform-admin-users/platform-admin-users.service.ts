@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { CreatePlatformAdminUserDto } from './dto/create-platform-admin-user.dto';
 import { UpdatePlatformAdminUserDto } from './dto/update-platform-admin-user.dto';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -86,11 +90,15 @@ export class PlatformAdminUsersService {
 
   async update(id: string, dto: UpdatePlatformAdminUserDto) {
     const existing = await this.findOne(id);
-    
+
     if (dto.isActive === false && existing.isActive === true) {
-      const activeCount = await this.prisma.platformAdminUser.count({ where: { isActive: true } });
+      const activeCount = await this.prisma.platformAdminUser.count({
+        where: { isActive: true },
+      });
       if (activeCount <= 1) {
-        throw new BadRequestException('Cannot deactivate the last active platform administrator.');
+        throw new BadRequestException(
+          'Cannot deactivate the last active platform administrator.',
+        );
       }
     }
 
@@ -129,7 +137,9 @@ export class PlatformAdminUsersService {
     await this.findOne(id);
     const count = await this.prisma.platformAdminUser.count();
     if (count <= 1) {
-      throw new BadRequestException('Cannot delete the last platform administrator.');
+      throw new BadRequestException(
+        'Cannot delete the last platform administrator.',
+      );
     }
     await this.prisma.platformAdminUser.delete({ where: { id } });
     return { message: `PlatformAdminUser ${id} deleted successfully` };

@@ -112,9 +112,11 @@ export class RolesService {
                 ],
               },
               ...(companyId
-                ? [{
-                    OR: [{ companyId: null }, { companyId }],
-                  }]
+                ? [
+                    {
+                      OR: [{ companyId: null }, { companyId }],
+                    },
+                  ]
                 : []),
             ],
           },

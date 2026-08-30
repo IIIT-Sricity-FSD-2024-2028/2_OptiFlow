@@ -32,16 +32,62 @@ export class AuthService {
     let roleId: string | number = 1;
 
     if (user.roleAssignments && user.roleAssignments.length > 0) {
-      const systemAdminRole = user.roleAssignments.find(ra => ra.role && (ra.role.label.includes('System Admin') || ra.role.label.includes('system_admin')));
-      const ownerRole = user.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Owner') || ra.role.label.includes('CEO') || ra.role.label.includes('CTO') || ra.role.label.includes('COO') || ra.role.label.includes('Superuser')));
-      const branchManagerRole = user.roleAssignments.find(ra => ra.role && ra.role.label.toLowerCase().includes('branch manager'));
-      const hrRole = user.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Governance') || ra.role.label.includes('HR')));
-      const processRole = user.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Process Admin') || ra.role.label.includes('Process')));
-      const complianceRole = user.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Compliance')));
-      const pmRole = user.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Project Manager') || ra.role.label.includes('PM')));
-      const tlRole = user.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Team Lead') || ra.role.label.includes('TL')));
+      const systemAdminRole = user.roleAssignments.find(
+        (ra) =>
+          ra.role &&
+          (ra.role.label.includes('System Admin') ||
+            ra.role.label.includes('system_admin')),
+      );
+      const ownerRole = user.roleAssignments.find(
+        (ra) =>
+          ra.role &&
+          (ra.role.label.includes('Owner') ||
+            ra.role.label.includes('CEO') ||
+            ra.role.label.includes('CTO') ||
+            ra.role.label.includes('COO') ||
+            ra.role.label.includes('Superuser')),
+      );
+      const branchManagerRole = user.roleAssignments.find(
+        (ra) =>
+          ra.role && ra.role.label.toLowerCase().includes('branch manager'),
+      );
+      const hrRole = user.roleAssignments.find(
+        (ra) =>
+          ra.role &&
+          (ra.role.label.includes('Governance') ||
+            ra.role.label.includes('HR')),
+      );
+      const processRole = user.roleAssignments.find(
+        (ra) =>
+          ra.role &&
+          (ra.role.label.includes('Process Admin') ||
+            ra.role.label.includes('Process')),
+      );
+      const complianceRole = user.roleAssignments.find(
+        (ra) => ra.role && ra.role.label.includes('Compliance'),
+      );
+      const pmRole = user.roleAssignments.find(
+        (ra) =>
+          ra.role &&
+          (ra.role.label.includes('Project Manager') ||
+            ra.role.label.includes('PM')),
+      );
+      const tlRole = user.roleAssignments.find(
+        (ra) =>
+          ra.role &&
+          (ra.role.label.includes('Team Lead') || ra.role.label.includes('TL')),
+      );
 
-      const matchedAssignment = systemAdminRole || ownerRole || branchManagerRole || hrRole || processRole || complianceRole || pmRole || tlRole || user.roleAssignments[0];
+      const matchedAssignment =
+        systemAdminRole ||
+        ownerRole ||
+        branchManagerRole ||
+        hrRole ||
+        processRole ||
+        complianceRole ||
+        pmRole ||
+        tlRole ||
+        user.roleAssignments[0];
       if (matchedAssignment && matchedAssignment.role) {
         roleLabel = matchedAssignment.role.label;
         roleId = matchedAssignment.roleId || matchedAssignment.role.id;
@@ -54,7 +100,8 @@ export class AuthService {
 
     if (user.roleAssignments && user.roleAssignments.length > 0) {
       const bmAssignment = user.roleAssignments.find(
-        ra => ra.role && ra.role.label.toLowerCase().includes('branch manager'),
+        (ra) =>
+          ra.role && ra.role.label.toLowerCase().includes('branch manager'),
       );
       if (bmAssignment) {
         scopeType = bmAssignment.scopeType;
@@ -78,29 +125,35 @@ export class AuthService {
     if (rLower.includes('system admin') || rLower.includes('system_admin')) {
       targetRoute = 'admin-console/admin-dashboard.html';
       roleSlug = 'system_admin';
-    } else if (rLower.includes('owner') || rLower.includes('ceo') || rLower.includes('cto') || rLower.includes('coo') || rLower.includes('superuser')) {
-      targetRoute = 'admin/executive/executive_dashboard.html';                 // Company Owner -> admin/executive/executive_dashboard.html
+    } else if (
+      rLower.includes('owner') ||
+      rLower.includes('ceo') ||
+      rLower.includes('cto') ||
+      rLower.includes('coo') ||
+      rLower.includes('superuser')
+    ) {
+      targetRoute = 'admin/executive/executive_dashboard.html'; // Company Owner -> admin/executive/executive_dashboard.html
       roleSlug = 'superuser';
     } else if (rLower.includes('branch manager')) {
       targetRoute = 'admin/executive/executive_dashboard.html';
       roleSlug = 'branch_manager';
     } else if (rLower.includes('governance') || rLower.includes('hr')) {
-      targetRoute = 'admin/pm/hr-dashboard.html';               // Access Governance -> admin/pm/hr-dashboard.html
+      targetRoute = 'admin/pm/hr-dashboard.html'; // Access Governance -> admin/pm/hr-dashboard.html
       roleSlug = 'hr_manager';
     } else if (rLower.includes('process')) {
-      targetRoute = 'superuser/dashboard.html';                 // Process Admin -> superuser/dashboard.html
+      targetRoute = 'superuser/dashboard.html'; // Process Admin -> superuser/dashboard.html
       roleSlug = 'project_manager';
     } else if (rLower.includes('compliance')) {
       targetRoute = 'modules/compliance.html'; // Compliance Officer -> modules/compliance.html
       roleSlug = 'compliance_officer';
     } else if (rLower.includes('project') || rLower.includes('pm')) {
-      targetRoute = 'admin/pm/pm-dashboard.html';               // Project Manager -> admin/pm/pm-dashboard.html
+      targetRoute = 'admin/pm/pm-dashboard.html'; // Project Manager -> admin/pm/pm-dashboard.html
       roleSlug = 'project_manager';
     } else if (rLower.includes('lead') || rLower.includes('tl')) {
-      targetRoute = 'enduser/tl-dashboard.html';                // Team Lead -> enduser/tl-dashboard.html
+      targetRoute = 'enduser/tl-dashboard.html'; // Team Lead -> enduser/tl-dashboard.html
       roleSlug = 'team_leader';
     } else {
-      targetRoute = 'admin/pm/tasks.html';                      // Team Member -> admin/pm/tasks.html
+      targetRoute = 'admin/pm/tasks.html'; // Team Member -> admin/pm/tasks.html
       roleSlug = 'team_member';
     }
 
@@ -126,8 +179,9 @@ export class AuthService {
     };
   }
 
-
-  async registerCompany(dto: import('./dto/register-company.dto').RegisterCompanyDto) {
+  async registerCompany(
+    dto: import('./dto/register-company.dto').RegisterCompanyDto,
+  ) {
     const jwt = require('jsonwebtoken');
     const { RoleTemplateOrigin, ScopeType } = require('@prisma/client');
     const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -158,13 +212,19 @@ export class AuthService {
           planId: dto.planId,
           billingCycle: dto.billingCycle,
           status: 'Active',
-          currentPeriodEnd: new Date(Date.now() + (dto.billingCycle === 'YEARLY' ? 365 : 30) * 24 * 60 * 60 * 1000),
+          currentPeriodEnd: new Date(
+            Date.now() +
+              (dto.billingCycle === 'YEARLY' ? 365 : 30) * 24 * 60 * 60 * 1000,
+          ),
         },
       });
 
       // 3. Ensure System Admin RoleTemplate exists at platform level
       let platformRoleTemplates = await tx.roleTemplate.findMany({
-        where: { origin: RoleTemplateOrigin.platform_predefined, companyId: null },
+        where: {
+          origin: RoleTemplateOrigin.platform_predefined,
+          companyId: null,
+        },
       });
 
       const hasSystemAdminTemplate = platformRoleTemplates.some(
@@ -257,7 +317,7 @@ export class AuthService {
         role: result.sysAdminRole ? result.sysAdminRole.label : 'System Admin',
       },
       process.env.JWT_SECRET || 'fallback_secret',
-      { expiresIn: '24h' }
+      { expiresIn: '24h' },
     );
 
     return {

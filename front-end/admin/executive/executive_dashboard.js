@@ -29,8 +29,8 @@ async function loadMetrics(branchId = '') {
 
   try {
     const url = branchId
-      ? `http://localhost:3000/executive/metrics?branchId=${branchId}`
-      : 'http://localhost:3000/executive/metrics';
+      ? `http://localhost:5500/executive/metrics?branchId=${branchId}`
+      : 'http://localhost:5500/executive/metrics';
     const res = await fetch(url, { headers });
     if (!res.ok) throw new Error('Failed to fetch executive metrics');
     const { data } = await res.json();

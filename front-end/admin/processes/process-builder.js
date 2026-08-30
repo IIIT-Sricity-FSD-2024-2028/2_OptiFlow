@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadTemplates() {
         try {
-            const response = await fetch('http://localhost:3000/processes/templates', { headers });
+            const response = await fetch('http://localhost:5500/processes/templates', { headers });
             if (response.status === 403) {
                 showError('403 Forbidden: You do not have Process Admin privileges.');
                 templateList.innerHTML = '<li style="padding: 15px; color: #dc2626;">Access Denied</li>';
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         addStepFormContainer.style.display = 'block';
         
         try {
-            const response = await fetch(`http://localhost:3000/processes/templates/${template.id}/steps`, { headers });
+            const response = await fetch(`http://localhost:5500/processes/templates/${template.id}/steps`, { headers });
             if (!response.ok) throw new Error('Failed to load steps');
             
             const result = await response.json();
@@ -121,7 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadPermissions() {
         try {
             // Usually permissions are global or tenant-scoped
-            const response = await fetch('http://localhost:3000/permissions', { headers });
+            const response = await fetch('http://localhost:5500/permissions', { headers });
             if (!response.ok) return;
             
             const result = await response.json();
@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         try {
-            const response = await fetch(`http://localhost:3000/processes/templates/${currentTemplateId}/steps`, {
+            const response = await fetch(`http://localhost:5500/processes/templates/${currentTemplateId}/steps`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(payload)

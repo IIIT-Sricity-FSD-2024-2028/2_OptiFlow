@@ -1,9 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { RegisterCompanyDto } from './dto/register-company.dto';
-import { RoleTemplateOrigin, ScopeType, SubscriptionStatus } from '@prisma/client';
+import {
+  RoleTemplateOrigin,
+  ScopeType,
+  SubscriptionStatus,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -16,7 +24,9 @@ export class CompaniesService {
       where: { email: dto.ownerEmail },
     });
     if (existingUser) {
-      throw new BadRequestException(`User with email '${dto.ownerEmail}' already exists.`);
+      throw new BadRequestException(
+        `User with email '${dto.ownerEmail}' already exists.`,
+      );
     }
 
     const passwordHash = await bcrypt.hash(dto.ownerPassword, 10);
@@ -65,7 +75,10 @@ export class CompaniesService {
 
     if (predefinedTemplates.length === 0) {
       const defaultTpl = await this.prisma.roleTemplate.create({
-        data: { origin: RoleTemplateOrigin.platform_predefined, label: 'CEO / Superuser' },
+        data: {
+          origin: RoleTemplateOrigin.platform_predefined,
+          label: 'CEO / Superuser',
+        },
       });
       predefinedTemplates = [defaultTpl];
     }
@@ -127,7 +140,7 @@ export class CompaniesService {
             companyId: company.id,
             name: pRule.name,
             description: pRule.description,
-            severity: pRule.severity || "High",
+            severity: pRule.severity || 'High',
             sourceTemplateId: pRule.id,
             isActive: true,
           },
@@ -147,7 +160,10 @@ export class CompaniesService {
 
     // 8. Create Default Branch & Team
     const branch = await this.prisma.branch.create({
-      data: { companyId: company.id, name: `${dto.companyLegalName} Headquarters` },
+      data: {
+        companyId: company.id,
+        name: `${dto.companyLegalName} Headquarters`,
+      },
     });
     await this.prisma.team.create({
       data: { branchId: branch.id, name: 'Core Team' },
@@ -168,9 +184,24 @@ export class CompaniesService {
 
       await this.prisma.processTemplateStep.createMany({
         data: [
-          { templateId: onboardingTemplate.id, stepOrder: 1, name: 'Submit Personal Info & Equipment Request', stepType: 'Input_Required' },
-          { templateId: onboardingTemplate.id, stepOrder: 2, name: 'HR Manager Verification & Approval', stepType: 'Approval' },
-          { templateId: onboardingTemplate.id, stepOrder: 3, name: 'Automated System Access Provisioning', stepType: 'Automated_Task' },
+          {
+            templateId: onboardingTemplate.id,
+            stepOrder: 1,
+            name: 'Submit Personal Info & Equipment Request',
+            stepType: 'Input_Required',
+          },
+          {
+            templateId: onboardingTemplate.id,
+            stepOrder: 2,
+            name: 'HR Manager Verification & Approval',
+            stepType: 'Approval',
+          },
+          {
+            templateId: onboardingTemplate.id,
+            stepOrder: 3,
+            name: 'Automated System Access Provisioning',
+            stepType: 'Automated_Task',
+          },
         ],
       });
 
@@ -187,38 +218,74 @@ export class CompaniesService {
 
       await this.prisma.processTemplateStep.createMany({
         data: [
-          { templateId: vendorTemplate.id, stepOrder: 1, name: 'Vendor Security Questionnaire Intake', stepType: 'Input_Required' },
-          { templateId: vendorTemplate.id, stepOrder: 2, name: 'Compliance Officer Risk Sign-off', stepType: 'Approval' },
+          {
+            templateId: vendorTemplate.id,
+            stepOrder: 1,
+            name: 'Vendor Security Questionnaire Intake',
+            stepType: 'Input_Required',
+          },
+          {
+            templateId: vendorTemplate.id,
+            stepOrder: 2,
+            name: 'Compliance Officer Risk Sign-off',
+            stepType: 'Approval',
+          },
         ],
       });
 
-      if (plan && (plan.name.includes('Enterprise') || plan.name.includes('Growth') || plan.name.includes('Pro'))) {
-        const enterpriseSdlcTemplate = await this.prisma.processTemplate.create({
-          data: {
-            companyId: company.id,
-            name: `${dto.companyLegalName} Enterprise Software Release & Security Gate`,
-            category: 'Engineering & DevOps',
-            version: 1,
-            isActive: true,
-            createdById: ownerUser.id,
+      if (
+        plan &&
+        (plan.name.includes('Enterprise') ||
+          plan.name.includes('Growth') ||
+          plan.name.includes('Pro'))
+      ) {
+        const enterpriseSdlcTemplate = await this.prisma.processTemplate.create(
+          {
+            data: {
+              companyId: company.id,
+              name: `${dto.companyLegalName} Enterprise Software Release & Security Gate`,
+              category: 'Engineering & DevOps',
+              version: 1,
+              isActive: true,
+              createdById: ownerUser.id,
+            },
           },
-        });
+        );
 
         await this.prisma.processTemplateStep.createMany({
           data: [
-            { templateId: enterpriseSdlcTemplate.id, stepOrder: 1, name: 'Code Audit & Vulnerability Scan', stepType: 'Input_Required' },
-            { templateId: enterpriseSdlcTemplate.id, stepOrder: 2, name: 'Security Lead Release Approval', stepType: 'Approval' },
-            { templateId: enterpriseSdlcTemplate.id, stepOrder: 3, name: 'Automated Production Deployment', stepType: 'Automated_Task' },
+            {
+              templateId: enterpriseSdlcTemplate.id,
+              stepOrder: 1,
+              name: 'Code Audit & Vulnerability Scan',
+              stepType: 'Input_Required',
+            },
+            {
+              templateId: enterpriseSdlcTemplate.id,
+              stepOrder: 2,
+              name: 'Security Lead Release Approval',
+              stepType: 'Approval',
+            },
+            {
+              templateId: enterpriseSdlcTemplate.id,
+              stepOrder: 3,
+              name: 'Automated Production Deployment',
+              stepType: 'Automated_Task',
+            },
           ],
         });
       }
     } catch (tplErr) {
-      console.error('Error seeding process templates during registration:', tplErr);
+      console.error(
+        'Error seeding process templates during registration:',
+        tplErr,
+      );
     }
 
     return {
       success: true,
-      message: 'Company successfully registered and platform defaults initialized.',
+      message:
+        'Company successfully registered and platform defaults initialized.',
       company: {
         id: company.id,
         legalName: company.legalName,
@@ -239,7 +306,12 @@ export class CompaniesService {
         subscriptions: { include: { plan: true } },
         branches: true,
         _count: {
-          select: { users: true, branches: true, tasks: true, processTemplates: true },
+          select: {
+            users: true,
+            branches: true,
+            tasks: true,
+            processTemplates: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
