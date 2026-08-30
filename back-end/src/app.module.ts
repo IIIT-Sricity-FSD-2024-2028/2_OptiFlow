@@ -4,6 +4,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './core/database/database.module';
 import { PrismaModule } from './core/prisma/prisma.module';
+import { LoggingModule } from './core/logging/logging.module';
+import { LoggerMiddleware } from './core/middleware/logger.middleware';
 import { TenantMiddleware } from './core/middleware/tenant.middleware';
 
 // Platform
@@ -62,6 +64,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
+    LoggingModule,
     PrismaModule,
     DatabaseModule,
 
@@ -113,6 +116,6 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantMiddleware).forRoutes('*');
+    consumer.apply(LoggerMiddleware, TenantMiddleware).forRoutes('*');
   }
 }

@@ -4,13 +4,17 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { RolesGuard } from './core/guards/roles.guard';
 import { TransformInterceptor } from './core/interceptors/transform.interceptor';
+import { GlobalExceptionFilter } from './core/filters/global-exception.filter';
+import { LoggingService } from './core/logging/logging.service';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as path from 'path';
 import * as fs from 'fs'; // Added for file system operations
 
 async function bootstrap() {
   // 1. Enable CORS so your vanilla JS frontend can actually talk to this server
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { cors: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    cors: true,
+  });
 
   // Serve uploaded evidence files at /uploads/...
   const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -35,7 +39,11 @@ async function bootstrap() {
   // 4. Apply Global Interceptor for API Standardization
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // 5. Setup Swagger API Documentation (Fulfills Rubric #7)
+  // 5. Apply Global Exception Filter for Error Logging and Standardization
+  const loggingService = app.get(LoggingService);
+  app.useGlobalFilters(new GlobalExceptionFilter(loggingService));
+
+  // 6. Setup Swagger API Documentation (Fulfills Rubric #7)
   const config = new DocumentBuilder()
     .setTitle('OfficeSync API')
     .setDescription('Backend API for the OfficeSync HR and PM Dashboard')
