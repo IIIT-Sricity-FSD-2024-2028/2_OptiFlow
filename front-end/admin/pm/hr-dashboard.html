@@ -396,6 +396,37 @@
     </div>
 
     <!-- Scripts -->
+    <script>
+      (function() {
+        let currentUser = null;
+        try {
+          const currentUserRaw = sessionStorage.getItem('currentUser');
+          currentUser = currentUserRaw ? JSON.parse(currentUserRaw) : null;
+        } catch (e) {
+          currentUser = null;
+        }
+        const isHrUser = !!(currentUser && (
+          currentUser.role === 'hr_manager' ||
+          currentUser.roleLabel === 'HR Manager' ||
+          currentUser.roleName === 'HR_Manager' ||
+          currentUser.assignedRole === 'HR Manager' ||
+          String(currentUser.role || '').toLowerCase() === 'hr_manager' ||
+          String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('hr') ||
+          String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('governance')
+        ));
+        if (!currentUser) {
+          window.location.replace('../../login.html');
+          return;
+        }
+        if (!isHrUser) {
+          window.location.replace('../../login.html');
+          return;
+        }
+        if (!window.location.pathname.toLowerCase().endsWith('/admin/pm/hr-dashboard.html')) {
+          window.location.replace('hr-dashboard.html');
+        }
+      })();
+    </script>
     <script src="../../js/data/db.js"></script>
     <script src="../../js/data/pm-data-store.js"></script>
     <script src="../../js/utils/auth.js"></script>
@@ -426,13 +457,28 @@
     }
 
     const ROLE_DISPLAY = {
-      superuser: 'Company Owner',
+      superuser: 'Superuser',
+      company_owner: 'Company Owner',
+      process_admin: 'Superuser',
       project_manager: 'Project Manager',
       team_leader: 'Team Leader',
       team_member: 'Team Member',
       hr_manager: 'HR Manager',
       compliance_officer: 'Compliance Officer',
     };
+
+    function normalizeRoleKey(value) {
+      return String(value || '').trim().toLowerCase().replace(/[\s\-]+/g, '_').replace(/[^a-z0-9_]/g, '') || 'team_member';
+    }
+
+    function getRoleLabel(value, fallback = 'Team Member') {
+      const raw = String(value || '').trim();
+      if (!raw) return fallback;
+      const normalized = normalizeRoleKey(raw);
+      if (ROLE_DISPLAY[normalized]) return ROLE_DISPLAY[normalized];
+      if (normalized === 'process_admin' || normalized === 'superuser') return 'Superuser';
+      return raw.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+    }
 
     // ── Tab switching ───────────────────────────────────────────────
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -471,7 +517,7 @@
 
       data.forEach(emp => {
         const slug = emp.roleName || emp.roleSlug || 'team_member';
-        const roleLabel = ROLE_DISPLAY[slug] || emp.roleLabel || slug;
+        const roleLabel = getRoleLabel(emp.roleLabel || emp.roleName || emp.roleSlug || slug, 'Team Member');
         const teamDisplay = emp.teamName || emp.departmentName || '—';
         const initials = (emp.fullName || emp.name || '')
           .split(' ').map(n => (n[0] || '')).join('').toUpperCase().substring(0, 2) || '??';
@@ -611,6 +657,15 @@
 
     // ── Roles for dropdowns ─────────────────────────────────────────
     let _allRoles = [];
+    function normalizeRoleOptions(data) {
+      if (Array.isArray(data)) return data;
+      if (!data || typeof data !== 'object') return [];
+      if (Array.isArray(data.data)) return data.data;
+      if (Array.isArray(data.roles)) return data.roles;
+      if (Array.isArray(data.items)) return data.items;
+      if (Array.isArray(data.results)) return data.results;
+      return Object.values(data);
+    }
     async function loadRoles() {
       const sessionRaw = sessionStorage.getItem('currentUser');
       if (!sessionRaw) return;
@@ -625,15 +680,17 @@
         const res = await fetch('http://localhost:3000/governance/roles', { headers });
         if (!res.ok) return;
         const data = await res.json();
-        _allRoles = data.data || data;
+        _allRoles = normalizeRoleOptions(data);
 
         const invSel = document.getElementById('inviteRoleSelect');
         const baseSel = document.getElementById('baseRoleSelect');
         invSel.innerHTML = '';
         baseSel.innerHTML = '<option value="">Select a base role…</option>';
         _allRoles.forEach(r => {
-          invSel.innerHTML += `<option value="${r.id}">${r.label}</option>`;
-          baseSel.innerHTML += `<option value="${r.id}">${r.label}</option>`;
+          const roleLabel = r.label || r.name || r.roleName || r.key || 'Custom Role';
+          const roleValue = r.id || r.roleId || roleLabel;
+          invSel.innerHTML += `<option value="${roleValue}">${roleLabel}</option>`;
+          baseSel.innerHTML += `<option value="${roleValue}">${roleLabel}</option>`;
         });
       } catch (e) { console.warn('[HR] Roles load failed', e); }
     }

@@ -106,7 +106,7 @@
       approve_evidence: false, manage_compliance_rules: false,
       change_own_password: true, manage_team_members: true,
     },
-    "Process Admin": {
+    "Superuser": {
       view_assigned_tasks: true,  assign_subtasks: false,
       review_member_submissions: false, create_subtasks: false,
       create_top_level_tasks: false, delete_tasks: false,
@@ -156,33 +156,102 @@
     { key: "Team Member",        color: "#64748b", dotColor: "#94a3b8" },
     { key: "Team Leader",        color: "#2563eb", dotColor: "#2563eb" },
     { key: "Project Manager",    color: "#7c3aed", dotColor: "#7c3aed" },
-    { key: "Process Admin",      color: "#d97706", dotColor: "#d97706" },
+    { key: "Superuser",          color: "#d97706", dotColor: "#d97706" },
     { key: "Compliance Officer", color: "#e11d48", dotColor: "#e11d48" },
     { key: "HR Manager",         color: "#16a34a", dotColor: "#16a34a" },
     { key: "HR Ops",             color: "#16a34a", dotColor: "#16a34a" },
   ];
 
   const DEPT_HIERARCHY = {
-    Operations: ["Project Manager", "Process Admin", "Team Leader", "Team Member"],
+    Operations: ["Project Manager", "Superuser", "Team Leader", "Team Member"],
     Finance:    ["Project Manager", "Team Leader", "Team Member"],
     IT:         ["Project Manager", "Team Leader", "Team Member"],
     HR:         ["HR Manager", "HR Ops"],
     Compliance: ["Compliance Officer", "Team Member"],
   };
 
+  function normalizeRoleKey(value) {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\-]+/g, "_")
+      .replace(/[^a-z0-9_]/g, "") || "team_member";
+    return normalized === "process_admin" ? "superuser" : normalized;
+  }
+
+  function getRoleListFromServer(serverRoles) {
+    if (Array.isArray(serverRoles)) return serverRoles;
+    if (!serverRoles || typeof serverRoles !== "object") return [];
+    if (Array.isArray(serverRoles.data)) return serverRoles.data;
+    if (Array.isArray(serverRoles.roles)) return serverRoles.roles;
+    return Object.values(serverRoles);
+  }
+
+  function normalizePermissions(role) {
+    const permissions = {};
+    const addPermission = (permission) => {
+      if (!permission) return;
+      const slug = permission.slug || permission.key || permission.id;
+      if (slug) permissions[slug] = true;
+    };
+
+    const addCollection = (collection) => {
+      if (!Array.isArray(collection)) return;
+      collection.forEach((entry) => addPermission(entry.permission || entry));
+    };
+
+    if (role && typeof role.permissions === "object" && !Array.isArray(role.permissions)) {
+      Object.entries(role.permissions).forEach(([key, value]) => {
+        permissions[key] = Boolean(value);
+      });
+    } else {
+      addCollection(role && role.permissions);
+    }
+    addCollection(role && role.roleTemplate && role.roleTemplate.defaultPermissions);
+    addCollection(role && role.roleTemplate && role.roleTemplate.permissions);
+
+    return permissions;
+  }
+
   const RolesStore = {
     async getAllSystemRoles() {
       try {
         const serverRoles = await window.Helpers.api.request('/roles', 'GET');
-        return ROLE_META.map(meta => {
-          const sRole = serverRoles.find(r => r.key === meta.key);
-          return {
-            key: meta.key,
-            color: meta.color,
-            dotColor: meta.dotColor,
-            permissions: sRole ? sRole.permissions : { ...(DEFAULT_ROLE_PERMISSIONS[meta.key] || {}) },
+        const roleList = getRoleListFromServer(serverRoles);
+        const merged = [...ROLE_META.map(meta => ({
+          key: meta.key,
+          color: meta.color,
+          dotColor: meta.dotColor,
+          permissions: { ...(DEFAULT_ROLE_PERMISSIONS[meta.key] || {}) },
+        }))];
+
+        roleList.forEach((role) => {
+          const rawKey = role.key || role.name || role.label || role.slug || role.roleName || "";
+          const key = normalizeRoleKey(rawKey) === "superuser"
+            ? "Superuser"
+            : String(rawKey || "").trim();
+          if (!key) return;
+          const normalized = normalizeRoleKey(key);
+          const existingIndex = merged.findIndex(item => normalizeRoleKey(item.key) === normalized);
+          const permissions = normalizePermissions(role);
+          const entry = {
+            id: role.id,
+            key,
+            color: role.color || merged.find(item => normalizeRoleKey(item.key) === normalized)?.color || "#64748b",
+            dotColor: role.dotColor || merged.find(item => normalizeRoleKey(item.key) === normalized)?.dotColor || "#94a3b8",
+            permissions: Object.keys(permissions).length
+              ? permissions
+              : { ...(DEFAULT_ROLE_PERMISSIONS[key] || {}) },
           };
+
+          if (existingIndex >= 0) {
+            merged[existingIndex] = entry;
+          } else {
+            merged.push(entry);
+          }
         });
+
+        return merged;
       } catch {
         return ROLE_META.map(meta => ({
           key: meta.key,
@@ -195,17 +264,32 @@
 
     async getSystemRole(roleKey) {
       try {
+        const roles = await this.getAllSystemRoles();
+        const normalizedKey = normalizeRoleKey(roleKey);
+        const match = roles.find((item) => normalizeRoleKey(item.key) === normalizedKey);
+        if (match) {
+          return match;
+        }
+
         const slug = String(roleKey).toLowerCase().replace(/ /g, '_');
         const sRole = await window.Helpers.api.request(`/roles/${encodeURIComponent(slug)}`, 'GET');
-        const meta = ROLE_META.find(m => m.key === roleKey) || { color:"#64748b", dotColor:"#94a3b8" };
+        const meta = ROLE_META.find(m => normalizeRoleKey(m.key) === normalizedKey) || { color:"#64748b", dotColor:"#94a3b8" };
+        const permissions = normalizePermissions(sRole);
         return {
           key: roleKey,
           color: meta.color,
           dotColor: meta.dotColor,
-          permissions: sRole.permissions || { ...(DEFAULT_ROLE_PERMISSIONS[roleKey] || {}) },
+          permissions: Object.keys(permissions).length
+            ? permissions
+            : { ...(DEFAULT_ROLE_PERMISSIONS[roleKey] || {}) },
         };
       } catch {
-        const meta = ROLE_META.find(m => m.key === roleKey) || { color:"#64748b", dotColor:"#94a3b8" };
+        const roles = await this.getAllSystemRoles();
+        const normalizedKey = normalizeRoleKey(roleKey);
+        const match = roles.find((item) => normalizeRoleKey(item.key) === normalizedKey);
+        if (match) return match;
+
+        const meta = ROLE_META.find(m => normalizeRoleKey(m.key) === normalizedKey) || { color:"#64748b", dotColor:"#94a3b8" };
         return {
           key: roleKey,
           color: meta.color,
@@ -217,11 +301,26 @@
 
     async saveSystemRole(roleKey, permissions) {
       try {
-        const slug = String(roleKey).toLowerCase().replace(/ /g, '_');
-        await window.Helpers.api.request(`/roles/${encodeURIComponent(slug)}`, 'PATCH', { permissions });
+        const roles = await this.getAllSystemRoles();
+        const role = roles.find((item) => normalizeRoleKey(item.key) === normalizeRoleKey(roleKey));
+        const identifier = role && role.id ? role.id : roleKey;
+        await window.Helpers.api.request(`/roles/${encodeURIComponent(identifier)}`, 'PATCH', { permissions });
+        return true;
       } catch (e) {
-        console.warn("RolesStore: API system role write failed.", e);
+        console.error("RolesStore: API system role write failed.", e);
+        throw e;
       }
+    },
+
+    async createSystemRole(label, permissions = {}) {
+      if (!String(label || "").trim()) {
+        throw new Error("Role name is required");
+      }
+      return window.Helpers.api.request("/roles", "POST", {
+        role_name: String(label).trim(),
+        is_system: false,
+        permissions,
+      });
     },
 
     getPermissionGroups() {

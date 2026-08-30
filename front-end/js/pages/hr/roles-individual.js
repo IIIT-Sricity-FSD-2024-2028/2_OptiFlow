@@ -63,14 +63,14 @@ function countOverrides(empPerms, base) {
 
 // ─── Left panel: employee list ────────────────────────────
 async function renderEmpList() {
-  const dept = document.getElementById("deptFilterInd").value;
+  const team = document.getElementById("deptFilterInd").value;
   const search = document
     .getElementById("empSearch")
     .value.toLowerCase()
     .trim();
   let employees = await HRStore.getAll();
 
-  if (dept) employees = employees.filter((e) => e.department === dept);
+  if (team) employees = employees.filter((e) => (e.team || e.department || "") === team);
   if (search)
     employees = employees.filter(
       (e) =>
@@ -107,7 +107,7 @@ async function renderEmpList() {
       <div class="ind-emp-avatar" style="background:${emp.color};">${emp.initials}</div>
       <div class="ind-emp-info">
         <div class="ind-emp-name">${emp.name}</div>
-        <div class="ind-emp-role">${emp.role} · ${emp.department}</div>
+        <div class="ind-emp-role">${emp.role} · ${emp.team || emp.department || "—"}</div>
       </div>
       <div class="ind-override-dot" title="${overrideCount} custom permission${overrideCount !== 1 ? "s" : ""}"></div>
     `;
@@ -422,12 +422,12 @@ async function resetToDefault() {
 
 async function populateDeptFilter() {
   const sel = document.getElementById("deptFilterInd");
-  const deps = await HRStore.getDepartments();
-  sel.innerHTML = '<option value="">All Departments</option>';
-  deps.forEach((d) => {
+  const teams = await HRStore.getTeams();
+  sel.innerHTML = '<option value="">All Teams</option>';
+  teams.forEach((team) => {
     const opt = document.createElement("option");
-    opt.value = d;
-    opt.textContent = d;
+    opt.value = team;
+    opt.textContent = team;
     sel.appendChild(opt);
   });
 }

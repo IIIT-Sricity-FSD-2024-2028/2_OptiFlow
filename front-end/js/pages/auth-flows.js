@@ -162,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
             targetRedirect = "admin/executive/executive_dashboard.html";
           } else if (roleLower.includes("governance") || roleLower.includes("hr")) {
             roleSlug = "hr_manager";
-            targetRedirect = "admin/hr/dashboard.html";
+            targetRedirect = "admin/pm/hr-dashboard.html";
           } else if (roleLower.includes("process")) {
             roleSlug = "project_manager";
             targetRedirect = "superuser/dashboard.html";

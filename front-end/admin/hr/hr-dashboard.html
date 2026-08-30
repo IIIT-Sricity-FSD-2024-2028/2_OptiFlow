@@ -334,33 +334,34 @@
         </div>
       </div>
     </div>
+<script>
+  (function() {
+    const currentUserRaw = sessionStorage.getItem('currentUser');
+    const currentUser = currentUserRaw ? JSON.parse(currentUserRaw) : null;
+    const isHrUser = !!(currentUser && (
+      currentUser.role === 'hr_manager' ||
+      currentUser.roleLabel === 'HR Manager' ||
+      currentUser.roleName === 'HR_Manager' ||
+      currentUser.assignedRole === 'HR Manager' ||
+      String(currentUser.role || '').toLowerCase() === 'hr_manager' ||
+      String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('hr') ||
+      String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('governance')
+    ));
+    if (isHrUser) {
+      window.location.replace('../pm/hr-dashboard.html');
+      return;
+    }
+    if (!currentUser) {
+      window.location.replace('../../login.html');
+    }
+  })();
+</script>
+<script src="../../js/utils/helpers.js"></script>
+<script src="../../js/data/db.js"></script>
+<script src="../../js/data/hr-data-store.js"></script>
+<script src="../../js/utils/auth.js"></script>
+<script src="dashboard.js"></script>
     <script>
-      (function() {
-        const currentUserRaw = sessionStorage.getItem('currentUser');
-        const currentUser = currentUserRaw ? JSON.parse(currentUserRaw) : null;
-        const isHrUser = !!(currentUser && (
-          currentUser.role === 'hr_manager' ||
-          currentUser.roleLabel === 'HR Manager' ||
-          currentUser.roleName === 'HR_Manager' ||
-          currentUser.assignedRole === 'HR Manager' ||
-          String(currentUser.role || '').toLowerCase() === 'hr_manager' ||
-          String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('hr') ||
-          String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('governance')
-        ));
-        if (isHrUser) {
-          window.location.replace('../pm/hr-dashboard.html');
-          return;
-        }
-        if (!currentUser) {
-          window.location.replace('../../login.html');
-        }
-      })();
-    </script>
-    <script src="../../js/utils/helpers.js"></script>
-    <script src="../../js/data/db.js"></script>
-    <script src="../../js/data/hr-data-store.js"></script>
-    <script src="../../js/utils/auth.js"></script>
-    <script src="dashboard.js"></script>    <script>
       // Populate sidebar with real session user
       (function() {
         const raw = sessionStorage.getItem('currentUser');

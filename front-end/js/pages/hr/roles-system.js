@@ -7,6 +7,12 @@ let activeRoleKey = null; // currently selected role
 let currentPerms = {}; // live permission state in the editor
 let originalPerms = {}; // snapshot on role select (for discard)
 let isDirty = false;
+
+function roleMatches(employee, roleKey) {
+  const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const canonical = (value) => normalize(value) === "process_admin" ? "superuser" : normalize(value);
+  return canonical(employee.roleSlug || employee.role) === canonical(roleKey);
+}
 // ─────────────────────────────────────────
 // SECURITY GUARD: Prevent Back-Button Access
 // ─────────────────────────────────────────
@@ -30,6 +36,20 @@ function showToast(msg) {
   document.getElementById("toastMsg").textContent = msg;
   el.classList.add("show");
   setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+async function createRole() {
+  const label = window.prompt("Enter a name for the new actor role:");
+  if (label === null) return;
+
+  try {
+    const role = await RolesStore.createSystemRole(label, {});
+    showToast(`"${role.label || label.trim()}" created.`);
+    await renderRoleList(activeRoleKey);
+    if (role.label) await selectRole(role.label);
+  } catch (error) {
+    showToast(error.message || "Unable to create the actor role.");
+  }
 }
 
 function setDirty(val) {
@@ -61,7 +81,7 @@ async function renderRoleList(activeKey) {
   container.innerHTML = "";
 
   allRoles.forEach((role) => {
-    const empCount = allEmployees.filter((e) => e.role === role.key).length;
+    const empCount = allEmployees.filter((e) => roleMatches(e, role.key)).length;
     const item = document.createElement("div");
     item.className = `role-list-item${role.key === activeKey ? " active" : ""}`;
     item.dataset.roleKey = role.key;
@@ -182,7 +202,7 @@ function onPermChange(e) {
 // ─── Right panel: employees ───────────────────────────────
 async function renderEmployeesPanel(roleKey) {
   const hrUsers = await HRStore.getAll();
-  const employees = hrUsers.filter((e) => e.role === roleKey);
+  const employees = hrUsers.filter((e) => roleMatches(e, roleKey));
   const container = document.getElementById("empListContainer");
   const countEl = document.getElementById("empCount");
   countEl.textContent = employees.length;
@@ -220,7 +240,7 @@ async function selectRole(roleKey) {
   currentPerms = { ...roleConf.permissions };
 
   const hrUsers = await HRStore.getAll();
-  const empCount = hrUsers.filter((e) => e.role === roleKey).length;
+  const empCount = hrUsers.filter((e) => roleMatches(e, roleKey)).length;
   document.getElementById("centerTitle").textContent = roleKey;
   document.getElementById("centerBadge").textContent = `${empCount} employees`;
 
@@ -322,4 +342,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   document
     .getElementById("discardBtn")
     .addEventListener("click", discardChanges);
+  document.getElementById("createRoleBtn")?.addEventListener("click", createRole);
 });

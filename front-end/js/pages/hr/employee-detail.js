@@ -207,14 +207,13 @@ async function renderPersonalDetails() {
 async function renderRolePermissions() {
   const groups = RolesStore.getPermissionGroups();
 
-  // BULLETPROOF ID EXTRACTION: Force it to be a pure integer (e.g., 1 instead of "EMP-001")
-  const numericId = emp.rawId || parseInt(String(emp.id).replace("EMP-", ""), 10);
+  const numericId = emp.rawId || parseInt(String(emp.id).replace(/\D/g, ""), 10) || null;
+  const roleKey = emp.role || emp.roleSlug || "Team Member";
 
-  // Safely fetch permissions
   let effective = {};
   try {
-    if (emp.roleSlug && emp.roleSlug !== "undefined") {
-      effective = await RolesStore.getEmployeePermissions(numericId, emp.roleSlug);
+    if (roleKey && roleKey !== "undefined") {
+      effective = await RolesStore.getEmployeePermissions(numericId, roleKey);
     }
   } catch (e) {
     console.warn("Could not fetch permissions, skipping.");
@@ -673,7 +672,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("pageContent").innerHTML = `
       <div class="ed-loading" style="flex-direction:column;gap:12px;">
         <i class="ri-error-warning-line" style="font-size:40px;color:#ef4444;"></i>
-        <p>No employee ID specified. <a href="dashboard.html" style="color:var(--primary-color);">Go to Dashboard</a></p>
+        <p>No employee ID specified. <a href="../../admin/pm/hr-dashboard.html" style="color:var(--primary-color);">Go to Dashboard</a></p>
       </div>`;
     return;
   }
@@ -683,7 +682,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("pageContent").innerHTML = `
       <div class="ed-loading" style="flex-direction:column;gap:12px;">
         <i class="ri-user-unfollow-line" style="font-size:40px;color:#ef4444;"></i>
-        <p>Employee <strong>${empId}</strong> not found. <a href="dashboard.html" style="color:var(--primary-color);">Go to Dashboard</a></p>
+        <p>Employee <strong>${empId}</strong> not found. <a href="../../admin/pm/hr-dashboard.html" style="color:var(--primary-color);">Go to Dashboard</a></p>
       </div>`;
     return;
   }

@@ -64,7 +64,7 @@ export class RolesService {
       templateId = template.id;
     }
 
-    return this.prisma.role.create({
+    const role = await this.prisma.role.create({
       data: {
         companyId: targetCompanyId,
         roleTemplateId: templateId,
@@ -73,17 +73,61 @@ export class RolesService {
       },
       include: { roleTemplate: true, permissions: true },
     });
+
+    await this.syncPermissions(role.id, dto.permissions, targetCompanyId);
+    return this.findOne(role.id, targetCompanyId);
   }
 
   async update(idOrSlug: string, dto: UpdateRoleDto, companyId?: string) {
     const existing = await this.findOne(idOrSlug, companyId);
-    return this.prisma.role.update({
+    const role = await this.prisma.role.update({
       where: { id: existing.id },
       data: {
         ...(dto.role_name ? { label: dto.role_name } : {}),
         ...(dto.is_system !== undefined ? { isSystem: dto.is_system } : {}),
       },
     });
+    await this.syncPermissions(role.id, dto.permissions, companyId);
+    return this.findOne(role.id, companyId);
+  }
+
+  private async syncPermissions(
+    roleId: string,
+    permissions: Record<string, boolean> | undefined,
+    companyId?: string,
+  ) {
+    if (!permissions) return;
+
+    const enabledKeys = Object.entries(permissions)
+      .filter(([, enabled]) => enabled)
+      .map(([key]) => key);
+    const permissionRows = enabledKeys.length
+      ? await this.prisma.permission.findMany({
+          where: {
+            AND: [
+              {
+                OR: [
+                  { id: { in: enabledKeys } },
+                  { slug: { in: enabledKeys } },
+                ],
+              },
+              ...(companyId
+                ? [{
+                    OR: [{ companyId: null }, { companyId }],
+                  }]
+                : []),
+            ],
+          },
+          select: { id: true },
+        })
+      : [];
+
+    await this.prisma.$transaction([
+      this.prisma.rolePermission.deleteMany({ where: { roleId } }),
+      this.prisma.rolePermission.createMany({
+        data: permissionRows.map(({ id }) => ({ roleId, permissionId: id })),
+      }),
+    ]);
   }
 
   async remove(idOrSlug: string, companyId?: string) {

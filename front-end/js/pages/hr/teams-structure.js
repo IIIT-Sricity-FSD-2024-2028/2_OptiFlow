@@ -28,7 +28,7 @@
 
   // ── Human-readable role labels ─────────────────────────────────────────────
   const ROLE_LABEL = {
-    superuser:          'Company Owner',
+    superuser:          'Superuser',
     hr_manager:         'HR Manager',
     compliance_officer: 'Compliance Officer',
     project_manager:    'Project Manager',

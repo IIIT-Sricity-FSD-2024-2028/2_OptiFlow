@@ -13,7 +13,9 @@
 
   // ── Role display labels ────────────────────────────────────────────────
   const ROLE_DISPLAY = {
-    superuser:          'Company Owner',
+    superuser:          'Superuser',
+    company_owner:      'Company Owner',
+    process_admin:      'Process Admin',
     project_manager:    'Project Manager',
     team_leader:        'Team Leader',
     team_member:        'Team Member',
