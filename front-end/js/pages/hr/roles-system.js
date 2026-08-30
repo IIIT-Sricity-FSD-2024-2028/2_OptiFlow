@@ -38,20 +38,6 @@ function showToast(msg) {
   setTimeout(() => el.classList.remove("show"), 2800);
 }
 
-async function createRole() {
-  const label = window.prompt("Enter a name for the new actor role:");
-  if (label === null) return;
-
-  try {
-    const role = await RolesStore.createSystemRole(label, {});
-    showToast(`"${role.label || label.trim()}" created.`);
-    await renderRoleList(activeRoleKey);
-    if (role.label) await selectRole(role.label);
-  } catch (error) {
-    showToast(error.message || "Unable to create the actor role.");
-  }
-}
-
 function setDirty(val) {
   isDirty = val;
   document.getElementById("savebar").style.display = val ? "flex" : "none";
@@ -93,6 +79,39 @@ async function renderRoleList(activeKey) {
       </div>
       <div class="role-emp-count">${empCount}</div>
     `;
+    if (role.id && role.isSystem === false) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn btn-secondary";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.style.cssText = "font-size:11px;padding:4px 7px;margin-left:8px;";
+      deleteBtn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        if (!window.confirm(`Delete the custom role "${role.key}"?`)) return;
+        try {
+          await RolesStore.deleteSystemRole(role);
+          activeRoleKey = null;
+          document.getElementById("centerTitle").textContent = "—";
+          document.getElementById("centerBadge").textContent = "";
+          document.getElementById("permissionsContainer").innerHTML = `
+            <div class="roles-empty">
+              <i class="ri-shield-keyhole-line"></i>
+              <p>Select a role from the left to manage permissions.</p>
+            </div>`;
+          document.getElementById("empListContainer").innerHTML = `
+            <div class="roles-empty">
+              <i class="ri-group-line"></i>
+              <p>No role selected.</p>
+            </div>`;
+          document.getElementById("empCount").textContent = "0";
+          await renderRoleList(null);
+          showToast(`"${role.key}" deleted.`);
+        } catch (error) {
+          showToast(error.message || "Unable to delete the custom role.");
+        }
+      });
+      item.appendChild(deleteBtn);
+    }
     item.addEventListener("click", async () => {
       if (isDirty) {
         if (!confirm("You have unsaved changes. Discard and switch role?"))
@@ -342,5 +361,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   document
     .getElementById("discardBtn")
     .addEventListener("click", discardChanges);
-  document.getElementById("createRoleBtn")?.addEventListener("click", createRole);
 });

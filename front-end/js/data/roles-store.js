@@ -219,7 +219,9 @@
         const serverRoles = await window.Helpers.api.request('/roles', 'GET');
         const roleList = getRoleListFromServer(serverRoles);
         const merged = [...ROLE_META.map(meta => ({
+          id: null,
           key: meta.key,
+          isSystem: true,
           color: meta.color,
           dotColor: meta.dotColor,
           permissions: { ...(DEFAULT_ROLE_PERMISSIONS[meta.key] || {}) },
@@ -237,6 +239,7 @@
           const entry = {
             id: role.id,
             key,
+            isSystem: role.isSystem !== false,
             color: role.color || merged.find(item => normalizeRoleKey(item.key) === normalized)?.color || "#64748b",
             dotColor: role.dotColor || merged.find(item => normalizeRoleKey(item.key) === normalized)?.dotColor || "#94a3b8",
             permissions: Object.keys(permissions).length
@@ -321,6 +324,12 @@
         is_system: false,
         permissions,
       });
+    },
+
+    async deleteSystemRole(role) {
+      const roleId = typeof role === "object" ? role.id : role;
+      if (!roleId) throw new Error("This system role cannot be deleted.");
+      return window.Helpers.api.request(`/roles/${encodeURIComponent(roleId)}`, "DELETE");
     },
 
     getPermissionGroups() {
