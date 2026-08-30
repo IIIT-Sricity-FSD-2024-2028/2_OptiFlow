@@ -198,7 +198,7 @@ describe('System-Wide File Logging (e2e)', () => {
     expect(res.status).toBe(500);
     const body = res.body as ErrorResponseBody;
     expect(body.statusCode).toBe(500);
-    expect(body.message).toBe('Database connection unexpectedly failed');
+    expect(body.message).toBe('Internal server error');
     expect(body.stack).toBeUndefined(); // Never exposed in HTTP response
 
     await new Promise((r) => setTimeout(r, 100));
