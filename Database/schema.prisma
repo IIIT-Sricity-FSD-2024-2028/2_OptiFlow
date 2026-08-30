@@ -1,0 +1,730 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+// ---------------------------------------------------------------------------
+// 1. PLATFORM LAYER (Billing, Plans, and Super-Admins)
+// These entities sit ABOVE the companies and manage the SaaS product itself.
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id                        String   @id @default(uuid())
+  name                      String
+  maxBranches               Int?     // null = unlimited
+  maxUsers                  Int?
+  maxActiveProcessTemplates Int?
+  maxComplianceRules        Int?
+  auditLogRetentionDays     Int
+  allowsIntegrations        Boolean
+  
+  monthlyPrice              Float?   @default(0.0)
+  annualPrice               Float?   @default(0.0)
+  currency                  String?  @default("USD")
+  
+  priceMonthly              Int      @default(0)
+  priceYearly               Int      @default(0)
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id               String             @id @default(uuid())
+  companyId        String
+  company          Company            @relation(fields: [companyId], references: [id])
+  planId           String
+  plan             Plan               @relation(fields: [planId], references: [id])
+  billingCycle     String
+  status           SubscriptionStatus @default(Active)
+  currentPeriodEnd DateTime
+
+  @@index([companyId])
+  @@index([planId])
+}
+
+enum SubscriptionStatus {
+  Active
+  PastDue
+  Cancelled
+}
+
+model PlatformAdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  supportAccesses PlatformSupportAccess[]
+}
+
+model PlatformSupportAccess {
+  id          String            @id @default(uuid())
+  adminUserId String
+  adminUser   PlatformAdminUser @relation(fields: [adminUserId], references: [id])
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id])
+  reason      String
+  grantedAt   DateTime          @default(now())
+  expiresAt   DateTime
+  actionLog   Json              @default("[]") // Append-only JSON array of admin actions
+
+  @@index([adminUserId])
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// 2. TENANT (Company) — every tenant-owned model below carries companyId
+// ---------------------------------------------------------------------------
+
+model Company {
+  id        String        @id @default(uuid())
+  legalName String
+  status    CompanyStatus @default(Active)
+  createdAt DateTime      @default(now())
+
+  // Platform Relations
+  subscriptions      Subscription[]
+  supportAccesses    PlatformSupportAccess[]
+
+  // Tenant Relations
+  users                User[]
+  roleTemplates        RoleTemplate[]
+  roles                Role[]
+  branches             Branch[]
+  permissions          Permission[]
+  processTemplates     ProcessTemplate[]
+  complianceRules      ComplianceRule[]
+  permissionGrants     PermissionGrant[]
+  tasks                Task[]
+  processInstances     ProcessInstance[]
+  complianceViolations ComplianceViolation[]
+  complianceCategories ComplianceCategory[]
+  escalations          Escalation[]
+  complianceEvidence   ComplianceEvidence[]
+}
+
+enum CompanyStatus {
+  Active
+  Suspended
+  Closed
+}
+
+// ---------------------------------------------------------------------------
+// 3. IDENTITY & ACCESS (Tenant Layer)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(uuid())
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id])
+  fullName      String
+  email         String
+  jobTitle      String?
+  passwordHash  String
+  managerUserId String?
+  manager       User?     @relation("ManagerReports", fields: [managerUserId], references: [id])
+  reports       User[]    @relation("ManagerReports")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deactivatedAt DateTime?
+
+  roleAssignments           RoleAssignment[]      @relation("AssignmentUser")
+  grantedAssignments        RoleAssignment[]      @relation("AssignmentGrantedBy")
+  permissionGrants          PermissionGrant[]     @relation("GrantRecipient")
+  grantedPermissions        PermissionGrant[]     @relation("GrantIssuedBy")
+  comments                  Comment[]
+  attachments               Attachment[]
+  auditLogs                 AuditLog[]            @relation("PerformedBy")
+  createdTasks              Task[]                @relation("TaskCreatedBy")
+  assignedTasks             Task[]                @relation("TaskAssignedTo")
+  reportedViolations        ComplianceViolation[] @relation("ViolationReportedBy")
+  resolvedViolations        ComplianceViolation[] @relation("ViolationResolvedBy")
+  stepsAssigned             ProcessInstanceStep[] @relation("StepAssignedTo")
+  stepsActioned             ProcessInstanceStep[] @relation("StepActionedBy")
+  escalationsReported       Escalation[]          @relation("EscalationReportedBy")
+  escalationsTargeted       Escalation[]          @relation("EscalationTargetManager")
+  evidenceSubmitted         ComplianceEvidence[]  @relation("EvidenceSubmittedBy")
+  evidenceReviewed          ComplianceEvidence[]  @relation("EvidenceReviewedBy")
+  ownedComplianceCategories ComplianceCategory[]  @relation("ComplianceCategoryOwner")
+  notifications             Notification[]
+
+  @@unique([companyId, email])
+  @@index([companyId])
+}
+
+
+model Permission {
+  id          String   @id @default(uuid())
+  slug        String
+  module      String
+  description String
+  companyId   String? 
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  roleTemplates    RoleTemplatePermission[]
+  roles            RolePermission[]
+  grants           PermissionGrant[]
+  requiredForSteps ProcessTemplateStep[]
+
+  @@unique([companyId, slug]) 
+}
+
+model RoleTemplate {
+  id          String             @id @default(uuid())
+  origin      RoleTemplateOrigin
+  companyId   String? 
+  company     Company?           @relation(fields: [companyId], references: [id])
+  label       String
+  createdById String?
+
+  defaultPermissions RoleTemplatePermission[]
+  roles              Role[]
+}
+
+enum RoleTemplateOrigin {
+  platform_predefined
+  company_custom
+}
+
+model RoleTemplatePermission {
+  roleTemplateId String
+  roleTemplate   RoleTemplate @relation(fields: [roleTemplateId], references: [id], onDelete: Cascade)
+  permissionId   String
+  permission     Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleTemplateId, permissionId])
+}
+
+model Role {
+  id             String       @id @default(uuid())
+  companyId      String
+  company        Company      @relation(fields: [companyId], references: [id])
+  roleTemplateId String
+  roleTemplate   RoleTemplate @relation(fields: [roleTemplateId], references: [id])
+  label          String
+  isSystem       Boolean      @default(false)
+
+  permissions     RolePermission[]
+  roleAssignments RoleAssignment[]
+
+  @@index([companyId])
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model RoleAssignment {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation("AssignmentUser", fields: [userId], references: [id])
+  roleId      String
+  role        Role      @relation(fields: [roleId], references: [id])
+  scopeType   ScopeType
+  scopeId     String
+  grantedById String
+  grantedByUser User    @relation("AssignmentGrantedBy", fields: [grantedById], references: [id])
+  grantedAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  @@index([userId])
+  @@index([roleId])
+  @@index([scopeType, scopeId])
+}
+
+model PermissionGrant {
+  id           String     @id @default(uuid())
+  companyId    String
+  company      Company    @relation(fields: [companyId], references: [id])
+  userId       String
+  user         User       @relation("GrantRecipient", fields: [userId], references: [id])
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  scopeType    ScopeType
+  scopeId      String
+  isGranted    Boolean    @default(true) 
+  issuedById   String
+  issuedByUser User       @relation("GrantIssuedBy", fields: [issuedById], references: [id])
+  issuedAt     DateTime   @default(now())
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+enum ScopeType {
+  Company
+  Branch
+  Team
+  Project
+}
+
+// ---------------------------------------------------------------------------
+// 4. ORG HIERARCHY
+// ---------------------------------------------------------------------------
+
+model Branch {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  name      String
+
+  teams Team[]
+
+  @@index([companyId])
+}
+
+model Team {
+  id       String @id @default(uuid())
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id])
+  name     String
+
+  projects Project[]
+
+  @@index([branchId])
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  teamId      String
+  team        Team      @relation(fields: [teamId], references: [id])
+  name        String
+  status      String    @default("Active")
+  startDate   DateTime?
+  endDate     DateTime?
+  createdById String
+
+  tasks            Task[]
+  processInstances ProcessInstance[]
+  escalations      Escalation[]
+
+  @@index([teamId])
+}
+
+// ---------------------------------------------------------------------------
+// 5. TASKS
+// ---------------------------------------------------------------------------
+
+model Task {
+  id                    String       @id @default(uuid())
+  companyId             String
+  company               Company      @relation(fields: [companyId], references: [id])
+  projectId             String?
+  project               Project?     @relation(fields: [projectId], references: [id])
+  processInstanceStepId String?
+  title                 String
+  description           String?
+  status                TaskStatus   @default(Draft)
+  priority              TaskPriority @default(Medium)
+  assignedToId          String?
+  assignedTo            User?        @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+  createdById           String
+  createdBy             User         @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  dueDate               DateTime?
+  completedAt           DateTime?
+  estimatedHours        Decimal?     @db.Decimal(5, 2)
+  actualHours           Decimal?     @default(0) @db.Decimal(5, 2)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  deletedAt             DateTime?
+
+  subtasks           Subtask[]
+  escalations        Escalation[]
+  complianceEvidence ComplianceEvidence[]
+
+  @@index([companyId])
+  @@index([projectId])
+}
+
+model Subtask {
+  id           String     @id @default(uuid())
+  companyId    String 
+  taskId       String
+  task         Task       @relation(fields: [taskId], references: [id])
+  title        String
+  description  String?
+  status       TaskStatus @default(Draft)
+  assignedToId String?
+  createdById  String
+  dueDate      DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  @@index([taskId])
+  @@index([companyId])
+}
+
+enum TaskStatus {
+  Draft
+  Active
+  In_Review
+  Blocked
+  Completed
+  Cancelled
+}
+
+enum TaskPriority {
+  Low
+  Medium
+  High
+  Urgent
+}
+
+// ---------------------------------------------------------------------------
+// 6. PROCESS MANAGEMENT
+// ---------------------------------------------------------------------------
+
+model ProcessTemplate {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  name        String
+  category    String?
+  compliance  Json?
+  version     Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdById String
+
+  steps     ProcessTemplateStep[]
+  instances ProcessInstance[]
+
+  @@unique([companyId, name, version])
+  @@index([companyId])
+}
+
+model ProcessTemplateStep {
+  id                     String                @id @default(uuid())
+  templateId             String
+  template               ProcessTemplate       @relation(fields: [templateId], references: [id])
+  stepOrder              Int
+  name                   String
+  stepType               StepType
+  requiredPermissionId   String?
+  requiredPermission     Permission?           @relation(fields: [requiredPermissionId], references: [id])
+  escalationTimeoutHours Int?
+  onRejectGotoStepId     String?
+  onRejectGotoStep       ProcessTemplateStep?  @relation("StepLoopBack", fields: [onRejectGotoStepId], references: [id])
+  loopBackTargetFor      ProcessTemplateStep[] @relation("StepLoopBack")
+
+  instanceSteps ProcessInstanceStep[]
+
+  @@unique([templateId, stepOrder])
+  @@index([requiredPermissionId])
+}
+
+enum StepType {
+  Approval
+  Input_Required
+  Automated_Task
+}
+
+model ProcessInstance {
+  id            String                @id @default(uuid())
+  companyId     String
+  company       Company               @relation(fields: [companyId], references: [id])
+  templateId    String
+  template      ProcessTemplate       @relation(fields: [templateId], references: [id])
+  projectId     String?
+  project       Project?              @relation(fields: [projectId], references: [id])
+  title         String
+  status        ProcessInstanceStatus @default(Draft)
+  currentStepId String?
+  currentStep   ProcessInstanceStep?  @relation("CurrentStep", fields: [currentStepId], references: [id])
+  initiatedById String
+  createdAt     DateTime              @default(now())
+  completedAt   DateTime?
+
+  steps ProcessInstanceStep[] @relation("InstanceSteps")
+
+  @@index([companyId])
+  @@index([templateId])
+}
+
+enum ProcessInstanceStatus {
+  Draft
+  Active
+  Completed
+  Cancelled
+  Rejected
+}
+
+model ProcessInstanceStep {
+  id                String              @id @default(uuid())
+  processInstanceId String
+  processInstance   ProcessInstance     @relation("InstanceSteps", fields: [processInstanceId], references: [id])
+  templateStepId    String
+  templateStep      ProcessTemplateStep @relation(fields: [templateStepId], references: [id])
+  assignedToId      String?
+  assignedTo        User?               @relation("StepAssignedTo", fields: [assignedToId], references: [id])
+  actionedById      String?
+  actionedBy        User?               @relation("StepActionedBy", fields: [actionedById], references: [id])
+  status            StepStatus          @default(Pending)
+  remarks           String?
+  actionedAt        DateTime?
+
+  currentForInstance ProcessInstance[] @relation("CurrentStep")
+
+  @@unique([processInstanceId, templateStepId])
+  @@index([processInstanceId])
+}
+
+enum StepStatus {
+  Pending
+  Approved
+  Rejected
+  Skipped
+}
+
+// ---------------------------------------------------------------------------
+// 7. COMPLIANCE
+// ---------------------------------------------------------------------------
+
+model ComplianceCategory {
+  id          String   @id @default(uuid())
+  companyId   String? 
+  company     Company? @relation(fields: [companyId], references: [id])
+  name        String
+  description String?
+  ownerId     String? 
+  owner       User?    @relation("ComplianceCategoryOwner", fields: [ownerId], references: [id])
+
+  rules ComplianceRule[]
+
+  @@index([companyId])
+}
+
+model ComplianceRule {
+  id          String              @id @default(uuid())
+  companyId   String? 
+  company     Company?            @relation(fields: [companyId], references: [id])
+  name        String
+  description String
+  severity    Severity
+  categoryId  String?
+  category    ComplianceCategory? @relation(fields: [categoryId], references: [id])
+  isActive    Boolean             @default(true) 
+
+  sourceTemplateId String?
+  sourceTemplate   ComplianceRule?  @relation("ClonedFrom", fields: [sourceTemplateId], references: [id])
+  clonedRules      ComplianceRule[] @relation("ClonedFrom")
+
+  bindings   ComplianceBinding[]
+  violations ComplianceViolation[]
+
+  @@index([companyId])
+  @@index([categoryId])
+}
+
+enum Severity {
+  Low
+  Medium
+  High
+  Critical
+}
+
+model ComplianceBinding {
+  id        String         @id @default(uuid())
+  ruleId    String
+  rule      ComplianceRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  scopeType ScopeType
+  scopeId   String
+
+  @@unique([ruleId, scopeType, scopeId])
+  @@index([scopeType, scopeId])
+}
+
+model ComplianceViolation {
+  id                String          @id @default(uuid())
+  companyId         String
+  company           Company         @relation(fields: [companyId], references: [id])
+  ruleId            String
+  rule              ComplianceRule  @relation(fields: [ruleId], references: [id])
+  entityType        String
+  entityId          String
+  status            ViolationStatus @default(Open)
+  severity          Severity
+  detectedAt        DateTime        @default(now())
+  reportedById      String?
+  reportedBy        User?           @relation("ViolationReportedBy", fields: [reportedById], references: [id])
+  resolvedById      String?
+  resolvedBy        User?           @relation("ViolationResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt        DateTime?
+  resolutionRemarks String?
+  dueDate           DateTime?
+
+  evidence ComplianceEvidence[]
+
+  @@index([companyId])
+  @@index([entityType, entityId])
+  @@index([ruleId])
+}
+
+enum ViolationStatus {
+  Open
+  Under_Review
+  Resolved
+  Ignored
+}
+
+model Escalation {
+  id              String           @id @default(uuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id])
+  taskId          String?
+  task            Task?            @relation(fields: [taskId], references: [id])
+  projectId       String?
+  project         Project?         @relation(fields: [projectId], references: [id])
+  reportedById    String
+  reportedBy      User             @relation("EscalationReportedBy", fields: [reportedById], references: [id])
+  targetManagerId String?
+  targetManager   User?            @relation("EscalationTargetManager", fields: [targetManagerId], references: [id])
+  title           String
+  description     String?
+  blockerType     String? 
+  priority        Severity         @default(High)
+  status          EscalationStatus @default(Open)
+  createdAt       DateTime         @default(now())
+  resolvedAt      DateTime?
+
+  @@index([companyId])
+  @@index([taskId])
+}
+
+enum EscalationStatus {
+  Open
+  Reviewed
+  Resolved
+  Closed
+}
+
+model ComplianceEvidence {
+  id           String              @id @default(uuid())
+  companyId    String
+  company      Company             @relation(fields: [companyId], references: [id])
+  userId       String
+  user         User                @relation("EvidenceSubmittedBy", fields: [userId], references: [id])
+  taskId       String?
+  task         Task?               @relation(fields: [taskId], references: [id])
+  violationId  String?
+  violation    ComplianceViolation? @relation(fields: [violationId], references: [id])
+  title        String
+  evidenceType String? 
+  fileUrl      String
+  notes        String?
+  status       EvidenceStatus      @default(Pending)
+  reviewedById String?
+  reviewedBy   User?               @relation("EvidenceReviewedBy", fields: [reviewedById], references: [id])
+  submittedAt  DateTime            @default(now())
+  reviewedAt   DateTime?
+
+  @@index([companyId])
+  @@index([taskId])
+  @@index([violationId])
+}
+
+enum EvidenceStatus {
+  Pending
+  Under_Review
+  Approved
+  Rejected
+}
+
+// ---------------------------------------------------------------------------
+// 8. CROSS-CUTTING SERVICES
+// ---------------------------------------------------------------------------
+
+model Comment {
+  id          String    @id @default(uuid())
+  companyId   String
+  entityType  String
+  entityId    String
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  commentText String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([companyId])
+  @@index([entityType, entityId])
+}
+
+model Attachment {
+  id            String   @id @default(uuid())
+  companyId     String
+  entityType    String
+  entityId      String
+  fileName      String
+  fileType      String
+  fileSizeBytes Int
+  fileUrl       String
+  uploadedById  String
+  uploadedBy    User     @relation(fields: [uploadedById], references: [id])
+  uploadedAt    DateTime @default(now())
+
+  @@index([companyId])
+  @@index([entityType, entityId])
+}
+
+model AuditLog {
+  id                 String      @id @default(uuid())
+  companyId          String
+  entityType         String
+  entityId           String
+  action             AuditAction
+  performedById      String?
+  performedBy        User?       @relation("PerformedBy", fields: [performedById], references: [id])
+  performedAt        DateTime    @default(now())
+  usedPermissionSlug String?
+  ipAddress          String?
+  userAgent          String?
+  oldValue           Json?
+  newValue           Json?
+
+  @@index([companyId])
+  @@index([entityType, entityId])
+  @@index([performedById])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  LOGIN
+  PERMISSION_CHANGE
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("System")
+  isRead    Boolean  @default(false)
+  link      String?  @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
