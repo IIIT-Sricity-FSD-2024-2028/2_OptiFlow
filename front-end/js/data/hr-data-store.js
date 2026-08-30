@@ -206,22 +206,31 @@
       }
     },
 
-async getById(id) {
+    async getById(id) {
       if (!id) return null;
       try {
-    const allEmployees = await this.getAll();
-    const normalizedTarget = String(id).trim();
-    return (
-      allEmployees.find(e => String(e.id) === normalizedTarget) ||
-      allEmployees.find(e => String(e.rawId || e.id) === normalizedTarget) ||
-      allEmployees.find(e => String(e.id).replace(/\D/g, "") === normalizedTarget.replace(/\D/g, "")) ||
-      null
-    );
-  } catch (error) {
-    console.error("HRStore.getById failed:", error);
-    return null;
-  }
-},
+        const normalizedTarget = String(id).trim().toLowerCase();
+        const allEmployees = await this.getAll();
+        const found = allEmployees.find(e => 
+          String(e.id || "").toLowerCase() === normalizedTarget ||
+          String(e.rawId || "").toLowerCase() === normalizedTarget ||
+          String(e.email || "").toLowerCase() === normalizedTarget
+        );
+        if (found) return found;
+
+        // Try direct backend query if not found in list
+        if (window.Helpers && window.Helpers.api) {
+          const res = await window.Helpers.api.request(`/users/${id}`, "GET");
+          const userObj = (res && res.data) ? res.data : res;
+          if (userObj && (userObj.id || userObj.fullName)) {
+            return await mapIn(userObj);
+          }
+        }
+      } catch (error) {
+        console.error("HRStore.getById failed:", error);
+      }
+      return null;
+    },
     async getStats() {
       const emps = await this.getAll();
       const globalState = await window.Helpers.getState();

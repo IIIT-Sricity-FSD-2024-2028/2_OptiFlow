@@ -412,7 +412,10 @@
           currentUser.assignedRole === 'HR Manager' ||
           String(currentUser.role || '').toLowerCase() === 'hr_manager' ||
           String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('hr') ||
-          String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('governance')
+          String(currentUser.roleLabel || currentUser.assignedRole || '').toLowerCase().includes('governance') ||
+          String(currentUser.role || '').toLowerCase() === 'superuser' ||
+          String(currentUser.role || '').toLowerCase() === 'company_owner' ||
+          String(currentUser.role || '').toLowerCase() === 'system_admin'
         ));
         if (!currentUser) {
           window.location.replace('../../login.html');
@@ -421,9 +424,6 @@
         if (!isHrUser) {
           window.location.replace('../../login.html');
           return;
-        }
-        if (!window.location.pathname.toLowerCase().endsWith('/admin/pm/hr-dashboard.html')) {
-          window.location.replace('hr-dashboard.html');
         }
       })();
     </script>
