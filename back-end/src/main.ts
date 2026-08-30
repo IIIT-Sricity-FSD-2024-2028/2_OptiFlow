@@ -5,13 +5,31 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { RolesGuard } from './core/guards/roles.guard';
 import { TransformInterceptor } from './core/interceptors/transform.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
 import * as path from 'path';
 import * as fs from 'fs';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // 1. Configure CORS explicitly (Security Requirement)
+  // 1. Enable Security Headers with Helmet (Security Requirement)
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https:'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+          imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+          connectSrc: ["'self'", 'http:', 'https:'],
+        },
+      },
+      hsts: process.env.NODE_ENV === 'production',
+    }),
+  );
+
+  // 2. Configure CORS explicitly (Security Requirement)
   const envOrigins =
     process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN;
   const allowedOrigins = envOrigins
@@ -19,7 +37,13 @@ async function bootstrap() {
         .split(',')
         .map((o) => o.trim())
         .filter(Boolean)
-    : ['http://localhost:5500', 'http://127.0.0.1:5500'];
+    : [
+        'http://localhost:5500',
+        'http://127.0.0.1:5500',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:64064',
+      ];
 
   app.enableCors({
     origin: allowedOrigins,
@@ -107,10 +131,11 @@ async function bootstrap() {
     JSON.stringify(document, null, 2),
   );
 
-  SwaggerModule.setup('api/docs', app, document);
-
-  await app.listen(process.env.PORT ?? 3000);
-  console.log(`🚀 Application is running on: http://localhost:3000`);
-  console.log(`📄 Swagger Docs available at: http://localhost:3000/api/docs`);
+  const port = process.env.PORT ?? 5500;
+  await app.listen(port);
+  console.log(`🚀 Application is running on: http://localhost:${port}`);
+  console.log(
+    `📄 Swagger Docs available at: http://localhost:${port}/api/docs`,
+  );
 }
 void bootstrap();
