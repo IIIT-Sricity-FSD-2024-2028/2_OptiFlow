@@ -1,155 +1,189 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { DatabaseService, User } from '../../core/database/database.service';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
-export interface UserActivity {
-  id: string;
-  employeeId: number;
-  action: string;
-  timestamp: string;
-}
-
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private activities: UserActivity[] = [];
-
-  getActivities(employeeId: number): UserActivity[] {
-    return this.activities.filter(a => a.employeeId === employeeId).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }
-
-  private logActivity(employeeId: number, action: string) {
-    this.activities.push({
-      id: Math.random().toString(36).substr(2, 9),
-      employeeId,
-      action,
-      timestamp: new Date().toISOString()
+  async findAll(companyId?: string) {
+    const filter = (companyId && companyId !== 'all' && companyId !== 'any' && companyId !== 'guest') ? { companyId } : undefined;
+    return this.prisma.user.findMany({
+      where: filter,
+      include: {
+        company: { select: { id: true, legalName: true } },
+        manager: { select: { id: true, fullName: true, email: true } },
+        roleAssignments: {
+          include: {
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  findAll(): User[] {
-    return this.db.users;
+  async findAllUserRoles(companyId?: string) {
+    const filter = (companyId && companyId !== 'all' && companyId !== 'any' && companyId !== 'guest') ? { user: { companyId } } : undefined;
+    return this.prisma.roleAssignment.findMany({
+      where: filter,
+      include: {
+        user: { select: { id: true, fullName: true, email: true } },
+        role: true,
+      },
+    });
   }
 
-  findAllUserRoles() {
-    return this.db.user_roles;
-  }
-
-  findOne(id: number): User {
-    const user = this.db.users.find(u => u.user_id === id);
-    if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+  async findOne(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        company: { select: { id: true, legalName: true } },
+        manager: { select: { id: true, fullName: true, email: true } },
+        reports: { select: { id: true, fullName: true, email: true } },
+        roleAssignments: {
+          include: {
+            role: true,
+          },
+        },
+        assignedTasks: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            priority: true,
+            dueDate: true,
+          },
+        },
+      },
+    });
+    if (!user) throw new NotFoundException(`User ${id} not found`);
     return user;
   }
 
-  create(dto: CreateUserDto): User {
-    if (this.db.users.some(u => u.email.toLowerCase() === dto.email.toLowerCase())) {
-      throw new BadRequestException('Email already exists');
+  async getActivities(userId: string) {
+    await this.findOne(userId);
+    return this.prisma.auditLog.findMany({
+      where: { performedById: userId },
+      orderBy: { performedAt: 'desc' },
+    });
+  }
+
+  async create(dto: CreateUserDto) {
+    const existing = await this.prisma.user.findFirst({
+      where: { companyId: dto.companyId, email: dto.email.toLowerCase() },
+    });
+    if (existing)
+      throw new BadRequestException('Email already exists in this company');
+
+    if (dto.managerUserId) {
+      const managerExists = await this.prisma.user.findUnique({
+        where: { id: dto.managerUserId },
+      });
+      if (!managerExists)
+        throw new BadRequestException(`Manager ${dto.managerUserId} not found`);
     }
 
-    let teamId: number | null = null;
-    if (dto.team) {
-      const teamObj = this.db.teams.find(t => t.team_name.toLowerCase() === dto.team?.toLowerCase());
-      if (teamObj) teamId = teamObj.team_id;
-    }
-
-    if (dto.manager_id && !this.db.users.find(u => u.user_id === dto.manager_id)) {
-      throw new BadRequestException(`Manager with ID ${dto.manager_id} not found`);
-    }
-
-    const newUser: User = {
-      user_id: this.db.users.length ? Math.max(...this.db.users.map(u => u.user_id)) + 1 : 1,
-      full_name: dto.full_name,
-      email: dto.email,
-      phone: dto.phone ?? null,
-      password_hash: dto.password_hash ?? 'default_hash',
-      department_id: dto.department_id,
-      team_id: teamId,
-      manager_id: dto.manager_id ?? null,
-      is_active: dto.is_active ?? true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      deleted_at: null,
-    };
-    this.db.users.push(newUser);
+    const user = await this.prisma.user.create({
+      data: {
+        companyId: dto.companyId,
+        fullName: dto.full_name,
+        email: dto.email.toLowerCase(),
+        passwordHash: dto.password_hash ?? 'default_hash',
+        managerUserId: dto.managerUserId ?? null,
+        isActive: dto.is_active ?? true,
+      },
+    });
 
     if (dto.role) {
-      const roleStr = String(dto.role);
-      const roleObj = this.db.roles.find(r => r.role_name === roleStr || r.role_name === roleStr.replace(/ /g, '_').toLowerCase());
-      if (roleObj) {
-        this.db.user_roles.push({
-          user_id: newUser.user_id,
-          role_id: roleObj.role_id,
-          assigned_by: null,
-          assigned_at: new Date().toISOString()
+      const role = await this.prisma.role.findFirst({
+        where: { companyId: dto.companyId, label: dto.role },
+      });
+      if (role) {
+        await this.prisma.roleAssignment.create({
+          data: {
+            userId: user.id,
+            roleId: role.id,
+            scopeType: 'Company',
+            scopeId: dto.companyId,
+            grantedById: user.id,
+          },
         });
       }
     }
 
-    this.logActivity(newUser.user_id, 'Employee created');
-
-    return newUser;
+    return this.findOne(user.id);
   }
 
-  update(id: number, dto: UpdateUserDto): User {
-    const index = this.db.users.findIndex(u => u.user_id === id);
-    if (index === -1) throw new NotFoundException(`User with ID ${id} not found`);
+  async update(id: string, dto: UpdateUserDto) {
+    const currentUser = await this.findOne(id);
 
-    if (dto.email && this.db.users.some(u => u.user_id !== id && u.email.toLowerCase() === dto.email?.toLowerCase())) {
-      throw new BadRequestException('Email already exists');
+    if (
+      dto.email &&
+      dto.email.toLowerCase() !== currentUser.email.toLowerCase()
+    ) {
+      const duplicate = await this.prisma.user.findFirst({
+        where: {
+          companyId: currentUser.companyId,
+          email: dto.email.toLowerCase(),
+          NOT: { id },
+        },
+      });
+      if (duplicate)
+        throw new BadRequestException('Email already exists in this company');
     }
 
-    let teamId = this.db.users[index].team_id;
-    if (dto.team !== undefined) {
-      if (dto.team === null || dto.team === '') {
-        teamId = null;
-      } else {
-        const teamObj = this.db.teams.find(t => t.team_name.toLowerCase() === dto.team?.toLowerCase());
-        if (teamObj) teamId = teamObj.team_id;
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(dto.full_name ? { fullName: dto.full_name } : {}),
+        ...(dto.email ? { email: dto.email.toLowerCase() } : {}),
+        ...(dto.password_hash ? { passwordHash: dto.password_hash } : {}),
+        ...(dto.managerUserId !== undefined
+          ? { managerUserId: dto.managerUserId }
+          : {}),
+        ...(dto.is_active !== undefined
+          ? {
+              isActive: dto.is_active,
+              deactivatedAt: dto.is_active ? null : new Date(),
+            }
+          : {}),
+      },
+    });
+
+    if (dto.role) {
+      const role = await this.prisma.role.findFirst({
+        where: { companyId: currentUser.companyId, label: dto.role },
+      });
+      if (role) {
+        await this.prisma.roleAssignment.deleteMany({ where: { userId: id } });
+        await this.prisma.roleAssignment.create({
+          data: {
+            userId: id,
+            roleId: role.id,
+            scopeType: 'Company',
+            scopeId: currentUser.companyId,
+            grantedById: id,
+          },
+        });
       }
     }
 
-    if (dto.manager_id !== undefined && dto.manager_id !== null && !this.db.users.find(u => u.user_id === dto.manager_id)) {
-      throw new BadRequestException(`Manager with ID ${dto.manager_id} not found`);
-    }
-
-    const updatedPhone = dto.phone !== undefined ? dto.phone : this.db.users[index].phone;
-
-    this.db.users[index] = { ...this.db.users[index], ...dto, team_id: teamId, phone: updatedPhone };
-
-    if (dto.role) {
-      const roleStr = String(dto.role);
-      const roleObj = this.db.roles.find(r => r.role_name === roleStr || r.role_name === roleStr.replace(/ /g, '_').toLowerCase());
-      if (roleObj) {
-        const urIndex = this.db.user_roles.findIndex(ur => ur.user_id === id);
-        if (urIndex !== -1) {
-          this.db.user_roles[urIndex].role_id = roleObj.role_id;
-        } else {
-          this.db.user_roles.push({
-            user_id: id,
-            role_id: roleObj.role_id,
-            assigned_by: null,
-            assigned_at: new Date().toISOString()
-          });
-        }
-      }
-    }
-
-    if (dto.role) {
-      this.logActivity(id, `Role updated to ${dto.role}`);
-    }
-    if (dto.is_active !== undefined && dto.is_active !== this.db.users[index].is_active) {
-      this.logActivity(id, dto.is_active ? 'Employee activated' : 'Employee deactivated');
-    }
-
-    return this.db.users[index];
+    return this.findOne(updated.id);
   }
 
-  remove(id: number): void {
-    const index = this.db.users.findIndex(u => u.user_id === id);
-    if (index === -1) throw new NotFoundException(`User with ID ${id} not found`);
-    this.logActivity(id, 'Employee deactivated');
-    this.db.users.splice(index, 1);
+  async remove(id: string) {
+    await this.findOne(id);
+    await this.prisma.user.update({
+      where: { id },
+      data: { isActive: false, deactivatedAt: new Date() },
+    });
+    return { message: 'User deactivated successfully' };
   }
 }

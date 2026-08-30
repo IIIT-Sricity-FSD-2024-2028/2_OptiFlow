@@ -1,69 +1,56 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsString, IsNotEmpty, IsInt, IsOptional, Min, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  Min,
+  IsNumber,
+} from 'class-validator';
 
 export class CreateTaskDto {
+  @ApiProperty({ example: 'comp-uuid-123' })
+  @IsString()
+  @IsNotEmpty()
+  companyId: string;
+
   @ApiProperty({ example: 'Reconcile vendor invoices' })
   @IsString()
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({ example: 'Cross-check all vendor invoices against PO records.', required: false })
+  @ApiProperty({
+    example: 'Cross-check all vendor invoices against PO records.',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: 1, required: false })
+  @ApiProperty({ example: 'proj-uuid-1', required: false })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  project_id?: number;
+  @IsString()
+  project_id?: string;
 
-  @ApiProperty({ example: 4 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  created_by: number;
+  @ApiProperty({ example: 'user-uuid-4', required: false })
+  @IsOptional()
+  @IsString()
+  created_by?: string;
 
-  @ApiProperty({ example: 5 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  assigned_to: number;
+  @ApiProperty({ example: 'user-uuid-5', required: false })
+  @IsOptional()
+  @IsString()
+  assigned_to?: string;
 
   @ApiProperty({ example: 'High', required: false })
   @IsOptional()
   @IsString()
-  priority?: 'Low' | 'Medium' | 'High' | 'Critical';
+  priority?: any;
 
-  @ApiProperty({
-    example: 'Pending',
-    required: false,
-    enum: [
-      'Pending',
-      'In_Progress',
-      'In_Review',
-      'Blocked',
-      'Completed',
-      'Cancelled',
-      'Pending_TL_Review',
-      'Pending_PM_Review',
-      'Pending_Compliance',
-    ],
-  })
+  @ApiProperty({ example: 'Active', required: false })
   @IsOptional()
   @IsString()
-  status?:
-    | 'Pending'
-    | 'In_Progress'
-    | 'In_Review'
-    | 'Pending_TL_Review'
-    | 'Blocked'
-    | 'Completed'
-    | 'Cancelled'
-    | 'Pending_PM_Review'
-    | 'Pending_Compliance';
+  status?: any;
 
   @ApiProperty({ example: 8, required: false })
   @IsOptional()
@@ -83,4 +70,9 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   due_date?: string;
+
+  @ApiProperty({ example: 'step-uuid-10', required: false })
+  @IsOptional()
+  @IsString()
+  processInstanceStepId?: string;
 }

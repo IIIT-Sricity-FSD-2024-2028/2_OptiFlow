@@ -46,7 +46,8 @@ function logout() {
 }
 
 function openNewProcessModal() {
-  window.location.href = "workflow-builder.html";
+  // Default: navigate to process builder. Pages can override this.
+  window.location.href = "process-builder.html";
 }
 
 // Legacy notification logic removed. Handled by sidebar.js.
@@ -92,382 +93,619 @@ function unwrapApiListForCollections(res) {
  *   GET /escalations            → escalations[]
  *   GET /evidence               → evidence[]
  *   GET /audit-logs             → auditLogs[]
- *   GET /compliance-rules       → complianceRules[]
- *   GET /compliance-violations  → complianceViolations[]
  */
-window.Helpers = {
-  async getState() {
-    // 1. Concurrent fetch — perfectly aligned arrays
-    const ENDPOINTS = [
-      '/users',                  // 0
-      '/tasks',                  // 1
-      '/projects',               // 2
-      '/escalations',            // 3
-      '/evidence',               // 4
-      '/departments',            // 5
-      '/roles',                  // 6
-      '/subtasks',               // 7
-      '/audit-logs',             // 8
-      '/compliance-rules',       // 9
-      '/compliance-violations',  // 10
-      '/user-roles',             // 11
-      '/workflow-instances',     // 12
-      '/workflow-templates',     // 13
-      '/workflow-instance-steps',// 14
-      '/teams',                  // 15
-      '/notifications'           // 16
-    ];
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * MOCK TEST ACTOR PRESET CONFIGURATION (SWAP ACTIVE_PRESET_KEY TO TEST ROLES)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * To test the app as different multi-tenant users, set ACTIVE_PRESET_KEY:
+ *
+ *  • 'ACME_CEO'      : Acme Corp CEO (Full company visibility, create/resolve/report)
+ *  • 'ACME_PM'       : Acme Corp Project Manager
+ *  • 'ACME_TL'       : Acme Corp Team Leader
+ *  • 'ACME_MEMBER1'  : Acme Corp Team Member (Role filtered: only assigned tasks, NO rule creation)
+ *  • 'BETA_CEO'      : Beta LLC CEO (Isolated Beta LLC tenant data)
+ *  • 'BETA_MEMBER'   : Beta LLC Team Member (Isolated Beta LLC team member data)
+ */
+window.TEST_ACTOR_PRESETS = {
+  ACME_CEO:     { email: "ceo@acmecorp.com",     role: "superuser",          label: "Acme Corp CEO" },
+  ACME_PM:      { email: "pm@acmecorp.com",      role: "project_manager",    label: "Acme Corp PM" },
+  ACME_TL:      { email: "tl@acmecorp.com",      role: "team_leader",        label: "Acme Corp TL" },
+  ACME_MEMBER1: { email: "member1@acmecorp.com", role: "team_member",        label: "Acme Corp Team Member 1" },
+  BETA_CEO:     { email: "ceo@betallc.com",      role: "superuser",          label: "Beta LLC CEO" },
+  BETA_MEMBER:  { email: "member1@betallc.com",  role: "team_member",        label: "Beta LLC Team Member" },
+};
 
-    const settled = await Promise.allSettled(
-      ENDPOINTS.map((ep) => this.api.request(ep))
-    );
+// Toggle active test preset here (or set to null to use standard login session)
+// Set to null to use the real logged-in session. Set to a preset key (e.g. 'ACME_CEO') only for local dev testing.
+window.ACTIVE_PRESET_KEY = null;
 
-    const unwrap = (result, endpoint) => {
-      if (result.status === "fulfilled") return unwrapApiListForCollections(result.value);
-      console.warn(`[getState] Failed to fetch ${endpoint}:`, result.reason?.message ?? result.reason);
-      return [];
+window.Helpers = window.Helpers || {};
+window.Helpers.api = window.Helpers.api || {
+  baseUrl: 'http://localhost:3000',
+
+  async request(endpoint, method = 'GET', body = null, customHeaders = {}) {
+    const preset = window.ACTIVE_PRESET_KEY && window.TEST_ACTOR_PRESETS[window.ACTIVE_PRESET_KEY];
+    const sessionRaw = sessionStorage.getItem("currentUser");
+    
+    let role = preset ? preset.role : "guest";
+    let userEmail = preset ? preset.email : null;
+    let actorId = null;
+    let companyId = null;
+    let isPlatformAdmin = false;
+
+    if (!preset && sessionRaw) {
+      try {
+        const session = JSON.parse(sessionRaw);
+        role = session.role || "guest";
+        userEmail = session.email;
+        companyId = session.companyId;
+        actorId = session.id ?? session.userId ?? null;
+        if (role === 'platform_admin' || session.roleName === 'Platform_Admin') {
+          isPlatformAdmin = true;
+        }
+      } catch (e) {
+        console.warn("Failed to parse currentUser from sessionStorage");
+      }
+    }
+
+    const tokenIdentifier = actorId || userEmail || 'acme-ceo-uuid';
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${tokenIdentifier}`,
+      'x-user-role': role,
+      ...customHeaders
     };
 
-    // Variables must perfectly match the index of the ENDPOINTS array above
+    if (userEmail && !headers['x-user-email']) {
+      headers['x-user-email'] = userEmail;
+    }
+
+    if (isPlatformAdmin) {
+      if (!headers['x-platform-admin-id'] && actorId) {
+        headers['x-platform-admin-id'] = String(actorId);
+      }
+    } else {
+      if (companyId && !headers['x-company-id']) {
+        headers['x-company-id'] = companyId;
+      }
+    }
+
+    if (actorId && !headers["x-user-id"] && !isPlatformAdmin) {
+      headers["x-user-id"] = String(actorId);
+    }
+
+    const config = { method, headers };
+    if (body) config.body = JSON.stringify(body);
+
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, config);
+
+      if (!response.ok) {
+        let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+        try {
+          const data = await response.json();
+          if (data.message) errorMsg = data.message;
+        } catch (err) {}
+        throw new Error(errorMsg);
+      }
+
+      const json = await response.json();
+      if (json && typeof json.success === 'boolean' && 'data' in json) {
+        return json.data;
+      }
+      return json;
+    } catch (error) {
+      console.error(`API Request Failed [${method} ${endpoint}]:`, error);
+      throw error;
+    }
+  }
+};
+
+let _stateCacheVal = null;
+Object.defineProperty(window.Helpers, '_stateCache', {
+  get() {
+    return _stateCacheVal;
+  },
+  set(val) {
+    _stateCacheVal = val;
+    if (val === null) {
+      sessionStorage.removeItem("officesync_global_state");
+      sessionStorage.removeItem("officesync_global_state_time");
+    }
+  },
+  configurable: true,
+  enumerable: true
+});
+
+Object.assign(window.Helpers, {
+  _statePromise: null,
+
+  async getState(forceRefresh = false) {
+    const CACHE_KEY = "officesync_global_state";
+    const CACHE_TIME_KEY = "officesync_global_state_time";
+    const CACHE_TTL = 30000; // 30 seconds TTL
+
+    if (forceRefresh) {
+      window.Helpers._stateCache = null;
+      this._statePromise = null;
+    }
+
+    if (!forceRefresh) {
+      const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
+      const cachedData = sessionStorage.getItem(CACHE_KEY);
+      if (cachedTime && cachedData && (Date.now() - Number(cachedTime) < CACHE_TTL)) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          _stateCacheVal = parsed;
+          return parsed;
+        } catch (e) {
+          console.warn("Failed to parse cached state, refetching...");
+        }
+      }
+    }
+
+    if (window.Helpers._stateCache) {
+      return window.Helpers._stateCache;
+    }
+    if (this._statePromise) {
+      return this._statePromise;
+    }
+
+    this._statePromise = (async () => {
+      try {
+        const sessionRaw = sessionStorage.getItem('currentUser');
+        let isScopedExecutiveContext = false;
+        if (sessionRaw) {
+          try {
+            const s = JSON.parse(sessionRaw);
+            isScopedExecutiveContext = window.ExecutiveBranchSwitcher
+              ? window.ExecutiveBranchSwitcher.hasScopedExecutiveAccess(s)
+              : false;
+          } catch { /* ignore */ }
+        }
+
+        const branchQuery =
+          isScopedExecutiveContext &&
+          window.ExecutiveBranchSwitcher &&
+          typeof window.ExecutiveBranchSwitcher.buildQueryString === 'function'
+            ? window.ExecutiveBranchSwitcher.buildQueryString()
+            : '';
+
+        const ENDPOINTS = [
+          '/users',                  // 0
+          `/tasks${branchQuery}`,                  // 1
+          `/projects${branchQuery}`,               // 2
+          '/escalations',            // 3
+          '/evidence',               // 4
+          '/branches',               // 5
+          '/roles',                  // 6
+          '/subtasks',               // 7
+          '/audit-logs',             // 8
+          '/compliance-rules',       // 9
+          `/compliance-violations${branchQuery}`,  // 10
+          '/users/roles/mapping',    // 11
+          '/process-instances',      // 12
+          '/process-templates',      // 13
+          '/process-instance-steps', // 14
+          '/teams',                  // 15
+          '/notifications',          // 16
+          '/compliance-categories',  // 17
+          '/compliance-bindings',    // 18
+        ];
+
+        const settled = await Promise.allSettled(
+          ENDPOINTS.map((ep) => this.api.request(ep))
+        );
+
+        const unwrap = (result) => {
+          if (result.status === "fulfilled") return unwrapApiListForCollections(result.value);
+          return [];
+        };
+
     const [
-      rawUsers,                  // 0 matches '/users'
-      rawTasks,                  // 1 matches '/tasks'
-      rawProjects,               // 2 matches '/projects'
-      rawEscalations,            // 3 matches '/escalations'
-      rawEvidence,               // 4 matches '/evidence'
-      rawDepartments,            // 5 matches '/departments'
-      rawRoles,                  // 6 matches '/roles'
-      rawSubtasks,               // 7 matches '/subtasks'
-      rawAuditLogs,              // 8 matches '/audit-logs'
-      rawComplianceRules,        // 9 matches '/compliance-rules'
-      rawViolations,             // 10 matches '/compliance-violations'
-      rawUserRoles,              // 11 matches '/user-roles'
-      rawWorkflowInstances,      // 12 matches '/workflow-instances'
-      rawWorkflowTemplates,      // 13 matches '/workflow-templates'
-      rawWorkflowInstanceSteps,  // 14 matches '/workflow-instance-steps'
-      rawTeams,                  // 15 matches '/teams'
-      rawNotifications,          // 16 matches '/notifications'
+      rawUsers,                  // 0
+      rawTasks,                  // 1
+      rawProjects,               // 2
+      rawEscalations,            // 3
+      rawEvidence,               // 4
+      rawBranches,               // 5
+      rawRoles,                  // 6
+      rawSubtasks,               // 7
+      rawAuditLogs,              // 8
+      rawComplianceRules,        // 9
+      rawViolations,             // 10
+      rawRoleAssignments,        // 11 ← renamed from rawUserRoles
+      rawProcessInstances,       // 12
+      rawProcessTemplates,       // 13
+      rawProcessInstanceSteps,   // 14
+      rawTeams,                  // 15
+      rawNotifications,          // 16
+      rawComplianceCategories,   // 17
+      rawComplianceBindings,     // 18
     ] = settled.map((r, i) => unwrap(r, ENDPOINTS[i]));
 
-    console.log("DEBUG - RAW USERS:", rawUsers);
-    console.log("DEBUG - RAW ROLES:", rawRoles);
-    console.log("DEBUG - RAW USER-ROLES:", rawUserRoles);
-    
-    // ── 2. Static lookup: role slug → numeric roleId ──────────────────────────
-    // Mirrors the seeded roles table in DatabaseService.
-    const roleSlugToId = {
-      superuser: 1, project_manager: 2, compliance_officer: 3,
-      hr_manager: 4, team_leader: 5, team_member: 6,
-    };
-
-    // ── 3. Map each collection — NO object spreads; every field is explicit ───
+    // ── 2. Map each collection using ACTUAL backend camelCase field names ──────
 
     // ── Roles ─────────────────────────────────────────────────────────────────
-    // Backend: { role_id, role_name, description, is_system, created_at }
+    // Backend (Prisma): { id, label, isSystem, companyId, createdAt }
     const roles = rawRoles.map((r) => ({
-      id:          String(r.role_id),
-      roleId:      r.role_id,
-      name:        r.role_name    || '',
-      roleName:    r.role_name    || '',
-      description: r.description  || '',
-      isSystem:    r.is_system    || false,
-      createdAt:   r.created_at   || null,
+      id:          String(r.id),
+      roleId:      r.id,
+      name:        r.label       || '',
+      roleName:    r.label       || '',
+      label:       r.label       || '',
+      description: r.description || '',
+      isSystem:    r.isSystem    || false,
+      createdAt:   r.createdAt   || null,
     }));
 
-    // ── User Roles Mapping ────────────────────────────────────────────────────
-    const userRoles = rawUserRoles.map(ur => ({
-      userId: String(ur.user_id),
-      roleId: ur.role_id,
-      assignedBy: ur.assigned_by || null,
-      assignedAt: ur.assigned_at || null
+    // ── Role Assignments ──────────────────────────────────────────────────────
+    // Backend (Prisma): { id, userId, roleId, scopeType, scopeId, grantedAt, role:{id,label}, user:{id,fullName} }
+    const userRoles = rawRoleAssignments.map(ra => ({
+      id:         ra.id,
+      userId:     ra.userId,
+      roleId:     ra.roleId,
+      roleLabel:  ra.role ? ra.role.label : null,
+      scopeType:  ra.scopeType || null,
+      scopeId:    ra.scopeId   || null,
+      grantedAt:  ra.grantedAt || null,
+    }));
+
+    // ── Branches ──────────────────────────────────────────────────────────────
+    // Backend (Prisma): { id, name, companyId, createdAt }
+    const branches = rawBranches.map((b) => ({
+      id:        String(b.id),
+      branchId:  b.id,
+      name:      b.name || '',
+      head:      'Branch Head',
+      companyId: b.companyId || null,
+      createdAt: b.createdAt || null,
+    }));
+    // Legacy alias
+    const departments = branches.map(b => ({ ...b, departmentId: b.id, departmentName: b.name }));
+
+    // ── Teams ─────────────────────────────────────────────────────────────────
+    // Backend (Prisma): { id, name, branchId, createdAt, branch:{id,name} }
+    const teams = rawTeams.map((t) => ({
+      id:        String(t.id),
+      teamId:    t.id,
+      name:      t.name     || '',
+      teamName:  t.name     || '',
+      branchId:  t.branchId || null,
+      createdAt: t.createdAt || null,
     }));
 
     // ── Users ─────────────────────────────────────────────────────────────────
-    // Backend: { user_id, full_name, email, password_hash, role,
-    //            department_id, manager_id, is_active, created_at }
+    // Backend (Prisma): { id, companyId, fullName, email, managerUserId, createdAt }
     const users = rawUsers.map((u) => {
-      // Normalization Mapping: Attach roleName directly to the user object
-      const ur = userRoles.find(ur => String(ur.userId) === String(u.user_id));
-      const roleObj = ur ? roles.find(r => String(r.roleId) === String(ur.roleId)) : null;
+      // Find this user's primary role assignment
+      const ra = userRoles.find(r => r.userId === u.id);
+      const roleLabel = ra ? ra.roleLabel : null;
+      // Map role label to frontend role slug — covers all common variants
+      const roleLabelMap = {
+        // Owner / CEO variants
+        'Owner': 'superuser',
+        'Company Owner': 'superuser',
+        'CEO': 'superuser',
+        'CTO': 'superuser',
+        'COO': 'superuser',
+        'Superuser': 'superuser',
+        // Project Manager
+        'Project Manager': 'project_manager',
+        'PM': 'project_manager',
+        // Team Leader variants
+        'Team Leader': 'team_leader',
+        'Team Lead': 'team_leader',
+        'TL': 'team_leader',
+        // Team Member
+        'Team Member': 'team_member',
+        // HR variants
+        'HR Manager': 'hr_manager',
+        'HR Admin': 'hr_manager',
+        'HR': 'hr_manager',
+        'Access Governance': 'hr_manager',
+        'Governance': 'hr_manager',
+        // Compliance
+        'Compliance Officer': 'compliance_officer',
+        'Compliance': 'compliance_officer',
+        // Process Admin
+        'Process Admin': 'project_manager',
+      };
+      const roleSlug = roleLabelMap[roleLabel] || (roleLabel ? roleLabel.toLowerCase().replace(/ /g,'_') : 'team_member');
 
-      const teamObj = rawTeams.find(t => String(t.team_id) === String(u.team_id));
-      const deptObj = rawDepartments.find(d => String(d.department_id) === String(u.department_id));
+      const teamObj = teams.find(t => t.id === u.teamId);
+      const branchObj = branches.find(b => b.id === u.branchId);
 
-      const initials = u.full_name
-        ? u.full_name.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2)
+      const initials = u.fullName
+        ? u.fullName.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2)
         : '??';
+
       return {
-        id:           String(u.user_id),
-        userId:       u.user_id,
-        fullName:     u.full_name      || 'Unknown User',
-        email:        u.email          || '',
-        roleId:       roleObj ? roleObj.roleId : null,
-        roleName:     roleObj ? roleObj.roleName : 'Team Member',
-        departmentId: u.department_id  || null,
-        departmentName: deptObj ? deptObj.department_name : null,
-        teamId:       u.team_id        || null,
-        teamName:     teamObj ? teamObj.team_name : null,
-        managerId:    u.manager_id     || null,
-        reportsTo:    u.manager_id     ? String(u.manager_id) : null,
-        phone:        u.phone          || '',
-        isActive:     u.is_active      !== undefined ? u.is_active : true,
-        status:       u.is_active === false ? 'inactive' : 'active',
-        avatar:       initials,
-        avatarColor:  'blue',
-        createdAt:    u.created_at     || null,
+        id:             String(u.id),
+        userId:         u.id,
+        fullName:       u.fullName      || 'Unknown User',
+        email:          u.email         || '',
+        roleId:         ra ? ra.roleId  : null,
+        roleName:       roleSlug,
+        roleLabel:      roleLabel,
+        departmentId:   u.branchId      || null,
+        departmentName: branchObj ? branchObj.name : null,
+        teamId:         u.teamId        || null,
+        teamName:       teamObj ? teamObj.name : null,
+        managerId:      u.managerUserId || null,
+        reportsTo:      u.managerUserId ? String(u.managerUserId) : null,
+        phone:          u.phone         || '',
+        isActive:       true,
+        status:         'active',
+        avatar:         initials,
+        avatarColor:    'blue',
+        createdAt:      u.createdAt     || null,
       };
     });
 
-    // ── Departments ───────────────────────────────────────────────────────────
-    // Backend: { department_id, department_name, manager_id, created_at }
-    const departments = rawDepartments.map((d) => ({
-      id:             String(d.department_id),
-      departmentId:   d.department_id,
-      name:           d.department_name || '',
-      departmentName: d.department_name || '',
-      managerId:      d.manager_id      || null,
-      createdAt:      d.created_at      || null,
-    }));
-
-    // ── Teams ─────────────────────────────────────────────────────────────────
-    const teams = rawTeams.map((t) => ({
-      id:             String(t.team_id),
-      teamId:         t.team_id,
-      name:           t.team_name || '',
-      teamName:       t.team_name || '',
-      departmentId:   t.department_id || null,
-      createdAt:      t.created_at || null,
-    }));
-
     // ── Projects ──────────────────────────────────────────────────────────────
-    // Backend: { project_id, project_name, description, department_id,
-    //            status, start_date, end_date, created_by, created_at }
+    // Backend (Prisma): { id, name, status, teamId, createdById, startDate, endDate, createdAt,
+    //                     team:{id,name,branch:{id,name,companyId}}, tasks[], escalations[] }
     const projects = rawProjects.map((p) => {
-      const projectTasks = rawTasks.filter(t => t.project_id === p.project_id);
+      const projectTasks = p.tasks || rawTasks.filter(t => t.projectId === p.id);
       const completedTasks = projectTasks.filter(t => t.status === 'Completed').length;
-      const progressPct = projectTasks.length > 0 
-        ? Math.round((completedTasks / projectTasks.length) * 100) 
+      const progressPct = projectTasks.length > 0
+        ? Math.round((completedTasks / projectTasks.length) * 100)
         : 0;
+      const companyId = p.team && p.team.branch ? p.team.branch.companyId : null;
+      const teamName  = p.team ? p.team.name : null;
+      const branchId  = p.team && p.team.branch ? p.team.branch.id : null;
+      const branchName = p.team && p.team.branch ? p.team.branch.name : null;
 
       return {
-        id:           String(p.project_id),
-        projectId:    p.project_id,
-        name:         p.project_name  || '',
-        projectName:  p.project_name  || '',
+        id:           String(p.id),
+        projectId:    p.id,
+        name:         p.name          || '',
+        projectName:  p.name          || '',
         description:  p.description   || '',
-        departmentId: p.department_id || null,
+        teamId:       p.teamId        || null,
+        teamName:     teamName,
+        branchId:     branchId,
+        branchName:   branchName,
+        companyId:    companyId,
+        departmentId: p.teamId        || null,   // legacy alias used in some pages
         status:       p.status        || 'Active',
         progress:     progressPct,
-        startDate:    p.start_date    || null,
-        endDate:      p.end_date      || null,
-        createdBy:    p.created_by    || null,
-        createdAt:    p.created_at    || null,
+        startDate:    p.startDate     || null,
+        endDate:      p.endDate       || null,
+        createdBy:    p.createdById   || null,
+        createdAt:    p.createdAt     || null,
       };
     });
 
     // ── Tasks ─────────────────────────────────────────────────────────────────
-    // Backend: { task_id, title, description, project_id, created_by,
-    //            assigned_to, priority, status, estimated_hours,
-    //            due_date, completed_at, created_at }
-    // Note: actual_hours is NOT in the backend schema; omitted.
+    // Backend (Prisma): { id, title, description, status, priority, projectId, companyId,
+    //                     assignedToId, createdById, dueDate, estimatedHours, actualHours,
+    //                     completedAt, createdAt, assignedTo:{id,fullName}, project:{id,name} }
     const tasks = rawTasks.map((t) => {
-      const proj = rawProjects.find(p => p.project_id === t.project_id);
-      const user = rawUsers.find(u => u.user_id === t.assigned_to);
+      const assigneeName = t.assignedTo ? t.assignedTo.fullName : 'Unassigned';
+      const projectName  = t.project ? t.project.name : 'General';
+      const branchId     = t.project?.team?.branch?.id || null;
+      const branchName   = t.project?.team?.branch?.name || null;
       return {
-        id:             String(t.task_id),
-        taskId:         t.task_id,
+        id:             String(t.id),
+        taskId:         t.id,
         title:          t.title          || '',
         description:    t.description    || '',
-        projectId:      t.project_id     || null,
-        projectName:    proj ? proj.project_name : 'General',
-        createdBy:      t.created_by     || null,
-        assignedTo:     t.assigned_to    || null,
-        assigneeName:   user ? user.full_name : 'Unassigned',
-        assignedUserId: t.assigned_to    ? String(t.assigned_to) : null,
+        projectId:      t.projectId      || null,
+        projectName:    projectName,
+        branchId:       branchId,
+        branchName:     branchName,
+        createdBy:      t.createdById    || null,
+        assignedTo:     t.assignedToId   || null,
+        assigneeName:   assigneeName,
+        assignedUserId: t.assignedToId   ? String(t.assignedToId) : null,
         priority:       t.priority       || 'Medium',
-        status:         t.status         || 'Pending',
-        estimatedHours: t.estimated_hours || 0,
-        dueDate:        t.due_date       || null,
-        completedAt:    t.completed_at   || null,
-        createdAt:      t.created_at     || null,
-        overdue:        t.due_date ? new Date(t.due_date) < new Date() : false,
+        status:         t.status         || 'Draft',
+        estimatedHours: t.estimatedHours || 0,
+        actualHours:    t.actualHours    || 0,
+        dueDate:        t.dueDate        || null,
+        completedAt:    t.completedAt    || null,
+        createdAt:      t.createdAt      || null,
+        overdue:        t.dueDate ? new Date(t.dueDate) < new Date() : false,
+        subtasks:       t.subtasks       || [],
       };
     });
 
     // ── Subtasks ──────────────────────────────────────────────────────────────
-    // Backend: { subtask_id, task_id, title, description, assigned_to,
-    //            status, estimated_hours, due_date, completed_at, created_at }
+    // Backend (Prisma): { id, taskId, title, description, assignedToId, status, createdById,
+    //                     estimatedHours, dueDate, completedAt, createdAt }
     const subtasks = rawSubtasks.map((s) => ({
-      id:             String(s.subtask_id),
-      subtaskId:      s.subtask_id,
-      taskId:         s.task_id         || null,
+      id:             String(s.id),
+      subtaskId:      s.id,
+      taskId:         s.taskId          || null,
       title:          s.title           || '',
       description:    s.description     || '',
-      assignedTo:     s.assigned_to     || null,
-      status:         s.status          || 'Pending',
-      estimatedHours: s.estimated_hours || 0,
-      dueDate:        s.due_date        || null,
-      completedAt:    s.completed_at    || null,
-      createdAt:      s.created_at      || null,
+      assignedTo:     s.assignedToId    || null,
+      status:         s.status          || 'Draft',
+      estimatedHours: s.estimatedHours  || 0,
+      dueDate:        s.dueDate         || null,
+      completedAt:    s.completedAt     || null,
+      createdAt:      s.createdAt       || null,
     }));
 
     // ── Escalations ───────────────────────────────────────────────────────────
-    // Backend: { escalation_id, task_id, project_id, reported_by,
-    //            target_manager_id, title, description, blocker_type,
-    //            priority, status, created_at, resolved_at }
+    // Backend (Prisma): { id, title, status, priority, blockerType, companyId, taskId, projectId,
+    //                     reportedById, targetManagerId, createdAt, resolvedAt,
+    //                     reportedBy:{id,fullName}, targetManager:{id,fullName} }
     const escalations = rawEscalations.map((e) => ({
-      id:              String(e.escalation_id),
-      escalationId:    e.escalation_id,
-      taskId:          e.task_id            || null,
-      projectId:       e.project_id         || null,
-      reportedBy:      e.reported_by        || null,
-      targetManagerId: e.target_manager_id  || null,
-      title:           e.title              || '',
-      description:     e.description        || '',
-      blockerType:     e.blocker_type       || '',
-      priority:        e.priority           || 'Medium',
-      status:          e.status             || 'Open',
-      createdAt:       e.created_at         || null,
-      resolvedAt:      e.resolved_at        || null,
+      id:              String(e.id),
+      escalationId:    e.id,
+      taskId:          e.taskId            || null,
+      projectId:       e.projectId         || null,
+      reportedBy:      e.reportedById      || null,
+      targetManagerId: e.targetManagerId   || null,
+      title:           e.title             || '',
+      description:     e.description       || '',
+      blockerType:     e.blockerType       || '',
+      priority:        e.priority          || 'Medium',
+      status:          e.status            || 'Open',
+      createdAt:       e.createdAt         || null,
+      resolvedAt:      e.resolvedAt        || null,
     }));
 
     // ── Audit Logs ────────────────────────────────────────────────────────────
-    // Backend: { log_id, entity_id, entity_type, action, performed_by,
-    //            performed_at, ip_address, old_value, new_value }
+    // Backend (Prisma): { id, entityId, entityType, action, performedById, createdAt, oldValue, newValue, ipAddress }
     const auditLogs = rawAuditLogs.map((l) => ({
-      id:          String(l.log_id),
-      logId:       l.log_id,
-      entityId:    l.entity_id       || null,
-      entityType:  l.entity_type     || '',
-      action:      l.action          || '',
-      performedBy: l.performed_by    || null,
-      performedAt: l.performed_at    || null,
-      ipAddress:   l.ip_address      || null,
-      oldValue:    l.old_value       || null,
-      newValue:    l.new_value       || null,
+      id:          String(l.id),
+      logId:       l.id,
+      entityId:    l.entityId       || null,
+      entityType:  l.entityType     || '',
+      action:      l.action         || '',
+      performedBy: l.performedById  || null,
+      performedAt: l.createdAt      || null,
+      ipAddress:   l.ipAddress      || null,
+      oldValue:    l.oldValue       || null,
+      newValue:    l.newValue       || null,
     }));
 
     // ── Compliance Rules ──────────────────────────────────────────────────────
-    // Backend: { rule_id, rule_name, description, remediation_steps,
-    //            severity, is_active, created_at }
+    // Backend (Prisma): { id, name, description, severity, companyId, categoryId, createdAt }
     const complianceRules = rawComplianceRules.map((r) => ({
-      id:               String(r.rule_id),
-      ruleId:           r.rule_id,
-      name:             r.rule_name         || '',
-      ruleName:         r.rule_name         || '',
-      description:      r.description       || '',
-      remediationSteps: r.remediation_steps || '',
-      severity:         r.severity          || 'Medium',
-      isActive:         r.is_active         !== undefined ? r.is_active : true,
-      createdAt:        r.created_at        || null,
+      id:               String(r.id),
+      ruleId:           r.id,
+      name:             r.name             || '',
+      ruleName:         r.name             || '',
+      description:      r.description      || '',
+      severity:         r.severity         || 'Medium',
+      isActive:         true,
+      categoryId:       r.categoryId       || null,
+      createdAt:        r.createdAt        || null,
     }));
 
     // ── Compliance Violations ─────────────────────────────────────────────────
-    // Backend: { violation_id, rule_id, entity_id, entity_type, status,
-    //            detected_at, reported_by, resolved_by, resolved_at,
-    //            resolution_remarks, due_date }
+    // Backend (Prisma): { id, ruleId, entityType, entityId, status, severity, companyId,
+    //                     reportedById, resolvedById, resolvedAt, createdAt }
     const complianceViolations = rawViolations.map((v) => {
-      const rule = rawComplianceRules.find(r => r.rule_id === v.rule_id);
-      const proj = rawProjects.find(p => p.project_id === v.entity_id && v.entity_type === 'Project');
+      const rule = complianceRules.find(r => r.id === v.ruleId);
+      const proj = projects.find(p => p.id === v.entityId && v.entityType === 'Project');
       return {
-        id:                 String(v.violation_id),
-        violationId:        v.violation_id,
-        ruleId:             v.rule_id             || null,
-        ruleName:           rule ? rule.rule_name : 'General Policy',
-        entityId:           v.entity_id           || null,
-        entityType:         v.entity_type         || '',
-        projectName:        proj ? proj.project_name : 'General',
-        status:             v.status              || 'Open',
-        detectedAt:         v.detected_at         || null,
-        reportedBy:         v.reported_by         || null,
-        resolvedBy:         v.resolved_by         || null,
-        resolvedAt:         v.resolved_at         || null,
-        resolutionRemarks:  v.resolution_remarks  || null,
-        dueDate:            v.due_date            || null,
-        evidenceLabel:      v.status === 'Open' ? 'At Risk' : 'Compliant'
+        id:                 String(v.id),
+        violationId:        v.id,
+        ruleId:             v.ruleId            || null,
+        ruleName:           rule ? rule.name    : 'General Policy',
+        entityId:           v.entityId          || null,
+        entityType:         v.entityType        || '',
+        projectName:        proj ? proj.name    : 'General',
+        status:             v.status            || 'Open',
+        severity:           v.severity          || 'Medium',
+        detectedAt:         v.createdAt         || null,
+        reportedBy:         v.reportedById      || null,
+        resolvedBy:         v.resolvedById      || null,
+        resolvedAt:         v.resolvedAt        || null,
+        evidenceLabel:      v.status === 'Open' ? 'At Risk' : 'Compliant',
       };
     });
 
     // ── Evidence ──────────────────────────────────────────────────────────────
-    // Backend: { evidence_id, user_id, task_id, violation_id, title,
-    //            evidence_type, file_url, notes, status,
-    //            reviewed_by, submitted_at, reviewed_at }
+    // Backend (Prisma): { id, title, evidenceType, fileUrl, notes, status, companyId,
+    //                     userId, taskId, violationId, reviewedById, createdAt, reviewedAt }
     const evidence = rawEvidence.map((e) => ({
-      id:           String(e.evidence_id),
-      evidenceId:   e.evidence_id,
-      userId:       e.user_id          || null,
-      taskId:       e.task_id          || null,
-      violationId:  e.violation_id     || null,
+      id:           String(e.id),
+      evidenceId:   e.id,
+      userId:       e.userId           || null,
+      taskId:       e.taskId           || null,
+      violationId:  e.violationId      || null,
       title:        e.title            || '',
-      evidenceType: e.evidence_type    || 'Document',
-      fileUrl:      e.file_url         || '',
+      evidenceType: e.evidenceType     || 'Document',
+      fileUrl:      e.fileUrl          || '',
       notes:        e.notes            || '',
       status:       e.status           || 'Pending',
-      reviewedBy:   e.reviewed_by      || null,
-      submittedAt:  e.submitted_at     || null,
-      reviewedAt:   e.reviewed_at      || null,
+      reviewedBy:   e.reviewedById     || null,
+      submittedAt:  e.createdAt        || null,
+      reviewedAt:   e.reviewedAt       || null,
     }));
 
-    // ── Workflow Data ─────────────────────────────────────────────────────────
-    const workflowInstances = rawWorkflowInstances.map(w => ({
-      id:            String(w.instance_id),
-      instanceId:    w.instance_id,
-      title:         w.title           || '',
-      templateId:    w.template_id     || null,
-      projectId:     w.project_id      || null,
-      initiatedBy:   w.initiated_by    || null,
-      currentStepId: w.current_step_id || null,
-      status:        w.status          || 'Draft',
-      startedAt:     w.started_at      || null,
-      completedAt:   w.completed_at    || null,
+    // ── Process Instances ─────────────────────────────────────────────────────
+    // Backend (Prisma): { id, title, status, templateId, projectId, initiatedById, currentStepId, createdAt, completedAt }
+    const processInstances = rawProcessInstances.map(w => ({
+      id:            String(w.id),
+      instanceId:    w.id,
+      title:         w.title         || '',
+      templateId:    w.templateId    || null,
+      projectId:     w.projectId     || null,
+      initiatedBy:   w.initiatedById || null,
+      currentStepId: w.currentStepId || null,
+      status:        w.status        || 'Draft',
+      startedAt:     w.createdAt     || null,
+      completedAt:   w.completedAt   || null,
     }));
 
-    const workflowTemplates = rawWorkflowTemplates.map(t => ({
-      id:            String(t.template_id),
-      templateId:    t.template_id,
-      name:          t.template_name || '',
-      department:    t.category || 'General',
-      stages:        t.stages || [],
-      totalStages:   t.stages ? t.stages.length : 0,
-      description:   t.description || '',
-      compliance:    t.compliance || [],
-      runs:          t.runs || 0,
-      status:        t.status || 'Active',
-      lastModified:  t.updated_at ? this.formatDate(t.updated_at) : (t.created_at ? this.formatDate(t.created_at) : 'Recently'),
-      createdAt:     t.created_at || null,
-      updatedAt:     t.updated_at || null,
-      createdBy:     t.created_by || null,
+    // ── Process Templates ─────────────────────────────────────────────────────
+    // Backend (Prisma): { id, name, category, companyId, createdById, createdAt, updatedAt, compliance, steps[] }
+    const processTemplates = rawProcessTemplates.map(t => ({
+      id:            String(t.id),
+      templateId:    t.id,
+      name:          t.name          || '',
+      category:      t.category      || 'General',
+      department:    t.category      || 'General',
+      stages:        t.steps ? t.steps.map(s => s.name) : [],
+      steps:         t.steps         || [],
+      totalStages:   t.steps ? t.steps.length : 0,
+      description:   t.description   || '',
+      compliance:    Array.isArray(t.compliance) ? t.compliance : [],
+      runs:          t.instances ? t.instances.length : 0,
+      status:        'Active',
+      lastModified:  t.updatedAt ? this.formatDate(t.updatedAt) : (t.createdAt ? this.formatDate(t.createdAt) : 'Recently'),
+      createdAt:     t.createdAt     || null,
+      createdBy:     t.createdById   || null,
     }));
 
-    const workflowInstanceSteps = rawWorkflowInstanceSteps.map(s => ({
-      id:              String(s.instance_step_id),
-      instanceStepId:  s.instance_step_id,
-      instanceId:      s.instance_id || null,
-      stepId:          s.step_id     || null,
-      assignedTo:      s.assigned_to || null,
-      status:          s.status      || 'Pending',
-      remarks:         s.remarks     || null,
-      actionedBy:      s.actioned_by || null,
-      createdAt:       s.created_at  || null,
-      actionedAt:      s.actioned_at || null,
+    // ── Process Instance Steps ────────────────────────────────────────────────
+    // Backend (Prisma): { id, processInstanceId, templateStepId, assignedToId, status, remarks, createdAt }
+    const processInstanceSteps = rawProcessInstanceSteps.map(s => ({
+      id:              String(s.id),
+      instanceStepId:  s.id,
+      instanceId:      s.processInstanceId  || null,
+      stepId:          s.templateStepId     || null,
+      assignedTo:      s.assignedToId       || null,
+      status:          s.status             || 'Pending',
+      remarks:         s.remarks            || null,
+      createdAt:       s.createdAt          || null,
+    }));
+
+    // ── Compliance Categories ─────────────────────────────────────────────────
+    // Backend (Prisma): { id, name, description, companyId, ownerId, createdAt }
+    const complianceCategories = rawComplianceCategories.map(c => ({
+      name:        c.name || '',
+      description: c.description || '',
+      createdAt:   c.createdAt || null,
+    }));
+
+    const complianceBindings = rawComplianceBindings.map(b => ({
+      id:                 String(b.id || b.bindingId),
+      bindingId:          b.id || b.bindingId,
+      ruleId:             b.ruleId,
+      processTemplateId:  b.processTemplateId || null,
+      branchId:           b.branchId || null,
+      mandatory:          b.mandatory !== undefined ? b.mandatory : true,
+      createdAt:          b.createdAt || null,
     }));
 
     const notifications = rawNotifications.map(n => ({
-      id:             String(n.notification_id),
-      notificationId: n.notification_id,
-      userId:         n.user_id,
+      id:             String(n.notification_id || n.id),
+      notificationId: n.notification_id || n.id,
+      userId:         n.user_id || n.userId,
       title:          n.title || '',
       message:        n.message || '',
       type:           n.type || 'System',
-      isRead:         n.is_read || false,
+      isRead:         n.is_read || n.isRead || false,
       link:           n.link || '',
-      createdAt:      n.created_at || null,
+      createdAt:      n.created_at || n.createdAt || null,
     }));
 
     // ── 4. Assemble and return the unified application state ──────────────────
     return {
       users,
       userRoles,
+      branches,
       departments,
       teams,
       roles,
@@ -478,16 +716,38 @@ window.Helpers = {
       auditLogs,
       complianceRules,
       complianceViolations,
+      complianceCategories,
+      complianceBindings,
       evidence,
-      workflowInstances,
-      workflowTemplates,
-      workflowInstanceSteps,
+      processInstances,
+      processTemplates,
+      processInstanceSteps,
+      workflowInstances: processInstances,
+      workflowTemplates: processTemplates,
+      workflowInstanceSteps: processInstanceSteps,
       notifications,
       // Legacy aliases for backward-compat with older dashboard pages
       complianceItems:    complianceViolations,
       activeViolations:   complianceViolations.filter((v) => v.status === 'Open'),
       complianceReports:  [],
     };
+
+    // Save to sessionStorage cache
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(resObj));
+      sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+    } catch (err) {
+      console.warn("sessionStorage save failed:", err);
+    }
+
+    window.Helpers._stateCache = resObj;
+    setTimeout(() => { window.Helpers._stateCache = null; }, 30000);
+    return resObj;
+      } finally {
+        this._statePromise = null;
+      }
+    })();
+    return this._statePromise;
   },
 
   /**
@@ -632,102 +892,22 @@ window.Helpers = {
     });
   },
 
-  log(action, entityType, entityId, oldValue = null, newValue = null) {
-    const sessionRaw = sessionStorage.getItem("currentUser");
-    if (!sessionRaw) return;
-    const session = JSON.parse(sessionRaw);
-    let logs = JSON.parse(localStorage.getItem("pm_audit_logs")) || [];
-    logs.unshift({
-      log_id: this.nextId(logs, "log_id"),
-      entity_id: entityId,
-      entity_type: entityType,
-      action: action,
-      performed_by: session.id,
-      performed_by_name: session.name,
-      performed_at: new Date().toISOString(),
-      old_value: oldValue,
-      new_value: newValue,
-    });
-    localStorage.setItem("pm_audit_logs", JSON.stringify(logs));
-  },
-
-  api: {
-    baseUrl: 'http://localhost:3000',
-
-    async request(endpoint, method = 'GET', body = null) {
-      const sessionRaw = sessionStorage.getItem("currentUser");
-      let role = "guest";
-      let numericActorId = null;
-      if (sessionRaw) {
-        try {
-          const session = JSON.parse(sessionRaw);
-          role = session.role || "guest";
-          numericActorId =
-            window.TasksStore && typeof window.TasksStore.parseNumericUserId === "function"
-              ? window.TasksStore.parseNumericUserId(session)
-              : typeof session.id === "number"
-                ? session.id
-                : parseInt(String(session.id).replace(/\D/g, ""), 10) || null;
-        } catch (e) {
-          console.warn("Failed to parse currentUser from sessionStorage");
-        }
-      }
-
-      const headers = {
-        'Content-Type': 'application/json',
-        'x-user-role': role
-      };
-
-      const m = String(method).toUpperCase();
-      if (
-        ["POST", "PATCH", "PUT", "DELETE"].includes(m) &&
-        numericActorId != null &&
-        Number.isFinite(numericActorId)
-      ) {
-        headers["x-user-id"] = String(numericActorId);
-      }
-
-      const config = { method, headers };
-      if (body) config.body = JSON.stringify(body);
-
-      try {
-        const response = await fetch(`${this.baseUrl}${endpoint}`, config);
-
-        if (!response.ok) {
-          // Throw explicit errors on non-2xx responses
-          let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
-          try {
-            const data = await response.json();
-            if (data.message) errorMsg = data.message;
-          } catch (err) {
-            // response was not JSON
-          }
-          throw new Error(errorMsg);
-        }
-
-        const json = await response.json();
-        if (json && typeof json.success === 'boolean' && 'data' in json) {
-          return json.data;
-        }
-        return json;
-      } catch (error) {
-        console.error(`API Request Failed [${method} ${endpoint}]:`, error);
-        throw error;
-      }
+  async log(action, entityType, entityId, oldValue = null, newValue = null) {
+    try {
+      await this.api.request('/audit-logs', 'POST', {
+        action: action,
+        entityType: entityType,
+        entityId: String(entityId),
+        oldValue: oldValue,
+        newValue: newValue,
+      });
+    } catch (e) {
+      console.warn('[AuditLog] API log creation failed:', e);
     }
   },
-  
-  sendSystemNotification(targetUserId, title, message) {
-    const allNotifs = JSON.parse(localStorage.getItem("system_notifications")) || [];
-    allNotifs.unshift({
-      id: Date.now(),
-      targetUserId: String(targetUserId),
-      title,
-      message,
-      date: new Date().toISOString(),
-      read: false
-    });
-    localStorage.setItem("system_notifications", JSON.stringify(allNotifs));
+
+  async sendSystemNotification(targetUserId, title, message) {
+    return this.pushNotification(targetUserId, { title, message, type: 'System' });
   },
 
   timeAgo(dateString) {
@@ -746,4 +926,23 @@ window.Helpers = {
     if (diffDay < 7) return `${diffDay}d ago`;
     return past.toLocaleDateString();
   }
-};
+});
+
+// ─────────────────────────────────────────
+// Global Modal Controls (Click Outside & Escape Key)
+// ─────────────────────────────────────────
+document.addEventListener('click', (e) => {
+  if (e.target && (e.target.classList.contains('modal-backdrop') || e.target.classList.contains('modal-overlay'))) {
+    e.target.style.display = 'none';
+    e.target.classList.remove('active');
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-backdrop, .modal-overlay').forEach((el) => {
+      el.style.display = 'none';
+      el.classList.remove('active');
+    });
+  }
+});

@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Arjun Mehta' })
@@ -7,41 +13,42 @@ export class CreateUserDto {
   @IsNotEmpty()
   full_name: string;
 
-  @ApiProperty({ example: 'arjun@officesync.in' })
+  @ApiProperty({ example: 'arjun@acme.test' })
   @IsEmail()
   email: string;
 
-  @ApiProperty({ example: 'hashed_password', required: false })
+  @ApiProperty({ example: 'Password123!', required: false })
   @IsOptional()
   @IsString()
   password_hash?: string;
 
-  @ApiProperty({ example: 1 })
-  @IsNumber()
-  department_id: number;
-
-  @ApiProperty({ example: 4, required: false })
+  @ApiProperty({ example: 'user-uuid-123', required: false })
   @IsOptional()
-  @IsNumber()
-  manager_id?: number;
+  @IsString()
+  managerUserId?: string;
 
   @ApiProperty({ example: true, required: false })
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
 
-  @ApiProperty({ example: 'team_member', required: false })
+  @ApiProperty({ example: 'Team Member', required: false })
   @IsOptional()
   @IsString()
   role?: string;
-
-  @ApiProperty({ example: 'Ops-Admin', required: false })
-  @IsOptional()
-  @IsString()
-  team?: string;
 
   @ApiProperty({ example: '+91 9876543210', required: false })
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @ApiProperty({ example: 'comp-uuid-123' })
+  @IsString()
+  @IsNotEmpty()
+  companyId: string;
+
+  @ApiProperty({ example: 'branch-uuid-456', required: false })
+  @IsOptional()
+  @IsString()
+  branchId?: string;
 }

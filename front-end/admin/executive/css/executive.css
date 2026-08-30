@@ -1,0 +1,315 @@
+/* Executive Command Center — CEO-specific styling */
+:root {
+  --exec-accent: #1e3a5f;
+  --exec-accent-light: #2563eb;
+  --exec-gold: #d4a853;
+  --exec-surface: #f8fafc;
+  --exec-card: #ffffff;
+  --exec-border: #e2e8f0;
+  --exec-text: #0f172a;
+  --exec-muted: #64748b;
+}
+
+body.executive-portal {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--exec-surface);
+}
+
+.executive-portal .admin-layout {
+  background: var(--exec-surface);
+}
+
+.executive-portal .sidebar {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.executive-portal .sidebar-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--exec-gold);
+  padding: 16px 16px 8px;
+  opacity: 0.9;
+}
+
+.executive-portal .nav-item.active {
+  background: rgba(37, 99, 235, 0.2);
+  color: #fff;
+  border-left: 3px solid var(--exec-gold);
+}
+
+.executive-portal .top-header {
+  background: #fff;
+  border-bottom: 1px solid var(--exec-border);
+  padding: 16px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.executive-portal .page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--exec-text);
+}
+
+.executive-portal .exec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--exec-gold);
+  background: rgba(212, 168, 83, 0.12);
+  padding: 4px 10px;
+  border-radius: 99px;
+  margin-left: 12px;
+}
+
+.executive-content {
+  padding: 24px 28px 40px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.exec-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1100px) {
+  .exec-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.exec-kpi {
+  background: var(--exec-card);
+  border: 1px solid var(--exec-border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.exec-kpi-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--exec-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.exec-kpi-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--exec-text);
+  line-height: 1;
+}
+
+.exec-kpi-sub {
+  font-size: 12px;
+  color: var(--exec-muted);
+  margin-top: 6px;
+}
+
+.exec-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.exec-toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.exec-search {
+  position: relative;
+  min-width: 260px;
+}
+
+.exec-search input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid var(--exec-border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.exec-search i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--exec-muted);
+}
+
+.exec-select {
+  padding: 10px 14px;
+  border: 1px solid var(--exec-border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.exec-card {
+  background: var(--exec-card);
+  border: 1px solid var(--exec-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.exec-card-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--exec-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.exec-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--exec-text);
+}
+
+.exec-table-wrap {
+  overflow-x: auto;
+}
+
+.exec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.exec-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--exec-muted);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--exec-border);
+}
+
+.exec-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--exec-text);
+}
+
+.exec-table tr:hover td {
+  background: #f8fafc;
+}
+
+.exec-table tr.clickable {
+  cursor: pointer;
+}
+
+.exec-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.exec-pill.green { background: #dcfce7; color: #166534; }
+.exec-pill.blue { background: #dbeafe; color: #1d4ed8; }
+.exec-pill.yellow { background: #fef3c7; color: #b45309; }
+.exec-pill.red { background: #fee2e2; color: #b91c1c; }
+.exec-pill.gray { background: #f1f5f9; color: #475569; }
+
+.exec-branch-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e40af;
+  background: #eff6ff;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.exec-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.exec-branch-tag.locked {
+  cursor: default;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+}
+
+.user-profile {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid var(--exec-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 8px 0;
+  min-width: 200px;
+  z-index: 100;
+  margin-top: 10px;
+}
+
+.dropdown-menu.show { display: block; }
+
+.dropdown-item {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--exec-text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.dropdown-item:hover { background: #f8fafc; }
+
+.exec-two-col {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 1000px) {
+  .exec-two-col { grid-template-columns: 1fr; }
+}
+
+.exec-mini-chart {
+  height: 220px;
+  padding: 16px;
+}

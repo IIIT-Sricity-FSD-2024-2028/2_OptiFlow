@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Console — Billing</title>
+  <link rel="stylesheet" href="../css/pm/base.css" />
+  <link rel="stylesheet" href="../css/pm/layout.css" />
+  <link rel="stylesheet" href="../css/pm/components.css" />
+  <link rel="stylesheet" href="css/admin-console.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-area">
+      <header class="top-header">
+        <div class="ac-header-block">
+          <div class="page-title">Billing</div>
+          <p id="ac-page-subtitle" class="ac-page-subtitle">Subscription and plan details</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" type="button" onclick="alert('Plan management coming soon.')">Manage Plan</button>
+        </div>
+      </header>
+      <main class="page-content">
+        <div id="billing-error" class="ac-alert-error"></div>
+        <div class="card">
+          <div class="ac-stat-grid">
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Active Plan</div>
+              <div class="ac-stat-value lg" id="planName">—</div>
+            </div>
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Billing Cycle</div>
+              <div class="ac-stat-value" id="billingCycle">—</div>
+            </div>
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Price (INR)</div>
+              <div class="ac-stat-value" id="planPrice">—</div>
+            </div>
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Status</div>
+              <div class="ac-stat-value" id="planStatus">—</div>
+            </div>
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Renews On</div>
+              <div class="ac-stat-value" id="planRenewal">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2 class="ac-card-title">Usage vs. Limits</h2>
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead><tr><th>Resource</th><th>Used</th><th>Limit</th></tr></thead>
+              <tbody id="usageTableBody"><tr><td colspan="3" class="ac-empty-cell">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="../js/utils/helpers.js"></script>
+  <script src="../js/helpers.js"></script>
+  <script src="../js/components/sidebar.js"></script>
+  <script src="js/admin-shell.js"></script>
+  <script src="js/admin-billing.js"></script>
+</body>
+</html>

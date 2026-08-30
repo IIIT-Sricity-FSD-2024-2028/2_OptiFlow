@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ComplianceViolationsService } from './compliance-violations.service';
 import { ComplianceViolationsController } from './compliance-violations.controller';
-import { DatabaseModule } from '../../core/database/database.module';
+import { ComplianceObserverService } from './compliance-observer.service';
 
-@Module({ imports: [DatabaseModule], controllers: [ComplianceViolationsController], providers: [ComplianceViolationsService] })
+@Module({
+  controllers: [ComplianceViolationsController],
+  providers: [ComplianceViolationsService, ComplianceObserverService],
+})
 export class ComplianceViolationsModule {}

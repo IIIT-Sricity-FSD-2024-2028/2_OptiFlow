@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/swagger';
 import { CreateEvidenceDto } from './create-evidence.dto';
-import { IsOptional, IsEnum } from 'class-validator';
+import { IsOptional, IsEnum, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum EvidenceStatus {
@@ -11,8 +11,15 @@ export enum EvidenceStatus {
 }
 
 export class UpdateEvidenceDto extends PartialType(CreateEvidenceDto) {
-  @ApiPropertyOptional({ enum: EvidenceStatus, example: EvidenceStatus.Approved })
+  @ApiPropertyOptional({
+    enum: EvidenceStatus,
+    example: EvidenceStatus.Approved,
+  })
   @IsOptional()
   @IsEnum(EvidenceStatus)
   status?: EvidenceStatus;
+
+  @IsOptional()
+  @IsString()
+  reviewed_by?: string;
 }

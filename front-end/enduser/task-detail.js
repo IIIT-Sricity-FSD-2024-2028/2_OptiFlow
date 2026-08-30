@@ -240,9 +240,9 @@ function renderPage() {
     if (!showAcceptanceFlow && task.status !== "Completed" && task.status !== "done") {
       let isPending = ["Pending_TL_Review", "Pending_PM_Review", "Pending_Compliance", "In_Review", "Under_Review"].includes(task.status);
       const isTm = !tl;
-      let isAssignedToMe = (Number(task.assignedTo) === numericSessionUserId(session));
+      let isAssignedToMe = (String(task.assignedTo || task.assignedToId) === String(numericSessionUserId(session)));
       
-      const mySubtasks = (state.subtasks || []).filter(s => Number(s.taskId) === Number(task.taskId) && Number(s.assignedTo) === numericSessionUserId(session));
+      const mySubtasks = (state.subtasks || []).filter(s => String(s.taskId) === Number(task.taskId) && Number(s.assignedTo || s.taskId) === Number(task.taskId) && Number(s.assignedToId) === String(numericSessionUserId(session)));
       if (isTm && !isAssignedToMe && mySubtasks.length > 0) {
         isAssignedToMe = true;
         // Check if all their active subtasks are pending review
@@ -252,7 +252,7 @@ function renderPage() {
         }
       }
 
-      const isAssignedToTm = tl && (Number(task.assignedTo) !== numericSessionUserId(session));
+      const isAssignedToTm = tl && (String(task.assignedTo || task.assignedToId) !== String(numericSessionUserId(session)));
       const isBlocked = task.status === "Blocked";
 
       if (isTm && isAssignedToMe) {
@@ -312,7 +312,7 @@ function renderPage() {
         : subs
             .map((st) => {
               const assignee =
-                state.users.find((u) => Number(u.userId) === Number(st.assignedTo)) || {};
+                state.users.find((u) => String(u.userId || u.id) === String(st.assignedTo || st.assignedToId)) || {};
               const an = assignee.fullName || assignee.name || "Unknown";
               const done = st.status === "Completed";
               const badgeCls = done
@@ -389,7 +389,7 @@ async function approveTaskWork() {
     window.Toast.success("Approved", "Task marked complete.");
     
     if (task && task.assignedTo) {
-      window.Helpers.pushNotification(Number(task.assignedTo), {
+      window.Helpers.pushNotification(task.assignedTo || task.assignedToId, {
         title:   'Task Approved',
         message: `Your work on "${task.title || task.taskName || 'Untitled'}" was approved by your Team Leader.`,
         type:    'success',
@@ -433,7 +433,7 @@ function openRejectModal() {
               });
               
               if (task && task.assignedTo) {
-                window.Helpers.pushNotification(Number(task.assignedTo), {
+                window.Helpers.pushNotification(task.assignedTo || task.assignedToId, {
                   title:   'Task Rejected',
                   message: `Task Rejected: "${task.title || task.taskName || 'Untitled'}". Reason: ${reason}`,
                   type:    'error',
@@ -765,10 +765,10 @@ async function submitAct(type) {
 
     try {
       const isTm = !tl;
-      const isAssignedToTmTask = isTm && (Number(task.assignedTo) === numericSessionUserId(session));
+      const isAssignedToTmTask = isTm && (String(task.assignedTo || task.assignedToId) === String(numericSessionUserId(session)));
 
       if (isTm && !isAssignedToTmTask) {
-        const mySubtasks = (state.subtasks || []).filter(s => Number(s.taskId) === Number(task.taskId) && Number(s.assignedTo) === numericSessionUserId(session) && s.status !== "Completed");
+        const mySubtasks = (state.subtasks || []).filter(s => String(s.taskId) === Number(task.taskId) && Number(s.assignedTo || s.taskId) === Number(task.taskId) && Number(s.assignedToId) === String(numericSessionUserId(session)) && s.status !== "Completed");
         for (const st of mySubtasks) {
           await window.Helpers.api.request(`/subtasks/${st.subtaskId || st.id}`, "PATCH", { status: nextStatus });
         }
@@ -917,7 +917,7 @@ async function confirmResolveBlocker() {
 
     // 3. Notify the person who reported it (Crucial!)
     if (reporterId) {
-      window.Helpers.pushNotification(Number(reporterId), {
+      window.Helpers.pushNotification(reporterId, {
         title:   'Blocker Resolved',
         message: `The blocker you reported on "${taskDisplayTitle(task)}" has been resolved. Message: ${notes}`,
         type:    'success',
@@ -925,8 +925,8 @@ async function confirmResolveBlocker() {
     }
 
     // 4. Also notify the main assignee if different
-    if (task.assignedTo && Number(task.assignedTo) !== Number(reporterId)) {
-      window.Helpers.pushNotification(Number(task.assignedTo), {
+    if (task.assignedTo && task.assignedTo || task.assignedToId !== reporterId) {
+      window.Helpers.pushNotification(task.assignedTo || task.assignedToId, {
         title:   'Task Unblocked',
         message: `The blocker on "${taskDisplayTitle(task)}" has been resolved. Message: ${notes}`,
         type:    'success',

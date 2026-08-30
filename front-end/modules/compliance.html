@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeSync - Compliance Officer</title>
+    <meta
+      name="description"
+      content="OfficeSync Compliance Officer Dashboard – Monitor compliance scores, pending evidence, open violations, and audit activity."
+    />
+    <link rel="stylesheet" href="../css/compliance/base.css" />
+    <link rel="stylesheet" href="../css/compliance/layout.css" />
+    <link rel="stylesheet" href="../css/compliance/components.css" />
+    <link rel="stylesheet" href="../css/compliance/compliance.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/data/pm-data-store.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/utils/validator.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      // Auth guard: only compliance officers
+      if (!sessionStorage.getItem('currentUser')) {
+        window.location.replace('../login.html');
+      }
+      window.addEventListener('pageshow', e => {
+        if (e.persisted && !sessionStorage.getItem('currentUser'))
+          window.location.replace('../login.html');
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        // Force hide all modal overlays on load
+        document.querySelectorAll(".modal-overlay, .modal-backdrop").forEach(m => {
+          m.style.display = "none";
+          m.classList.remove("active");
+        });
+        // Render compliance sidebar
+        if (window.Sidebar) window.Sidebar.render("dashboard");
+      });
+    </script>
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- ===== SIDEBAR ===== -->
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <!-- ===== MAIN CONTENT ===== -->
+      <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+          <div class="page-title">Dashboard</div>
+          <div class="header-actions">
+            <button
+              class="btn-icon"
+              id="btn-notifications"
+              style="position: relative"
+              aria-label="Notifications"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Content Wrapper -->
+        <div class="content-wrapper">
+          <!-- ===== METRICS GRID ===== -->
+          <div class="metrics-grid">
+            <!-- Compliance Score -->
+            <div class="card metric-card score-card" id="card-compliance-score">
+              <div class="score-gauge-wrap" aria-label="Compliance score">
+                <svg viewBox="0 0 80 80" aria-hidden="true">
+                  <circle class="gauge-bg" cx="40" cy="40" r="33" />
+                  <circle class="gauge-fill" cx="40" cy="40" r="33" id="gauge-fill-arc" />
+                </svg>
+                <div class="gauge-text">
+                  <span class="gauge-number" id="comp-score">—</span>
+                  <span class="gauge-denom">/100</span>
+                </div>
+              </div>
+              <div class="score-info">
+                <div class="metric-title">Compliance Score</div>
+                <div class="score-value" id="comp-score-label">Loading…</div>
+                <div class="score-sub" id="comp-score-sub"></div>
+              </div>
+            </div>
+
+            <!-- Pending Evidence -->
+            <div class="card metric-card" id="card-pending-evidence" style="cursor:pointer" onclick="window.location.href='../admin/compliance/compliance_evidence.html'">
+              <div class="metric-title">Pending Evidence</div>
+              <div class="metric-value" id="pending-ev-count">—</div>
+              <span class="metric-tag yellow">Awaiting review</span>
+            </div>
+
+            <!-- Open Violations -->
+            <div class="card metric-card" id="card-open-violations" style="cursor:pointer" onclick="window.location.href='../admin/compliance/compliance_violations.html'">
+              <div class="metric-title">Open Violations</div>
+              <div class="metric-value" id="open-violations-count">—</div>
+              <span class="metric-tag red">Action required</span>
+            </div>
+
+            <!-- Rules Active -->
+            <div class="card metric-card" id="card-rules-active" style="cursor:pointer" onclick="window.location.href='../admin/compliance/compliance_rules.html'">
+              <div class="metric-title">Rules Active</div>
+              <div class="metric-value" id="active-rules-count">—</div>
+              <span class="metric-tag blue">Across all projects</span>
+            </div>
+          </div>
+          <!-- /metrics-grid -->
+
+          <!-- ===== PANELS ROW ===== -->
+          <div class="panels-row">
+            <!-- Pending Evidence Review -->
+            <div class="card" id="panel-evidence">
+              <div class="panel-header">
+                <h2 class="panel-title">Pending Evidence Review</h2>
+                <a href="../admin/compliance/compliance_evidence.html" class="panel-link" id="link-view-evidence">View all →</a>
+              </div>
+              <!-- Dynamically rendered by dashboard.js -->
+              <ul class="evidence-list" role="list" id="dash-evidence-list"></ul>
+            </div>
+
+            <!-- Open Violations -->
+            <div class="card" id="panel-violations">
+              <div class="panel-header">
+                <h2 class="panel-title">Open Violations</h2>
+                <a href="../admin/compliance/compliance_violations.html" class="panel-link" id="link-view-violations">View all →</a>
+              </div>
+              <!-- Dynamically rendered by dashboard.js -->
+              <ul class="violations-list" role="list" id="dash-violations-list"></ul>
+              <div class="no-more-violations" aria-live="polite" id="dash-violations-footer"></div>
+            </div>
+
+            <!-- Recent Audit Activity -->
+            <div class="card" id="panel-audit">
+              <div class="panel-header">
+                <h2 class="panel-title">Recent Audit Activity</h2>
+                <a href="../admin/compliance/compliance_audit_log.html" class="panel-link" id="link-full-log">Full log →</a>
+              </div>
+              <!-- Dynamically rendered by dashboard.js -->
+              <ul class="audit-list" role="list" id="dash-audit-list"></ul>
+            </div>
+          </div>
+          <!-- /panels-row -->
+        </div>
+        <!-- /content-wrapper -->
+      </main>
+    </div>
+    <!-- /admin-layout -->
+    <script src="../js/pages/compliance/dashboard.js"></script>
+  </body>
+</html>

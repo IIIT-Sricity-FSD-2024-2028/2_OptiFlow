@@ -1,27 +1,39 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateComplianceViolationDto {
-  @ApiProperty({ example: 1 })
-  @IsNumber()
-  rule_id: number;
+  @ApiProperty({ example: 'comp-uuid-1' })
+  @IsString()
+  @IsNotEmpty()
+  companyId: string;
 
-  @ApiProperty({ example: 10 })
-  @IsNumber()
-  entity_id: number;
+  @ApiProperty({ example: 'rule-uuid-1' })
+  @IsString()
+  @IsNotEmpty()
+  rule_id: string;
 
-  @ApiProperty({ example: 'User' })
+  @ApiProperty({ example: 'task-uuid-10' })
+  @IsString()
+  @IsNotEmpty()
+  entity_id: string;
+
+  @ApiProperty({ example: 'Task' })
   @IsString()
   @IsNotEmpty()
   entity_type: string;
 
-  @ApiProperty({ example: 9, required: false })
+  @ApiProperty({ example: 'user-uuid-9', required: false })
   @IsOptional()
-  @IsNumber()
-  reported_by?: number;
+  @IsString()
+  reported_by?: string;
 
   @ApiProperty({ example: '2024-12-10', required: false })
   @IsOptional()
   @IsString()
   due_date?: string;
+
+  @ApiProperty({ example: 'High', required: false })
+  @IsOptional()
+  @IsString()
+  severity?: any;
 }

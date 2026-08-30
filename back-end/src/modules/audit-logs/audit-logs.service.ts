@@ -1,36 +1,68 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseService, AuditLog, SystemEntity } from '../../core/database/database.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 
 @Injectable()
 export class AuditLogsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): AuditLog[] { return this.db.audit_logs; }
-
-  findByEntity(entityType: string, entityId: number): AuditLog[] {
-    return this.db.audit_logs.filter(l => l.entity_type === entityType && l.entity_id === entityId);
+  async findAll(companyId?: string) {
+    return this.prisma.auditLog.findMany({
+      where: companyId ? { companyId } : undefined,
+      include: {
+        performedBy: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { performedAt: 'desc' },
+    });
   }
 
-  findByUser(userId: number): AuditLog[] {
-    return this.db.audit_logs.filter(l => l.performed_by === userId);
+  async findByEntity(entityType: string, entityId: string | number) {
+    return this.prisma.auditLog.findMany({
+      where: {
+        entityType,
+        entityId: String(entityId),
+      },
+      include: {
+        performedBy: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { performedAt: 'desc' },
+    });
   }
 
-  create(dto: CreateAuditLogDto): AuditLog {
-    const newLog: AuditLog = {
-      log_id: this.db.audit_logs.length ? Math.max(...this.db.audit_logs.map(l => l.log_id)) + 1 : 1,
-      entity_id: dto.entity_id,
-      entity_type: dto.entity_type as SystemEntity,
-      action: dto.action,
-      performed_by: dto.performed_by ?? null,
-      performed_at: new Date().toISOString(),
-      ip_address: dto.ip_address ?? null,
-      user_agent: null,
-      used_permission_slug: null,
-      old_value: dto.old_value ?? null,
-      new_value: dto.new_value ?? null,
-    };
-    this.db.audit_logs.push(newLog);
-    return newLog;
+  async findByUser(userId: string) {
+    return this.prisma.auditLog.findMany({
+      where: { performedById: userId },
+      orderBy: { performedAt: 'desc' },
+    });
+  }
+
+  async create(dto: CreateAuditLogDto, companyId?: string) {
+    const actionEnum = (
+      [
+        'CREATE',
+        'UPDATE',
+        'DELETE',
+        'STATUS_CHANGE',
+        'LOGIN',
+        'PERMISSION_CHANGE',
+      ].includes(dto.action)
+        ? dto.action
+        : 'UPDATE'
+    ) as any;
+
+    return this.prisma.auditLog.create({
+      data: {
+        companyId: companyId || dto.companyId || 'b7744408-190c-4b83-82c5-ab0049afb6b2',
+        entityType: dto.entity_type,
+        entityId: String(dto.entity_id),
+        action: actionEnum,
+        performedById: dto.performed_by ? String(dto.performed_by) : null,
+        usedPermissionSlug: dto.usedPermissionSlug ?? null,
+        ipAddress: dto.ip_address ?? null,
+        userAgent: dto.userAgent ?? null,
+        oldValue: dto.old_value ?? undefined,
+        newValue: dto.new_value ?? undefined,
+      },
+    });
   }
 }

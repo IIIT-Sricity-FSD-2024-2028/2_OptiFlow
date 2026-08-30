@@ -76,7 +76,7 @@
     const rawId = rawIdRef;
     if (!state || rawId == null) return;
 
-    const sessionUser = (state.users || []).find((u) => Number(u.userId) === Number(rawId));
+    const sessionUser = (state.users || []).find((u) => String(u.userId || u.id) === String(rawId));
     const myLeader = sessionUser
       ? (state.users || []).find((u) => Number(u.userId) === Number(sessionUser.managerId))
       : null;
@@ -100,7 +100,7 @@
         ? window.TasksStore.filterExecutionTasksForMember(state.tasks, rawId)
         : [];
         
-    const mySubtasks = (state.subtasks || []).filter(s => Number(s.assignedTo) === Number(rawId));
+    const mySubtasks = (state.subtasks || []).filter(s => String(s.assignedTo || s.assignedToId) === String(rawId));
     myTasks.push(...mySubtasks);
 
     const myFirstTask = myTasks[0] || null;
@@ -164,12 +164,12 @@
         .slice(0, 8)
         .map((t) => {
           const proj =
-            (state.projects || []).find((p) => p.projectId === t.projectId) || {
+            (state.projects || []).find((p) => String(p.projectId || p.id) === String(t.projectId || t.id)) || {
               name: "General",
             };
           const assignerId = t.createdBy || myFirstTask?.createdBy || null;
           const assigner =
-            (state.users || []).find((u) => Number(u.userId) === Number(assignerId)) || {};
+            (state.users || []).find((u) => String(u.userId || u.id) === String(assignerId)) || {};
           const assignerFullName = assigner.fullName || assigner.name || "Lead";
           const parts = assignerFullName.split(" ");
           const assignerFormatted =
@@ -182,7 +182,7 @@
                 month: "short",
               })
             : "N/A";
-          const tid = t.taskId;
+          const tid = t.taskId || t.id;
           const tname = escapeHtml(taskDisplayTitle(t) || "Untitled");
 
           return `
@@ -314,7 +314,7 @@
   async function toggleTaskComplete(taskId) {
     const state = window.__memberDashboardState;
     if (!state) return;
-    const task = state.tasks.find((t) => Number(t.taskId) === Number(taskId));
+    const task = state.tasks.find((t) => String(t.taskId || t.id) === String(taskId));
     if (!task) return;
     const newStatus = task.status === "Completed" ? "In_Progress" : "Completed";
     try {
@@ -374,7 +374,7 @@
       return;
     }
 
-    const sessionUser = (state.users || []).find((u) => Number(u.userId) === Number(rawId));
+    const sessionUser = (state.users || []).find((u) => String(u.userId || u.id) === String(rawId));
     let targetManagerStr = taskObj?.createdBy || sessionUser?.managerId || sessionUser?.reportsTo || (state.users[0]?.userId) || 1;
     let targetManager = parseInt(String(targetManagerStr).replace(/[^0-9]/g, ''), 10) || 1;
 

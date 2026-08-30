@@ -7,6 +7,19 @@ window.TasksPage = {
   tasks: [],
 
   async init() {
+    const sessionRaw = sessionStorage.getItem('currentUser');
+    if (sessionRaw) {
+      try {
+        const s = JSON.parse(sessionRaw);
+        const role = String(s.role || '').toLowerCase();
+        const label = String(s.roleLabel || '').toLowerCase();
+        if (role === 'company_owner' || label.includes('owner') || label.includes('ceo')) {
+          window.location.href = '../admin/executive/executive_tasks.html';
+          return;
+        }
+      } catch { /* continue */ }
+    }
+
     this.state = await window.Helpers.getState();
     const urlParam = window.Helpers.getParam("project");
     const localParam = localStorage.getItem("selectedProjectId");
@@ -19,13 +32,14 @@ window.TasksPage = {
     }
 
     this.project =
-      this.state.projects.find((p) => String(p.projectId) === String(param)) || this.state.projects[0];
+      this.state.projects.find((p) => String(p.id || p.projectId) === String(param)) || this.state.projects[0];
 
     // SAFETY GUARD: Stop rendering if project doesn't exist
     if (!this.project) return;
 
+    const currentProjId = String(this.project.id || this.project.projectId);
     this.tasks = this.state.tasks.filter(
-      (t) => String(t.projectId) === String(this.project.projectId),
+      (t) => String(t.projectId) === currentProjId,
     );
     this.render();
     this.bindEvents();
@@ -138,31 +152,36 @@ window.TasksPage = {
           sBadgeClass = t.blocked ? "badge-red" : "badge-gray";
 
         const assigneeObj = this.state.users.find(
-          (u) => parseInt(u.userId) === parseInt(t.assignedTo || t.assignedUserId),
+          (u) => String(u.id || u.userId) === String(t.assignedToId || t.assignedTo || t.assignedUserId),
         );
-        const assigneeName = assigneeObj ? assigneeObj.fullName : "Unassigned";
-        const assigneeColor = assigneeObj ? assigneeObj.avatarColor : "gray";
-        const assigneeInitials = assigneeObj ? assigneeObj.avatar : "?";
+        const assigneeName = assigneeObj ? (assigneeObj.fullName || assigneeObj.name) : (t.assignedTo?.fullName || "Unassigned");
+        const assigneeColor = assigneeObj ? assigneeObj.avatarColor || "blue" : "gray";
+        const assigneeInitials = assigneeObj
+          ? (assigneeObj.avatar || (assigneeObj.fullName ? assigneeObj.fullName.substring(0, 2).toUpperCase() : "?"))
+          : "?";
 
         const assigneeHTML = `<div style="display:flex;align-items:center;gap:8px">
         <div class="avatar avatar-sm avatar-${assigneeColor}">${assigneeInitials}</div>
         <span style="font-size:13px;font-weight:500;color:#1e293b">${assigneeName}</span>
       </div>`;
 
-        const deadline = t.deadline
-          ? t.deadline.split("-").slice(1).reverse().join("/")
+        const rawDue = t.dueDate || t.deadline;
+        const deadline = rawDue
+          ? new Date(rawDue).toLocaleDateString()
           : "—";
-        const dateHTML = t.overdue
+        const isOverdue = rawDue && new Date(rawDue) < new Date() && !['Completed', 'Resolved', 'Closed'].includes(t.status);
+        const dateHTML = isOverdue
           ? `<span style="color:#ef4444;font-weight:600">${deadline} &nbsp;<span title="Overdue">!</span></span>`
           : `<span style="color:#475569;font-weight:500">${deadline}</span>`;
 
-        const subtasks = this.state.subtasks.filter((st) => st.taskId === t.id);
+        const taskIdStr = String(t.id || t.taskId);
+        const subtasks = this.state.subtasks.filter((st) => String(st.taskId) === taskIdStr);
         const subHTML =
           subtasks.length > 0
             ? `<div style="font-size:11px;color:#64748b;margin-top:2px;display:flex;align-items:center;gap:4px">↳ ${subtasks.filter((s) => s.status === "Completed").length}/${subtasks.length} subtasks done</div>`
             : "";
 
-        return `<tr style="cursor:pointer" onclick="window.TasksPage.openEdit(${t.taskId})">
+        return `<tr style="cursor:pointer" onclick="window.TasksPage.openEdit('${taskIdStr}')">
         <td style="padding:16px">
           <div style="font-size:14px;font-weight:600;color:#0f172a;margin-bottom:2px">${t.title || t.name}</div>
           <div style="font-size:12px;color:#64748b">${t.category || "Task"}</div>
@@ -173,7 +192,7 @@ window.TasksPage = {
         <td style="padding:16px"><span class="badge ${sBadgeClass}">${t.status || "Pending"}</span></td>
         <td style="padding:16px">${dateHTML}</td>
         <td style="padding:16px" onclick="event.stopPropagation()">
-          <button class="btn btn-sm" style="background:#eff6ff;color:#2563eb;font-weight:600;border:none;padding:6px 14px" onclick="window.TasksPage.openEdit(${t.taskId})">${t.status === "Completed" ? "View" : "Review"}</button>
+          <button class="btn btn-sm" style="background:#eff6ff;color:#2563eb;font-weight:600;border:none;padding:6px 14px" onclick="window.TasksPage.openEdit('${taskIdStr}')">${t.status === "Completed" ? "View" : "Review"}</button>
         </td>
       </tr>`;
       })
@@ -182,10 +201,10 @@ window.TasksPage = {
 
   renderTeamPanel() {
     const assignedUserIds = [
-      ...new Set(this.tasks.map((t) => t.assignedUserId)),
+      ...new Set(this.tasks.map((t) => String(t.assignedToId || t.assignedTo || t.assignedUserId)).filter(Boolean)),
     ];
     const members = this.state.users.filter((u) =>
-      assignedUserIds.includes(parseInt(u.userId)) || assignedUserIds.includes(u.userId),
+      assignedUserIds.includes(String(u.id || u.userId)),
     );
 
     const html =
@@ -195,12 +214,12 @@ window.TasksPage = {
             .map(
               (m) => `
           <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f5f9">
-            <div class="avatar avatar-md avatar-${m.avatarColor}">${m.avatar}</div>
+            <div class="avatar avatar-md avatar-${m.avatarColor || 'blue'}">${m.avatar || (m.fullName ? m.fullName.substring(0, 2).toUpperCase() : '??')}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600;color:#0f172a">${m.fullName}</div>
-              <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${m.roleName || (m.roleId === 4 ? 'Team Leader' : 'Team Member')}</div>
+              <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${m.roleName || 'Team Member'}</div>
             </div>
-            <div style="font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;padding:4px 8px;border-radius:6px;white-space:nowrap">${this.tasks.filter((t) => String(t.assignedTo || t.assignedUserId) === String(m.userId)).length} tasks</div>
+            <div style="font-size:12px;font-weight:600;color:#2563eb;background:#eff6ff;padding:4px 8px;border-radius:6px;white-space:nowrap">${this.tasks.filter((t) => String(t.assignedToId || t.assignedTo || t.assignedUserId) === String(m.id || m.userId)).length} tasks</div>
           </div>`,
             )
             .join("");
@@ -266,7 +285,10 @@ window.TasksPage = {
     parentContainer.innerHTML = html;
   },
 
+  _eventsBound: false,
   bindEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
     // Robust event delegation for "Add Task" buttons
     document.addEventListener("click", (e) => {
       const btn = e.target.closest("#btn-add-task") || (e.target.id === "btn-add-task" ? e.target : null);
@@ -278,23 +300,9 @@ window.TasksPage = {
   },
 
   openAddModal() {
-    // Filter team members: use userRoles join since users don't have roleId directly
-    // Restriction: PM can only assign to Team Leaders (roleId 5)
-    // Restriction: Must belong to the same domain (department) as the project
-    let users = this.state.users.filter(u => {
-      const ur = this.state.userRoles.find(r => String(r.userId) === String(u.userId));
-      const isTL = ur && ur.roleId === 5;
-      const sameDept = String(u.departmentId) === String(this.project.departmentId);
-      return isTL && sameDept;
-    });
-    
-    // If no specific TL found in dept, show a message or fallback? 
-    // The user said "can only be assigned to TL belonging to that domain", so no fallback.
-    if (!users.length) {
-      console.warn("No Team Leaders found in this project's domain!");
-    }
+    let users = this.state.users || [];
     const userOptions = users
-      .map((u) => `<option value="${u.userId}">${u.fullName}</option>`)
+      .map((u) => `<option value="${u.id || u.userId}">${u.fullName || u.name}</option>`)
       .join("");
 
     window.Modal.create({
@@ -360,42 +368,29 @@ window.TasksPage = {
     const session = window.Auth.getSession();
     const priority = window.Helpers.getVal("task-priority") || "Medium";
     const deadline = window.Helpers.getVal("task-deadline");
-    const assignedId = parseInt(window.Helpers.getVal("task-assigned"), 10) || null;
-    const creatorId = session && session.id ? parseInt(String(session.id).replace(/\D/g, ''), 10) : 1;
-    const projectId = this.project.projectId || parseInt(String(this.project.id).replace(/\D/g, ''), 10);
+    const assignedId = window.Helpers.getVal("task-assigned") || null;
+    const creatorId = session && session.id ? String(session.id) : null;
+    const projectId = String(this.project.id || this.project.projectId);
 
     const newTask = {
-      project_id: projectId,
+      projectId: projectId,
       title: window.Helpers.getVal("task-name"),
-      assigned_to: assignedId,
-      created_by: creatorId,
+      assignedToId: assignedId,
+      createdById: creatorId,
       priority: priority,
-      status: "Pending",
-      estimated_hours: parseFloat(window.Helpers.getVal("task-est")) || 0,
-      due_date: deadline
+      status: "Active",
+      estimatedHours: parseFloat(window.Helpers.getVal("task-est")) || 0,
+      dueDate: deadline ? new Date(deadline).toISOString() : null,
     };
 
     try {
       await window.Helpers.api.request('/tasks', 'POST', newTask);
       this.state = await window.Helpers.getState();
-      
-
-
-      // Send notification to the assigned Team Leader
-      if (newTask.assigned_to) {
-        const dept = this.state.departments.find(d => String(d.id) === String(this.project.departmentId));
-        const deptName = dept ? dept.name : "General";
-        
-        window.Helpers.sendSystemNotification(
-          newTask.assigned_to,
-          `New Task: ${deptName} Department`,
-          `Project Manager assigned you: ${newTask.title}`
-        );
-      }
 
       window.Modal.close("modal-add-task");
       window.Toast.success("Task Added", `"${newTask.title}" created.`);
-      this.tasks = this.state.tasks.filter((t) => parseInt(t.projectId) === parseInt(this.project.id));
+      const currentProjId = String(this.project.id || this.project.projectId);
+      this.tasks = this.state.tasks.filter((t) => String(t.projectId) === currentProjId);
       this.render();
     } catch (e) {
       console.error(e);
@@ -404,13 +399,14 @@ window.TasksPage = {
   },
 
   openEdit(taskId) {
-    const task = this.state.tasks.find((t) => t.taskId === taskId || t.id === taskId);
+    const task = this.state.tasks.find((t) => String(t.id || t.taskId) === String(taskId));
     if (!task) return;
 
     const existing = document.getElementById("task-side-panel-overlay");
     if (existing) window.TasksPage.closeEdit();
 
-    const subtasks = this.state.subtasks.filter((st) => st.taskId === taskId || st.taskId === task.taskId);
+    const taskIdStr = String(task.id || task.taskId);
+    const subtasks = this.state.subtasks.filter((st) => String(st.taskId) === taskIdStr);
     const subHTML =
       subtasks
         .map(
@@ -420,7 +416,7 @@ window.TasksPage = {
           <input type="checkbox" ${st.status === "Completed" ? "checked" : ""} style="width:16px;height:16px;accent-color:#2563eb;cursor:pointer">
           <span style="font-weight:500;font-size:13px;color:${st.status === "Completed" ? "#94a3b8;text-decoration:line-through" : "#1e293b"}">${st.title}</span>
         </div>
-        <span class="badge ${window.Helpers.statusClass(st.status)}">${st.status.replace("_", " ")}</span>
+        <span class="badge ${window.Helpers.statusClass(st.status)}">${String(st.status).replace("_", " ")}</span>
       </div>`,
         )
         .join("") ||
@@ -433,7 +429,7 @@ window.TasksPage = {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:24px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
         <div>
           <div style="font-size:18px;font-weight:800;color:#0f172a">Task Review</div>
-          <div style="font-size:12px;font-weight:600;color:#64748b;margin-top:4px;letter-spacing:0.5px">ID: T-${(task.taskId || task.id).toString().padStart(4, "0")}</div>
+          <div style="font-size:12px;font-weight:600;color:#64748b;margin-top:4px;letter-spacing:0.5px">ID: T-${taskIdStr.substring(0, 8)}</div>
         </div>
         <button onclick="window.TasksPage.closeEdit()" style="background:#e2e8f0;border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#475569;cursor:pointer;font-weight:bold">&times;</button>
       </div>
@@ -446,15 +442,12 @@ window.TasksPage = {
           <div style="background:#f0f4f8;padding:16px;border-radius:12px">
             <label style="display:block;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">STATUS</label>
             <select id="etask-status" class="form-select" style="background:#fff;border-color:#e2e8f0;padding:8px 12px;font-weight:500;color:#0f172a">
-              <option value="Pending"    ${task.status === "Pending" ? "selected" : ""}>Pending</option>
+              <option value="Active"      ${task.status === "Active" ? "selected" : ""}>Active</option>
               <option value="In_Progress" ${task.status === "In_Progress" ? "selected" : ""}>In Progress</option>
-              <option value="In_Review" ${task.status === "In_Review" ? "selected" : ""}>In Review</option>
-              <option value="Pending_TL_Review" ${task.status === "Pending_TL_Review" ? "selected" : ""}>TL Review</option>
-              <option value="Pending_PM_Review" ${task.status === "Pending_PM_Review" ? "selected" : ""}>PM Review</option>
-              <option value="Pending_Compliance" ${task.status === "Pending_Compliance" ? "selected" : ""}>Compliance Check</option>
-              <option value="Completed"  ${task.status === "Completed" ? "selected" : ""}>Completed</option>
-              <option value="Blocked"    ${task.status === "Blocked" ? "selected" : ""}>Blocked</option>
-              <option value="Cancelled"  ${task.status === "Cancelled" ? "selected" : ""}>Cancelled</option>
+              <option value="In_Review"   ${task.status === "In_Review" ? "selected" : ""}>In Review</option>
+              <option value="Completed"   ${task.status === "Completed" ? "selected" : ""}>Completed</option>
+              <option value="Blocked"     ${task.status === "Blocked" ? "selected" : ""}>Blocked</option>
+              <option value="Cancelled"   ${task.status === "Cancelled" ? "selected" : ""}>Cancelled</option>
             </select>
           </div>
           <div style="background:#f0f4f8;padding:16px;border-radius:12px">
@@ -464,28 +457,25 @@ window.TasksPage = {
         </div>
 
         <div style="margin-bottom:28px">
-          <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Attachments</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px">
-            <div style="display:flex;align-items:center;gap:12px">
-              <div style="width:36px;height:36px;background:#eff6ff;color:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">PDF</div>
-              <div>
-                <div style="font-size:13px;font-weight:600;color:#0f172a">Evidence_Log_v2.pdf</div>
-                <div style="font-size:11px;color:#64748b;margin-top:2px">1.4 MB</div>
-              </div>
-            </div>
-            <button style="background:none;border:none;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-          </div>
-        </div>
-
-        <div>
           <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Checklist / Subtasks</div>
           ${subHTML}
+        </div>
+
+        <!-- ── Compliance Evidence Upload (PM/TL/TM Role Integration) ── -->
+        <div style="margin-bottom:28px;padding:16px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;">
+          <div style="font-size:12px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📎 Submit Compliance Evidence</div>
+          <div style="font-size:12px;color:#64748b;margin-bottom:12px">Attach audit documents or logs to satisfy compliance requirements for this task.</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <input type="text" id="task-evidence-title" class="form-input" placeholder="Evidence Title (e.g. Server Audit Signoff)" style="font-size:13px;background:#fff;">
+            <input type="file" id="task-evidence-file" class="form-input" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.txt,.csv" style="font-size:12px;background:#fff;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.TasksPage.uploadTaskEvidence('${taskIdStr}')" style="background:#2563eb;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:600;margin-top:4px;cursor:pointer">Upload Evidence File</button>
+          </div>
         </div>
       </div>
 
       <div style="padding:20px 24px;border-top:1px solid #e2e8f0;background:#fff;display:flex;gap:12px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="window.TasksPage.closeEdit()" style="padding:10px 20px;border-radius:8px;border-color:#e2e8f0;color:#475569">Cancel</button>
-        <button class="btn btn-primary" onclick="window.TasksPage.submitEdit(${task.taskId || task.id})" style="padding:10px 24px;border-radius:8px;background:#2563eb">Save Updates</button>
+        <button class="btn btn-primary" onclick="window.TasksPage.submitEdit('${taskIdStr}')" style="padding:10px 24px;border-radius:8px;background:#2563eb">Save Updates</button>
       </div>
     </div>`;
 
@@ -507,19 +497,14 @@ window.TasksPage = {
   },
 
   async submitEdit(taskId) {
-    const idx = this.state.tasks.findIndex((t) => t.taskId === taskId || t.id === taskId);
-    if (idx === -1) return;
-
-    const numericTaskId = this.state.tasks[idx].taskId || parseInt(String(taskId).replace(/[^0-9]/g, ''), 10);
-
+    const taskIdStr = String(taskId);
     const newStatus = window.Helpers.getVal("etask-status");
     const actualHours = parseFloat(window.Helpers.getVal("etask-actual")) || 0;
 
     try {
-      const pureTaskId = numericTaskId;
-      await window.Helpers.api.request(`/tasks/${pureTaskId}`, 'PATCH', { 
+      await window.Helpers.api.request(`/tasks/${taskIdStr}`, 'PATCH', { 
         status: newStatus,
-        actual_hours: actualHours
+        actualHours: actualHours
       });
       this.state = await window.Helpers.getState();
 
@@ -528,11 +513,82 @@ window.TasksPage = {
         "Task Updated",
         "Status saved successfully.",
       );
-      this.tasks = this.state.tasks.filter((t) => String(t.projectId) === String(this.project.projectId));
+      const currentProjId = String(this.project.id || this.project.projectId);
+      this.tasks = this.state.tasks.filter((t) => String(t.projectId) === currentProjId);
       this.render();
     } catch (e) {
       console.error(e);
       window.Toast.warning("Error", "Failed to update task.");
+    }
+  },
+
+  async uploadTaskEvidence(taskIdStr) {
+    const titleInput = document.getElementById("task-evidence-title");
+    const fileInput  = document.getElementById("task-evidence-file");
+
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      if (window.Toast) window.Toast.warning("No File", "Please select an evidence file to upload.");
+      return;
+    }
+
+    const title = (titleInput ? titleInput.value.trim() : "") || `Evidence for Task #${taskIdStr.substring(0, 8)}`;
+    const file = fileInput.files[0];
+
+    try {
+      const session = window.Auth ? window.Auth.getSession() : null;
+      const userId = session ? (session.id || session.userId) : null;
+      const userRole = session ? (session.role || "team_member") : "team_member";
+      const companyId = session ? (session.companyId || "b7744408-190c-4b83-82c5-ab0049afb6b2") : "b7744408-190c-4b83-82c5-ab0049afb6b2";
+
+      const baseHeaders = {
+        "x-user-role": userRole,
+        "x-company-id": companyId,
+      };
+      if (userId) baseHeaders["x-user-id"] = String(userId);
+
+      // 1. Create Evidence record in NestJS backend
+      const createRes = await fetch("http://localhost:3000/evidence", {
+        method: "POST",
+        headers: {
+          ...baseHeaders,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: userId || "user-1",
+          task_id: taskIdStr,
+          title: title,
+          evidence_type: "Document",
+          file_url: `/uploads/${file.name}`,
+          notes: "Uploaded by actor via PM Task Dashboard"
+        }),
+      });
+
+      const createData = await createRes.json();
+      const createdEv = createData.data || createData;
+      const evId = createdEv.id || createdEv.evidenceId;
+
+      // 2. Upload real file via Multer endpoint POST /evidence/:id/upload
+      if (evId) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const uploadRes = await fetch(`http://localhost:3000/evidence/${evId}/upload`, {
+          method: "POST",
+          headers: baseHeaders,
+          body: formData,
+        });
+
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.message || "File upload failed");
+      }
+
+      this.state = await window.Helpers.getState();
+      if (window.Toast) window.Toast.success("Evidence Uploaded", `"${title}" attached successfully.`);
+      if (titleInput) titleInput.value = "";
+      if (fileInput) fileInput.value = "";
+    } catch (err) {
+      console.error("Task evidence upload error:", err);
+      if (window.Toast) window.Toast.error("Upload Error", err.message || "Failed to upload evidence.");
     }
   },
 };

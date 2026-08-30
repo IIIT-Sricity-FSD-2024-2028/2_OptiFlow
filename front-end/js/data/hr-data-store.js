@@ -38,105 +38,89 @@
     if (!u) return null;
     const globalState = await window.Helpers.getState();
 
-    // PK is user_id in the new schema
-    const numericId = u.user_id ?? u.id;
-    const deptObj = globalState.departments.find(d => String(d.departmentId) === String(u.department_id));
-    const deptName  = deptObj ? deptObj.departmentName : `Dept ${u.department_id}`;
-    const nameParts = String(u.full_name || "").trim().split(/\s+/);
+    const rawId = String(u.userId || u.id || "");
+    const branches = globalState.branches || globalState.departments || [];
+    const deptObj = branches.find(d => String(d.id || d.branchId) === String(u.branchId || u.department_id));
+    const deptName  = deptObj ? deptObj.name : `Branch`;
+    const nameParts = String(u.fullName || u.full_name || "").trim().split(/\s+/);
     const initials  =
       ((nameParts[0] || "")[0] || "").toUpperCase() +
       ((nameParts[1] || "")[0] || "").toUpperCase() || "??";
-    const isActive  = u.is_active !== false && u.is_active !== "Inactive";
+    const isActive  = u.isActive !== false && u.status !== "Inactive";
 
     return {
-      id:          `EMP-${String(numericId).padStart(3, "0")}`,
-      rawId:       numericId,
-      name:        u.full_name || "Unknown",
+      id:          rawId,
+      rawId:       rawId,
+      name:        u.fullName || u.full_name || "Unknown",
       initials,
-      color:       colorFor(numericId),
-      // Store both slug (for guards) and display name
-      role:        ROLE_DISPLAY[u.role] || u.role,
-      roleSlug:    u.role,
-      department:  deptName,
+      color:       colorFor(rawId),
+      role:        ROLE_DISPLAY[u.roleName || u.role] || u.roleName || u.role,
+      roleSlug:    u.roleName || u.role,
+      branch: deptName,
       team:        u.teamName || null,
-      parentId:    u.manager_id
-        ? `EMP-${String(u.manager_id).padStart(3, "0")}`
-        : null,
+      parentId:    u.managerUserId || u.manager_id ? String(u.managerUserId || u.manager_id) : null,
       status:      isActive ? "active" : "inactive",
-      joined:      u.created_at
-        ? new Date(u.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })
+      joined:      u.createdAt
+        ? new Date(u.createdAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" })
         : new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
-      joinDateRaw: u.created_at || "",
+      joinDateRaw: u.createdAt || "",
       email:       u.email || "",
       phone:       u.phone || "",
     };
   }
 
-  // ── Map HR employee → backend PATCH/POST body ──────────────────────────────
   async function mapOut(emp) {
     const globalState = await window.Helpers.getState();
 
-    // Reverse ROLE_DISPLAY to find the slug
     const DISPLAY_TO_SLUG = Object.fromEntries(
       Object.entries(ROLE_DISPLAY).map(([k, v]) => [v, k])
     );
     const roleSlug = DISPLAY_TO_SLUG[emp.role] || emp.roleSlug || emp.role;
 
-    // Reverse DEPT_MAP
-    const deptObj = globalState.departments.find(d => d.departmentName === emp.department);
-    const deptId = deptObj ? deptObj.departmentId : 1;
+    const branches = globalState.branches || globalState.departments || [];
+    const deptObj = branches.find(d => d.name === emp.branch || d.id === emp.branch);
+    const deptId = deptObj ? deptObj.id : null;
 
-    const parentNumericId = emp.parentId
-      ? parseInt(emp.parentId.replace("EMP-", ""), 10)
-      : null;
+    const parentId = emp.parentId ? String(emp.parentId).replace(/^EMP-/, "") : null;
 
     return {
       full_name:     emp.name,
       email:         emp.email,
       phone:         emp.phone || null,
       role:          roleSlug,
-      department_id: deptId,
-      team:          emp.team || null,
-      manager_id:    parentNumericId || null,
+      branch_id:     deptId,
+      manager_id:    parentId || null,
       is_active:     emp.status !== "inactive",
     };
   }
 
-  // ── HRStore ────────────────────────────────────────────────────────────────
   const HRStore = {
-    // No-op: data is now always fetched live from the backend
     async syncWithMaster() {},
 
-  async getAll(filters = {}) {
+    async getAll(filters = {}) {
       try {
-        // Force the app to run getState() so all the roles are mapped properly!
         const globalState = await window.Helpers.getState();
-        
-        // Grab the 'users' array out of that fully mapped state
         let mapped = globalState.users || [];
 
-        // Apply filters (if any)
-        if (filters.status)     mapped = mapped.filter(e => e.status === filters.status);
-        if (filters.department) mapped = mapped.filter(e => e.departmentId === filters.department || e.department === filters.department);
-        
-        // Use the new snake_case properties from the backend
+        if (filters.status)     mapped = mapped.filter(e => e.status === filters.status || (filters.status === "active" ? e.isActive !== false : e.isActive === false));
+        if (filters.branch) mapped = mapped.filter(e => e.branchId === filters.branch || e.department === filters.branch);
         if (filters.role)       mapped = mapped.filter(e => e.roleId === filters.role || e.roleName === filters.role);
         
         if (filters.search) {
           const q = filters.search.toLowerCase();
           mapped = mapped.filter(
-            e => e.fullName.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)
+            e => (e.fullName || "").toLowerCase().includes(q) || (e.email || "").toLowerCase().includes(q)
           );
         }
         
-    // Finally, map it into the old "EMP-000" format the HR dashboard expects
         return mapped.map(u => {
-            return {
-              id:          `EMP-${String(u.userId).padStart(3, "0")}`,
-              rawId:       u.userId,
-              name:        u.fullName || "Unknown",
-              initials:    u.avatar || "??",
-              color:       colorFor(u.userId),
+          const rawId = String(u.userId || u.id || "");
+          return {
+            id:          rawId,
+            rawId:       rawId,
+            name:        u.fullName || u.name || "Unknown",
+            initials:    u.avatar || (u.fullName ? u.fullName.substring(0, 2).toUpperCase() : "??"),
+            color:       colorFor(rawId),
               
               // FIX: Translate snake_case into beautiful Title Case!
               role:        ROLE_DISPLAY[u.roleName] || u.roleName, 
@@ -185,7 +169,7 @@ async getById(id) {
       };
     },
 
-    async getDepartments() {
+    async getTeams() {
       const globalState = await window.Helpers.getState();
       return globalState.departments.map(d => d.departmentName);
     },

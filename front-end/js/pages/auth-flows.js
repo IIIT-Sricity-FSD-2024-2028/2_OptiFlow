@@ -63,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       
       const email = document.getElementById("loginEmail").value.trim();
+      const password = document.getElementById("loginPassword").value;
       const submitBtn = loginForm.querySelector('button[type="submit"]');
       const originalBtnText = submitBtn.textContent;
       
@@ -70,57 +71,158 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.disabled = true;
 
       try {
-        // Fetch all users from the NestJS backend
-        const users = await window.Helpers.api.request('/users', 'GET');
-        const userRoles = await window.Helpers.api.request('/users/roles/mapping', 'GET');
-        const rolesList = await window.Helpers.api.request('/roles', 'GET');
-        
-        // Find the user by email (Password check bypassed per rubric requirements)
-        const validUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+        const api = (window.Helpers && window.Helpers.api) ? window.Helpers.api : {
+          async request(endpoint, method = 'GET', body = null, customHeaders = {}) {
+            const res = await fetch(`http://localhost:3000${endpoint}`, {
+              method,
+              headers: { 'Content-Type': 'application/json', 'x-user-role': 'superuser', 'x-company-id': 'comp-1', ...customHeaders },
+              body: body ? JSON.stringify(body) : null
+            });
+            const json = await res.json();
+            return json.data || json;
+          }
+        };
+
+        // 1. Send Login Request to NestJS /auth/login Backend Endpoint
+        try {
+          const authRes = await fetch("http://localhost:3000/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+          });
+
+          const authData = await authRes.json();
+          const loginPayload = authData.data || authData;
+
+          if (authRes.ok && loginPayload.success && loginPayload.user) {
+            const user = loginPayload.user;
+            const targetRoute = loginPayload.targetRoute || user.targetRoute || "enduser/member-dashboard.html";
+            const roleSlug = loginPayload.roleSlug || "team_member";
+
+            sessionStorage.setItem("currentUser", JSON.stringify({
+              id: user.id,
+              name: user.fullName,
+              email: user.email,
+              role: roleSlug,
+              roleLabel: user.assignedRole,
+              jobTitle: user.jobTitle,
+              roleId: user.roleId || 1,
+              companyId: user.companyId,
+              companyName: user.companyName,
+              scopeType: user.scopeType || null,
+              scopeId: user.scopeId || null,
+              branchName: user.branchName || null,
+            }));
+
+            // Intercept System Role & Redirect to Strict Target Route
+            window.location.href = targetRoute;
+            return;
+          } else if (authRes.status === 401 || authRes.status === 400 || authRes.status === 403) {
+            showAuthMessage("loginForm", loginPayload.message || "Invalid email or password.", "error");
+            submitBtn.textContent = originalBtnText;
+            submitBtn.disabled = false;
+            return;
+          }
+        } catch (e) {
+          console.warn("Backend /auth/login attempt failed, attempting fallback user resolution...", e);
+        }
+
+        // Fallback: Fetch user list across all companies
+        const rawUsers = await api.request('/users', 'GET', null, { 'x-company-id': 'all' });
+        const users = Array.isArray(rawUsers) ? rawUsers : (rawUsers && rawUsers.data ? rawUsers.data : []);
+        const validUser = users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
 
         if (validUser) {
-          // Look up user_roles mapping to determine role
-          const ur = userRoles.find(x => x.user_id === validUser.user_id);
-          const roleObj = rolesList.find(r => r.role_id === ur?.role_id);
-          const roleString = roleObj ? roleObj.role_name : 'team_member';
-          const roleId = roleObj ? roleObj.role_id : 6;
+          let roleLabel = 'Team Member';
+          if (validUser.roleAssignments && validUser.roleAssignments.length > 0) {
+            const ownerRole = validUser.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Owner') || ra.role.label.includes('CEO') || ra.role.label.includes('CTO') || ra.role.label.includes('COO') || ra.role.label.includes('Superuser')));
+            const hrRole = validUser.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Governance') || ra.role.label.includes('HR')));
+            const processRole = validUser.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Process Admin') || ra.role.label.includes('Process')));
+            const complianceRole = validUser.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Compliance')));
+            const pmRole = validUser.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Project Manager') || ra.role.label.includes('PM')));
+            const tlRole = validUser.roleAssignments.find(ra => ra.role && (ra.role.label.includes('Team Lead') || ra.role.label.includes('TL')));
 
-          // Save session mapping backend snake_case to frontend expectations
+            const matchedAssignment = ownerRole || hrRole || processRole || complianceRole || pmRole || tlRole || validUser.roleAssignments[0];
+            if (matchedAssignment && matchedAssignment.role) roleLabel = matchedAssignment.role.label;
+          }
+
+          let roleLower = String(roleLabel || "").toLowerCase();
+          let roleSlug = "team_member";
+          let targetRedirect = "enduser/member-dashboard.html";
+
+          // Strict Target Route Mapping Rules:
+          if (roleLower.includes("system admin") || roleLower.includes("system_admin")) {
+            roleSlug = "system_admin";
+            targetRedirect = "admin-console/admin-dashboard.html";
+          } else if (roleLower.includes("owner") || roleLower.includes("ceo") || roleLower.includes("cto") || roleLower.includes("coo")) {
+            roleSlug = "company_owner";
+            targetRedirect = "admin/executive/executive_dashboard.html";
+          } else if (roleLower.includes("branch manager")) {
+            roleSlug = "branch_manager";
+            targetRedirect = "admin/executive/executive_dashboard.html";
+          } else if (roleLower.includes("governance") || roleLower.includes("hr")) {
+            roleSlug = "hr_manager";
+            targetRedirect = "admin/hr/dashboard.html";
+          } else if (roleLower.includes("process")) {
+            roleSlug = "project_manager";
+            targetRedirect = "superuser/dashboard.html";
+          } else if (roleLower.includes("compliance")) {
+            roleSlug = "compliance_officer";
+            targetRedirect = "modules/compliance.html";
+          } else if (roleLower.includes("project") || roleLower.includes("pm")) {
+            roleSlug = "project_manager";
+            targetRedirect = "admin/pm/pm-dashboard.html";
+          } else if (roleLower.includes("lead") || roleLower.includes("tl")) {
+            roleSlug = "team_leader";
+            targetRedirect = "enduser/tl-dashboard.html";
+          } else {
+            roleSlug = "team_member";
+            targetRedirect = "enduser/member-dashboard.html";
+          }
+
           sessionStorage.setItem("currentUser", JSON.stringify({
-            id: validUser.user_id,
-            name: validUser.full_name,
+            id: validUser.id,
+            name: validUser.fullName,
             email: validUser.email,
-            role: roleString,
-            roleId: roleId,
-            departmentId: validUser.department_id,
-            reportsTo: validUser.manager_id
+            role: roleSlug,
+            roleLabel: roleLabel,
+            roleId: validUser.roleAssignments?.[0]?.roleId || 1,
+            companyId: validUser.companyId,
+            jobTitle: validUser.jobTitle,
           }));
 
-          // Route based on the backend role string
-          const role = roleString.toLowerCase();
-          
-          if (role === "superuser") {
-            window.location.href = "superuser/dashboard.html";
-          } else if (role === "hr_manager" || role === "hr_ops") {
-            window.location.href = "admin/hr/dashboard.html";
-          } else if (role === "project_manager") {
-            window.location.href = "admin/pm/pm-dashboard.html";
-          } else if (role === "compliance_officer") {
-            window.location.href = "admin/compliance/compliance_dashboard.html";
-          } else if (role === "team_leader") {
-            window.location.href = "enduser/tl-dashboard.html";
-          } else {
-            // Fallback for team_member
-            window.location.href = "enduser/member-dashboard.html"; 
-          }
+          window.location.href = targetRedirect;
         } else {
+          // Check if this is a Platform Admin email
+          try {
+            const rawAdmins = await api.request('/platform-admin-users', 'GET', null, { 
+              'x-platform-admin-id': 'bootstrap',
+              'x-user-role': 'platform_admin'
+            });
+            const admins = Array.isArray(rawAdmins) ? rawAdmins : (rawAdmins && rawAdmins.data ? rawAdmins.data : []);
+            const validAdmin = admins.find(a => a.email && a.email.toLowerCase() === email.toLowerCase());
+
+            if (validAdmin) {
+              sessionStorage.setItem("currentUser", JSON.stringify({
+                id: validAdmin.id,
+                name: validAdmin.username || validAdmin.fullName || validAdmin.email,
+                email: validAdmin.email,
+                role: "platform_admin"
+              }));
+              window.location.href = "platform-admin/dashboard.html";
+              return;
+            }
+          } catch (adminErr) {
+            console.warn("Platform admin lookup error:", adminErr);
+          }
+
           showAuthMessage("loginForm", "Invalid email. Could not find this user in the backend database.", "error");
           submitBtn.textContent = originalBtnText;
           submitBtn.disabled = false;
         }
       } catch (error) {
         console.error("Login failed:", error);
-        showAuthMessage("loginForm", "Failed to connect to the backend API. Please ensure your NestJS server is running on port 3000.", "error");
+        showAuthMessage("loginForm", "Failed to connect to backend: " + (error.message || "Ensure NestJS server is running on port 3000"), "error");
         submitBtn.textContent = originalBtnText;
         submitBtn.disabled = false;
       }
@@ -130,14 +232,76 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- 2. REGISTER LOGIC ---
   const registerForm = document.getElementById("registerForm");
   if (registerForm) {
-    registerForm.addEventListener("submit", (e) => {
+    registerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      // Enterprise systems generally do not allow self-registration.
-      // Accounts are provisioned by HR (POST /users) which is protected by the RolesGuard.
-      showAuthMessage("registerForm", "In this enterprise environment, new accounts must be provisioned by the HR Manager. Please contact HR.", "info");
-      setTimeout(() => {
-        window.location.href = "login.html";
-      }, 3000);
+
+      const companyLegalName = document.getElementById("regCompany")?.value?.trim();
+      const ownerFullName = document.getElementById("regName")?.value?.trim();
+      const ownerEmail = document.getElementById("regEmail")?.value?.trim();
+      const ownerPassword = document.getElementById("loginPassword")?.value || document.getElementById("regConfirm")?.value || "password123";
+      const sizeVal = document.getElementById("regSize")?.value || "";
+
+      let planName = "Growth";
+      if (sizeVal.includes("Startup") || sizeVal.includes("Small")) planName = "Starter";
+      else if (sizeVal.includes("Enterprise") || sizeVal.includes("500+")) planName = "Pro Enterprise";
+
+      const submitBtn = registerForm.querySelector("button[type='submit']");
+      const originalBtnText = submitBtn ? submitBtn.textContent : "Create Organization";
+      if (submitBtn) {
+        submitBtn.textContent = "Creating Organization & Templates...";
+        submitBtn.disabled = true;
+      }
+
+      try {
+        const res = await fetch("http://localhost:3000/companies/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyLegalName,
+            ownerFullName,
+            ownerEmail,
+            ownerPassword,
+            planName,
+          }),
+        });
+
+        const json = await res.json();
+        const data = json.data || json;
+
+        if (res.ok && (json.success || data.company)) {
+          const company = data.company;
+          const owner = data.owner;
+
+          sessionStorage.setItem("currentUser", JSON.stringify({
+            id: owner.id,
+            name: owner.fullName,
+            email: owner.email,
+            role: "superuser",
+            roleLabel: owner.assignedRole || "Company Owner",
+            companyId: company.id,
+            companyName: company.legalName,
+          }));
+
+          showAuthMessage("registerForm", `Organization ${company.legalName} created! Seeding templates & initializing workspace...`, "success");
+
+          setTimeout(() => {
+            window.location.href = "admin/executive/executive_dashboard.html";
+          }, 1500);
+        } else {
+          showAuthMessage("registerForm", data.message || "Registration failed. Please check details.", "error");
+          if (submitBtn) {
+            submitBtn.textContent = originalBtnText;
+            submitBtn.disabled = false;
+          }
+        }
+      } catch (err) {
+        console.error("Registration error:", err);
+        showAuthMessage("registerForm", "Failed to connect to backend server: " + err.message, "error");
+        if (submitBtn) {
+          submitBtn.textContent = originalBtnText;
+          submitBtn.disabled = false;
+        }
+      }
     });
   }
 

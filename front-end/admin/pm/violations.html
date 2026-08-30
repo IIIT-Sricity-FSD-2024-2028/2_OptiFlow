@@ -237,7 +237,7 @@
    }
 
       <div style="display:flex; gap:16px;">
-        <button class="btn btn-secondary btn-lg" style="flex:1; justify-content:center;" onclick="window.location.href='tasks.html?project=${e.projectId}'">View Project</button>
+        <button class="btn btn-secondary btn-lg" style="flex:1; justify-content:center;" onclick="window.location.href='../../modules/tasks.html?project=${e.projectId}'">View Project</button>
         ${
           isOpen
             ? `<button class="btn btn-success btn-lg" style="flex:1; justify-content:center; background:#16a34a; color:white; border:none;" onclick="resolveEscalation('${e.id}')">Mark Resolved</button>`
@@ -324,17 +324,16 @@
         if (!result.valid) return;
 
         const session = window.Auth.getSession();
-        const projId = parseInt(window.Helpers.getVal("esc-project"));
-        const priority = window.Helpers.getVal("esc-priority");
+        const projId = window.Helpers.getVal("esc-project") || null;
+        const priority = window.Helpers.getVal("esc-priority") || "High";
 
         const payload = {
-          task_id: 1,                                        // required by DTO, default
           project_id: projId,
-          reported_by: session.id,
-          target_manager_id: session.id,                     // PM resolves own escalations
+          reported_by: session ? String(session.id) : null,
+          target_manager_id: session ? String(session.id) : null,
           title: window.Helpers.getVal("esc-title"),
           description: window.Helpers.getVal("esc-desc"),
-          blocker_type: window.Helpers.getVal("esc-blocker") || "Unknown",
+          blocker_type: window.Helpers.getVal("esc-blocker") || "General",
           priority,
         };
 
@@ -343,7 +342,6 @@
           // Refresh state from backend so the new item appears
           state = await window.Helpers.getState();
           escalations = state.escalations;
-          window.Helpers.log(`Logged escalation "${payload.title}"`, "Escalation");
           window.Modal.close("modal-add-esc");
           window.Toast.success("Escalation Reported", "The escalation has been logged.");
           renderList();
@@ -369,17 +367,12 @@
         try {
           await window.Helpers.api.request(`/escalations/${id}`, "PATCH", {
             status: "Resolved",
-            resolution_remarks: resolutionNotes
+            description: resolutionNotes
           });
 
-          const idx = state.escalations.findIndex((e) => String(e.id) === String(id));
-          if (idx > -1) {
-            state.escalations[idx].status = "Resolved";
-            state.escalations[idx].resolutionNotes = resolutionNotes;
-            escalations = state.escalations;
-          }
+          state = await window.Helpers.getState();
+          escalations = state.escalations;
 
-          window.Helpers.log(`Resolved escalation #${id}`, "Escalation");
           window.Toast.success("Resolved", "Escalation has been resolved.");
           renderList();
           renderDetail(String(id));
@@ -387,17 +380,26 @@
           window.Toast.error("Failed", err.message || "Could not resolve escalation");
         }
       }
+
       function deleteEscalation(id) {
         window.Modal.confirm({
           title: "Dismiss Escalation",
           message: "Are you sure you want to dismiss this escalation?",
           confirmLabel: "Dismiss",
-          onConfirm: () => {
-            state.escalations = state.escalations.filter((e) => e.id !== id);
-            escalations = state.escalations;
-            window.Helpers.saveState(state);
-            renderList();
-            window.Toast.warning("Dismissed", "Escalation has been dismissed.");
+          onConfirm: async () => {
+            try {
+              await window.Helpers.api.request(`/escalations/${id}`, "DELETE");
+              state = await window.Helpers.getState();
+              escalations = state.escalations;
+              renderList();
+              document.getElementById("escalation-detail-pane").innerHTML = `
+                <div class="empty-state" style="margin-top: 20vh">
+                  <div class="empty-state-text">Select an escalation to view details</div>
+                </div>`;
+              window.Toast.warning("Dismissed", "Escalation has been dismissed.");
+            } catch (err) {
+              window.Toast.error("Failed", "Could not delete escalation.");
+            }
           },
         });
       }

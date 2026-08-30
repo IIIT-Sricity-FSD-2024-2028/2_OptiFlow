@@ -54,6 +54,7 @@ window.Notifications = {
     }
   },
 
+  _eventsBound: false,
   bindEvents(notifications) {
     const bellBtn = document.getElementById('btn-notifications');
     if (!bellBtn) return;
@@ -63,10 +64,13 @@ window.Notifications = {
       this.toggleDropdown(notifications);
     };
 
-    // Close on outside click
-    document.addEventListener('click', () => {
-      this.closeDropdown();
-    });
+    // Close on outside click (single global binding)
+    if (!this._eventsBound) {
+      this._eventsBound = true;
+      document.addEventListener('click', () => {
+        this.closeDropdown();
+      });
+    }
   },
 
   toggleDropdown(notifications) {

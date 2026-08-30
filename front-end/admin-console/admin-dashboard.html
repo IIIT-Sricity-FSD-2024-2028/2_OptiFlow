@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Console — Overview</title>
+  <link rel="stylesheet" href="../css/pm/base.css" />
+  <link rel="stylesheet" href="../css/pm/layout.css" />
+  <link rel="stylesheet" href="../css/pm/components.css" />
+  <link rel="stylesheet" href="css/admin-console.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-area">
+      <header class="top-header">
+        <div class="ac-header-block">
+          <div class="page-title">Overview</div>
+          <p id="ac-page-subtitle" class="ac-page-subtitle">Real-time usage against your subscription plan</p>
+        </div>
+      </header>
+      <main class="page-content">
+        <div id="dashboard-error" class="ac-alert-error"></div>
+        <div class="ac-metric-grid" id="usageCards">
+          <div class="card ac-progress-card">
+            <div class="ac-progress-label"><span>Branches Used</span><span id="branchesLabel">—</span></div>
+            <div class="ac-progress-track"><div class="ac-progress-fill" id="branchesBar" style="width:0%"></div></div>
+          </div>
+          <div class="card ac-progress-card">
+            <div class="ac-progress-label"><span>Users Active</span><span id="usersLabel">—</span></div>
+            <div class="ac-progress-track"><div class="ac-progress-fill" id="usersBar" style="width:0%"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2 class="ac-card-title">Plan Summary</h2>
+          <div class="ac-stat-grid">
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Active Plan</div>
+              <div class="ac-stat-value lg" id="planName">—</div>
+            </div>
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Billing Cycle</div>
+              <div class="ac-stat-value" id="billingCycle">—</div>
+            </div>
+            <div class="ac-stat-item">
+              <div class="ac-stat-label">Status</div>
+              <div class="ac-stat-value" id="planStatus">—</div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="../js/utils/helpers.js"></script>
+  <script src="../js/helpers.js"></script>
+  <script src="../js/components/sidebar.js"></script>
+  <script src="js/admin-shell.js"></script>
+  <script src="js/admin-dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Plans Management — OfficeSync</title>
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <div class="main-area">
+        <header class="top-header">
+          <div>
+            <h1 class="page-title">Plans Management</h1>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openCreateModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Plan
+            </button>
+            <div class="bell-btn" id="btn-notifications" title="Notifications">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content" id="main-content">
+          <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h2 style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">Subscription Tiers</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0;">Define resource limits, compliance rules, and retention settings per tier</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Plan Name</th>
+                    <th>Pricing</th>
+                    <th>Max Branches</th>
+                    <th>Max Users</th>
+                    <th>Process Templates</th>
+                    <th>Compliance Rules</th>
+                    <th>Audit Retention</th>
+                    <th>Integrations</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="plans-table-body">
+                  <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">Loading plans...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Create / Edit Plan Modal -->
+    <div class="modal-backdrop" id="plan-modal" style="display: none;">
+      <div class="modal" style="max-width: 520px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-title">New Plan</h3>
+          <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <form id="plan-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Plan Name *</label>
+              <input type="text" class="form-input" id="pf-name" placeholder="e.g. Enterprise Tier" minlength="2" maxlength="100" required />
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label class="form-label">Max Branches</label>
+                <input type="number" class="form-input" id="pf-maxBranches" min="1" step="1" placeholder="e.g. 10 (blank for ∞)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Max Users</label>
+                <input type="number" class="form-input" id="pf-maxUsers" min="1" step="1" placeholder="e.g. 500 (blank for ∞)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Max Process Templates</label>
+                <input type="number" class="form-input" id="pf-maxProcessTemplates" min="1" step="1" placeholder="e.g. 50 (blank for ∞)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Max Compliance Rules</label>
+                <input type="number" class="form-input" id="pf-maxComplianceRules" min="1" step="1" placeholder="e.g. 20 (blank for ∞)" />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Monthly Price</label>
+                <input type="number" class="form-input" id="pf-monthlyPrice" min="0" step="0.01" placeholder="e.g. 99.99" />
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Annual Price</label>
+                <input type="number" class="form-input" id="pf-annualPrice" min="0" step="0.01" placeholder="e.g. 999.99" />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Price Monthly (INR - ₹)*</label>
+                <input type="number" class="form-input" id="pf-priceMonthly" min="0" step="1" placeholder="e.g. 8500" required />
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Price Yearly (INR - ₹)*</label>
+                <input type="number" class="form-input" id="pf-priceYearly" min="0" step="1" placeholder="e.g. 82000" required />
+                <div id="price-yearly-helper" style="font-size: 11.5px; color: var(--text-muted); margin-top: 4px; font-weight: 500; min-height: 16px;"></div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Currency</label>
+              <select class="form-input" id="pf-currency">
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="INR" selected>INR (₹)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Audit Log Retention (days) *</label>
+              <input type="number" class="form-input" id="pf-auditRetention" min="1" max="3650" step="1" placeholder="365" required />
+            </div>
+
+            <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="pf-integrations" style="width: 16px; height: 16px; cursor: pointer;" />
+              <label for="pf-integrations" style="font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text-primary);">Allows Third-Party Integrations</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Plan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      let editingId = null;
+      const session = window.Auth.getSession();
+      const headers = { 'x-platform-admin-id': session ? (session.id || 'bootstrap') : 'bootstrap', 'x-user-role': 'platform_admin' };
+
+      document.addEventListener('DOMContentLoaded', () => {
+        if (!session) { window.location.href = '../login.html'; return; }
+        window.Sidebar.render('plans');
+        loadPlans();
+      });
+
+      async function loadPlans() {
+        try {
+          const plans = await window.Helpers.api.request('/plans', 'GET', null, headers);
+          const tbody = document.getElementById('plans-table-body');
+          if (!plans || !plans.length) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">No plans configured yet. Click "+ New Plan" above to create one.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = plans.map(p => `
+            <tr>
+              <td>
+                <div class="td-label" style="font-weight: 600; color: var(--blue);">${p.name}</div>
+                <div class="td-sub">ID: ${p.id}</div>
+              </td>
+              <td>
+                <div style="font-size: 13px; color: var(--text-primary); font-weight: 600;">
+                  ₹${new Intl.NumberFormat('en-IN').format(p.priceMonthly || 0)}/mo
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted);">
+                  ₹${new Intl.NumberFormat('en-IN').format(p.priceYearly || 0)}/yr
+                </div>
+              </td>
+              <td>${p.maxBranches != null ? p.maxBranches : '<span class="badge badge-gray">Unlimited</span>'}</td>
+              <td>${p.maxUsers != null ? p.maxUsers : '<span class="badge badge-gray">Unlimited</span>'}</td>
+              <td>${p.maxActiveProcessTemplates != null ? p.maxActiveProcessTemplates : '<span class="badge badge-gray">Unlimited</span>'}</td>
+              <td>${p.maxComplianceRules != null ? p.maxComplianceRules : '<span class="badge badge-gray">Unlimited</span>'}</td>
+              <td><span class="badge badge-blue">${p.auditLogRetentionDays} days</span></td>
+              <td>${p.allowsIntegrations ? '<span class="badge badge-green">Enabled</span>' : '<span class="badge badge-gray">Disabled</span>'}</td>
+              <td style="text-align: right;">
+                <button class="btn btn-sm btn-secondary" onclick="editPlan('${p.id}')">Edit</button>
+                <button class="btn btn-sm btn-danger" style="margin-left: 4px;" onclick="deletePlan('${p.id}')">Delete</button>
+              </td>
+            </tr>
+          `).join('');
+        } catch(e) {
+          document.getElementById('plans-table-body').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#ef4444">Failed to load plans from server.</td></tr>';
+        }
+      }
+
+      function updateYearlyPriceHelper() {
+        const val = parseInt(document.getElementById('pf-priceYearly').value, 10);
+        const helper = document.getElementById('price-yearly-helper');
+        if (!isNaN(val) && val > 0) {
+          const equiv = Math.round(val / 12);
+          const formatter = new Intl.NumberFormat('en-IN');
+          helper.textContent = `Equivalent to ₹${formatter.format(equiv)}/month`;
+        } else {
+          helper.textContent = '';
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const yearlyInput = document.getElementById('pf-priceYearly');
+        if (yearlyInput) {
+          yearlyInput.addEventListener('input', updateYearlyPriceHelper);
+        }
+      });
+
+      function openCreateModal() {
+        editingId = null;
+        document.getElementById('modal-title').textContent = 'New Plan';
+        document.getElementById('plan-form').reset();
+        document.getElementById('pf-priceMonthly').value = '';
+        document.getElementById('pf-priceYearly').value = '';
+        updateYearlyPriceHelper();
+        window.Modal.open('plan-modal');
+      }
+
+      function closeModal() {
+        window.Modal.close('plan-modal');
+      }
+
+      async function editPlan(id) {
+        try {
+          const plan = await window.Helpers.api.request(`/plans/${id}`, 'GET', null, headers);
+          editingId = id;
+          document.getElementById('modal-title').textContent = 'Edit Plan';
+          document.getElementById('pf-name').value = plan.name || '';
+          document.getElementById('pf-maxBranches').value = plan.maxBranches ?? '';
+          document.getElementById('pf-maxUsers').value = plan.maxUsers ?? '';
+          document.getElementById('pf-maxProcessTemplates').value = plan.maxActiveProcessTemplates ?? '';
+          document.getElementById('pf-maxComplianceRules').value = plan.maxComplianceRules ?? '';
+          document.getElementById('pf-auditRetention').value = plan.auditLogRetentionDays || 365;
+          document.getElementById('pf-monthlyPrice').value = plan.monthlyPrice ?? '';
+          document.getElementById('pf-annualPrice').value = plan.annualPrice ?? '';
+          document.getElementById('pf-currency').value = plan.currency || 'USD';
+          document.getElementById('pf-priceMonthly').value = plan.priceMonthly ?? '';
+          document.getElementById('pf-priceYearly').value = plan.priceYearly ?? '';
+          updateYearlyPriceHelper();
+          document.getElementById('pf-integrations').checked = !!plan.allowsIntegrations;
+          window.Modal.open('plan-modal');
+        } catch(e) { window.Toast.show('error', 'Error', 'Failed to load plan details'); }
+      }
+
+      function deletePlan(id) {
+        window.Modal.create({
+          id: 'delete-plan-modal',
+          title: 'Delete Plan',
+          body: 'Are you sure you want to delete this plan? This action cannot be undone.',
+          actions: [
+            { text: 'Cancel', class: 'btn-secondary', close: true },
+            { 
+              text: 'Delete', 
+              class: 'btn-danger', 
+              onClick: async () => {
+                try {
+                  await window.Helpers.api.request(`/plans/${id}`, 'DELETE', null, headers);
+                  window.Toast.show('success', 'Deleted', 'Plan deleted successfully');
+                  loadPlans();
+                  window.Modal.close('delete-plan-modal');
+                } catch(e) { window.Toast.show('error', 'Error', 'Failed to delete plan'); }
+              }
+            }
+          ]
+        });
+      }
+
+      document.getElementById('plan-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('pf-name').value.trim();
+        if (!name || name.length < 2) {
+          window.Toast.show('error', 'Validation Error', 'Plan name must be at least 2 characters long.');
+          return;
+        }
+
+        const maxBranchesVal = document.getElementById('pf-maxBranches').value.trim();
+        const maxUsersVal = document.getElementById('pf-maxUsers').value.trim();
+        const maxProcessVal = document.getElementById('pf-maxProcessTemplates').value.trim();
+        const maxRulesVal = document.getElementById('pf-maxComplianceRules').value.trim();
+        const auditRetentionVal = document.getElementById('pf-auditRetention').value.trim();
+        const monthlyPriceVal = document.getElementById('pf-monthlyPrice').value.trim();
+        const annualPriceVal = document.getElementById('pf-annualPrice').value.trim();
+        const currencyVal = document.getElementById('pf-currency').value;
+        const priceMonthlyVal = document.getElementById('pf-priceMonthly').value.trim();
+        const priceYearlyVal = document.getElementById('pf-priceYearly').value.trim();
+
+        if (maxBranchesVal && (isNaN(maxBranchesVal) || parseInt(maxBranchesVal, 10) < 1)) {
+          window.Toast.show('error', 'Validation Error', 'Max Branches must be a positive number greater than 0.');
+          return;
+        }
+        if (maxUsersVal && (isNaN(maxUsersVal) || parseInt(maxUsersVal, 10) < 1)) {
+          window.Toast.show('error', 'Validation Error', 'Max Users must be a positive number greater than 0.');
+          return;
+        }
+        if (maxProcessVal && (isNaN(maxProcessVal) || parseInt(maxProcessVal, 10) < 1)) {
+          window.Toast.show('error', 'Validation Error', 'Max Process Templates must be a positive number greater than 0.');
+          return;
+        }
+        if (maxRulesVal && (isNaN(maxRulesVal) || parseInt(maxRulesVal, 10) < 1)) {
+          window.Toast.show('error', 'Validation Error', 'Max Compliance Rules must be a positive number greater than 0.');
+          return;
+        }
+
+        const auditRetentionDays = parseInt(auditRetentionVal, 10);
+        if (isNaN(auditRetentionDays) || auditRetentionDays < 1) {
+          window.Toast.show('error', 'Validation Error', 'Audit Log Retention must be at least 1 day.');
+          return;
+        }
+
+        const priceMonthly = parseInt(priceMonthlyVal, 10);
+        const priceYearly = parseInt(priceYearlyVal, 10);
+        if (isNaN(priceMonthly) || priceMonthly < 0) {
+          window.Toast.show('error', 'Validation Error', 'Price Monthly (INR) must be a positive integer.');
+          return;
+        }
+        if (isNaN(priceYearly) || priceYearly < 0) {
+          window.Toast.show('error', 'Validation Error', 'Price Yearly (INR) must be a positive integer.');
+          return;
+        }
+
+        const body = {
+          name,
+          maxBranches: maxBranchesVal ? parseInt(maxBranchesVal, 10) : null,
+          maxUsers: maxUsersVal ? parseInt(maxUsersVal, 10) : null,
+          maxActiveProcessTemplates: maxProcessVal ? parseInt(maxProcessVal, 10) : null,
+          maxComplianceRules: maxRulesVal ? parseInt(maxRulesVal, 10) : null,
+          auditLogRetentionDays: auditRetentionDays,
+          allowsIntegrations: document.getElementById('pf-integrations').checked,
+          monthlyPrice: monthlyPriceVal ? parseFloat(monthlyPriceVal) : 0,
+          annualPrice: annualPriceVal ? parseFloat(annualPriceVal) : 0,
+          currency: currencyVal,
+          priceMonthly: priceMonthly,
+          priceYearly: priceYearly
+        };
+        try {
+          if (editingId) {
+            await window.Helpers.api.request(`/plans/${editingId}`, 'PATCH', body, headers);
+            window.Toast.show('success', 'Plan Updated', 'Plan was successfully updated.');
+          } else {
+            await window.Helpers.api.request('/plans', 'POST', body, headers);
+            window.Toast.show('success', 'Plan Created', 'New plan was successfully created.');
+          }
+          closeModal();
+          loadPlans();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to save plan: ' + (err.message || 'Server error')); }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Subscriptions Management — OfficeSync</title>
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <div class="main-area">
+        <header class="top-header">
+          <div>
+            <h1 class="page-title">Tenant Subscriptions</h1>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openAssignSubModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Assign Subscription
+            </button>
+            <div class="bell-btn" id="btn-notifications" title="Notifications">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content" id="main-content">
+          <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h2 style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">Active Company Subscriptions</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0;">Company plan assignments, renewal cycles, and subscription status</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tenant Company</th>
+                    <th>Plan Tier</th>
+                    <th>Billing Cycle</th>
+                    <th>Status</th>
+                    <th>Current Period End</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="subscriptions-table-body">
+                  <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">Loading subscriptions...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Assign / Create Subscription Modal -->
+    <div class="modal-backdrop" id="sub-modal" style="display: none;">
+      <div class="modal" style="max-width: 500px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Assign Tenant Subscription</h3>
+          <button class="modal-close" onclick="closeSubModal()">✕</button>
+        </div>
+        <form id="sub-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Tenant Company *</label>
+              <select class="form-select" id="sf-companyId" required>
+                <option value="">Select Company...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Subscription Plan *</label>
+              <select class="form-select" id="sf-planId" required>
+                <option value="">Select Plan...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Billing Cycle *</label>
+              <select class="form-select" id="sf-billingCycle" required>
+                <option value="Monthly">Monthly</option>
+                <option value="Annual">Annual</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Current Period End Date *</label>
+              <input type="date" class="form-input" id="sf-periodEnd" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Initial Status</label>
+              <select class="form-select" id="sf-status">
+                <option value="Active">Active</option>
+                <option value="PastDue">PastDue</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeSubModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Assign Plan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Subscription Modal -->
+    <div class="modal-backdrop" id="edit-sub-modal" style="display: none;">
+      <div class="modal" style="max-width: 500px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Update Subscription</h3>
+          <button class="modal-close" onclick="closeEditSubModal()">✕</button>
+        </div>
+        <form id="edit-sub-form">
+          <input type="hidden" id="esf-id" />
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Subscription Plan</label>
+              <select class="form-select" id="esf-planId" required></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Billing Cycle</label>
+              <select class="form-select" id="esf-billingCycle" required>
+                <option value="Monthly">Monthly</option>
+                <option value="Annual">Annual</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status *</label>
+              <select class="form-select" id="esf-status" required>
+                <option value="Active">Active</option>
+                <option value="PastDue">PastDue</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Period End Date</label>
+              <input type="date" class="form-input" id="esf-periodEnd" required />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeEditSubModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      const session = window.Auth.getSession();
+      const headers = { 'x-platform-admin-id': session ? (session.id || 'bootstrap') : 'bootstrap', 'x-user-role': 'platform_admin' };
+      let loadedSubscriptions = [];
+      let loadedCompanies = [];
+      let loadedPlans = [];
+
+      document.addEventListener('DOMContentLoaded', () => {
+        if (!session) { window.location.href = '../login.html'; return; }
+        window.Sidebar.render('subscriptions');
+        loadData();
+      });
+
+      async function loadData() {
+        await Promise.all([loadCompaniesList(), loadPlansList()]);
+        await loadSubscriptions();
+      }
+
+      async function loadCompaniesList() {
+        try {
+          const comp = await window.Helpers.api.request('/companies', 'GET', null, headers);
+          loadedCompanies = Array.isArray(comp) ? comp : (comp?.data || []);
+          const select = document.getElementById('sf-companyId');
+          select.innerHTML = '<option value="">Select Company...</option>' + loadedCompanies.map(c => 
+            `<option value="${c.id}">${c.legalName || c.name || 'Unnamed Company'} (${c.id.substring(0, 8)}...)</option>`
+          ).join('');
+        } catch(e) { console.error('Failed to load companies dropdown', e); }
+      }
+
+      async function loadPlansList() {
+        try {
+          const plans = await window.Helpers.api.request('/plans', 'GET', null, headers);
+          loadedPlans = Array.isArray(plans) ? plans : (plans?.data || []);
+          const sfSelect = document.getElementById('sf-planId');
+          const esfSelect = document.getElementById('esf-planId');
+          const options = loadedPlans.map(p => `<option value="${p.id}">${p.name} (Max users: ${p.maxUsers ?? 'Unlimited'})</option>`).join('');
+          sfSelect.innerHTML = '<option value="">Select Plan...</option>' + options;
+          esfSelect.innerHTML = options;
+        } catch(e) { console.error('Failed to load plans dropdown', e); }
+      }
+
+      async function loadSubscriptions() {
+        try {
+          const subs = await window.Helpers.api.request('/subscriptions', 'GET', null, headers);
+          loadedSubscriptions = Array.isArray(subs) ? subs : (subs?.data || []);
+          const tbody = document.getElementById('subscriptions-table-body');
+          if (!loadedSubscriptions || !loadedSubscriptions.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No active subscriptions found. Click "+ Assign Subscription" above to create one.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = loadedSubscriptions.map(s => {
+            const compName = s.company?.legalName || s.company?.name || loadedCompanies.find(c => c.id === s.companyId)?.legalName || s.companyId || '—';
+            const plan = s.plan || loadedPlans.find(p => p.id === s.planId);
+            const planName = plan ? plan.name : 'Custom Plan';
+            let priceText = '—';
+            if (plan) {
+              const price = s.billingCycle === 'Annual' ? plan.annualPrice : plan.monthlyPrice;
+              const period = s.billingCycle === 'Annual' ? 'yr' : 'mo';
+              priceText = `${plan.currency || 'USD'} $${(price || 0).toFixed(2)}/${period}`;
+            }
+            const statusClass = s.status === 'Active' ? 'badge-green' : (s.status === 'PastDue' ? 'badge-yellow' : 'badge-gray');
+            const endFormatted = s.currentPeriodEnd ? new Date(s.currentPeriodEnd).toLocaleDateString() : '—';
+            return `
+              <tr>
+                <td>
+                  <div class="td-label" style="font-weight: 600; color: var(--text-primary);">${compName}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Company ID: <code>${s.companyId}</code></div>
+                </td>
+                <td>
+                  <div><span class="badge badge-blue">${planName}</span></div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;"><strong>${priceText}</strong></div>
+                </td>
+                <td><strong>${s.billingCycle || 'Monthly'}</strong></td>
+                <td>
+                  <span class="badge ${statusClass}">
+                    ${s.status || 'Active'}
+                  </span>
+                </td>
+                <td>${endFormatted}</td>
+                <td style="text-align: right; white-space: nowrap;">
+                  <button class="btn btn-sm btn-secondary" onclick="openEditSubModal('${s.id}')">Edit</button>
+                  <button class="btn btn-sm btn-danger" style="margin-left: 4px;" onclick="deleteSubscription('${s.id}')">Terminate</button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        } catch(e) {
+          console.error(e);
+          document.getElementById('subscriptions-table-body').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#ef4444">Failed to load subscriptions.</td></tr>';
+        }
+      }
+
+      function openAssignSubModal() {
+        document.getElementById('sub-form').reset();
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + 1);
+        document.getElementById('sf-periodEnd').value = d.toISOString().split('T')[0];
+        window.Modal.open('sub-modal');
+      }
+
+      function closeSubModal() {
+        window.Modal.close('sub-modal');
+      }
+
+      document.getElementById('sub-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+          companyId: document.getElementById('sf-companyId').value,
+          planId: document.getElementById('sf-planId').value,
+          billingCycle: document.getElementById('sf-billingCycle').value,
+          status: document.getElementById('sf-status').value,
+          currentPeriodEnd: new Date(document.getElementById('sf-periodEnd').value).toISOString(),
+        };
+        try {
+          await window.Helpers.api.request('/subscriptions', 'POST', body, headers);
+          closeSubModal();
+          loadSubscriptions();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to assign subscription: ' + (err.message || 'Error')); }
+      });
+
+      function openEditSubModal(id) {
+        const s = loadedSubscriptions.find(x => x.id === id);
+        if (!s) return;
+        document.getElementById('esf-id').value = s.id;
+        document.getElementById('esf-planId').value = s.planId || '';
+        document.getElementById('esf-billingCycle').value = s.billingCycle || 'Monthly';
+        document.getElementById('esf-status').value = s.status || 'Active';
+        if (s.currentPeriodEnd) {
+          document.getElementById('esf-periodEnd').value = new Date(s.currentPeriodEnd).toISOString().split('T')[0];
+        }
+        window.Modal.open('edit-sub-modal');
+      }
+
+      function closeEditSubModal() {
+        window.Modal.close('edit-sub-modal');
+      }
+
+      document.getElementById('edit-sub-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('esf-id').value;
+        const body = {
+          planId: document.getElementById('esf-planId').value,
+          billingCycle: document.getElementById('esf-billingCycle').value,
+          status: document.getElementById('esf-status').value,
+          currentPeriodEnd: new Date(document.getElementById('esf-periodEnd').value).toISOString(),
+        };
+        try {
+          await window.Helpers.api.request(`/subscriptions/${id}`, 'PATCH', body, headers);
+          closeEditSubModal();
+          loadSubscriptions();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to update subscription: ' + (err.message || 'Error')); }
+      });
+
+      function deleteSubscription(id) {
+        window.Modal.create({
+          id: 'delete-sub-modal',
+          title: 'Terminate Subscription',
+          body: `Are you sure you want to terminate and delete subscription ID: ${id}?`,
+          actions: [
+            { text: 'Cancel', class: 'btn-secondary', close: true },
+            { 
+              text: 'Terminate', 
+              class: 'btn-danger', 
+              onClick: async () => {
+                try {
+                  await window.Helpers.api.request(`/subscriptions/${id}`, 'DELETE', null, headers);
+                  window.Toast.show('success', 'Terminated', 'Subscription terminated successfully');
+                  loadSubscriptions();
+                  window.Modal.close('delete-sub-modal');
+                } catch(err) { window.Toast.show('error', 'Error', 'Failed to terminate subscription: ' + (err.message || 'Error')); }
+              }
+            }
+          ]
+        });
+      }
+    </script>
+  </body>
+</html>

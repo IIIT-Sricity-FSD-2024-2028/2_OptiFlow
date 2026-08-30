@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Platform Administrators — OfficeSync</title>
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <div class="main-area">
+        <header class="top-header">
+          <div>
+            <h1 class="page-title">Platform Administrators</h1>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openCreateAdminModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Platform Admin
+            </button>
+            <div class="bell-btn" id="btn-notifications" title="Notifications">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content" id="main-content">
+          <!-- Stats Row -->
+          <div class="stats-row" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px;">
+            <div class="stat-card">
+              <div class="stat-label">Total Platform Admins</div>
+              <div class="stat-value">
+                <span id="stat-total" class="stat-num" style="font-size: 28px; font-weight: 700; color: var(--text-primary);">—</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Registered operator accounts</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Active Operators</div>
+              <div class="stat-value">
+                <span id="stat-active" class="stat-num" style="font-size: 28px; font-weight: 700; color: #10b981;">—</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Granted full platform access</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Inactive / Suspended</div>
+              <div class="stat-value">
+                <span id="stat-inactive" class="stat-num" style="font-size: 28px; font-weight: 700; color: #ef4444;">—</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Login privileges revoked</div>
+            </div>
+          </div>
+
+          <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h2 style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">Platform Staff Directory</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0;">Global administrative personnel with master credentials and cross-tenant access</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Admin Name</th>
+                    <th>Email Address</th>
+                    <th>Status</th>
+                    <th>Created Date</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admins-table-body">
+                  <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">Loading platform admins...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Create Admin Modal -->
+    <div class="modal-backdrop" id="admin-modal" style="display: none;">
+      <div class="modal" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Create Platform Administrator</h3>
+          <button class="modal-close" onclick="closeCreateAdminModal()">✕</button>
+        </div>
+        <form id="admin-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Full Name *</label>
+              <input type="text" class="form-input" id="af-fullName" placeholder="e.g. Sarah Jenkins" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email Address *</label>
+              <input type="email" class="form-input" id="af-email" placeholder="e.g. sarah@officesync-platform.test" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Temporary Password *</label>
+              <input type="password" class="form-input" id="af-password" placeholder="••••••••" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Status</label>
+              <select class="form-select" id="af-status">
+                <option value="true">Active (Can log in)</option>
+                <option value="false">Inactive (Suspended)</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeCreateAdminModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Administrator</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      const session = window.Auth.getSession();
+      const headers = { 'x-platform-admin-id': session ? (session.id || 'bootstrap') : 'bootstrap', 'x-user-role': 'platform_admin' };
+      let loadedAdmins = [];
+
+      document.addEventListener('DOMContentLoaded', () => {
+        if (!session) { window.location.href = '../login.html'; return; }
+        window.Sidebar.render('platform-admins');
+        loadAdmins();
+      });
+
+      async function loadAdmins() {
+        try {
+          const admins = await window.Helpers.api.request('/platform-admin-users', 'GET', null, headers);
+          loadedAdmins = Array.isArray(admins) ? admins : (admins?.data || []);
+          
+          document.getElementById('stat-total').textContent = loadedAdmins.length;
+          document.getElementById('stat-active').textContent = loadedAdmins.filter(a => a.isActive !== false).length;
+          document.getElementById('stat-inactive').textContent = loadedAdmins.filter(a => a.isActive === false).length;
+
+          const tbody = document.getElementById('admins-table-body');
+          if (!loadedAdmins || !loadedAdmins.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">No platform admin staff found. Click "+ New Platform Admin" to create one.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = loadedAdmins.map(a => {
+            const isActive = a.isActive !== false;
+            const statusBadge = isActive 
+              ? '<span class="badge badge-green">Active</span>' 
+              : '<span class="badge badge-gray">Inactive</span>';
+
+            const toggleBtnText = isActive ? 'Deactivate' : 'Activate';
+            const toggleBtnClass = isActive ? 'btn-secondary' : 'btn-primary';
+
+            return `
+              <tr>
+                <td>
+                  <div class="td-label" style="font-weight: 600; color: var(--text-primary);">${a.fullName || a.username || 'Platform Operator'}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">ID: <code>${a.id}</code></div>
+                </td>
+                <td><code style="font-size: 12px;">${a.email}</code></td>
+                <td>${statusBadge}</td>
+                <td>${a.createdAt ? new Date(a.createdAt).toLocaleDateString() : '—'}</td>
+                <td style="text-align: right; white-space: nowrap;">
+                  <button class="btn btn-sm ${toggleBtnClass}" onclick="toggleStatus('${a.id}', ${isActive})">${toggleBtnText}</button>
+                  <button class="btn btn-sm btn-danger" style="margin-left: 4px;" onclick="deleteAdmin('${a.id}', '${(a.fullName || a.email).replace(/'/g, "\\'")}')">Delete</button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        } catch(e) {
+          console.error(e);
+          document.getElementById('admins-table-body').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#ef4444">Failed to load platform admins.</td></tr>';
+        }
+      }
+
+      function openCreateAdminModal() {
+        document.getElementById('admin-form').reset();
+        window.Modal.open('admin-modal');
+      }
+
+      function closeCreateAdminModal() {
+        window.Modal.close('admin-modal');
+      }
+
+      document.getElementById('admin-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+          fullName: document.getElementById('af-fullName').value.trim(),
+          email: document.getElementById('af-email').value.trim(),
+          password: document.getElementById('af-password').value,
+          isActive: document.getElementById('af-status').value === 'true',
+        };
+        try {
+          await window.Helpers.api.request('/platform-admin-users', 'POST', body, headers);
+          closeCreateAdminModal();
+          loadAdmins();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to create platform admin: ' + (err.message || 'Error')); }
+      });
+
+      async function toggleStatus(id, currentlyActive) {
+        try {
+          await window.Helpers.api.request(`/platform-admin-users/${id}`, 'PATCH', { isActive: !currentlyActive }, headers);
+          loadAdmins();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to update status: ' + (err.message || 'Error')); }
+      }
+
+      function deleteAdmin(id, name) {
+        window.Modal.create({
+          id: 'delete-admin-modal',
+          title: 'Delete Admin',
+          body: `Are you sure you want to delete platform admin "${name}"?`,
+          actions: [
+            { text: 'Cancel', class: 'btn-secondary', close: true },
+            { 
+              text: 'Delete', 
+              class: 'btn-danger', 
+              onClick: async () => {
+                try {
+                  await window.Helpers.api.request(`/platform-admin-users/${id}`, 'DELETE', null, headers);
+                  window.Toast.show('success', 'Deleted', 'Platform admin deleted successfully');
+                  loadAdmins();
+                  window.Modal.close('delete-admin-modal');
+                } catch(err) { window.Toast.show('error', 'Error', 'Failed to delete platform admin: ' + (err.message || 'Error')); }
+              }
+            }
+          ]
+        });
+      }
+    </script>
+  </body>
+</html>

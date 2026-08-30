@@ -63,7 +63,7 @@
                   Project Health
                 </div>
                 <a
-                  href="projects.html"
+                  href="../../modules/projects.html"
                   style="
                     font-size: 12px;
                     font-weight: 600;
@@ -138,12 +138,11 @@
       </div>
     </div>
 
+    <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/data/db.js"></script>
-
     <script src="../../js/data/pm-data-store.js"></script>
     <script src="../../js/utils/auth.js"></script>
     <script src="../../js/utils/validator.js"></script>
-    <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/components/sidebar.js"></script>
     <script src="../../js/components/toast.js"></script>
     <script src="../../js/components/modal.js"></script>
@@ -157,7 +156,7 @@
         }
         const session = window.Auth.getSession();
         // Allow Superuser (1) or Project Manager (2)
-        if (session.roleId !== 1 && session.roleId !== 2) {
+        if (session.roleId !== 1 && session.roleId !== 2 && session.roleName !== "Project_Manager" && session.role !== "project_manager") {
           window.location.replace("../../login.html");
           return;
         }
@@ -168,14 +167,21 @@
 
         const state = await window.Helpers.getState();
 
-        // Filter projects for this PM (or show all if Superuser)
-        const myProjects =
-          session.roleId === 1
-            ? state.projects
-            : state.projects.filter(
-                (p) => String(p.createdBy) === String(session.id),
-              );
-        const myProjectIds = myProjects.map((p) => String(p.id));
+        // Filter projects for this PM (or show all if Superuser / Project Manager)
+        const isManager =
+          session.roleId === 1 ||
+          session.roleId === 2 ||
+          session.roleName === "Project_Manager" ||
+          session.role === "project_manager" ||
+          session.role === "superuser";
+        const myProjects = isManager
+          ? state.projects
+          : state.projects.filter(
+              (p) =>
+                String(p.createdBy) === String(session.id) ||
+                String(p.createdById) === String(session.id),
+            );
+        const myProjectIds = myProjects.map((p) => String(p.id || p.projectId));
 
         // Filter tasks related to those projects
         const myTasks = state.tasks.filter((t) =>
@@ -215,7 +221,7 @@
         <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">ACTIVE PROJECTS</div>
         <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1">${myProjects.filter((p) => p.status === "Active").length}</div>
       </div>
-      <div style="font-size:24px;color:#0f172a;cursor:pointer" onclick="window.location.href='projects.html'">→</div>
+      <div style="font-size:24px;color:#0f172a;cursor:pointer" onclick="window.location.href='../../modules/projects.html'">→</div>
     </div>
     
     <div style="background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);padding:24px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start">
@@ -268,7 +274,7 @@
               ? p.endDate.split("-").slice(1).reverse().join("/")
               : "—";
             return `
-      <div style="display:flex;align-items:center;padding:16px 0;border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="localStorage.setItem('selectedProjectId', '${p.id}'); window.location.href='tasks.html?project=${p.id}'">
+      <div style="display:flex;align-items:center;padding:16px 0;border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="localStorage.setItem('selectedProjectId', '${p.id}'); window.location.href='../../modules/tasks.html?project=${p.id}'">
         <div style="width:4px;height:32px;background:${color};border-radius:4px;margin-right:16px"></div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:600;color:#0f172a">${p.name}</div>
@@ -424,15 +430,9 @@
                 return;
               }
               
-              const filteredTLs = state.users.filter(u => {
-                const ur = state.userRoles.find(r => String(r.userId) === String(u.userId));
-                const isTL = ur && ur.roleId === 5;
-                const sameDept = String(u.departmentId) === String(project.departmentId);
-                return isTL && sameDept;
-              });
-              
+              const users = state.users || [];
               assignSelect.innerHTML = '<option value="">Select member</option>' + 
-                filteredTLs.map(u => `<option value="${u.userId}">${u.fullName}</option>`).join("");
+                users.map(u => `<option value="${u.id || u.userId}">${u.fullName || u.name}</option>`).join("");
             };
 
             // Handle submission
@@ -445,15 +445,16 @@
               });
               if (!res.valid) return;
 
+              const deadline = window.Helpers.getVal("gtask-deadline");
               const newTask = {
-                project_id: parseInt(window.Helpers.getVal("gtask-project"), 10),
+                projectId: window.Helpers.getVal("gtask-project"),
                 title: window.Helpers.getVal("gtask-name"),
-                assigned_to: parseInt(window.Helpers.getVal("gtask-assigned"), 10),
-                created_by: parseInt(session.id, 10),
+                assignedToId: window.Helpers.getVal("gtask-assigned"),
+                createdById: session.id ? String(session.id) : null,
                 priority: window.Helpers.getVal("gtask-priority") || "Medium",
-                status: "Pending",
-                estimated_hours: parseFloat(window.Helpers.getVal("gtask-est")) || 0,
-                due_date: window.Helpers.getVal("gtask-deadline")
+                status: "Active",
+                estimatedHours: parseFloat(window.Helpers.getVal("gtask-est")) || 0,
+                dueDate: deadline ? new Date(deadline).toISOString() : null
               };
 
               try {

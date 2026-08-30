@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>OfficeSync - Platform Admin Login</title>
+  <link rel="stylesheet" href="../css/auth.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+</head>
+
+<body>
+  <header class="auth-header">
+    <img src="../assets/images/logo.svg" alt="OfficeSync" height="30" />
+    <nav>
+      <a href="../index.html">Home</a>
+      <a href="../login.html">User Login</a>
+    </nav>
+  </header>
+
+  <main class="auth-main">
+    <div class="auth-card">
+      <div class="auth-header-text">
+        <p style="text-transform:uppercase;font-size:0.75rem;color:var(--btn-blue);font-weight:bold">
+          Platform Administration
+        </p>
+        <h1>Platform Admin Login</h1>
+      </div>
+      <form id="platformLoginForm">
+        <div class="input-group">
+          <label>Admin Email</label>
+          <input type="email" id="adminEmail" placeholder="admin@officesync.com" required />
+        </div>
+        <div class="input-group">
+          <label>Password</label>
+          <input type="password" id="adminPassword" placeholder="Password" />
+        </div>
+        <button type="submit" class="auth-btn">Sign In as Platform Admin</button>
+      </form>
+      <div class="bottom-text">
+        <a href="../login.html">← Back to User Login</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="auth-footer">
+    <div>© 2026 OfficeSync Inc. All rights reserved.</div>
+  </footer>
+
+  <script src="../js/utils/helpers.js"></script>
+  <script src="../js/data/db.js"></script>
+  <script src="../js/utils/auth.js"></script>
+  <script src="../js/components/toast.js"></script>
+  <script src="../js/components/modal.js"></script>
+  <script>
+    document.getElementById('platformLoginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('adminEmail').value.trim();
+
+      try {
+        const api = (window.Helpers && window.Helpers.api) ? window.Helpers.api : {
+          async request(endpoint, method = 'GET', body = null, customHeaders = {}) {
+            const res = await fetch(`http://localhost:3000${endpoint}`, {
+              method,
+              headers: { 
+                'Content-Type': 'application/json', 
+                'x-platform-admin-id': 'bootstrap', 
+                'x-user-role': 'platform_admin',
+                ...customHeaders 
+              },
+              body: body ? JSON.stringify(body) : null
+            });
+            const json = await res.json();
+            return json.data || json;
+          }
+        };
+
+        const rawAdmins = await api.request('/platform-admin-users', 'GET', null, { 
+          'x-platform-admin-id': 'bootstrap',
+          'x-user-role': 'platform_admin'
+        });
+        const admins = Array.isArray(rawAdmins) ? rawAdmins : (rawAdmins && rawAdmins.data ? rawAdmins.data : []);
+        const admin = admins.find(a => a.email && a.email.toLowerCase() === email.toLowerCase());
+        if (admin) {
+          sessionStorage.setItem('currentUser', JSON.stringify({
+            id: admin.id,
+            name: admin.fullName || admin.username || admin.email,
+            email: admin.email,
+            role: 'platform_admin',
+            roleLabel: 'Platform Admin',
+          }));
+          window.location.href = 'dashboard.html';
+        } else {
+          window.Toast.show('error', 'Error', 'Platform admin not found. Please check your email.');
+        }
+      } catch(err) {
+        console.error('Platform admin login error:', err);
+        window.Toast.show('error', 'Error', 'Failed to connect to backend: ' + (err.message || 'Ensure the server is running.'));
+      }
+    });
+  </script>
+</body>
+</html>

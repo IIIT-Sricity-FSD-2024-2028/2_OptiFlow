@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Global Projects — Executive Command Center</title>
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/layout.css" />
+  <link rel="stylesheet" href="../../css/components.css" />
+  <link rel="stylesheet" href="css/executive.css" />
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content" style="display:flex;flex-direction:column;overflow:hidden;">
+      <header class="top-header">
+        <div>
+          <div class="page-title">Global Projects</div>
+          <div id="exec-page-subtitle" style="font-size:13px;color:var(--exec-muted);margin-top:4px;">Cross-branch project portfolio</div>
+        </div>
+        <div class="exec-header-actions">
+          <div id="executive-branch-switcher" style="display:flex;align-items:center;"></div>
+        </div>
+      </header>
+
+      <div class="executive-content">
+        <div class="exec-kpi-grid" id="project-kpis"></div>
+
+        <div class="exec-toolbar">
+          <div class="exec-toolbar-left">
+            <div class="exec-search">
+              <i class="ri-search-line"></i>
+              <input type="text" id="project-search" placeholder="Search projects across all branches..." />
+            </div>
+            <select id="status-filter" class="exec-select">
+              <option value="">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Planning">Planning</option>
+              <option value="On_Hold">At Risk</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div id="context-banner" style="font-size:13px;color:var(--exec-muted);font-weight:500;"></div>
+        </div>
+
+        <div class="exec-two-col">
+          <div class="exec-card">
+            <div class="exec-card-header">
+              <span class="exec-card-title">Project Portfolio</span>
+              <span id="project-count-label" style="font-size:12px;color:var(--exec-muted);"></span>
+            </div>
+            <div class="exec-table-wrap">
+              <table class="exec-table">
+                <thead>
+                  <tr>
+                    <th>Project</th>
+                    <th>Branch</th>
+                    <th>Team</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th>Due</th>
+                    <th>Risk</th>
+                  </tr>
+                </thead>
+                <tbody id="projects-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="exec-card">
+            <div class="exec-card-header">
+              <span class="exec-card-title">Projects by Branch</span>
+            </div>
+            <div class="exec-mini-chart"><canvas id="branchProjectChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="../../js/utils/helpers.js"></script>
+  <script src="../../js/components/executive-branch-switcher.js"></script>
+  <script src="../../js/components/sidebar.js"></script>
+  <script src="js/executive-shell.js"></script>
+  <script src="executive_projects.js"></script>
+</body>
+</html>

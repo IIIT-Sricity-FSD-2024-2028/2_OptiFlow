@@ -20,13 +20,14 @@
       href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
       rel="stylesheet"
     />
+    <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/data/db.js"></script>
     <script src="../../js/data/pm-data-store.js"></script>
     <script src="../../js/utils/auth.js"></script>
     <script src="../../js/utils/validator.js"></script>
-    <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/components/sidebar.js"></script>
     <script src="../../js/components/toast.js"></script>
+    <script src="../../js/components/modal.js"></script>
     <script src="../../js/data/audit-store.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
@@ -113,114 +114,7 @@
               </div>
 
               <ul class="queue-list" id="queueList" role="list">
-                <li
-                  class="queue-item active"
-                  id="qi-gdpr"
-                  data-id="gdpr"
-                  onclick="selectEvidence('gdpr')"
-                  role="button"
-                  tabindex="0"
-                >
-                  <div class="queue-item-header">
-                    <span class="queue-item-title">GDPR Evidence Package</span>
-                    <span class="queue-item-date">Today</span>
-                  </div>
-                  <div class="queue-item-meta">
-                    Project Atlas · Kiran Rao (TL)
-                  </div>
-                  <div class="queue-item-badges">
-                    <span class="badge urgent">Urgent</span>
-                    <span class="badge policy">GDPR</span>
-                  </div>
-                </li>
-
-                <li
-                  class="queue-item"
-                  id="qi-sox"
-                  data-id="sox"
-                  onclick="selectEvidence('sox')"
-                  role="button"
-                  tabindex="0"
-                >
-                  <div class="queue-item-header">
-                    <span class="queue-item-title">SOX Variance Report</span>
-                    <span class="queue-item-date">Yesterday</span>
-                  </div>
-                  <div class="queue-item-meta">
-                    Finance Q4 · Priya Sharma (TL)
-                  </div>
-                  <div class="queue-item-badges">
-                    <span class="badge due-soon">Due soon</span>
-                    <span class="badge policy">SOX</span>
-                  </div>
-                </li>
-
-                <li
-                  class="queue-item"
-                  id="qi-iso"
-                  data-id="iso"
-                  onclick="selectEvidence('iso')"
-                  role="button"
-                  tabindex="0"
-                >
-                  <div class="queue-item-header">
-                    <span class="queue-item-title"
-                      >ISO 27001 Control Check</span
-                    >
-                    <span class="queue-item-date">Dec 15</span>
-                  </div>
-                  <div class="queue-item-meta">
-                    IT Security · Sunita Rao (TL)
-                  </div>
-                  <div class="queue-item-badges">
-                    <span class="badge pending">Pending</span>
-                    <span class="badge policy">ISO 27001</span>
-                  </div>
-                </li>
-
-                <li
-                  class="queue-item"
-                  id="qi-hr"
-                  data-id="hr"
-                  onclick="selectEvidence('hr')"
-                  role="button"
-                  tabindex="0"
-                >
-                  <div class="queue-item-header">
-                    <span class="queue-item-title">HR Policy Checklist</span>
-                    <span class="queue-item-date">Dec 14</span>
-                  </div>
-                  <div class="queue-item-meta">
-                    Onboarding Overhaul · Kiran Rao (TL)
-                  </div>
-                  <div class="queue-item-badges">
-                    <span class="badge pending">Pending</span>
-                    <span class="badge policy">HR Policy</span>
-                  </div>
-                </li>
-
-                <li
-                  class="queue-item"
-                  id="qi-proc"
-                  data-id="proc"
-                  onclick="selectEvidence('proc')"
-                  role="button"
-                  tabindex="0"
-                >
-                  <div class="queue-item-header">
-                    <span class="queue-item-title"
-                      >Procurement Audit Trail</span
-                    >
-                    <span class="queue-item-date">Dec 13</span>
-                  </div>
-                  <div class="queue-item-meta">
-                    Procurement Review · Priya Sharma (TL)
-                  </div>
-                  <div class="queue-item-badges">
-                    <span class="badge pending">Pending</span>
-                    <span class="badge policy">Internal</span>
-                  </div>
-                </li>
+                <!-- Dynamically populated by JS -->
               </ul>
             </section>
 
@@ -291,126 +185,34 @@
                   </div>
                 </div>
 
-                <!-- Attached Files -->
+                <!-- Attached Files — rendered dynamically by evidence.js -->
                 <div class="detail-section">
-                  <div class="detail-section-label">Attached Files (3)</div>
+                  <div class="detail-section-label">Attached Files</div>
                   <div id="attachedFiles">
-                    <div class="attached-file-item">
-                      <svg
-                        class="file-icon"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path
-                          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                        />
-                        <polyline points="14 2 14 8 20 8" />
-                      </svg>
-                      <div class="file-info">
-                        <div class="file-name">GDPR_Evidence_Package.pdf</div>
-                        <div class="file-size">6.1 MB</div>
-                      </div>
-                      <button
-                        class="file-download-btn"
-                        onclick="downloadEvidence()"
-                        aria-label="Download GDPR_Evidence_Package.pdf"
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      </button>
-                    </div>
+                    <!-- Populated by selectEvidence() in evidence.js -->
+                  </div>
 
-                    <div class="attached-file-item">
-                      <svg
-                        class="file-icon"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path
-                          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                        />
-                        <polyline points="14 2 14 8 20 8" />
-                      </svg>
-                      <div class="file-info">
-                        <div class="file-name">Data_Audit_Report.xlsx</div>
-                        <div class="file-size">2.3 MB</div>
-                      </div>
+                  <!-- ── Real File Upload Widget ─────────────────────────── -->
+                  <div id="uploadWidget" style="margin-top:12px;padding:14px 16px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;">
+                    <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;">Upload New Evidence File</div>
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                      <input
+                        type="file"
+                        id="evidenceFileInput"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.txt,.csv"
+                        style="flex:1;min-width:180px;font-size:13px;"
+                      />
                       <button
-                        class="file-download-btn"
-                        onclick="downloadEvidence()"
-                        aria-label="Download Data_Audit_Report.xlsx"
+                        id="btn-upload-evidence"
+                        class="btn btn-primary"
+                        onclick="uploadEvidenceFile()"
+                        style="padding:8px 16px;font-size:13px;white-space:nowrap;"
                       >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
+                        Upload
                       </button>
                     </div>
-
-                    <div class="attached-file-item">
-                      <svg
-                        class="file-icon"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path
-                          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                        />
-                        <polyline points="14 2 14 8 20 8" />
-                      </svg>
-                      <div class="file-info">
-                        <div class="file-name">Client_Consent_Records.pdf</div>
-                        <div class="file-size">890 KB</div>
-                      </div>
-                      <button
-                        class="file-download-btn"
-                        onclick="downloadEvidence()"
-                        aria-label="Download Client_Consent_Records.pdf"
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      </button>
-                    </div>
+                    <div id="uploadProgress" style="display:none;font-size:12px;color:#64748b;margin-top:6px;">Uploading…</div>
+                    <div id="uploadResult" style="display:none;font-size:12px;margin-top:6px;"></div>
                   </div>
                 </div>
 
@@ -562,6 +364,7 @@
       </div>
     </div>
 
+    <script src="../../js/pages/compliance/compliance.js"></script>
     <script src="../../js/pages/compliance/evidence.js"></script>
   </body>
 </html>

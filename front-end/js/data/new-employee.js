@@ -144,7 +144,7 @@ async function validateAll() {
 // ═══════════════════════════════════════════════════════
 
 async function populateDepartments() {
-  const sel = document.getElementById("department");
+  const sel = document.getElementById("branch");
   const deps = await HRStore.getDepartments();
   sel.innerHTML = '<option value="">— Select Department —</option>';
   deps.forEach((d) => {
@@ -284,7 +284,7 @@ async function handleSubmit() {
   const firstName = document.getElementById("firstName").value.trim();
   const lastName = document.getElementById("lastName").value.trim();
   const workEmail = document.getElementById("workEmail").value.trim();
-  const department = document.getElementById("department").value;
+  const branch = document.getElementById("branch").value;
   const team = document.getElementById("team").value;
   const systemRole = document.getElementById("systemRole").value;
   const reportsTo = document.getElementById("reportsTo").value || null;
@@ -296,7 +296,7 @@ async function handleSubmit() {
     initials: getInitials(firstName, lastName),
     color: randomColor(),
     role: systemRole,
-    department,
+    branch,
     team: team || null,
     parentId: reportsTo,
     status: "active",
@@ -360,7 +360,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await populateSystemRoles();
   await populateReportsTo();
 
-  document.getElementById("department").addEventListener("change", async function () {
+  document.getElementById("branch").addEventListener("change", async function () {
     await populateTeams(this.value);
     clearError("department");
     clearError("team");

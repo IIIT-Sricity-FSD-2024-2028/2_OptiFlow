@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Console — User Governance</title>
+  <link rel="stylesheet" href="../css/pm/base.css" />
+  <link rel="stylesheet" href="../css/pm/layout.css" />
+  <link rel="stylesheet" href="../css/pm/components.css" />
+  <link rel="stylesheet" href="css/admin-console.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-area">
+      <header class="top-header">
+        <div>
+          <div class="page-title">User Governance</div>
+          <p id="ac-page-subtitle" style="margin:6px 0 0;color:var(--text-muted);font-size:14px;">Invite CEOs, Branch Managers, and team members</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="openInviteModal()">+ Invite User</button>
+        </div>
+      </header>
+      <main class="page-content">
+        <div class="card">
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead>
+                <tr><th>USER</th><th>ROLE</th><th>STATUS</th></tr>
+              </thead>
+              <tbody id="userTableBody">
+                <tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="inviteModal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Invite User</div>
+        <div class="modal-close" onclick="closeInviteModal()">&times;</div>
+      </div>
+      <div class="modal-body">
+        <div id="invite-error" style="display:none;color:#ef4444;font-weight:600;margin-bottom:12px;padding:10px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;"></div>
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-control" id="inviteName" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="inviteEmail" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-control" id="inviteRole" onchange="toggleBranchField()">
+            <option value="company_owner">Company Owner (CEO)</option>
+            <option value="branch_manager">Branch Manager</option>
+            <option value="project_manager">Project Manager</option>
+            <option value="team_leader">Team Leader</option>
+            <option value="enduser">Team Member</option>
+            <option value="compliance_officer">Compliance Officer</option>
+            <option value="hr_manager">Access Governance (HR)</option>
+            <option value="superuser">Process Admin</option>
+          </select>
+        </div>
+        <div class="form-group" id="inviteBranchGroup" style="display:none;">
+          <label class="form-label">Assign to Branch</label>
+          <select class="form-control" id="inviteBranch">
+            <option value="">Select branch…</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeInviteModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitInvite()">Send Invite</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/utils/helpers.js"></script>
+  <script src="../js/helpers.js"></script>
+  <script src="../js/components/sidebar.js"></script>
+  <script src="js/admin-shell.js"></script>
+  <script src="js/admin-governance.js"></script>
+</body>
+</html>

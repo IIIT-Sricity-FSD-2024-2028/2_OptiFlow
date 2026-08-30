@@ -11,6 +11,7 @@ function goToLogin() {
     path.includes("/admin/pm/") ||
     path.includes("/admin/hr/") ||
     path.includes("/admin/compliance/") ||
+    path.includes("/admin/executive/") ||
     path.includes("/enduser/member/") ||
     path.includes("/enduser/leader/")
   ) {
@@ -20,7 +21,8 @@ function goToLogin() {
   else if (
     path.includes("/admin/") ||
     path.includes("/superuser/") ||
-    path.includes("/enduser/")
+    path.includes("/enduser/") ||
+    path.includes("/platform-admin/")
   ) {
     window.location.replace("../login.html");
   }
@@ -44,12 +46,18 @@ function protectPage(allowedRoles) {
 
   const currentUser = JSON.parse(currentUserStr);
 
-  // "God-mode": superuser can access every page regardless of allowedRoles
-  if (currentUser && currentUser.role === "superuser") return;
+  // "God-mode": superuser / company owner can access PM module pages
+  if (currentUser && (currentUser.role === "superuser" || currentUser.role === "company_owner")) return;
 
   if (!allowedRoles.includes(currentUser.role)) {
-    alert("You do not have permission to view this page.");
-    goToLogin();
+    if (window.Toast && typeof window.Toast.show === 'function') {
+      window.Toast.show("error", "Access Denied", "You do not have permission to view this page.");
+      // Add slight delay to allow toast to render
+      setTimeout(() => goToLogin(), 1500);
+    } else {
+      alert("You do not have permission to view this page.");
+      goToLogin();
+    }
   }
 }
 
@@ -76,17 +84,24 @@ window.Auth = {
     // 1. Translate string roles to exactly what the PM module wants
     let rId = 5;
     let pmRoleName = "Team_Member";
+    const r = String(u.role || u.roleLabel || "").toLowerCase().replace(/[\s\-]/g, "_");
 
-    if (u.role === "superuser") {
+    if (r === "company_owner" || (u.roleLabel || '').toLowerCase().includes('owner') || (u.roleLabel || '').toLowerCase().includes('ceo')) {
+      rId = 1;
+      pmRoleName = "Company_Owner";
+    } else if (r === "superuser" || r === "owner" || r === "system_admin") {
       rId = 1;
       pmRoleName = "SuperUser";
-    } else if (u.role === "project_manager") {
+    } else if (r === "platform_admin") {
+      rId = 0;
+      pmRoleName = "Platform_Admin";
+    } else if (r === "project_manager") {
       rId = 2;
       pmRoleName = "Project_Manager";
-    } else if (u.role === "compliance_officer") {
+    } else if (r === "compliance_officer") {
       rId = 3;
       pmRoleName = "Compliance_Officer";
-    } else if (u.role === "team_leader") {
+    } else if (r === "team_leader") {
       rId = 4;
       pmRoleName = "Team_Leader";
     }
@@ -111,9 +126,11 @@ window.Auth = {
       rawId: rawNumericId != null ? rawNumericId : u.id,
       name: u.name,
       email: u.email,
+      role: r,
       roleId: rId,
       roleName: pmRoleName,
-      subRole: u.role === "team_leader" ? "team_leader" : "member",
+      subRole: r === "team_leader" ? "team_leader" : "member",
+      companyId: u.companyId || (u.company && u.company.id) || "b7744408-190c-4b83-82c5-ab0049afb6b2",
       avatar: initials,
       avatarColor: "blue",
       projectId: u.projectId, // Passthrough for dashboards

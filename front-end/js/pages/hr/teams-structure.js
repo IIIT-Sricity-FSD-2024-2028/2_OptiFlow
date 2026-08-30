@@ -1,391 +1,348 @@
-// teams-structure.js
-// All data comes from HRStore (API-backed).
-// No employee names or details are hardcoded here.
+// teams-structure.js — Rewritten
+// Builds a role-level org hierarchy from real DB data.
+// Hierarchy: CEO/Owner → CTO/COO → HR Manager / Process Admin / Compliance Officer → Project Manager → Team Leader → Team Member
+// Uses managerId (UUID) from the DB directly. Falls back to role-level grouping if managerId is not set.
 
-let ALL_EMPLOYEES = [];
-let DEPARTMENTS = [];
-// ─────────────────────────────────────────
-// SECURITY GUARD: Prevent Back-Button Access
-// ─────────────────────────────────────────
-function enforceSecurity() {
-  if (!sessionStorage.getItem("currentUser")) {
-    window.location.replace("../../login.html");
-  }
-}
+(function () {
+  'use strict';
 
-enforceSecurity();
-
-window.addEventListener("pageshow", (event) => {
-  if (event.persisted) {
-    enforceSecurity();
-  }
-});
-// ─────────────────────────────────────────
-// ─── 1. LOAD FROM STORE ──────────────────────────────────
-async function loadData() {
-  try {
-    if (HRStore && HRStore.syncWithMaster) await HRStore.syncWithMaster();
-    ALL_EMPLOYEES = await HRStore.getAll();
-    DEPARTMENTS = ["All Departments", ...(await HRStore.getDepartments())];
-    return true;
-  } catch (err) {
-    console.error("HRStore read failed:", err);
-    return false;
-  }
-}
-
-// ─── 2. STATS DISPLAY ────────────────────────────────────
-function renderStats(employees) {
-  const active = employees.filter((e) => e.status === "active").length;
-  const pending = employees.filter((e) => e.status === "pending").length;
-  const teams = new Set(employees.map((e) => e.team).filter(Boolean)).size;
-
-  document.getElementById("statTotal").textContent = employees.length;
-  document.getElementById("statTeams").textContent = teams;
-  document.getElementById("statActive").textContent = active;
-  document.getElementById("statPending").textContent = pending;
-}
-
-// ─── 3. DEPARTMENT FILTER ────────────────────────────────
-function populateDeptFilter() {
-  const sel = document.getElementById("deptFilter");
-  sel.innerHTML = "";
-  DEPARTMENTS.forEach((dept) => {
-    const opt = document.createElement("option");
-    opt.value = dept === "All Departments" ? "" : dept;
-    opt.textContent = dept;
-    sel.appendChild(opt);
-  });
-}
-
-// ─── 4. TREE BUILDING ────────────────────────────────────
-function normEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function resolveManagerEmpId(emp, ctx) {
-  if (!emp) return null;
-
-  const raw = emp.parentId || emp.reportsTo || null;
-  if (!raw) return null;
-
-  const ref = String(raw);
-  if (ref.startsWith("EMP-")) return ref;
-
-  if (ref.startsWith("u")) {
-    const u = ctx.userById.get(ref);
-    if (!u) return null;
-    const mgrEmp = ctx.hrByEmail.get(normEmail(u.email));
-    return mgrEmp ? mgrEmp.id : null;
-  }
-
-  return null;
-}
-
-async function buildTree(employees) {
-  const map = new Map();
-  const idSet = new Set(employees.map((e) => e.id));
-
-  const hrByEmail = new Map();
-  const hrById = new Map();
-  employees.forEach((e) => {
-    hrById.set(String(e.id), e);
-    const em = normEmail(e.email);
-    if (em) hrByEmail.set(em, e);
-  });
-
-  const masterUsers =
-    typeof getUsers === "function"
-      ? await getUsers()
-      : JSON.parse(localStorage.getItem("users")) || [];
-  const userById = new Map(masterUsers.map((u) => [String(u.id), u]));
-  const ctx = { hrByEmail, hrById, userById };
-
-  employees.forEach((emp) => map.set(emp.id, { ...emp, children: [] }));
-
-  const topLevelNodes = [];
-
-  employees.forEach((emp) => {
-    const node = map.get(emp.id);
-    const managerId = resolveManagerEmpId(emp, ctx);
-
-    if (managerId && map.has(managerId) && managerId !== emp.id) {
-      map.get(managerId).children.push(node);
-    } else {
-      topLevelNodes.push(node);
-    }
-  });
-
-  function detectCycle(node, ancestors = new Set()) {
-    if (ancestors.has(node.id)) {
-      console.warn(`Circular ref at ${node.id} — breaking link.`);
-      return true;
-    }
-    ancestors.add(node.id);
-    node.children = node.children.filter(
-      (c) => !detectCycle(c, new Set(ancestors)),
-    );
-    return false;
-  }
-  topLevelNodes.forEach((r) => detectCycle(r));
-
-  const roots = [];
-  const independents = [];
-
-  topLevelNodes.forEach((node) => {
-    if (node.children.length > 0) {
-      roots.push(node);
-    } else {
-      independents.push(node);
-    }
-  });
-
-  return { roots, independents };
-}
-
-// ─── 5. ROLE → CSS CLASS ─────────────────────────────────
-function roleClass(role = "", status = "") {
-  if (status === "pending") return "role-pend";
-  const r = role.toLowerCase();
-  if (r.includes("project manager")) return "role-pm";
-  if (r.includes("team leader")) return "role-tl";
-  if (r.includes("team member")) return "role-tm";
-  if (r.includes("compliance")) return "role-co";
-  if (r.includes("process")) return "role-pa";
-  if (r.includes("hr")) return "role-hr";
-  return "role-def";
-}
-
-// ─── 6. RECURSIVE NODE RENDERER ──────────────────────────
-function renderNode(node, isRoot = false) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "tree-node";
-
-  const cardWrap = document.createElement("div");
-  cardWrap.className = "node-card-wrap";
-
-  const card = document.createElement("div");
-  card.className = `emp-card${isRoot ? " root" : ""}${node.status === "pending" ? " pending" : ""}`;
-  card.title = `View ${node.name}'s profile`;
-  card.setAttribute("role", "button");
-  card.setAttribute("tabindex", "0");
-
-  card.innerHTML = `
-    <div class="card-avatar" style="background:${node.color};">${node.initials}</div>
-    <div class="card-name">${node.name}</div>
-    <div class="card-team">${node.team || node.department || ""}</div>
-    <span class="card-role-badge ${roleClass(node.role, node.status)}">${node.role}</span>
-  `;
-
-  function navigate() {
-    window.location.href = `employee-detail.html?id=${encodeURIComponent(node.id)}`;
-  }
-  card.addEventListener("click", navigate);
-  card.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") navigate();
-  });
-
-  cardWrap.appendChild(card);
-  wrapper.appendChild(cardWrap);
-
-  if (node.children && node.children.length > 0) {
-    const ul = document.createElement("ul");
-    ul.className = "tree-children";
-    node.children.forEach((child) => {
-      const li = document.createElement("li");
-      li.appendChild(renderNode(child, false));
-      ul.appendChild(li);
-    });
-    wrapper.appendChild(ul);
-  }
-
-  return wrapper;
-}
-
-// ─── 7. MAIN RENDER ──────────────────────────────────────
-async function renderTree(employees) {
-  const loader = document.getElementById("treeLoader");
-  const container = document.getElementById("treeContainer");
-  const treeRoot = document.getElementById("treeRoot");
-  const indieSection = document.getElementById("independentSection");
-  const indieGrid = document.getElementById("indieGrid");
-
-  treeRoot.innerHTML = "";
-  indieGrid.innerHTML = "";
-  indieSection.style.display = "none";
-
-  if (employees.length === 0) {
-    loader.innerHTML = `<div class="tree-empty"><i class="ri-team-line"></i><p>No employees found for this department.</p></div>`;
-    loader.style.display = "flex";
-    container.style.display = "none";
+  // ── Security guard ────────────────────────────────────────────────────────
+  if (!sessionStorage.getItem('currentUser')) {
+    window.location.replace('../../login.html');
     return;
   }
+  window.addEventListener('pageshow', e => {
+    if (e.persisted && !sessionStorage.getItem('currentUser'))
+      window.location.replace('../../login.html');
+  });
 
-  loader.style.display = "none";
-  container.style.display = "block";
+  // ── Role hierarchy order (lower = higher rank) ────────────────────────────
+  const ROLE_RANK = {
+    superuser:          0,
+    hr_manager:         1,
+    compliance_officer: 1,
+    project_manager:    2,
+    team_leader:        3,
+    team_member:        4,
+  };
 
-  const { roots, independents } = await buildTree(employees);
+  // ── Human-readable role labels ─────────────────────────────────────────────
+  const ROLE_LABEL = {
+    superuser:          'Company Owner',
+    hr_manager:         'HR Manager',
+    compliance_officer: 'Compliance Officer',
+    project_manager:    'Project Manager',
+    team_leader:        'Team Leader',
+    team_member:        'Team Member',
+  };
 
-  if (roots.length === 0 && independents.length === 0) {
-    treeRoot.innerHTML = `<div class="tree-empty"><i class="ri-search-line"></i><p>Could not build a tree for this selection.</p></div>`;
+  // ── Role → badge CSS class ─────────────────────────────────────────────────
+  const ROLE_CSS = {
+    superuser:          'role-su',
+    hr_manager:         'role-hr',
+    compliance_officer: 'role-co',
+    project_manager:    'role-pm',
+    team_leader:        'role-tl',
+    team_member:        'role-tm',
+  };
+
+  // ── Avatar colours ─────────────────────────────────────────────────────────
+  const COLORS = ['#2563eb','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#db2777','#16a34a'];
+  function colorFor(str) {
+    let h = 0;
+    for (let i = 0; i < (str || '').length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+    return COLORS[Math.abs(h) % COLORS.length];
   }
 
-  roots.forEach((root) => treeRoot.appendChild(renderNode(root, true)));
+  // ── State ──────────────────────────────────────────────────────────────────
+  let ALL_EMPLOYEES = [];
+  let BRANCHES = [];
 
-  if (independents.length > 0) {
-    indieSection.style.display = "block";
-    independents.forEach((emp) => {
-      const card = document.createElement("div");
-      card.className = `emp-card${emp.status === "pending" ? " pending" : ""}`;
-      card.title = `View ${emp.name}'s profile`;
-      card.setAttribute("role", "button");
-      card.setAttribute("tabindex", "0");
-      card.innerHTML = `
-        <div class="card-avatar" style="background:${emp.color};">${emp.initials}</div>
-        <div class="card-name">${emp.name}</div>
-        <div class="card-team">${emp.department || ""}</div>
-        <span class="card-role-badge ${roleClass(emp.role, emp.status)}">${emp.role}</span>
-      `;
-      function navigate() {
-        window.location.href = `employee-detail.html?id=${encodeURIComponent(emp.id)}`;
-      }
-      card.addEventListener("click", navigate);
-      card.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") navigate();
+  // ── Load from real API ─────────────────────────────────────────────────────
+  async function loadData() {
+    try {
+      const state = await window.Helpers.getState();
+      const users = state.users || [];
+      ALL_EMPLOYEES = users.map(u => {
+        const slug = u.roleName || 'team_member';
+        const initials = (u.fullName || '')
+          .split(' ').map(n => (n[0] || '')).join('').toUpperCase().substring(0, 2) || '??';
+        return {
+          id:         String(u.id),
+          name:       u.fullName || 'Unknown',
+          email:      u.email    || '',
+          initials,
+          color:      colorFor(u.id),
+          roleSlug:   slug,
+          role:       ROLE_LABEL[slug] || u.roleLabel || slug,
+          rank:       ROLE_RANK[slug] ?? 4,
+          managerId:  u.managerId ? String(u.managerId) : null,
+          teamName:   u.teamName   || null,
+          branchName: u.departmentName || null,
+          status:     u.isActive !== false ? 'active' : 'inactive',
+        };
       });
-      indieGrid.appendChild(card);
-    });
+      BRANCHES = (state.branches || []).map(b => b.name).filter(Boolean);
+      return true;
+    } catch (err) {
+      console.error('[Teams] loadData failed:', err);
+      return false;
+    }
   }
-}
 
-// ─── 8. FILTER HANDLER ───────────────────────────────────
-async function applyFilter() {
-  const dept = document.getElementById("deptFilter").value;
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  function renderStats(employees) {
+    const teams  = new Set(employees.map(e => e.teamName).filter(Boolean)).size;
+    const active = employees.filter(e => e.status === 'active').length;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('statTotal',   employees.length);
+    set('statTeams',   teams);
+    set('statActive',  active);
+    set('statPending', 0);
+  }
 
-  let subset;
-  if (!dept) {
-    subset = ALL_EMPLOYEES;
-  } else {
-    const deptSet = new Set(
-      ALL_EMPLOYEES.filter((e) => e.department === dept).map((e) => e.id),
-    );
+  // ── Dept filter ────────────────────────────────────────────────────────────
+  function populateDeptFilter(employees) {
+    const sel = document.getElementById('deptFilter');
+    if (!sel) return;
 
-    const hrByEmail = new Map();
-    ALL_EMPLOYEES.forEach((e) => {
-      const em = normEmail(e.email);
-      if (em) hrByEmail.set(em, e);
+    const branches = [...new Set(employees.map(e => e.branchName).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">All Departments</option>';
+    branches.forEach(b => { sel.innerHTML += `<option value="${b}">${b}</option>`; });
+  }
+
+  // ── Build tree from employees ──────────────────────────────────────────────
+  // Strategy:
+  //   1. If managerId is set and resolves to a known employee → use it
+  //   2. Otherwise fall back to role-rank grouping:
+  //      - rank-0 (Owner) nodes are top-level
+  //      - rank-N employees report to the closest rank-(N-1) employee
+  function buildOrgTree(employees) {
+    const byId = new Map(employees.map(e => [e.id, { ...e, children: [] }]));
+
+    // Pass 1: wire up explicit manager links
+    const unlinked = [];
+    byId.forEach(node => {
+      if (node.managerId && byId.has(node.managerId) && node.managerId !== node.id) {
+        byId.get(node.managerId).children.push(node);
+      } else {
+        unlinked.push(node);
+      }
     });
-    const masterUsers =
-      typeof getUsers === "function"
-        ? await getUsers()
-        : JSON.parse(localStorage.getItem("users")) || [];
-    const userById = new Map(masterUsers.map((u) => [String(u.id), u]));
-    const ctx = { hrByEmail, hrById: new Map(), userById };
 
-    function addAncestors(id) {
-      const emp = ALL_EMPLOYEES.find((e) => e.id === id);
-      if (!emp || deptSet.has(emp.id)) return;
-      deptSet.add(emp.id);
-      const managerId = resolveManagerEmpId(emp, ctx);
-      if (managerId) addAncestors(managerId);
+    // Pass 2: among unlinked nodes, group by role rank
+    // Find the best "parent" for each unlinked node: the highest-ranked node
+    // with a strictly lower rank number
+    const byRank = {};
+    byId.forEach(node => {
+      const r = node.rank ?? 4;
+      if (!byRank[r]) byRank[r] = [];
+      byRank[r].push(node);
+    });
+
+    const roots = [];
+
+    unlinked.forEach(node => {
+      if (node.rank === 0) {
+        roots.push(node);
+        return;
+      }
+      // Find a parent at rank - 1, then rank - 2, etc.
+      let attached = false;
+      for (let r = node.rank - 1; r >= 0; r--) {
+        const candidates = byRank[r] || [];
+        if (candidates.length > 0) {
+          // Attach to the first candidate (or distribute round-robin for many)
+          const parent = byId.get(candidates[0].id);
+          if (parent) { parent.children.push(node); attached = true; break; }
+        }
+      }
+      if (!attached) roots.push(node);
+    });
+
+    // Cycle detection
+    function detectCycle(node, seen = new Set()) {
+      if (seen.has(node.id)) { node.children = []; return; }
+      seen.add(node.id);
+      node.children.forEach(c => detectCycle(c, new Set(seen)));
+    }
+    roots.forEach(r => detectCycle(r));
+
+    return roots;
+  }
+
+  // ── Card HTML builder ──────────────────────────────────────────────────────
+  function makeCard(emp, isRoot = false) {
+    const div = document.createElement('div');
+    div.className = 'tree-node';
+
+    const cardWrap = document.createElement('div');
+    cardWrap.className = 'node-card-wrap';
+
+    const card = document.createElement('div');
+    card.className = `emp-card${isRoot ? ' root' : ''}`;
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.title = `View ${emp.name}'s profile`;
+    card.innerHTML = `
+      <div class="card-avatar" style="background:${emp.color};">${emp.initials}</div>
+      <div class="card-name">${emp.name}</div>
+      <div class="card-team">${emp.teamName || emp.branchName || ''}</div>
+      <span class="card-role-badge ${ROLE_CSS[emp.roleSlug] || 'role-tm'}">${emp.role}</span>
+    `;
+
+    // Navigate on click — NOT logout
+    const navigate = () => {
+      window.location.href = `employee-detail.html?id=${encodeURIComponent(emp.id)}`;
+    };
+    card.addEventListener('click', navigate);
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') navigate(); });
+
+    cardWrap.appendChild(card);
+    div.appendChild(cardWrap);
+
+    if (emp.children && emp.children.length > 0) {
+      const ul = document.createElement('ul');
+      ul.className = 'tree-children';
+      emp.children.forEach(child => {
+        const li = document.createElement('li');
+        li.appendChild(makeCard(child, false));
+        ul.appendChild(li);
+      });
+      div.appendChild(ul);
     }
 
-    ALL_EMPLOYEES.filter((e) => e.department === dept).forEach((e) => {
-      const managerId = resolveManagerEmpId(e, ctx);
-      if (managerId) addAncestors(managerId);
+    return div;
+  }
+
+  // ── Render tree ────────────────────────────────────────────────────────────
+  async function renderTree(employees) {
+    const loader    = document.getElementById('treeLoader');
+    const container = document.getElementById('treeContainer');
+    const treeRoot  = document.getElementById('treeRoot');
+
+    if (!loader || !container || !treeRoot) return;
+
+    treeRoot.innerHTML = '';
+    loader.style.display = 'none';
+    container.style.display = 'block';
+
+    if (!employees.length) {
+      treeRoot.innerHTML = `
+        <div class="tree-empty">
+          <i class="ri-team-line"></i>
+          <p>No employees found for this filter.</p>
+        </div>`;
+      return;
+    }
+
+    const roots = buildOrgTree(employees);
+
+    if (!roots.length) {
+      treeRoot.innerHTML = `
+        <div class="tree-empty">
+          <i class="ri-search-line"></i>
+          <p>Could not build an org chart — check manager assignments.</p>
+        </div>`;
+      return;
+    }
+
+    roots.forEach(root => treeRoot.appendChild(makeCard(root, true)));
+  }
+
+  // ── Filter handler ─────────────────────────────────────────────────────────
+  async function applyFilter() {
+    const branch = document.getElementById('deptFilter')?.value || '';
+    const subset = branch
+      ? ALL_EMPLOYEES.filter(e => e.branchName === branch)
+      : ALL_EMPLOYEES;
+    renderStats(subset);
+    await renderTree(subset);
+  }
+
+  // ── Notifications ──────────────────────────────────────────────────────────
+  function setupNotifications() {
+    const btn      = document.getElementById('notifBtn');
+    const panel    = document.getElementById('notifPanel');
+    const backdrop = document.getElementById('notifBackdrop');
+    const closeBtn = document.getElementById('closeNotif');
+    if (!btn || !panel) return;
+
+    const open  = () => { panel.classList.add('open'); backdrop?.classList.add('open'); };
+    const close = () => { panel.classList.remove('open'); backdrop?.classList.remove('open'); };
+
+    btn.addEventListener('click', e => { e.stopPropagation(); panel.classList.contains('open') ? close() : open(); });
+    closeBtn?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+  }
+
+  // ── Logout ─────────────────────────────────────────────────────────────────
+  function setupLogout() {
+    const modal    = document.getElementById('logoutModal');
+    const openFn   = () => modal?.classList.add('active');
+    const closeFn  = () => modal?.classList.remove('active');
+
+    document.getElementById('logoutBtn')?.addEventListener('click', openFn);
+    document.getElementById('closeLogoutModal')?.addEventListener('click', closeFn);
+    document.getElementById('cancelLogout')?.addEventListener('click', closeFn);
+    document.getElementById('confirmLogout')?.addEventListener('click', () => {
+      sessionStorage.removeItem('currentUser');
+      window.location.href = '../../login.html';
     });
-    subset = ALL_EMPLOYEES.filter((e) => deptSet.has(e.id));
+    modal?.addEventListener('click', e => { if (e.target === modal) closeFn(); });
   }
 
-  renderStats(subset);
-  await renderTree(subset);
-}
+  // ── Sidebar user info ──────────────────────────────────────────────────────
+  function updateSidebar() {
+    const raw = sessionStorage.getItem('currentUser');
+    if (!raw) return;
+    try {
+      const u = JSON.parse(raw);
+      const name     = u.fullName || u.name || 'HR Manager';
+      const initials = name.split(' ').map(n => (n[0] || '')).join('').toUpperCase().substring(0, 2) || '??';
+      const role     = u.assignedRole || u.roleLabel || 'HR Manager';
+      const el = document.getElementById('sidebarName');
+      const av = document.getElementById('sidebarAvatar');
+      const ro = document.getElementById('sidebarRole');
+      // Fallback to .user-name / .user-role / .avatar selectors used in the HTML
+      document.querySelectorAll('.user-name').forEach(el => el.textContent = name);
+      document.querySelectorAll('.user-role').forEach(el => el.textContent = role);
+      document.querySelectorAll('.avatar').forEach(el => {
+        el.textContent = initials;
+        el.style.background = colorFor(name);
+      });
+    } catch {}
+  }
 
-// ─── 9. NOTIFICATION PANEL ───────────────────────────────
-function setupNotifications() {
-  const btn = document.getElementById("notifBtn");
-  if (!btn) return;
-  const panel = document.getElementById("notifPanel");
-  const backdrop = document.getElementById("notifBackdrop");
-  const closeBtn = document.getElementById("closeNotif");
+  // ── Main init ──────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', async () => {
+    updateSidebar();
+    setupNotifications();
+    setupLogout();
 
-  const open = () => {
-    panel.classList.add("open");
-    backdrop.classList.add("open");
-  };
-  const close = () => {
-    panel.classList.remove("open");
-    backdrop.classList.remove("open");
-  };
-
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    panel.classList.contains("open") ? close() : open();
-  });
-  closeBtn.addEventListener("click", close);
-  backdrop.addEventListener("click", close);
-}
-
-// ─── 10. LOGOUT MODAL ────────────────────────────────────
-function setupLogout() {
-  const modal = document.getElementById("logoutModal");
-  const open = () => modal.classList.add("active");
-  const close = () => modal.classList.remove("active");
-
-  document.getElementById("logoutBtn").addEventListener("click", open);
-  document.getElementById("closeLogoutModal").addEventListener("click", close);
-  document.getElementById("cancelLogout").addEventListener("click", close);
-  document.getElementById("confirmLogout").addEventListener("click", () => {
-    sessionStorage.removeItem("currentUser");
-    close();
-    window.location.href = "../../login.html";
-  });
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) close();
-  });
-}
-
-// ─── 11. INIT ────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", async () => {
-  setupNotifications();
-  // --- DYNAMIC SIDEBAR UPDATER ---
-  // Fetch the live, mapped user from the backend
-  const currentUser = await HRStore.getCurrentUser();
-  if (currentUser) {
-    // We cast a wide net to catch whatever CSS class your HTML is using
-    const nameEls = document.querySelectorAll(".sidebar-user-name, .user-info h4, .profile-name, .name, .user-name");
-    const roleEls = document.querySelectorAll(".sidebar-user-role, .user-info p, .profile-role, .role, .user-role");
-    const avatarEls = document.querySelectorAll(".sidebar-avatar, .user-avatar, .avatar, .profile-avatar");
-
-    // Update all matching elements on the page
-    nameEls.forEach(el => el.textContent = currentUser.name);
-    roleEls.forEach(el => el.textContent = currentUser.role);
-    avatarEls.forEach(el => {
-      el.textContent = currentUser.initials;
-      el.style.backgroundColor = currentUser.color;
+    // "Add Member" → navigate, not modal
+    document.getElementById('addMemberBtn')?.addEventListener('click', () => {
+      window.location.href = 'new-employee.html';
     });
-  }
-  // -------------------------------
-  setupLogout();
 
-  document.getElementById("addMemberBtn").addEventListener("click", () => {
-    window.location.href = "new-employee.html?returnTo=teams-structure.html";
+    document.getElementById('deptFilter')?.addEventListener('change', applyFilter);
+
+    // Show loading state
+    const loader = document.getElementById('treeLoader');
+    if (loader) loader.style.display = 'flex';
+
+    const ok = await loadData();
+    if (!ok) {
+      if (loader) loader.innerHTML = `
+        <div class="tree-empty">
+          <i class="ri-error-warning-line"></i>
+          <p>Failed to load team data. Please refresh.</p>
+        </div>`;
+      return;
+    }
+
+    populateDeptFilter(ALL_EMPLOYEES);
+    renderStats(ALL_EMPLOYEES);
+    await renderTree(ALL_EMPLOYEES);
   });
-
-  document.getElementById("deptFilter").addEventListener("change", applyFilter);
-  document.getElementById("treeLoader").style.display = "flex";
-
-  const ok = await loadData();
-  if (!ok) {
-    document.getElementById("treeLoader").innerHTML = `
-      <div class="tree-empty">
-        <i class="ri-error-warning-line"></i>
-        <p>Failed to load team data. Please refresh.</p>
-      </div>`;
-    return;
-  }
-
-  populateDeptFilter();
-  renderStats(ALL_EMPLOYEES);
-  await renderTree(ALL_EMPLOYEES);
-});
+})();

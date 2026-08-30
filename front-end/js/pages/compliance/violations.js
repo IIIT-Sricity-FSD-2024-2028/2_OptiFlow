@@ -1,3 +1,6 @@
+// js/pages/compliance/violations.js
+// Compliance Violations — Queue & Resolution view with human-readable entity names
+
 let state;
 let allUsers = [];
 let allRules = [];
@@ -6,31 +9,71 @@ let activeViolationId = null;
 document.addEventListener("DOMContentLoaded", async function () {
   if (window.Sidebar) window.Sidebar.render("violations");
 
-  // ── Async load ────────────────────────────────────────────────────────────
+  // Force hide all inert modals on initial render
+  document.querySelectorAll('.modal-overlay, .modal-backdrop').forEach(m => {
+    m.classList.remove('active');
+    m.classList.add('hidden');
+    m.style.display = 'none';
+  });
+
   state = await window.Helpers.getState();
   if (!state.complianceViolations) state.complianceViolations = [];
   allUsers = state.users || [];
   allRules = state.complianceRules || [];
 
-  document.querySelectorAll(".pill-tab").forEach(function (tab) {
-    tab.addEventListener("click", function () {
-      document.querySelectorAll(".pill-tab").forEach((t) => t.classList.remove("active"));
-      this.classList.add("active");
-      renderQueue(this.dataset.tab);
+  let _eventsBound = false;
+  if (!_eventsBound) {
+    _eventsBound = true;
+    document.querySelectorAll(".pill-tab").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        document.querySelectorAll(".pill-tab").forEach((t) => t.classList.remove("active"));
+        this.classList.add("active");
+        renderQueue(this.dataset.tab);
+      });
     });
-  });
+  }
 
   renderQueue("open");
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Human-Readable Entity Name Resolver ───────────────────────────────────────
 function userName(userId) {
-  const u = allUsers.find((u) => u.userId === userId || u.id === String(userId));
-  return u ? u.fullName : "System";
+  if (!userId) return "System";
+  if (typeof userId === "object") return userId.fullName || userId.name || "System";
+  const cleanId = String(userId);
+  const u = allUsers.find((u) => String(u.id) === cleanId || String(u.userId) === cleanId);
+  return u ? (u.fullName || u.name) : `User (${cleanId.substring(0, 8)})`;
+}
+
+function getEntityLabel(entityType, entityId) {
+  if (!entityId) return entityType || "General";
+  const cleanId = String(entityId);
+
+  if (entityType === "User") {
+    const u = allUsers.find((u) => String(u.id) === cleanId || String(u.userId) === cleanId);
+    if (u) return `${u.fullName || u.name} (User)`;
+    return `User (${cleanId.substring(0, 8)})`;
+  }
+  if (entityType === "Task") {
+    const t = (state.tasks || []).find((t) => String(t.id) === cleanId || String(t.taskId) === cleanId);
+    if (t) return `Task "${t.title}"`;
+    return `Task #${cleanId.substring(0, 8)}`;
+  }
+  if (entityType === "Project") {
+    const p = (state.projects || []).find((p) => String(p.id) === cleanId || String(p.projectId) === cleanId);
+    if (p) return `Project "${p.name}"`;
+    return `Project #${cleanId.substring(0, 8)}`;
+  }
+  if (entityType === "Team") {
+    const tm = (state.teams || []).find((tm) => String(tm.id) === cleanId);
+    if (tm) return `Team "${tm.name}"`;
+    return `Team #${cleanId.substring(0, 8)}`;
+  }
+  return `${entityType || "Entity"} (${cleanId.substring(0, 8)})`;
 }
 
 function ruleFor(ruleId) {
-  return allRules.find((r) => r.ruleId === ruleId) || {};
+  return allRules.find((r) => String(r.id) === String(ruleId) || String(r.ruleId) === String(ruleId)) || {};
 }
 
 function fmtDate(iso) {
@@ -79,13 +122,17 @@ function renderQueue(filter) {
   list.innerHTML =
     filteredData
       .map((item) => {
-        const rule = ruleFor(item.ruleId);
-        const severity = rule.severity || "Medium";
-        const title = rule.ruleName ? `${rule.ruleName} — ${item.entityType} #${item.entityId}` : `Violation #${item.violationId}`;
+        const vId = item.id || item.violationId;
+        const rule = ruleFor(item.ruleId) || item.rule || {};
+        const severity = item.severity || rule.severity || "Medium";
+        const ruleName = rule.name || rule.ruleName || "Compliance Rule";
+        const entityLabel = getEntityLabel(item.entityType, item.entityId);
+        const title = `${ruleName} — ${entityLabel}`;
+
         return `
-        <li class="vq-item" id="vqi-${item.violationId}" onclick="selectViolation(${item.violationId})" role="button" tabindex="0">
+        <li class="vq-item" id="vqi-${vId}" onclick="selectViolation('${vId}')" role="button" tabindex="0">
           <div class="vq-item-title">${title}</div>
-          <div class="vq-item-meta">Detected ${fmtDate(item.detectedAt)} · Due: ${item.dueDate || "N/A"}</div>
+          <div class="vq-item-meta">Detected ${fmtDate(item.detectedAt)} · Target: ${entityLabel}</div>
           <div class="vq-item-badges">
             <span class="badge ${severityBadge(severity)}">${severity}</span>
             <span class="badge ${item.status === "Resolved" ? "resolved" : "open"}">${item.status}</span>
@@ -96,7 +143,8 @@ function renderQueue(filter) {
     '<li style="padding:20px; text-align:center; color:#64748b;">No violations found.</li>';
 
   if (filteredData.length > 0) {
-    selectViolation(filteredData[0].violationId);
+    const firstId = filteredData[0].id || filteredData[0].violationId;
+    selectViolation(firstId);
   } else {
     showEmptyDetail();
   }
@@ -141,16 +189,18 @@ window.selectViolation = function (id) {
   if (itemEl) itemEl.classList.add("active");
 
   activeViolationId = id;
-  const d = state.complianceViolations.find((v) => v.violationId === id || String(v.violationId) === String(id));
+  const d = state.complianceViolations.find((v) => String(v.id) === String(id) || String(v.violationId) === String(id));
   if (!d) return;
 
-  const rule = ruleFor(d.ruleId);
-  const severity = rule.severity || "Medium";
+  const rule = ruleFor(d.ruleId) || d.rule || {};
+  const severity = d.severity || rule.severity || "Medium";
+  const ruleName = rule.name || rule.ruleName || "Compliance Rule";
+  const entityLabel = getEntityLabel(d.entityType, d.entityId);
 
   // Title & badge
   const titleEl = document.getElementById("vdTitle");
   const badgeEl = document.getElementById("vdBadge");
-  if (titleEl) titleEl.textContent = rule.ruleName ? `${rule.ruleName} — ${d.entityType} #${d.entityId}` : `Violation #${d.violationId}`;
+  if (titleEl) titleEl.textContent = `${ruleName} — ${entityLabel}`;
   if (badgeEl) {
     badgeEl.textContent = severity;
     badgeEl.className = `badge ${severityBadge(severity)}`;
@@ -158,12 +208,12 @@ window.selectViolation = function (id) {
 
   // Info grid cells
   const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-  setText("vdPolicy", rule.ruleName || "—");
-  setText("vdProject", `${d.entityType} #${d.entityId}`);
-  setText("vdPM", userName(d.reportedBy));
-  setText("vdTL", d.resolvedBy ? userName(d.resolvedBy) : "Unassigned");
+  setText("vdPolicy", ruleName);
+  setText("vdProject", entityLabel);
+  setText("vdPM", userName(d.reportedById || d.reportedBy));
+  setText("vdTL", d.resolvedBy ? userName(d.resolvedById || d.resolvedBy) : "Unassigned");
   setText("vdSince", fmtDate(d.detectedAt));
-  setText("vdRisk", severity === "Critical" ? "Regulatory Risk" : severity === "High" ? "Operational Risk" : "Process Risk");
+  setText("vdRisk", severity === "Critical" ? "Critical Compliance Breach" : severity === "High" ? "Operational Policy Risk" : "Process Non-Conformance");
 
   // Description
   const descEl = document.getElementById("vdDescription");
@@ -178,49 +228,66 @@ window.selectViolation = function (id) {
 };
 
 // ── Actions ───────────────────────────────────────────────────────────────────
-window.markResolved = async function () {
-  if (!confirm("Mark this violation as resolved?")) return;
-  const idx = state.complianceViolations.findIndex(
-    (v) => v.violationId === activeViolationId || String(v.violationId) === String(activeViolationId),
-  );
-  if (idx > -1) {
-    const notesArea = document.getElementById("vdNotes");
-    const numericId = state.complianceViolations[idx].violationId;
+window.markResolved = function () {
+  window.Modal.create({
+    id: 'resolve-modal',
+    title: 'Resolve Violation',
+    body: 'Mark this violation as resolved?',
+    actions: [
+      { text: 'Cancel', class: 'btn-secondary', close: true },
+      {
+        text: 'Resolve',
+        class: 'btn-primary',
+        onClick: async () => {
+          const idx = state.complianceViolations.findIndex(
+            (v) => String(v.id || v.violationId) === String(activeViolationId),
+          );
+          if (idx > -1) {
+            const notesArea = document.getElementById("vdNotes");
+            const targetId = String(state.complianceViolations[idx].id || state.complianceViolations[idx].violationId || activeViolationId);
 
-    // Optimistic local update
-    state.complianceViolations[idx].status = "Resolved";
-    state.complianceViolations[idx].resolutionRemarks = notesArea ? notesArea.value : "";
-    state.complianceViolations[idx].resolvedAt = new Date().toISOString();
+            // Optimistic local update
+            state.complianceViolations[idx].status = "Resolved";
+            state.complianceViolations[idx].resolutionRemarks = notesArea ? notesArea.value : "";
+            state.complianceViolations[idx].resolvedAt = new Date().toISOString();
 
-    // PATCH to backend using pure integer ID
-    try {
-      await window.Helpers.api.request(
-        `/compliance-violations/${numericId}`,
-        "PATCH",
-        { status: "Resolved", resolution_remarks: state.complianceViolations[idx].resolutionRemarks },
-      );
+            // PATCH to backend using string UUID
+            try {
+              await window.Helpers.api.request(
+                `/compliance-violations/${targetId}`,
+                "PATCH",
+                { status: "Resolved", resolution_remarks: state.complianceViolations[idx].resolutionRemarks },
+              );
 
-      // ── INTERLINKING: If this is a Task violation, try to "Unblock" the task ──
-      const v = state.complianceViolations[idx];
-      if (v.entityType === 'Task' && v.entityId) {
-        try {
-          await window.Helpers.api.request(`/tasks/${v.entityId}`, "PATCH", { status: 'In_Progress' });
-          window.Helpers.pushNotification(v.reportedBy || 1, {
-            title: "Task Unblocked",
-            message: `Violation for Task #${v.entityId} resolved. Task moved to In Progress.`,
-            type: "success"
-          });
-        } catch (taskErr) {
-          console.warn("Could not auto-update task status:", taskErr);
+              // Interlinking: If this is a Task violation, unblock the task
+              const v = state.complianceViolations[idx];
+              if (v.entityType === 'Task' && v.entityId) {
+                try {
+                  await window.Helpers.api.request(`/tasks/${v.entityId}`, "PATCH", { status: 'In_Progress' });
+                  const notifyUserId = v.reportedById || v.reportedBy;
+                  if (notifyUserId) {
+                    window.Helpers.pushNotification(notifyUserId, {
+                      title: "Task Unblocked",
+                      message: `Violation for Task resolved. Task moved to In Progress.`,
+                      type: "success"
+                    });
+                  }
+                } catch (taskErr) {
+                  console.warn("Could not auto-update task status:", taskErr);
+                }
+              }
+            } catch (e) {
+              console.warn("Could not persist violation update to backend:", e);
+            }
+
+            if (window.Toast) window.Toast.show("success", "Violation Resolved", "Violation marked as resolved.");
+            renderQueue(document.querySelector(".pill-tab.active")?.dataset.tab || "open");
+          }
+          window.Modal.close('resolve-modal');
         }
       }
-    } catch (e) {
-      console.warn("Could not persist violation update to backend:", e);
-    }
-
-    if (window.Toast) window.Toast.show("success", "Violation Resolved", "Violation marked as resolved.");
-    renderQueue(document.querySelector(".pill-tab.active")?.dataset.tab || "open");
-  }
+    ]
+  });
 };
 
 window.viewProject = function () {
@@ -228,7 +295,20 @@ window.viewProject = function () {
 };
 
 window.escalateViolation = function () {
-  if (confirm("Escalate this violation to the regulatory team?")) {
-    if (window.Toast) window.Toast.show("warning", "Violation Escalated", "Violation escalated successfully.");
-  }
+  window.Modal.create({
+    id: 'escalate-modal',
+    title: 'Escalate Violation',
+    body: 'Escalate this violation to the regulatory team?',
+    actions: [
+      { text: 'Cancel', class: 'btn-secondary', close: true },
+      {
+        text: 'Escalate',
+        class: 'btn-danger',
+        onClick: () => {
+          if (window.Toast) window.Toast.show("warning", "Violation Escalated", "Violation escalated successfully.");
+          window.Modal.close('escalate-modal');
+        }
+      }
+    ]
+  });
 };

@@ -1,12 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsEnum, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+} from 'class-validator';
 
 enum TaskStatus {
   Pending = 'Pending',
   In_Progress = 'In_Progress',
   In_Review = 'In_Review',
   Blocked = 'Blocked',
-  Completed = 'Completed'
+  Completed = 'Completed',
 }
 
 export class CreateTaskDto {

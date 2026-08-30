@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Tenant Companies — OfficeSync</title>
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <div class="main-area">
+        <header class="top-header">
+          <div>
+            <h1 class="page-title">Tenant Companies</h1>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openCreateCompanyModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Company
+            </button>
+            <div class="bell-btn" id="btn-notifications" title="Notifications">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content" id="main-content">
+          <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h2 style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">Registered Organizations</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0;">Manage tenant organizations, account status, and configurations</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Company Name</th>
+                    <th>Tenant ID</th>
+                    <th>Status</th>
+                    <th>Created Date</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="companies-table-body">
+                  <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">Loading companies...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Create Company Modal -->
+    <div class="modal-backdrop" id="company-modal" style="display: none;">
+      <div class="modal" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Register Tenant Company</h3>
+          <button class="modal-close" onclick="closeCompanyModal()">✕</button>
+        </div>
+        <form id="company-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Company Legal Name *</label>
+              <input type="text" class="form-input" id="cf-legalName" placeholder="e.g. Acme Innovations Pvt Ltd" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Initial Status</label>
+              <select class="form-select" id="cf-status">
+                <option value="Active">Active</option>
+                <option value="Suspended">Suspended</option>
+                <option value="Closed">Closed</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeCompanyModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Company</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Edit Company Modal -->
+    <div class="modal-backdrop" id="edit-company-modal" style="display: none;">
+      <div class="modal" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Edit Company</h3>
+          <button class="modal-close" onclick="closeEditCompanyModal()">✕</button>
+        </div>
+        <form id="edit-company-form">
+          <input type="hidden" id="ecf-id" />
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Company Legal Name *</label>
+              <input type="text" class="form-input" id="ecf-legalName" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Status *</label>
+              <select class="form-select" id="ecf-status">
+                <option value="Active">Active (Fully Operational)</option>
+                <option value="Suspended">Suspended (Access Blocked)</option>
+                <option value="Closed">Closed (Archived)</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeEditCompanyModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Company Details Modal -->
+    <div class="modal-backdrop" id="details-modal" style="display: none;">
+      <div class="modal" style="max-width: 540px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="details-title">Company Overview</h3>
+          <button class="modal-close" onclick="closeDetailsModal()">✕</button>
+        </div>
+        <div class="modal-body" id="details-body" style="font-size: 13px; color: var(--text-primary);">
+          <!-- Populated by JS -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeDetailsModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      const session = window.Auth.getSession();
+      const headers = { 'x-platform-admin-id': session ? (session.id || 'bootstrap') : 'bootstrap', 'x-user-role': 'platform_admin' };
+      let loadedCompanies = [];
+
+      document.addEventListener('DOMContentLoaded', async () => {
+        if (!session) { window.location.href = '../login.html'; return; }
+        
+        // Render sidebar first and catch errors
+        if (window.Sidebar) {
+          try {
+            await window.Sidebar.render('companies');
+          } catch(err) {
+            console.error('Sidebar failed to render:', err);
+          }
+        }
+        
+        loadCompanies();
+      });
+
+      async function loadCompanies() {
+        try {
+          const companies = await window.Helpers.api.request('/platform/companies', 'GET', null, headers);
+          loadedCompanies = Array.isArray(companies) ? companies : (companies?.data || []);
+          const tbody = document.getElementById('companies-table-body');
+          if (!loadedCompanies || !loadedCompanies.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">No tenant companies found. Click "+ Add Company" to create one.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = loadedCompanies.map(c => {
+            const statusClass = c.status === 'Active' ? 'badge-green' : (c.status === 'Suspended' ? 'badge-yellow' : 'badge-gray');
+            const activeSub = (c.subscriptions || []).find(s => s.status === 'Active' || s.status === 'active');
+            const planBadge = activeSub && activeSub.plan ? `<span class="badge badge-blue" style="margin-left: 6px;">${activeSub.plan.name}</span>` : '';
+            return `
+              <tr>
+                <td>
+                  <div class="td-label" style="font-weight: 600; color: var(--text-primary); display: flex; align-items: center;">
+                    ${c.legalName || c.name || 'Unnamed Company'}
+                    ${planBadge}
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted);">${c._count ? `${c._count.users || 0} users • ${c._count.branches || 0} branches` : ''}</div>
+                </td>
+                <td><code style="font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">${c.id}</code></td>
+                <td>
+                  <span class="badge ${statusClass}">
+                    ${c.status || 'Active'}
+                  </span>
+                </td>
+                <td>${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</td>
+                <td style="text-align: right; white-space: nowrap;">
+                  <button class="btn btn-sm btn-secondary" onclick="viewCompanyDetails('${c.id}')">Details</button>
+                  <button class="btn btn-sm btn-secondary" style="margin-left: 4px;" onclick="openEditCompanyModal('${c.id}')">Edit</button>
+                  <button class="btn btn-sm btn-danger" style="margin-left: 4px;" onclick="deleteCompany('${c.id}', '${(c.legalName || c.name || '').replace(/'/g, "\\'")}')">Delete</button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        } catch(e) {
+          console.error(e);
+          document.getElementById('companies-table-body').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#ef4444">Failed to load companies.</td></tr>';
+        }
+      }
+
+      function openCreateCompanyModal() {
+        document.getElementById('company-form').reset();
+        window.Modal.open('company-modal');
+      }
+
+      function closeCompanyModal() {
+        window.Modal.close('company-modal');
+      }
+
+      document.getElementById('company-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+          legalName: document.getElementById('cf-legalName').value.trim(),
+          status: document.getElementById('cf-status').value,
+        };
+        try {
+          await window.Helpers.api.request('/companies', 'POST', body, headers);
+          closeCompanyModal();
+          loadCompanies();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to create company: ' + (err.message || 'Error')); }
+      });
+
+      function openEditCompanyModal(id) {
+        const comp = loadedCompanies.find(c => c.id === id);
+        if (!comp) return;
+        document.getElementById('ecf-id').value = comp.id;
+        document.getElementById('ecf-legalName').value = comp.legalName || comp.name || '';
+        document.getElementById('ecf-status').value = comp.status || 'Active';
+        window.Modal.open('edit-company-modal');
+      }
+
+      function closeEditCompanyModal() {
+        window.Modal.close('edit-company-modal');
+      }
+
+      document.getElementById('edit-company-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('ecf-id').value;
+        const body = {
+          legalName: document.getElementById('ecf-legalName').value.trim(),
+          status: document.getElementById('ecf-status').value,
+        };
+        try {
+          await window.Helpers.api.request(`/companies/${id}`, 'PATCH', body, headers);
+          closeEditCompanyModal();
+          loadCompanies();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to update company: ' + (err.message || 'Error')); }
+      });
+
+      async function viewCompanyDetails(id) {
+        try {
+          const comp = await window.Helpers.api.request(`/companies/${id}`, 'GET', null, headers);
+          document.getElementById('details-title').textContent = comp.legalName || comp.name || 'Company Details';
+          
+          const subsHtml = (comp.subscriptions || []).length > 0
+            ? comp.subscriptions.map(s => `<li><strong>${s.plan ? s.plan.name : 'Custom Plan'}</strong> — Status: <span class="badge ${s.status === 'Active' ? 'badge-green' : 'badge-yellow'}">${s.status}</span> (Renews: ${new Date(s.currentPeriodEnd).toLocaleDateString()})</li>`).join('')
+            : '<li style="color: var(--text-muted);">No active subscriptions found</li>';
+
+          const branchesHtml = (comp.branches || []).length > 0
+            ? comp.branches.map(b => `<span class="badge badge-gray" style="margin: 2px;">${b.name || 'Unnamed Branch'}</span>`).join(' ')
+            : '<span style="color: var(--text-muted);">No branches configured</span>';
+
+          document.getElementById('details-body').innerHTML = `
+            <div style="margin-bottom: 12px;"><strong>Tenant ID:</strong> <code>${comp.id}</code></div>
+            <div style="margin-bottom: 12px;"><strong>Legal Name:</strong> ${comp.legalName || '—'}</div>
+            <div style="margin-bottom: 12px;"><strong>Account Status:</strong> <span class="badge ${comp.status === 'Active' ? 'badge-green' : 'badge-yellow'}">${comp.status || 'Active'}</span></div>
+            <div style="margin-bottom: 12px;"><strong>Registered At:</strong> ${comp.createdAt ? new Date(comp.createdAt).toLocaleString() : '—'}</div>
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;" />
+            <div style="margin-bottom: 8px;"><strong>Subscriptions:</strong></div>
+            <ul style="padding-left: 20px; margin: 0 0 12px;">${subsHtml}</ul>
+            <div style="margin-bottom: 8px;"><strong>Branches (${(comp.branches || []).length}):</strong></div>
+            <div>${branchesHtml}</div>
+          `;
+          window.Modal.open('details-modal');
+        } catch(err) {
+          window.Toast.show('error', 'Error', 'Failed to load company details: ' + (err.message || 'Error'));
+        }
+      }
+
+      function closeDetailsModal() {
+        window.Modal.close('details-modal');
+      }
+
+      function deleteCompany(id, name) {
+        window.Modal.create({
+          id: 'delete-company-modal',
+          title: 'Delete Company',
+          body: `Are you sure you want to permanently delete "${name}" (ID: ${id})?\n\nThis will remove all associated tenant subscriptions and branches.`,
+          actions: [
+            { text: 'Cancel', class: 'btn-secondary', close: true },
+            { 
+              text: 'Delete', 
+              class: 'btn-danger', 
+              onClick: async () => {
+                try {
+                  await window.Helpers.api.request(`/companies/${id}`, 'DELETE', null, headers);
+                  window.Toast.show('success', 'Deleted', 'Company deleted successfully');
+                  loadCompanies();
+                  window.Modal.close('delete-company-modal');
+                } catch(err) { window.Toast.show('error', 'Error', 'Failed to delete company: ' + (err.message || 'Error')); }
+              }
+            }
+          ]
+        });
+      }
+    </script>
+  </body>
+</html>

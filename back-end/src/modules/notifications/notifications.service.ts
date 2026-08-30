@@ -1,42 +1,65 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseService, AppNotification } from '../../core/database/database.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'Task' | 'Project' | 'Compliance' | 'System';
+  isRead: boolean;
+  link?: string;
+  createdAt: string;
+}
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): AppNotification[] {
-    return this.db.notifications;
+  async findAll(companyId?: string) {
+    return this.prisma.notification.findMany({
+      where: companyId ? { user: { companyId } } : undefined,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  findByUser(userId: number): AppNotification[] {
-    return this.db.notifications.filter(n => n.user_id === userId);
+  async findByUser(userId: string) {
+    return this.prisma.notification.findMany({
+      where: { userId: String(userId) },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  create(data: Partial<AppNotification>) {
-    const newNotification: AppNotification = {
-      notification_id: Date.now(),
-      user_id: data.user_id || 0,
-      title: data.title || 'Notification',
-      message: data.message || '',
-      type: data.type || 'System',
-      is_read: false,
-      link: data.link || '',
-      created_at: new Date().toISOString(),
-    };
-    this.db.notifications.unshift(newNotification); // Newest first
-    return newNotification;
+  async create(data: {
+    userId: string;
+    title: string;
+    message: string;
+    type: string;
+    link?: string;
+  }) {
+    return this.prisma.notification.create({
+      data: {
+        userId: String(data.userId),
+        title: data.title,
+        message: data.message,
+        type: data.type || 'System',
+        link: data.link || '',
+      },
+    });
   }
 
-  markAsRead(id: number) {
-    const n = this.db.notifications.find(x => x.notification_id === id);
-    if (n) n.is_read = true;
-    return n;
+  async markAsRead(id: string) {
+    return this.prisma.notification.update({
+      where: { id: String(id) },
+      data: { isRead: true },
+    });
   }
 
-  markAllAsRead(userId: number) {
-    this.db.notifications
-      .filter(n => n.user_id === userId)
-      .forEach(n => n.is_read = true);
+  async markAllAsRead(userId: string): Promise<{ message: string }> {
+    await this.prisma.notification.updateMany({
+      where: { userId: String(userId), isRead: false },
+      data: { isRead: true },
+    });
+    return { message: 'All notifications marked as read' };
   }
 }

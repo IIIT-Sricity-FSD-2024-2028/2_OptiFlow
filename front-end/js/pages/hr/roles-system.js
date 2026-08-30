@@ -38,6 +38,22 @@ function setDirty(val) {
 }
 
 // ─── Left panel: role list ────────────────────────────────
+function updateSidebar() {
+  const raw = sessionStorage.getItem('currentUser');
+  if (raw) {
+    try {
+      const u = JSON.parse(raw);
+      const name = u.fullName || u.name || 'HR Manager';
+      const initials = name.split(' ').map(n => (n[0] || '')).join('').toUpperCase().substring(0, 2) || '??';
+      const role = u.assignedRole || u.roleLabel || u.roleName || 'HR Manager';
+      document.querySelectorAll('.user-name').forEach(el => el.textContent = name);
+      document.querySelectorAll('.user-role').forEach(el => el.textContent = role);
+      document.querySelectorAll('.avatar').forEach(el => el.textContent = initials);
+    } catch(e) {}
+  }
+}
+updateSidebar();
+
 async function renderRoleList(activeKey) {
   const allEmployees = await HRStore.getAll();
   const allRoles = await RolesStore.getAllSystemRoles();

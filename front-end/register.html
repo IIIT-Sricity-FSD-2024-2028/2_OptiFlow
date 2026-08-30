@@ -1,238 +1,588 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>OfficeSync - Register</title>
-    <link rel="stylesheet" href="css/auth.css" />
-  </head>
-  <body>
-    <header class="auth-header">
-      <img src="assets/images/logo.svg" alt="OfficeSync" height="30" />
-      <nav>
-        <a href="index.html">Home</a><a href="index.html#features">Features</a
-        ><a href="about.html">About Us</a><a href="contact.html">Contact</a>
-      </nav>
-    </header>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Company Registration</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f4f6f8; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .register-container { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.03); 
+            width: 100%; 
+            max-width: 600px; 
+            transition: all 0.3s ease;
+        }
+        .register-container h2 { 
+            margin-top: 0; 
+            color: #1e293b; 
+            text-align: center; 
+            margin-bottom: 8px; 
+            font-weight: 700;
+        }
+        .register-container p.subtitle {
+            text-align: center;
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 24px;
+            margin-top: 0;
+        }
+        
+        /* Step indicators */
+        .step-indicators {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            position: relative;
+        }
+        .step-indicators::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #e2e8f0;
+            z-index: 1;
+        }
+        .step-indicator {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+            z-index: 2;
+            color: #64748b;
+            transition: all 0.25s ease;
+        }
+        .step-indicator.active {
+            border-color: #2563eb;
+            background: #2563eb;
+            color: white;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+        }
+        .step-indicator.completed {
+            border-color: #10b981;
+            background: #10b981;
+            color: white;
+        }
 
-    <main class="auth-main">
-      <div class="auth-card wide">
-        <div class="auth-header-text" style="text-align: left">
-          <h1>Create your organization</h1>
-          <p>
-            Set up your company workspace to manage tasks, workflows and
-            compliance.
-          </p>
+        /* Form Steps */
+        .form-step {
+            display: none;
+        }
+        .form-step.active {
+            display: block;
+        }
+
+        .form-group { 
+            margin-bottom: 18px; 
+        }
+        .form-group label { 
+            display: block; 
+            margin-bottom: 6px; 
+            color: #334155; 
+            font-weight: 600; 
+            font-size: 13.5px;
+        }
+        .form-control { 
+            width: 100%; 
+            padding: 10px 12px; 
+            border: 1.5px solid #cbd5e1; 
+            border-radius: 6px; 
+            box-sizing: border-box; 
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+        
+        /* Billing Toggle */
+        .billing-toggle-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1;
+            transition: .3s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #2563eb;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+        .billing-label {
+            font-size: 13.5px;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+        }
+        .billing-label.active {
+            color: #2563eb;
+        }
+
+        /* Plan Cards */
+        .plans-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .plan-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            background: #fff;
+        }
+        .plan-card:hover {
+            border-color: #93c5fd;
+            background: #fafcff;
+        }
+        .plan-card.selected {
+            border-color: #2563eb;
+            background: #eff6ff;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.1);
+        }
+        .plan-card-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+        .plan-card-price {
+            font-size: 22px;
+            font-weight: 800;
+            color: #2563eb;
+            margin-bottom: 4px;
+        }
+        .plan-card-price-sub {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        /* Payment Elements mock */
+        .payment-element {
+            border: 1.5px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f8fafc;
+            margin-bottom: 24px;
+        }
+        .payment-element-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .payment-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        /* Buttons layout */
+        .btn-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        .nav-btn { 
+            flex: 1;
+            padding: 11px; 
+            border: none; 
+            border-radius: 6px; 
+            font-size: 14px; 
+            font-weight: 600;
+            cursor: pointer; 
+            transition: background 0.2s;
+            text-align: center;
+        }
+        .btn-primary {
+            background-color: #2563eb; 
+            color: white; 
+        }
+        .btn-primary:hover:not(:disabled) { 
+            background-color: #1d4ed8; 
+        }
+        .btn-secondary {
+            background-color: #e2e8f0;
+            color: #475569;
+        }
+        .btn-secondary:hover {
+            background-color: #cbd5e1;
+        }
+        .nav-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2.5px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message { 
+            display: none; 
+            color: #b91c1c; 
+            background: #fef2f2; 
+            padding: 10px 14px; 
+            border-radius: 6px; 
+            border: 1px solid #fca5a5;
+            margin-bottom: 20px; 
+            font-size: 13px;
+            text-align: center; 
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <h2>OfficeSync Registration</h2>
+        <p class="subtitle" id="wizard-subtitle">Setup your company account and billing tier</p>
+
+        <!-- Indicators -->
+        <div class="step-indicators">
+            <div class="step-indicator active" id="ind-1">1</div>
+            <div class="step-indicator" id="ind-2">2</div>
+            <div class="step-indicator" id="ind-3">3</div>
         </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
         <form id="registerForm">
-          <div class="form-section-title">Company Information</div>
-          <div class="input-row">
-            <div class="input-group">
-              <label>Company Name</label>
-              <input
-                type="text"
-                id="regCompany"
-                placeholder="Acme Corp"
-                required
-              />
+            <!-- STEP 1: Account Information -->
+            <div class="form-step active" id="step-1">
+                <div class="form-group">
+                    <label for="companyLegalName">Company Legal Name</label>
+                    <input type="text" id="companyLegalName" class="form-control" placeholder="Acme Corp" required>
+                </div>
+                <div class="form-group">
+                    <label for="ownerFullName">CEO / Administrator Full Name</label>
+                    <input type="text" id="ownerFullName" class="form-control" placeholder="John Doe" required>
+                </div>
+                <div class="form-group">
+                    <label for="ownerEmail">Work Email Address</label>
+                    <input type="email" id="ownerEmail" class="form-control" placeholder="admin@acme.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Account Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="••••••••" minlength="8" required>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="nav-btn btn-primary" onclick="goToStep(2)">Continue to Pricing</button>
+                </div>
             </div>
-            <div class="input-group">
-              <label>Organization Domain</label>
-              <input
-                type="text"
-                id="regDomain"
-                placeholder="acme.com"
-                required
-              />
-            </div>
-          </div>
-          <div class="input-row">
-            <div class="input-group">
-              <label>Company Size</label>
-              <select id="regSize" required>
-                <option value="">Select size</option>
-                <option>Startup (1-10)</option>
-                <option>Small Team (11-50)</option>
-                <option>Growing (51-200)</option>
-                <option>Enterprise (500+)</option>
-              </select>
-            </div>
-            <div class="input-group">
-              <label>Industry</label>
-              <select id="regIndustry" required>
-                <option value="">Select industry</option>
-                <option>Technology / Software</option>
-                <option>Finance / Banking</option>
-                <option>Consulting</option>
-              </select>
-            </div>
-          </div>
 
-          <div class="form-section-title">Administrator Account</div>
-          <div class="input-group">
-            <label>Admin Full Name</label>
-            <input type="text" id="regName" placeholder="John Doe" required />
-          </div>
-          <div class="input-group">
-            <label>Work Email</label>
-            <input
-              type="email"
-              id="regEmail"
-              placeholder="admin@company.com"
-              required
-            />
-          </div>
-          <div class="input-row">
-            <div class="input-group">
-              <label>Password</label>
-              <div class="password-input-group" style="position: relative">
-                <input
-                  type="password"
-                  id="loginPassword"
-                  class="form-control"
-                  placeholder="Password"
-                />
+            <!-- STEP 2: Plan Selection -->
+            <div class="form-step" id="step-2">
+                <div class="billing-toggle-container">
+                    <span class="billing-label active" id="lbl-monthly" onclick="setBillingToggle(false)">Monthly</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="billingCycleToggle" onchange="toggleBillingCycle()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="billing-label" id="lbl-yearly" onclick="setBillingToggle(true)">Annually (Save)</span>
+                </div>
 
-                <button
-                  type="button"
-                  class="password-toggle-btn"
-                  onclick="togglePassword('loginPassword', this)"
-                  style="
-                    position: absolute;
-                    right: 12px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    color: #64748b;
-                  "
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
-                    ></path>
-                    <line x1="1" y1="1" x2="23" y2="23"></line>
-                  </svg>
-                  <svg
-                    style="display: none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                    ></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="input-group">
-              <label>Confirm Password</label>
-              <div class="password-input-group" style="position: relative">
-                <input
-                  type="password"
-                  id="regConfirm"
-                  placeholder="••••••••"
-                  required
-                />
-                <button
-                  type="button"
-                  class="password-toggle-btn"
-                  onclick="togglePassword('regConfirm', this)"
-                  style="
-                    position: absolute;
-                    right: 12px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    color: #64748b;
-                  "
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
-                    ></path>
-                    <line x1="1" y1="1" x2="23" y2="23"></line>
-                  </svg>
-                  <svg
-                    style="display: none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                    ></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
+                <div class="plans-grid" id="plansGrid">
+                    <div style="grid-column: span 2; text-align: center; color: #64748b; padding: 20px;">Loading plan templates...</div>
+                </div>
 
-          <button type="submit" class="auth-btn">Create Organization</button>
-          <p
-            style="
-              text-align: center;
-              font-size: 0.75rem;
-              color: var(--text-muted);
-              margin-top: 1rem;
-            "
-          >
-            By clicking "Create Organization", you agree to our Terms of Service
-            and Privacy Policy.
-          </p>
+                <div class="btn-row">
+                    <button type="button" class="nav-btn btn-secondary" onclick="goToStep(1)">Back</button>
+                    <button type="button" class="nav-btn btn-primary" id="btn-to-step3" onclick="goToStep(3)" disabled>Proceed to Payment</button>
+                </div>
+            </div>
+
+            <!-- STEP 3: Simulated Payment Gateway -->
+            <div class="form-step" id="step-3">
+                <div class="payment-element">
+                    <div class="payment-element-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                        Secure Credit Card Transaction (Simulated)
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cardName">Cardholder Name</label>
+                        <input type="text" id="cardName" class="form-control" placeholder="John Doe" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cardNumber">Card Number</label>
+                        <input type="text" id="cardNumber" class="form-control" placeholder="4111 2222 3333 4444" required>
+                    </div>
+
+                    <div class="payment-row">
+                        <div class="form-group">
+                            <label for="cardExpiry">Expiration Date</label>
+                            <input type="text" id="cardExpiry" class="form-control" placeholder="MM/YY" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cardCvc">CVC</label>
+                            <input type="text" id="cardCvc" class="form-control" placeholder="123" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button type="button" class="nav-btn btn-secondary" id="btn-back-to-step2" onclick="goToStep(2)">Back</button>
+                    <button type="submit" class="nav-btn btn-primary" id="submitBtn">Pay & Register</button>
+                </div>
+            </div>
         </form>
-        <div class="bottom-text">
-          Already have an account? <a href="login.html">Sign in</a>
-        </div>
-      </div>
-    </main>
+    </div>
 
-    <footer class="auth-footer">
-      <div>© 2026 OfficeSync Inc. All rights reserved.</div>
-      <div class="auth-footer-links">
-        <a href="#">Privacy Policy</a><a href="#">Terms of Service</a
-        ><a href="#">Cookie Settings</a>
-      </div>
-    </footer>
+    <script>
+        let currentStep = 1;
+        let plansData = [];
+        let selectedPlanId = null;
+        let billingCycle = 'MONTHLY'; // MONTHLY or YEARLY
 
-    <script src="js/data/db.js"></script>
-    <script src="js/pages/auth-flows.js"></script>
-  </body>
+        // Fetch plans on load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetch('http://localhost:3000/auth/public-plans');
+                if (!res.ok) throw new Error('Failed to load plans');
+                const result = await res.json();
+                plansData = Array.isArray(result) ? result : (result.data || []);
+                renderPlans();
+            } catch (err) {
+                document.getElementById('plansGrid').innerHTML = `
+                    <div style="grid-column: span 2; text-align: center; color: #ef4444; padding: 20px;">
+                        Failed to fetch plans. Please verify server connection.
+                    </div>`;
+            }
+        });
+
+        function renderPlans() {
+            const grid = document.getElementById('plansGrid');
+            if (plansData.length === 0) return;
+
+            const isYearly = billingCycle === 'YEARLY';
+            const formatter = new Intl.NumberFormat('en-IN');
+
+            grid.innerHTML = plansData.map(p => {
+                const price = isYearly ? p.priceYearly : p.priceMonthly;
+                const cycleText = isYearly ? 'yr' : 'mo';
+                const isSelected = p.id === selectedPlanId;
+                
+                return `
+                    <div class="plan-card ${isSelected ? 'selected' : ''}" onclick="selectPlan('${p.id}')">
+                        <div class="plan-card-name">${p.name}</div>
+                        <div class="plan-card-price">₹${formatter.format(price)}</div>
+                        <div class="plan-card-price-sub">per company / ${cycleText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectPlan(id) {
+            selectedPlanId = id;
+            renderPlans();
+            document.getElementById('btn-to-step3').disabled = false;
+        }
+
+        function toggleBillingCycle() {
+            const toggle = document.getElementById('billingCycleToggle');
+            billingCycle = toggle.checked ? 'YEARLY' : 'MONTHLY';
+            
+            document.getElementById('lbl-monthly').classList.toggle('active', !toggle.checked);
+            document.getElementById('lbl-yearly').classList.toggle('active', toggle.checked);
+            
+            renderPlans();
+        }
+
+        function setBillingToggle(checked) {
+            const toggle = document.getElementById('billingCycleToggle');
+            if (toggle.checked !== checked) {
+                toggle.checked = checked;
+                toggleBillingCycle();
+            }
+        }
+
+        function goToStep(step) {
+            // Validation before leaving Step 1
+            if (step === 2 && currentStep === 1) {
+                const f1 = document.getElementById('companyLegalName');
+                const f2 = document.getElementById('ownerFullName');
+                const f3 = document.getElementById('ownerEmail');
+                const f4 = document.getElementById('password');
+                if (!f1.checkValidity() || !f2.checkValidity() || !f3.checkValidity() || !f4.checkValidity()) {
+                    document.getElementById('registerForm').reportValidity();
+                    return;
+                }
+            }
+
+            // Validation before leaving Step 2
+            if (step === 3 && currentStep === 2 && !selectedPlanId) {
+                return;
+            }
+
+            // Toggle step visibility
+            document.getElementById(`step-${currentStep}`).classList.remove('active');
+            document.getElementById(`step-${step}`).classList.add('active');
+
+            // Toggle indicators
+            document.getElementById(`ind-${currentStep}`).classList.remove('active');
+            if (step > currentStep) {
+                document.getElementById(`ind-${currentStep}`).classList.add('completed');
+            } else {
+                document.getElementById(`ind-${step}`).classList.remove('completed');
+            }
+            document.getElementById(`ind-${step}`).classList.add('active');
+
+            currentStep = step;
+            
+            // Update subtitle
+            const subtitle = document.getElementById('wizard-subtitle');
+            if (step === 1) subtitle.textContent = 'Setup your company account and login credentials';
+            else if (step === 2) subtitle.textContent = 'Select an enterprise tier that matches your scope';
+            else if (step === 3) subtitle.textContent = 'Complete security check and enter payment token';
+        }
+
+        // Form Submit Handler
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validate step 3 card fields
+            const cardName = document.getElementById('cardName');
+            const cardNumber = document.getElementById('cardNumber');
+            const cardExpiry = document.getElementById('cardExpiry');
+            const cardCvc = document.getElementById('cardCvc');
+
+            if (!cardName.checkValidity() || !cardNumber.checkValidity() || !cardExpiry.checkValidity() || !cardCvc.checkValidity()) {
+                document.getElementById('registerForm').reportValidity();
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const backBtn = document.getElementById('btn-back-to-step2');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // 1. Disable submit and back buttons
+            submitBtn.disabled = true;
+            backBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner"></span>Processing Payment...';
+            errorMessage.style.display = 'none';
+
+            // 2. Wait exactly 2 seconds to simulate payment processing network delay
+            setTimeout(async () => {
+                const payload = {
+                    companyLegalName: document.getElementById('companyLegalName').value.trim(),
+                    ownerFullName: document.getElementById('ownerFullName').value.trim(),
+                    ownerEmail: document.getElementById('ownerEmail').value.trim(),
+                    password: document.getElementById('password').value,
+                    planId: selectedPlanId,
+                    billingCycle: billingCycle
+                };
+
+                try {
+                    const response = await fetch('http://localhost:3000/auth/register-company', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.message || 'Registration failed');
+                    }
+
+                    const result = await response.json();
+                    const data = result.data ? result.data : result;
+                    
+                    if (data.token && data.user) {
+                        const user = {
+                          ...data.user,
+                          role: data.roleSlug || data.user.role || 'system_admin',
+                          roleLabel: data.user.roleLabel || data.user.assignedRole || 'System Admin',
+                          assignedRole: data.user.assignedRole || 'System Admin',
+                        };
+                        sessionStorage.setItem('jwtToken', data.token);
+                        sessionStorage.setItem('currentUser', JSON.stringify(user));
+                        
+                        window.location.href = data.targetRoute || user.targetRoute || 'admin-console/admin-dashboard.html';
+                    } else {
+                        throw new Error('Invalid response payload structure');
+                    }
+                } catch (error) {
+                    errorMessage.textContent = error.message;
+                    errorMessage.style.display = 'block';
+                    
+                    // Re-enable actions on failure
+                    submitBtn.disabled = false;
+                    backBtn.disabled = false;
+                    submitBtn.textContent = 'Pay & Register';
+                }
+            }, 2000);
+        });
+    </script>
+</body>
 </html>

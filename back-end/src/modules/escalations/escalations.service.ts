@@ -1,117 +1,119 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService, Escalation } from '../../core/database/database.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateEscalationDto } from './dto/create-escalation.dto';
 import { UpdateEscalationDto } from './dto/update-escalation.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
-function toEscalationPayload(e: Escalation): object {
-  return { ...e } as unknown as object;
-}
-
 @Injectable()
 export class EscalationsService {
   constructor(
-    private readonly db: DatabaseService,
+    private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
   ) {}
 
-  findAll(): Escalation[] {
-    return this.db.escalations;
+  async findAll(companyId?: string) {
+    return this.prisma.escalation.findMany({
+      where: companyId ? { companyId } : undefined,
+      include: {
+        task: { select: { id: true, title: true } },
+        project: { select: { id: true, name: true } },
+        reportedBy: { select: { id: true, fullName: true, email: true } },
+        targetManager: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  findOne(id: number): Escalation {
-    const escalation = this.db.escalations.find((e) => e.escalation_id === id);
-    if (!escalation) throw new NotFoundException(`Escalation with ID ${id} not found`);
+  async findOne(id: string, companyId?: string) {
+    const escalation = await this.prisma.escalation.findFirst({
+      where: {
+        id,
+        ...(companyId ? { companyId } : {}),
+      },
+      include: {
+        task: true,
+        project: true,
+        reportedBy: { select: { id: true, fullName: true, email: true } },
+        targetManager: { select: { id: true, fullName: true, email: true } },
+      },
+    });
+    if (!escalation) throw new NotFoundException(`Escalation ${id} not found`);
     return escalation;
   }
 
-  create(dto: CreateEscalationDto, actorUserId: number): Escalation {
-    const newEscalation: Escalation = {
-      escalation_id: this.db.escalations.length
-        ? Math.max(...this.db.escalations.map((e) => e.escalation_id)) + 1
-        : 1,
-      task_id: dto.task_id,
-      project_id: dto.project_id,
-      reported_by: dto.reported_by,
-      target_manager_id: dto.target_manager_id,
-      title: dto.title,
-      description: dto.description ?? '',
-      blocker_type: dto.blocker_type ?? 'General',
-      priority: dto.priority ?? 'High',
-      status: 'Open',
-      created_at: new Date().toISOString(),
-      resolved_at: null,
-    };
-    this.db.escalations.push(newEscalation);
-    this.auditLogs.create({
-      entity_id: newEscalation.escalation_id,
-      entity_type: 'Escalation',
-      action: 'CREATED',
-      performed_by: actorUserId,
-      new_value: toEscalationPayload(newEscalation),
+  async create(dto: CreateEscalationDto, actorUserId: string, companyId?: string) {
+    const newEscalation = await this.prisma.escalation.create({
+      data: {
+        companyId: dto.companyId || companyId || 'b7744408-190c-4b83-82c5-ab0049afb6b2',
+        taskId: dto.task_id ?? null,
+        projectId: dto.project_id ?? null,
+        reportedById: dto.reported_by || actorUserId,
+        targetManagerId: dto.target_manager_id ?? null,
+        title: dto.title,
+        description: dto.description ?? '',
+        blockerType: dto.blocker_type ?? 'General',
+        priority: dto.priority ?? 'High',
+        status: 'Open',
+      },
     });
-    return newEscalation;
+
+    this.auditLogs.create({
+      entity_id: newEscalation.id,
+      entity_type: 'Escalation',
+      action: 'CREATE',
+      performed_by: actorUserId,
+      new_value: newEscalation as any,
+    });
+
+    return this.findOne(newEscalation.id);
   }
 
-  update(id: number, dto: UpdateEscalationDto, actorUserId: number): Escalation {
-    const index = this.db.escalations.findIndex((e) => e.escalation_id === id);
-    if (index === -1) throw new NotFoundException(`Escalation ${id} not found`);
-    const before = { ...this.db.escalations[index] };
-    const merged: Escalation = { ...before };
-
-    const dtoKeys = Object.keys(dto) as (keyof UpdateEscalationDto)[];
-    let touched = false;
-    for (const key of dtoKeys) {
-      const v = dto[key];
-      if (v !== undefined) {
-        (merged as unknown as Record<string, unknown>)[key as string] = v as unknown;
-        touched = true;
-      }
-    }
-    if (!touched) {
-      return before;
-    }
-
-    const materiallyChanged = Object.keys(dto).some((k) => {
-      const key = k as keyof UpdateEscalationDto;
-      return (
-        dto[key] !== undefined &&
-        (before as unknown as Record<string, unknown>)[k] !== (merged as unknown as Record<string, unknown>)[k]
-      );
+  async update(id: string, dto: UpdateEscalationDto, actorUserId: string) {
+    const before = await this.findOne(id);
+    const updated = await this.prisma.escalation.update({
+      where: { id },
+      data: {
+        ...(dto.title ? { title: dto.title } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
+        ...(dto.blocker_type ? { blockerType: dto.blocker_type } : {}),
+        ...(dto.priority ? { priority: dto.priority } : {}),
+        ...(dto.status
+          ? {
+              status: dto.status as any,
+              resolvedAt: dto.status === 'Resolved' ? new Date() : null,
+            }
+          : {}),
+      },
     });
-    if (!materiallyChanged) {
-      return before;
-    }
 
-    this.db.escalations[index] = merged;
+    const statusChanged =
+      dto.status !== undefined && dto.status !== before.status;
+    this.auditLogs.create({
+      entity_id: id,
+      entity_type: 'Escalation',
+      action: statusChanged ? 'STATUS_CHANGE' : 'UPDATE',
+      performed_by: actorUserId,
+      old_value: before as any,
+      new_value: updated as any,
+    });
 
-    const statusProvided = dto.status !== undefined;
-    const statusChanged = statusProvided && dto.status !== before.status;
-    const action = statusChanged ? 'STATUS_CHANGED' : 'UPDATED';
+    return updated;
+  }
+
+  async remove(id: string, actorUserId: string) {
+    const before = await this.findOne(id);
+    await this.prisma.escalation.delete({ where: { id } });
 
     this.auditLogs.create({
       entity_id: id,
       entity_type: 'Escalation',
-      action,
+      action: 'DELETE',
       performed_by: actorUserId,
-      old_value: toEscalationPayload(before),
-      new_value: toEscalationPayload(merged),
+      old_value: before as any,
     });
 
-    return merged;
-  }
-
-  remove(id: number, actorUserId: number): void {
-    const index = this.db.escalations.findIndex((e) => e.escalation_id === id);
-    if (index === -1) throw new NotFoundException(`Escalation ${id} not found`);
-    const before = { ...this.db.escalations[index] };
-    this.auditLogs.create({
-      entity_id: id,
-      entity_type: 'Escalation',
-      action: 'DELETED',
-      performed_by: actorUserId,
-      old_value: toEscalationPayload(before),
-    });
-    this.db.escalations.splice(index, 1);
+    return { message: 'Escalation deleted successfully' };
   }
 }

@@ -1,46 +1,79 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService, ComplianceRule } from '../../core/database/database.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateComplianceRuleDto } from './dto/create-compliance-rule.dto';
 import { UpdateComplianceRuleDto } from './dto/update-compliance-rule.dto';
 
 @Injectable()
 export class ComplianceRulesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): ComplianceRule[] { return this.db.compliance_rules; }
+  async findAll(companyId?: string) {
+    return this.prisma.complianceRule.findMany({
+      where: companyId
+        ? { OR: [{ companyId: null }, { companyId }] }
+        : undefined,
+      include: {
+        category: true,
+        bindings: true,
+        violations: { where: { status: 'Open' } },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
 
-  findOne(id: number): ComplianceRule {
-    const rule = this.db.compliance_rules.find(r => r.rule_id === id);
-    if (!rule) throw new NotFoundException(`Compliance rule with ID ${id} not found`);
+  async findOne(id: string, companyId?: string) {
+    const rule = await this.prisma.complianceRule.findFirst({
+      where: {
+        id,
+        ...(companyId ? { OR: [{ companyId: null }, { companyId }] } : {}),
+      },
+      include: {
+        category: true,
+        bindings: true,
+        violations: true,
+      },
+    });
+    if (!rule) throw new NotFoundException(`Compliance rule ${id} not found`);
     return rule;
   }
 
-  create(dto: CreateComplianceRuleDto): ComplianceRule {
-    const newRule: ComplianceRule = {
-      rule_id: this.db.compliance_rules.length ? Math.max(...this.db.compliance_rules.map(r => r.rule_id)) + 1 : 1,
-      rule_name: dto.rule_name,
-      category_id: null,
-      description: dto.description,
-      remediation_steps: dto.remediation_steps,
-      severity: dto.severity,
-      is_active: dto.is_active ?? true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    this.db.compliance_rules.push(newRule);
-    return newRule;
+  async create(dto: CreateComplianceRuleDto, companyId?: string) {
+    return this.prisma.complianceRule.create({
+      data: {
+        companyId: companyId || dto.companyId || null,
+        name: dto.rule_name || (dto as any).name,
+        description: dto.description,
+        severity: dto.severity as any,
+        categoryId: dto.categoryId ?? null,
+        sourceTemplateId: dto.sourceTemplateId ?? null,
+        isActive: dto.is_active ?? (dto as any).isActive ?? true,
+      },
+      include: { category: true, bindings: true },
+    });
   }
 
-  update(id: number, dto: UpdateComplianceRuleDto): ComplianceRule {
-    const index = this.db.compliance_rules.findIndex(r => r.rule_id === id);
-    if (index === -1) throw new NotFoundException(`Compliance rule ${id} not found`);
-    this.db.compliance_rules[index] = { ...this.db.compliance_rules[index], ...dto };
-    return this.db.compliance_rules[index];
+  async update(id: string, dto: UpdateComplianceRuleDto, companyId?: string) {
+    await this.findOne(id, companyId);
+    return this.prisma.complianceRule.update({
+      where: { id },
+      data: {
+        ...(dto.rule_name !== undefined || (dto as any).name !== undefined
+          ? { name: dto.rule_name || (dto as any).name }
+          : {}),
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.severity !== undefined ? { severity: dto.severity as any } : {}),
+        ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+        ...(dto.is_active !== undefined || (dto as any).isActive !== undefined
+          ? { isActive: dto.is_active ?? (dto as any).isActive }
+          : {}),
+      },
+      include: { category: true, bindings: true },
+    });
   }
 
-  remove(id: number): void {
-    const index = this.db.compliance_rules.findIndex(r => r.rule_id === id);
-    if (index === -1) throw new NotFoundException(`Compliance rule ${id} not found`);
-    this.db.compliance_rules.splice(index, 1);
+  async remove(id: string, companyId?: string) {
+    await this.findOne(id, companyId);
+    await this.prisma.complianceRule.delete({ where: { id } });
+    return { message: 'Compliance rule deleted successfully' };
   }
 }

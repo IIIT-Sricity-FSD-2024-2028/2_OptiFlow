@@ -1,42 +1,44 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateProjectDto {
-  @ApiProperty({ example: 'ISO 27001 Certification' })
+  @ApiProperty({ example: 'Mobile App v2' })
   @IsString()
   @IsNotEmpty()
   project_name: string;
 
-  @ApiProperty({ example: 'Achieve ISO 27001 certification by Q2 2025.', required: false })
+  @ApiProperty({ example: 'Next-gen mobile app rollout.', required: false })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: 2 })
-  @IsNumber()
-  department_id: number;
+  @ApiProperty({ example: 'team-uuid-123' })
+  @IsString()
+  @IsNotEmpty()
+  teamId: string;
 
   @ApiProperty({ example: 'Active', required: false })
   @IsOptional()
   @IsString()
-  status?: 'Planning' | 'Active' | 'On_Hold' | 'Completed' | 'Cancelled';
+  status?: string;
 
-  @ApiProperty({ example: '2024-11-01' })
+  @ApiProperty({ example: '2024-11-01', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  start_date: string;
+  start_date?: string;
 
   @ApiProperty({ example: '2025-05-31', required: false })
   @IsOptional()
   @IsString()
   end_date?: string;
 
-  @ApiProperty({ example: 3 })
-  @IsNumber()
-  created_by: number;
+  @ApiProperty({ example: 'user-uuid-789' })
+  @IsString()
+  @IsNotEmpty()
+  createdById: string;
 
-  @ApiProperty({ example: 1, required: false })
+  @ApiProperty({ example: 'template-uuid-101', required: false })
   @IsOptional()
-  @IsNumber()
-  template_id?: number;
+  @IsString()
+  template_id?: string;
 }

@@ -1,38 +1,41 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsString, IsNotEmpty, IsInt, IsOptional, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateEscalationDto {
-  @ApiProperty({ example: 104 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  task_id: number;
+  @ApiProperty({ example: 'comp-uuid-1' })
+  @IsString()
+  @IsNotEmpty()
+  companyId: string;
 
-  @ApiProperty({ example: 2 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  project_id: number;
+  @ApiProperty({ example: 'task-uuid-104', required: false })
+  @IsOptional()
+  @IsString()
+  task_id?: string;
 
-  @ApiProperty({ example: 9 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  reported_by: number;
+  @ApiProperty({ example: 'proj-uuid-2', required: false })
+  @IsOptional()
+  @IsString()
+  project_id?: string;
 
-  @ApiProperty({ example: 8 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  target_manager_id: number;
+  @ApiProperty({ example: 'user-uuid-9', required: false })
+  @IsOptional()
+  @IsString()
+  reported_by?: string;
+
+  @ApiProperty({ example: 'user-uuid-8', required: false })
+  @IsOptional()
+  @IsString()
+  target_manager_id?: string;
 
   @ApiProperty({ example: 'Staging server down' })
   @IsString()
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({ example: 'Staging has been unreachable for 3 days.', required: false })
+  @ApiProperty({
+    example: 'Staging has been unreachable for 3 days.',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   description?: string;
@@ -45,5 +48,5 @@ export class CreateEscalationDto {
   @ApiProperty({ example: 'Critical', required: false })
   @IsOptional()
   @IsString()
-  priority?: 'Low' | 'Medium' | 'High' | 'Critical';
+  priority?: any;
 }

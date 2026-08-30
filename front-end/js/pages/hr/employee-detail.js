@@ -133,7 +133,7 @@ async function renderHero() {
           <span class="sep">·</span>
           <span>${emp.id}</span>
           <span class="sep">·</span>
-          <span>${emp.department} Dept</span>
+          <span>${emp.branch} Dept</span>
           ${emp.team ? `<span class="sep">·</span><span>${emp.team}</span>` : ""}
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -167,7 +167,7 @@ async function renderPersonalDetails() {
       value: `<a href="mailto:${emp.email}" style="color:var(--primary-color);">${emp.email}</a>`,
     },
     { label: "Phone", value: emp.phone || "—" },
-    { label: "Department", value: emp.department },
+    { label: "Department", value: emp.branch },
     { label: "Team", value: emp.team || "—" },
     {
       label: "System Role",
@@ -332,7 +332,7 @@ async function renderPage() {
 async function openEditModal() {
   const managers = await HRStore.getManagers(emp.id);
   const depts = await HRStore.getDepartments();
-  const teams = await HRStore.getTeamsForDept(emp.department);
+  const teams = await HRStore.getTeamsForDept(emp.branch);
   const roles = [
     "Project Manager",
     "Team Leader",
@@ -345,7 +345,7 @@ async function openEditModal() {
   const deptOpts = depts
     .map(
       (d) =>
-        `<option value="${d}" ${d === emp.department ? "selected" : ""}>${d}</option>`,
+        `<option value="${d}" ${d === emp.branch ? "selected" : ""}>${d}</option>`,
     )
     .join("");
   const teamOpts =

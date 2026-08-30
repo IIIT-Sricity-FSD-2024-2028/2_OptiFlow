@@ -1,20 +1,26 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateEvidenceDto {
-  @ApiProperty({ example: 9 })
-  @IsNumber()
-  user_id: number;
+  @ApiProperty({ example: 'comp-uuid-1' })
+  @IsString()
+  @IsNotEmpty()
+  companyId: string;
 
-  @ApiProperty({ example: 104, required: false })
-  @IsOptional()
-  @IsNumber()
-  task_id?: number;
+  @ApiProperty({ example: 'user-uuid-9' })
+  @IsString()
+  @IsNotEmpty()
+  user_id: string;
 
-  @ApiProperty({ example: 2, required: false })
+  @ApiProperty({ example: 'task-uuid-104', required: false })
   @IsOptional()
-  @IsNumber()
-  violation_id?: number;
+  @IsString()
+  task_id?: string;
+
+  @ApiProperty({ example: 'violation-uuid-2', required: false })
+  @IsOptional()
+  @IsString()
+  violation_id?: string;
 
   @ApiProperty({ example: 'Server patch test results' })
   @IsString()
@@ -31,7 +37,10 @@ export class CreateEvidenceDto {
   @IsNotEmpty()
   file_url: string;
 
-  @ApiProperty({ example: 'Partial test results from staging.', required: false })
+  @ApiProperty({
+    example: 'Partial test results from staging.',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   notes?: string;

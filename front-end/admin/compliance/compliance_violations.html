@@ -21,13 +21,14 @@
       href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"
       rel="stylesheet"
     />
+    <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/data/db.js"></script>
     <script src="../../js/data/pm-data-store.js"></script>
     <script src="../../js/utils/auth.js"></script>
     <script src="../../js/utils/validator.js"></script>
-    <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/components/sidebar.js"></script>
     <script src="../../js/components/toast.js"></script>
+    <script src="../../js/components/modal.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
         protectPage(["compliance_officer"]);
@@ -76,7 +77,7 @@
           </div>
         </header>
 
-        <div class="content-wrapper">
+        <div class="content-wrapper" style="padding: 0; display: flex; flex-direction: column; overflow: hidden; height: 100%;">
           <div class="violations-layout">
             <!-- ===== LEFT: VIOLATIONS QUEUE ===== -->
             <section class="violations-queue" aria-label="Violations Queue">
@@ -185,6 +186,7 @@
     </div>
     <!-- /admin-layout -->
 
+    <script src="../../js/pages/compliance/compliance.js"></script>
     <script src="../../js/pages/compliance/violations.js"></script>
   </body>
 </html>

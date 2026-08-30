@@ -228,6 +228,23 @@
       return PERMISSION_GROUPS;
     },
 
+    async assignUserRole(userId, roleId, scopeType = "Company", scopeId = null) {
+      try {
+        const state = await window.Helpers.getState();
+        const companyId = state.companyId || "75bdae98-37a7-4c46-8b0e-74a4a531efbc";
+        
+        return await window.Helpers.api.request("/role-assignments", "POST", {
+          userId: userId,
+          roleId: roleId,
+          scopeType: scopeType,
+          scopeId: scopeId || companyId
+        });
+      } catch (e) {
+        console.error("Failed to assign role to user:", e);
+        throw e;
+      }
+    },
+
     getRoleMeta() {
       return ROLE_META;
     },

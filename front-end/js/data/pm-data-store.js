@@ -7,8 +7,8 @@
 (function (global) {
   "use strict";
 
-  /** Strip any non-numeric chars and parse to int. */
-  const toInt = (id) => parseInt(String(id).replace(/[^0-9]/g, ''), 10);
+  /** Preserve string UUIDs or numeric IDs cleanly. */
+  const parseId = (id) => (id == null ? null : String(id).trim());
 
   async function getAllProjects() {
     try {
@@ -31,8 +31,8 @@
   async function getProjectById(id) {
     try {
       const state = await window.Helpers.getState();
-      const numericId = toInt(id);
-      return state.projects.find(p => p.projectId === numericId) || null;
+      const targetId = parseId(id);
+      return state.projects.find(p => String(p.id || p.projectId) === targetId) || null;
     } catch {
       return null;
     }
@@ -41,8 +41,8 @@
   async function getTaskById(id) {
     try {
       const state = await window.Helpers.getState();
-      const numericId = toInt(id);
-      return state.tasks.find(t => t.taskId === numericId) || null;
+      const targetId = parseId(id);
+      return state.tasks.find(t => String(t.id || t.taskId) === targetId) || null;
     } catch {
       return null;
     }
@@ -50,16 +50,15 @@
 
   async function addTask(payload) {
     try {
-      // Rule 1: All IDs must be pure integers
       const mapped = {
         title:           payload.title,
-        project_id:      toInt(payload.projectId),
-        assigned_to:     payload.assignedTo ? toInt(payload.assignedTo) : null,
-        created_by:      payload.createdBy  ? toInt(payload.createdBy)  : (window.Auth?.getSession()?.rawId || toInt(window.Auth?.getSession()?.id)),
+        projectId:       parseId(payload.projectId),
+        assignedToId:    parseId(payload.assignedTo || payload.assignedToId),
+        createdById:     parseId(payload.createdBy || window.Auth?.getSession()?.id),
         priority:        payload.priority   || 'Medium',
-        status:          'Pending',           // Rule 3: exact backend enum
-        estimated_hours: payload.estimatedHours || 0,
-        due_date:        payload.dueDate    || null,
+        status:          payload.status     || 'Active',
+        estimatedHours: Number(payload.estimatedHours) || 0,
+        dueDate:        payload.dueDate    || null,
       };
       return await window.Helpers.api.request('/tasks', 'POST', mapped);
     } catch (e) {
@@ -70,21 +69,8 @@
 
   async function updateTask(id, patch) {
     try {
-      const numericId = toInt(id);
-      // Rule 3: normalize status enums before sending
-      if (patch.status) {
-        const statusMap = {
-          open:        'Pending',
-          in_progress: 'In_Progress',
-          resolved:    'Completed',
-          closed:      'Completed',
-          in_review:   'In_Review',
-          blocked:     'Blocked',
-          cancelled:   'Cancelled',
-        };
-        patch.status = statusMap[patch.status.toLowerCase()] || patch.status;
-      }
-      return await window.Helpers.api.request(`/tasks/${numericId}`, 'PATCH', patch);
+      const targetId = parseId(id);
+      return await window.Helpers.api.request(`/tasks/${targetId}`, 'PATCH', patch);
     } catch (e) {
       console.warn("PMStore.updateTask failed", e);
       throw e;
@@ -93,8 +79,8 @@
 
   async function deleteProject(id) {
     try {
-      const numericId = toInt(id);
-      return await window.Helpers.api.request(`/projects/${numericId}`, 'DELETE');
+      const targetId = parseId(id);
+      return await window.Helpers.api.request(`/projects/${targetId}`, 'DELETE');
     } catch (e) {
       console.warn("PMStore.deleteProject failed", e);
       throw e;
@@ -104,14 +90,14 @@
   async function submitEvidence(payload) {
     try {
       const mapped = {
-        user_id:       payload.userId      ? toInt(payload.userId)  : null,
-        task_id:       payload.taskId      ? toInt(payload.taskId)  : null,
-        violation_id:  payload.violationId ? toInt(payload.violationId) : null,
+        userId:        parseId(payload.userId || window.Auth?.getSession()?.id),
+        taskId:        parseId(payload.taskId),
+        violationId:   parseId(payload.violationId),
         title:         payload.title       || 'Evidence',
-        evidence_type: payload.evidenceType || 'Document',
-        file_url:      payload.fileUrl     || '',
+        evidenceType:  payload.evidenceType || 'Document',
+        fileUrl:       payload.fileUrl     || '',
         notes:         payload.notes       || '',
-        status:        'Pending',           // Rule 3: exact backend EvidenceStatus enum
+        status:        'Pending',
       };
       return await window.Helpers.api.request('/evidence', 'POST', mapped);
     } catch (e) {
@@ -132,6 +118,6 @@
   };
 
   global.PMStore = PMStore;
-  global.initializePMDatabase = () => { console.log("PMStore runs on backend REST API now."); };
+  global.initializePMDatabase = () => {};
 
 })(window);

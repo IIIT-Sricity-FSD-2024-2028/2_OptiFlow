@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billing - OfficeSync Admin</title>
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/layout.css" />
+  <link rel="stylesheet" href="../css/components.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+
+    <main class="main-content">
+      <header class="top-header">
+        <div class="page-title">Billing & Subscription</div>
+      </header>
+
+      <div class="content-wrapper">
+        <div id="billing-error" style="display:none; color:#ef4444; font-weight:600; margin-bottom:16px;"></div>
+
+        <div class="card" style="margin-bottom:24px;">
+          <h2 style="font-size:16px; font-weight:600; margin-bottom:16px;">Current Plan</h2>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px;">
+            <div>
+              <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase;">Active Plan</div>
+              <div id="planName" style="font-size:22px; font-weight:700; margin-top:4px;">—</div>
+            </div>
+            <div>
+              <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase;">Billing Cycle</div>
+              <div id="billingCycle" style="font-size:18px; font-weight:600; margin-top:4px;">—</div>
+            </div>
+            <div>
+              <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase;">Price (INR)</div>
+              <div id="planPrice" style="font-size:18px; font-weight:600; margin-top:4px;">—</div>
+            </div>
+            <div>
+              <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase;">Status</div>
+              <div id="planStatus" style="font-size:18px; font-weight:600; margin-top:4px;">—</div>
+            </div>
+            <div>
+              <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase;">Renews On</div>
+              <div id="planRenewal" style="font-size:18px; font-weight:600; margin-top:4px;">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="font-size:16px; font-weight:600; margin-bottom:16px;">Usage vs. Limits</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Resource</th>
+                <th>Used</th>
+                <th>Limit</th>
+                <th>Utilization</th>
+              </tr>
+            </thead>
+            <tbody id="usageTableBody">
+              <tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../js/utils/helpers.js"></script>
+  <script src="../js/helpers.js"></script>
+  <script src="../js/components/sidebar.js"></script>
+  <script src="../js/pages/superuser/billing.js"></script>
+</body>
+</html>

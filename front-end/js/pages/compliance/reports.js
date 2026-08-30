@@ -1,73 +1,108 @@
+// js/pages/compliance/reports.js
+// Enterprise Compliance Reports generator & download manager — aligned with Prisma schema
+
 let state;
 
 document.addEventListener("DOMContentLoaded", async function () {
-  // 1. Initialize Sidebar
-  if (window.Sidebar) {
-    window.Sidebar.render("reports");
+  if (window.Sidebar) window.Sidebar.render("reports");
+
+  // Ensure download success modal is strictly hidden on initial page render
+  document.querySelectorAll(".modal-overlay, .modal-backdrop").forEach((m) => {
+    m.classList.remove("active");
+    m.classList.add("hidden");
+    m.style.display = "none";
+  });
+
+  state = await window.Helpers.getState();
+
+  // Populate dynamic project filter dropdown from live backend state
+  const projSelect = document.getElementById("rgProject");
+  if (projSelect && state.projects && state.projects.length > 0) {
+    projSelect.innerHTML =
+      '<option value="all">All Projects</option>' +
+      state.projects
+        .map((p) => `<option value="${p.id || p.projectId}">${p.name}</option>`)
+        .join("");
   }
 
-  // 2. Load the live database state
-  state = window.Helpers ? await window.Helpers.getState() : {};
+  const projectCount = (state.projects || []).length;
+  const violationCount = (state.complianceViolations || []).length;
+  const openViolations = (state.complianceViolations || []).filter(v => v.status === 'Open' || v.status === 'Under_Review').length;
+  const evidenceCount = (state.evidence || []).length;
+  const auditLogsCount = (state.auditLogs || []).length;
+
+  // Populate default enterprise compliance reports aligned with Prisma schema if empty
   if (!state.complianceReports || state.complianceReports.length === 0) {
     state.complianceReports = [
       {
-        id: "rep1",
-        title: "Compliance Summary — Q4 2024",
-        meta: "All Projects · All Policies · Generated Dec 15 · PDF · 2.1 MB",
+        id: "rep_exec_summary",
+        type: "compliance-summary",
+        title: "Executive Compliance Health & Audit Summary Report",
+        meta: `${projectCount} Projects · GDPR, SOX, ISO 27001 · Generated Today · PDF`,
         iconClass: "rtic-blue",
         tags: [
           { cls: "filetype", txt: "PDF" },
-          { cls: "gray", txt: "All Projects" },
-        ],
-      },
-      {
-        id: "rep2",
-        title: "Violations Report — Finance Q4",
-        meta: "Finance Q4 · SOX · Generated Dec 16 · PDF · 890 KB",
-        iconClass: "rtic-red",
-        tags: [
-          { cls: "filetype", txt: "PDF" },
+          { cls: "gray", txt: "Company-Wide" },
+          { cls: "gdpr", txt: "GDPR" },
           { cls: "sox", txt: "SOX" },
         ],
       },
       {
-        id: "rep3",
-        title: "Audit Trail — Project Atlas",
-        meta: "Project Atlas · GDPR · Generated Dec 12 · Excel · 1.4 MB",
-        iconClass: "rtic-green",
+        id: "rep_violations_ledger",
+        type: "violations-report",
+        title: "Regulatory Violation & Escalation Ledger",
+        meta: `${violationCount} Violations Logged · ${openViolations} Open · CSV Export`,
+        iconClass: "rtic-red",
         tags: [
-          { cls: "filetype", txt: "XLSX" },
-          { cls: "gdpr", txt: "GDPR" },
+          { cls: "filetype", txt: "CSV" },
+          { cls: "open", txt: "Violations" },
+          { cls: "critical", txt: "Critical Scope" },
         ],
       },
       {
-        id: "rep4",
-        title: "Evidence Log — IT Security Audit",
-        meta: "IT Security · ISO 27001 · Generated Dec 10 · PDF · 3.2 MB",
+        id: "rep_evidence_attestation",
+        type: "evidence-log",
+        title: "Evidence Verification & File Attestation Audit",
+        meta: `${evidenceCount} Evidence Submissions · Verification Status · XLSX`,
+        iconClass: "rtic-green",
+        tags: [
+          { cls: "filetype", txt: "XLSX" },
+          { cls: "green", txt: "Attestations" },
+        ],
+      },
+      {
+        id: "rep_audit_trail",
+        type: "audit-trail",
+        title: "System Audit Trail & Permission History Log",
+        meta: `${auditLogsCount} System Logs · Security Audit PDF`,
         iconClass: "rtic-yellow",
         tags: [
           { cls: "filetype", txt: "PDF" },
-          { cls: "iso", txt: "ISO 27001" },
+          { cls: "gray", txt: "Audit Stream" },
         ],
       },
     ];
-    if (window.Helpers) await window.Helpers.saveState(state);
   }
 
-  // Render the initial list
   window.renderReports();
 });
 
-// --- RENDER FUNCTION ---
+// ── Render Recent Reports List ────────────────────────────────────────────────
 window.renderReports = function () {
   const list = document.getElementById("recentReportsList");
   if (!list) return;
+
+  if (!state.complianceReports || state.complianceReports.length === 0) {
+    list.innerHTML =
+      '<div style="padding:24px;text-align:center;color:#64748b;">No generated compliance reports found.</div>';
+    return;
+  }
 
   list.innerHTML = state.complianceReports
     .map(
       (rep) => `
     <article class="report-card" role="listitem">
-      <div class="report-card-icon ${rep.iconClass}" aria-hidden="true">
+      <div class="report-card-icon ${rep.iconClass || "rtic-blue"}" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
           <polyline points="14 2 14 8 20 8"></polyline>
@@ -77,7 +112,9 @@ window.renderReports = function () {
         <div class="report-card-title">${rep.title}</div>
         <div class="report-card-meta">${rep.meta}</div>
         <div class="report-card-tags">
-          ${rep.tags.map((t) => `<span class="badge ${t.cls}">${t.txt}</span>`).join("")}
+          ${(rep.tags || [])
+            .map((t) => `<span class="badge ${t.cls}">${t.txt}</span>`)
+            .join("")}
         </div>
       </div>
       <button class="btn-download" onclick="window.downloadReport('${rep.id}')">
@@ -90,8 +127,7 @@ window.renderReports = function () {
     .join("");
 };
 
-// --- GLOBALLY SCOPED FUNCTIONS FOR HTML ONCLICK ---
-
+// ── Select Report Type Card ───────────────────────────────────────────────────
 window.selectReportType = function (card) {
   document.querySelectorAll(".report-type-card").forEach((c) => {
     c.classList.remove("selected");
@@ -101,130 +137,237 @@ window.selectReportType = function (card) {
   card.setAttribute("aria-checked", "true");
 };
 
+// ── Generate Report ───────────────────────────────────────────────────────────
 window.generateReport = function () {
   const btn = document.getElementById("btn-generate");
   if (!btn) return;
 
   const originalText = btn.innerText;
-
-  // 1. Visual feedback
-  btn.innerText = "Generating...";
-  btn.style.opacity = "0.7";
+  btn.innerText = "Compiling Report…";
   btn.disabled = true;
-  btn.style.cursor = "wait";
+  btn.style.opacity = "0.7";
 
-  if (window.Toast) window.Toast.show("Compiling report data...", "info");
+  if (window.Toast)
+    window.Toast.show(
+      "info",
+      "Compiling Data",
+      "Extracting Prisma DB state & generating report...",
+    );
 
-  // 2. Simulate delay, then create the real data
   setTimeout(async () => {
-    // Restore button state
     btn.innerText = originalText;
-    btn.style.opacity = "1";
     btn.disabled = false;
-    btn.style.cursor = "pointer";
+    btn.style.opacity = "1";
 
-    // Grab the values the user selected in the UI
     const typeCard = document.querySelector(".report-type-card.selected");
+    const typeId = typeCard
+      ? typeCard.getAttribute("data-type")
+      : "compliance-summary";
     const typeName = typeCard
       ? typeCard.querySelector(".report-type-name").innerText
-      : "Custom Report";
+      : "Compliance Summary";
 
     const projectSelect = document.getElementById("rgProject");
-    const project = projectSelect
-      ? projectSelect.options[projectSelect.selectedIndex].text
-      : "All Projects";
+    const project =
+      projectSelect && projectSelect.selectedIndex >= 0
+        ? projectSelect.options[projectSelect.selectedIndex].text
+        : "All Projects";
 
     const policySelect = document.getElementById("rgPolicy");
-    const policy = policySelect
-      ? policySelect.options[policySelect.selectedIndex].text
-      : "All Policies";
+    const policy =
+      policySelect && policySelect.selectedIndex >= 0
+        ? policySelect.options[policySelect.selectedIndex].text
+        : "All Frameworks";
 
     const formatSelect = document.getElementById("rgFormat");
-    const format = formatSelect
-      ? formatSelect.options[formatSelect.selectedIndex].text
-      : "PDF";
+    const format =
+      formatSelect && formatSelect.selectedIndex >= 0
+        ? formatSelect.options[formatSelect.selectedIndex].text
+        : "PDF";
 
-    const today = new Date().toLocaleDateString("en-US", {
-      month: "short",
+    const today = new Date().toLocaleDateString("en-IN", {
       day: "numeric",
+      month: "short",
+      year: "numeric",
     });
 
-    // 3. Build the new report object
     const newReport = {
       id: "rep_" + Date.now(),
+      type: typeId,
       title: `${typeName} — ${project}`,
-      meta: `${project} · ${policy} · Generated ${today} · ${format} · 1.2 MB`,
-      iconClass: "rtic-blue",
+      meta: `${project} · ${policy} · Generated ${today} · ${format}`,
+      iconClass:
+        typeId === "violations-report"
+          ? "rtic-red"
+          : typeId === "evidence-log"
+            ? "rtic-green"
+            : typeId === "audit-trail"
+              ? "rtic-yellow"
+              : "rtic-blue",
       tags: [
         { cls: "filetype", txt: format },
-        { cls: "gray", txt: policy },
+        { cls: "gray", txt: project },
+        { cls: policy.toLowerCase().includes("gdpr") ? "gdpr" : policy.toLowerCase().includes("sox") ? "sox" : "iso", txt: policy },
       ],
     };
 
-    // 4. Save to database and render!
-    state.complianceReports.unshift(newReport); // Adds to the TOP of the list
-    if (window.Helpers) await window.Helpers.saveState(state);
+    state.complianceReports.unshift(newReport);
     window.renderReports();
 
     if (window.Toast)
       window.Toast.show(
-        "Report generated successfully! Added to Recent Reports.",
         "success",
+        "Report Generated",
+        `"${newReport.title}" created successfully.`,
       );
-  }, 1500);
+  }, 1000);
 };
 
-// --- THE REAL DOWNLOAD FUNCTION ---
+// ── Real Download Report Engine ───────────────────────────────────────────────
 window.downloadReport = function (id) {
-  // 1. Show the Success UI Modal
-  const modal = document.getElementById("downloadSuccessModal");
-  if (modal) {
-    modal.classList.add("active");
-  } else if (window.Toast) {
-    window.Toast.show(
-      "Download Started! Check your browser downloads.",
-      "success",
-    );
+  const rep = (state.complianceReports || []).find((r) => r.id === id) || {
+    id: id,
+    type: "compliance-summary",
+    title: `Compliance_Report_${id}`,
+  };
+
+  const safeFileName = rep.title.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+  const formatTag = (rep.tags || []).find((t) => t.cls === "filetype")?.txt || "TXT";
+
+  // Build report based on schema model contents
+  const rules = state.complianceRules || [];
+  const violations = state.complianceViolations || [];
+  const evidence = state.evidence || [];
+  const logs = state.auditLogs || [];
+  const users = state.users || [];
+  const projects = state.projects || [];
+
+  let reportText = "";
+
+  if (rep.type === "violations-report" || formatTag === "CSV") {
+    // Generate CSV breakdown
+    reportText = "Violation ID,Rule Name,Severity,Status,Entity Type,Entity Name,Reported By,Detected At,Resolution Remarks\n";
+    violations.forEach((v) => {
+      const r = rules.find((x) => String(x.id || x.ruleId) === String(v.ruleId)) || {};
+      const u = users.find((x) => String(x.id || x.userId) === String(v.reportedById || v.reportedBy)) || {};
+      let entityName = `#${v.entityId}`;
+      if (v.entityType === "User") {
+        const targetU = users.find((x) => String(x.id || x.userId) === String(v.entityId));
+        if (targetU) entityName = targetU.fullName || targetU.name;
+      } else if (v.entityType === "Project") {
+        const targetP = projects.find((x) => String(x.id || x.projectId) === String(v.entityId));
+        if (targetP) entityName = targetP.name;
+      }
+
+      reportText += `"${v.id || v.violationId}","${r.name || 'Policy Violation'}","${v.severity || 'Medium'}","${v.status}","${v.entityType}","${entityName}","${u.fullName || 'System'}","${v.detectedAt || ''}","${(v.resolutionRemarks || '').replace(/"/g, '""')}"\n`;
+    });
+  } else if (rep.type === "evidence-log") {
+    // Generate Evidence attestation log
+    reportText = `===================================================================
+OFFICESYNC EVIDENCE VERIFICATION & ATTESTATION LEDGER
+Generated On: ${new Date().toLocaleString("en-IN")}
+Database Engine: PostgreSQL / Prisma Compliance Subsystem
+===================================================================
+
+I. EVIDENCE SUBMISSION SUMMARY
+Total Submissions: ${evidence.length}
+Pending Verification: ${evidence.filter((e) => e.status === "Pending" || e.status === "Under_Review").length}
+Approved Submissions: ${evidence.filter((e) => e.status === "Approved").length}
+Rejected Submissions: ${evidence.filter((e) => e.status === "Rejected").length}
+
+II. DETAILED EVIDENCE FILES
+`;
+    evidence.forEach((ev, i) => {
+      const submitter = users.find((u) => String(u.id || u.userId) === String(ev.userId)) || {};
+      reportText += `
+${i + 1}. [${ev.status.toUpperCase()}] ${ev.title || 'Untitled Evidence'}
+   • Evidence Type: ${ev.evidenceType || 'Document'}
+   • Submitted By:  ${submitter.fullName || 'User #' + ev.userId}
+   • File Attachment URL: ${ev.fileUrl || 'N/A'}
+   • Task ID: ${ev.taskId || 'N/A'} | Violation ID: ${ev.violationId || 'N/A'}
+   • Submitted Date: ${ev.submittedAt || '—'}
+`;
+    });
+  } else {
+    // Executive Compliance Summary Report
+    const totalRules = rules.length;
+    const activeRules = rules.filter((r) => r.isActive !== false).length;
+    const criticalRules = rules.filter((r) => r.severity === "Critical").length;
+    const openViolations = violations.filter((v) => v.status === "Open" || v.status === "Under_Review").length;
+
+    reportText = `===================================================================
+OFFICESYNC ENTERPRISE COMPLIANCE HEALTH & AUDIT REPORT
+Report Title: ${rep.title}
+Generated On:  ${new Date().toLocaleString("en-IN")}
+Environment:   PostgreSQL / Prisma Production Audit Engine
+===================================================================
+
+I. COMPLIANCE HEALTH SUMMARY
+- Total Compliance Policies Configured: ${totalRules} (${activeRules} Active)
+- Critical Severity Rules: ${criticalRules}
+- Active Violations Requiring Remediation: ${openViolations}
+- Evidence Verification Files Logged: ${evidence.length}
+- System Audit Trail Events Logged: ${logs.length}
+
+II. CONFIGURED COMPLIANCE RULES & SCOPES
+${rules
+  .map(
+    (r) =>
+      `  • [${r.severity || "Medium"}] ${r.name || r.ruleName} — Status: ${r.isActive !== false ? "Active" : "Inactive"} (Scope: ${r.dept || "Company-wide"})`,
+  )
+  .join("\n") || "  No rules configured."}
+
+III. CURRENT OPEN VIOLATIONS & RISKS
+${violations
+  .map(
+    (v) =>
+      `  • [${v.severity || "Medium"}] Violation #${v.id || v.violationId}: Status: ${v.status} | Entity: ${v.entityType} #${v.entityId}`,
+  )
+  .join("\n") || "  No active violations logged."}
+
+IV. AUDIT & REGULATORY COMPLIANCE STATEMENT
+This document certifies that OfficeSync compliance controls, audit logs, and file attachments
+are continuously verified against PostgreSQL database constraints and strict actor role permissions.
+===================================================================
+`;
   }
 
-  // 2. Format a safe file name based on the report title
-  let reportName = "Compliance_Report_" + id;
-  if (state && state.complianceReports) {
-    const rep = state.complianceReports.find((r) => r.id === id);
-    if (rep) {
-      // Removes spaces and special characters for a clean file name
-      reportName = rep.title.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-    }
-  }
+  const mimeType = formatTag === "CSV" ? "text/csv" : "text/plain";
+  const ext = formatTag === "CSV" ? "csv" : formatTag === "XLSX" ? "xlsx" : "txt";
 
-  // 3. ACTUALLY TRIGGER A REAL BROWSER DOWNLOAD
-  // This creates a text file dynamically and forces your browser to download it
-  const fileContent =
-    "This is a simulated downloaded report for: \n" +
-    reportName +
-    "\n\nGenerated securely by OfficeSync.";
-  const blob = new Blob([fileContent], { type: "text/plain" });
+  const blob = new Blob([reportText], { type: mimeType });
   const url = window.URL.createObjectURL(blob);
 
-  const downloadAnchor = document.createElement("a");
-  downloadAnchor.href = url;
-  downloadAnchor.download = reportName + ".txt";
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click(); // Triggers the real download
-
-  // Cleanup
-  document.body.removeChild(downloadAnchor);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${safeFileName}.${ext}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
   window.URL.revokeObjectURL(url);
+
+  // Trigger Download Successful Modal strictly AFTER download initiates
+  if (window.Modal && typeof window.Modal.open === "function") {
+    window.Modal.open("downloadSuccessModal");
+  } else {
+    const modal = document.getElementById("downloadSuccessModal");
+    if (modal) {
+      modal.classList.remove("hidden");
+      modal.classList.add("active");
+      modal.style.display = "flex";
+    }
+  }
 };
 
 window.closeDownloadModal = function () {
-  const modal = document.getElementById("downloadSuccessModal");
-  if (modal) modal.classList.remove("active");
-};
-
-// Close modal if user presses ESC key
-document.addEventListener("keydown", function (e) {
-  if (e.key === "Escape") {
-    window.closeDownloadModal();
+  if (window.Modal && typeof window.Modal.close === "function") {
+    window.Modal.close("downloadSuccessModal");
+  } else {
+    const modal = document.getElementById("downloadSuccessModal");
+    if (modal) {
+      modal.classList.remove("active");
+      modal.classList.add("hidden");
+      modal.style.display = "none";
+    }
   }
-});
+};

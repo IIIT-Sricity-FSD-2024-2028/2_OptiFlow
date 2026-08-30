@@ -8,6 +8,19 @@ window.ProjectsPage = {
   activeFilter: 'all',
 
   async init() {
+    const sessionRaw = sessionStorage.getItem('currentUser');
+    if (sessionRaw) {
+      try {
+        const s = JSON.parse(sessionRaw);
+        const role = String(s.role || '').toLowerCase();
+        const label = String(s.roleLabel || '').toLowerCase();
+        if (role === 'company_owner' || label.includes('owner') || label.includes('ceo')) {
+          window.location.href = '../admin/executive/executive_projects.html';
+          return;
+        }
+      } catch { /* continue */ }
+    }
+
     this.state = await window.Helpers.getState();
     if (window.Notifications) await window.Notifications.init();
     this.filtered = [...this.state.projects];
@@ -19,9 +32,9 @@ window.ProjectsPage = {
   populateDeptFilter() {
     const el = document.getElementById('dept-filter');
     if (!el) return;
-    const depts = this.state.departments || [];
+    const depts = this.state.teams || this.state.branches || this.state.departments || [];
     const options = depts.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
-    el.innerHTML = `<option value="">All Departments</option>` + options;
+    el.innerHTML = `<option value="">All Teams / Departments</option>` + options;
   },
 
   renderAll() {
@@ -48,7 +61,8 @@ window.ProjectsPage = {
   },
 
   projectCard(p) {
-    const projectTasks    = this.state.tasks.filter(t => parseInt(t.projectId) === parseInt(p.projectId));
+    const projId = String(p.projectId || p.id);
+    const projectTasks    = this.state.tasks.filter(t => String(t.projectId) === projId);
     const assignedUserIds = [...new Set(projectTasks.map(t => t.assignedUserId))];
     const team            = this.state.users.filter(u => assignedUserIds.includes(String(u.userId)) || assignedUserIds.includes(u.userId));
 
@@ -84,7 +98,7 @@ window.ProjectsPage = {
 
     // Real open escalations for this project
     const openEscalations = (this.state.escalations || []).filter(
-      e => String(e.projectId) === String(p.projectId) && e.status === 'Open'
+      e => String(e.projectId) === projId && e.status === 'Open'
     ).length;
 
     // Footer SVGs
@@ -98,7 +112,7 @@ window.ProjectsPage = {
       : `<div style="font-size:11px;font-weight:500;color:#94a3b8;display:flex;align-items:center">${pathClock} 0 escalations</div>`;
 
     // Real compliance badge from violations linked to this project's tasks
-    const projectTaskIds = projectTasks.map(t => String(t.taskId));
+    const projectTaskIds = projectTasks.map(t => String(t.taskId || t.id));
     const openViolations = (this.state.complianceViolations || []).filter(v =>
       v.status === 'Open' && v.entityType === 'Task' && projectTaskIds.includes(String(v.entityId))
     ).length;
@@ -108,15 +122,15 @@ window.ProjectsPage = {
     const badgeCompliance = `<div style="font-size:11px;font-weight:600;color:${compColor};display:flex;align-items:center">${pathShield} ${compText}</div>`;
 
     return `
-      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-top:5px solid ${borderColor};padding:24px;display:flex;flex-direction:column;gap:12px;cursor:pointer;position:relative;border-left:1px solid #f1f5f9;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9" onclick="localStorage.setItem('selectedProjectId', '${p.id}'); window.location.href='tasks.html?project=${p.id}'" class="hover-elevate">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-top:5px solid ${borderColor};padding:24px;display:flex;flex-direction:column;gap:12px;cursor:pointer;position:relative;border-left:1px solid #f1f5f9;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9" onclick="localStorage.setItem('selectedProjectId', '${projId}'); window.location.href='tasks.html?project=${projId}'" class="hover-elevate">
 
         <div style="position:absolute;top:16px;right:16px">
-          <button class="btn" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px" onclick="window.ProjectsPage.toggleMenu(event, ${p.id})">
+          <button class="btn" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px" onclick="window.ProjectsPage.toggleMenu(event, '${projId}')">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
           </button>
-          <div id="proj-menu-${p.id}" class="proj-dropdown hidden" style="position:absolute;right:0;top:24px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:10;width:140px;overflow:hidden">
-            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#475569" onclick="event.stopPropagation();window.ProjectsPage.openEditModal(${p.id})">Edit Project</div>
-            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#ef4444;border-top:1px solid #f1f5f9" onclick="event.stopPropagation();window.ProjectsPage.confirmDelete(${p.id})">Delete</div>
+          <div id="proj-menu-${projId}" class="proj-dropdown hidden" style="position:absolute;right:0;top:24px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:10;width:140px;overflow:hidden">
+            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#475569" onclick="event.stopPropagation();window.ProjectsPage.openEditModal('${projId}')">Edit Project</div>
+            <div style="padding:8px 16px;cursor:pointer;font-size:13px;color:#ef4444;border-top:1px solid #f1f5f9" onclick="event.stopPropagation();window.ProjectsPage.confirmDelete('${projId}')">Delete</div>
           </div>
         </div>
 
@@ -127,7 +141,7 @@ window.ProjectsPage = {
         </div>
 
         <!-- Description -->
-        <p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${p.description}</p>
+        <p style="margin:0;font-size:12px;color:#64748b;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${p.description || 'No description provided.'}</p>
 
         <!-- Progress -->
         <div style="margin-top:4px">
@@ -229,10 +243,10 @@ window.ProjectsPage = {
 
   /* ── Add Modal ── */
   openAddModal() {
-    const depts = this.state.departments;
-    const deptOptions = depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    const teams = this.state.teams || [];
+    const deptOptions = teams.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
 
-    const templates = this.state.workflowTemplates || [];
+    const templates = this.state.processTemplates || this.state.workflowTemplates || [];
     const templateOptions = templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
 
     window.Modal.create({
@@ -251,9 +265,9 @@ window.ProjectsPage = {
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="proj-dept">Department *</label>
+            <label class="form-label" for="proj-dept">Assigned Team *</label>
             <select id="proj-dept" class="form-select">
-              <option value="">Select department</option>
+              <option value="">Select team</option>
               ${deptOptions}
             </select>
             <span class="form-error hidden" id="proj-dept-error"></span>
@@ -307,11 +321,13 @@ window.ProjectsPage = {
       return;
     }
 
-    const template = this.state.workflowTemplates.find(t => String(t.id) === String(templateId));
-    if (template && template.stages) {
-      list.innerHTML = template.stages.map((s, i) => `
+    const templates = this.state.processTemplates || this.state.workflowTemplates || [];
+    const template = templates.find(t => String(t.id) === String(templateId));
+    if (template && (template.steps || template.stages)) {
+      const steps = template.steps || template.stages;
+      list.innerHTML = steps.map((s, i) => `
         <span style="font-size: 12px; background: #fff; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 4px; color: #475569;">
-          ${i + 1}. ${s}
+          ${i + 1}. ${s.name || s}
         </span>
       `).join('');
       preview.classList.remove('hidden');
@@ -329,26 +345,23 @@ window.ProjectsPage = {
 
     const session   = window.Auth.getSession();
     const statusVal = window.Helpers.getVal('proj-status') || 'Active';
-    const deptId    = parseInt(window.Helpers.getVal('proj-dept'));
-    const labelMap  = { Active: 'Active', Planning: 'Planning', On_Hold: 'On Hold', Completed: 'Completed' };
+    const teamIdVal = window.Helpers.getVal('proj-dept') || (this.state.teams && this.state.teams[0] ? this.state.teams[0].id : null);
+    const templateVal = window.Helpers.getVal('proj-template');
 
     const newProject = {
       project_name:  window.Helpers.getVal('proj-name'),
       description:   window.Helpers.getVal('proj-desc'),
-      department_id: deptId,
-      template_id:   parseInt(window.Helpers.getVal('proj-template')) || null,
+      teamId:        teamIdVal,
+      template_id:   templateVal || undefined,
       status:        statusVal,
       start_date:    new Date().toISOString().split('T')[0],
       end_date:      window.Helpers.getVal('proj-due'),
-      created_by:    session ? parseInt(String(session.id).replace(/[^0-9]/g, ''), 10) || 1 : 1
+      createdById:   session ? String(session.id) : undefined,
     };
 
     try {
       await window.Helpers.api.request('/projects', 'POST', newProject);
       this.state = await window.Helpers.getState();
-
-
-      
       window.Modal.close('modal-add-project');
       window.Toast.success('Project Created', `"${newProject.project_name}" has been created.`);
       
@@ -356,21 +369,20 @@ window.ProjectsPage = {
       this.renderAll();
     } catch (e) {
       console.error(e);
-      window.Toast.warning('Error', 'Failed to create project');
+      window.Toast.warning('Error', 'Failed to create project: ' + (e.message || 'Error'));
     }
   },
 
   /* ── Edit Modal ── */
   openEditModal(id) {
-    // Close any open dropdown
     document.querySelectorAll('.proj-dropdown').forEach(d => d.classList.add('hidden'));
 
-    const p = this.state.projects.find(x => x.projectId === id || String(x.projectId) === String(id));
+    const p = this.state.projects.find(x => String(x.projectId || x.id) === String(id));
     if (!p) return;
-    const numericId = p.projectId;
-    const depts = this.state.departments;
-    const deptOptions = depts.map(d =>
-      `<option value="${d.departmentId}" ${d.departmentId === p.departmentId ? 'selected' : ''}>${d.name}</option>`
+    const projId = p.projectId || p.id;
+    const teams = this.state.teams || [];
+    const deptOptions = teams.map(d =>
+      `<option value="${d.id}" ${String(d.id) === String(p.teamId) ? 'selected' : ''}>${d.name}</option>`
     ).join('');
 
     window.Modal.create({
@@ -384,19 +396,19 @@ window.ProjectsPage = {
         </div>
         <div class="form-group">
           <label class="form-label" for="edit-proj-desc">Description *</label>
-          <textarea id="edit-proj-desc" class="form-textarea">${p.description}</textarea>
+          <textarea id="edit-proj-desc" class="form-textarea">${p.description || ''}</textarea>
           <span class="form-error hidden" id="edit-proj-desc-error"></span>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="edit-proj-dept">Department</label>
+            <label class="form-label" for="edit-proj-dept">Assigned Team</label>
             <select id="edit-proj-dept" class="form-select">
               ${deptOptions}
             </select>
           </div>
           <div class="form-group">
             <label class="form-label" for="edit-proj-due">End Date</label>
-            <input type="date" id="edit-proj-due" class="form-input" value="${p.endDate || ''}">
+            <input type="date" id="edit-proj-due" class="form-input" value="${p.endDate ? String(p.endDate).split('T')[0] : ''}">
           </div>
         </div>
         <div class="form-row">
@@ -416,7 +428,7 @@ window.ProjectsPage = {
         </div>`,
       footerHTML: `
         <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-edit-project')">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="window.ProjectsPage.submitEdit(${numericId})">Save Changes</button>`
+        <button class="btn btn-primary btn-sm" onclick="window.ProjectsPage.submitEdit('${projId}')">Save Changes</button>`
     });
 
     window.Validator.attachLive('edit-proj-name', { required: true, minLength: 3 });
@@ -430,24 +442,22 @@ window.ProjectsPage = {
     });
     if (!result.valid) return;
 
-    const idx = this.state.projects.findIndex(x => x.projectId === id || String(x.projectId) === String(id));
+    const idx = this.state.projects.findIndex(x => String(x.projectId || x.id) === String(id));
     if (idx === -1) return;
 
-    const numericId = this.state.projects[idx].projectId;
-
+    const projId = this.state.projects[idx].projectId || this.state.projects[idx].id;
     const statusVal  = window.Helpers.getVal('edit-proj-status');
-    const progress   = Math.min(100, Math.max(0, parseInt(window.Helpers.getVal('edit-proj-progress')) || 0));
 
     const updatePayload = {
-      name:         window.Helpers.getVal('edit-proj-name'),
-      description:  window.Helpers.getVal('edit-proj-desc'),
-      department_id: parseInt(window.Helpers.getVal('edit-proj-dept')),
+      project_name:  window.Helpers.getVal('edit-proj-name'),
+      description:   window.Helpers.getVal('edit-proj-desc'),
+      teamId:        window.Helpers.getVal('edit-proj-dept') || undefined,
       end_date:      window.Helpers.getVal('edit-proj-due') || this.state.projects[idx].endDate,
-      status:       statusVal,
+      status:        statusVal,
     };
 
     try {
-      await window.Helpers.api.request(`/projects/${numericId}`, 'PATCH', updatePayload);
+      await window.Helpers.api.request(`/projects/${projId}`, 'PATCH', updatePayload);
       this.state = await window.Helpers.getState();
 
       window.Modal.close('modal-edit-project');
@@ -462,16 +472,16 @@ window.ProjectsPage = {
       this.renderAll();
     } catch (e) {
       console.error(e);
-      window.Toast.warning('Error', 'Failed to update project');
+      window.Toast.warning('Error', 'Failed to update project: ' + (e.message || 'Error'));
     }
   },
 
   /* ── Delete ── */
   confirmDelete(id) {
     document.querySelectorAll('.proj-dropdown').forEach(d => d.classList.add('hidden'));
-    const p = this.state.projects.find(x => x.projectId === id || String(x.projectId) === String(id));
+    const p = this.state.projects.find(x => String(x.projectId || x.id) === String(id));
     if (!p) return;
-    const numericId = p.projectId;
+    const projId = p.projectId || p.id;
 
     window.Modal.confirm({
       title:        'Delete Project',
@@ -479,7 +489,7 @@ window.ProjectsPage = {
       confirmLabel: 'Delete Project',
       onConfirm:    async () => {
         try {
-          await window.Helpers.api.request(`/projects/${numericId}`, 'DELETE');
+          await window.Helpers.api.request(`/projects/${projId}`, 'DELETE');
           this.state = await window.Helpers.getState();
           
           window.Toast.warning('Deleted', `"${p.name}" was deleted.`);
@@ -487,7 +497,7 @@ window.ProjectsPage = {
           this.renderAll();
         } catch (e) {
           console.error(e);
-          window.Toast.warning('Error', 'Failed to delete project');
+          window.Toast.warning('Error', 'Failed to delete project: ' + (e.message || 'Error'));
         }
       }
     });

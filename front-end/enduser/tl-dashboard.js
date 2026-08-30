@@ -23,11 +23,11 @@
     const container = document.getElementById("tl-escalation-history");
     if (!container || !stateRef) return;
 
-    const teamSet = new Set(teamMemberIds.map(Number));
-    teamSet.add(Number(sessionNumericId));
+    const teamSet = new Set(teamMemberIds.map(String));
+    teamSet.add(String(sessionNumericId));
 
     const teamEscalations = (stateRef.escalations || []).filter((e) => {
-      const rid = Number(e.reportedBy);
+      const rid = String(e.reportedBy || e.reportedById || '');
       return teamSet.has(rid);
     });
 
@@ -105,19 +105,19 @@
       window.TasksStore && typeof window.TasksStore.teamMemberUserIds === "function"
         ? window.TasksStore.teamMemberUserIds(stateRef.users, sessionNumericId)
         : (stateRef.users || [])
-            .filter((u) => Number(u.managerId || u.manager_id || u.reportsTo) === Number(sessionNumericId))
-            .map((u) => Number(u.userId || u.user_id || u.id));
+            .filter((u) => String(u.managerId || u.manager_id || u.reportsTo || '') === String(sessionNumericId))
+            .map((u) => String(u.userId || u.user_id || u.id));
     
     console.log("[tl-dashboard] sessionNumericId:", sessionNumericId, "teamMemberIds:", teamMemberIds);
 
     teamOverviewTasks =
       window.TasksStore && typeof window.TasksStore.filterTeamOverviewTasksForLeader === "function"
         ? window.TasksStore.filterTeamOverviewTasksForLeader(stateRef.tasks, teamMemberIds)
-        : (stateRef.tasks || []).filter((t) => teamMemberIds.includes(Number(t.assignedTo || t.assigned_to)));
+        : (stateRef.tasks || []).filter((t) => teamMemberIds.includes(String(t.assignedTo || t.assignedToId || t.assigned_to)));
 
     const parentTasksInReview = teamOverviewTasks.filter(t => ["In_Review", "Pending_TL_Review"].includes(t.status));
     const subtasksInReview = (stateRef.subtasks || []).filter(s => 
-      teamMemberIds.includes(Number(s.assignedTo)) && ["In_Review", "Pending_TL_Review"].includes(s.status)
+      teamMemberIds.includes(String(s.assignedTo || s.assignedToId || '')) && ["In_Review", "Pending_TL_Review"].includes(s.status)
     ).map(s => ({
        ...s,
        taskId: s.taskId,
@@ -140,7 +140,7 @@
 
     const teamEvidence = (stateRef.evidence || []).filter(
       (e) =>
-        teamMemberIds.includes(Number(e.userId)) &&
+        teamMemberIds.includes(String(e.userId || e.user_id || '')) &&
         (e.status === "Pending" || e.status === "Under_Review"),
     );
     const pendingEvidenceCount = teamEvidence.length;
@@ -204,7 +204,7 @@
                 if (t.status === "Blocked") badgeClass = "badge-orange";
 
                 const owner =
-                  stateRef.users.find((u) => Number(u.userId) === Number(t.assignedTo)) || {};
+                  stateRef.users.find((u) => String(u.userId || u.id) === String(t.assignedTo || t.assignedToId || '')) || {};
                 const name = owner.fullName || owner.name || "Assignee";
 
                 return `
@@ -231,7 +231,7 @@
         rq.innerHTML = reviewQueueTasks
           .map((t) => {
             const owner =
-              stateRef.users.find((u) => Number(u.userId) === Number(t.assignedTo)) || {};
+              stateRef.users.find((u) => String(u.userId || u.id) === String(t.assignedTo || t.assignedToId || '')) || {};
             const name = owner.fullName || owner.name || "Member";
             const tid = t.isSubtask ? (t.subtaskId || t.id) : (t.taskId || t.id || '');
             const isSub = t.isSubtask ? 'true' : 'false';
@@ -291,9 +291,8 @@
       return;
     }
     const session = window.Auth.getSession();
-    sessionNumericId = window.TasksStore && typeof window.TasksStore.parseNumericUserId === "function"
-        ? window.TasksStore.parseNumericUserId(session)
-        : parseInt(String(session.rawId || session.id || "").replace(/\D/g, ""), 10);
+    // Use the UUID string directly — the DB uses UUIDs, Number() on a UUID = NaN
+    sessionNumericId = session.id || session.rawId || null;
 
     window.Sidebar.render("dashboard");
     window.Toast.init();
@@ -628,7 +627,7 @@
     }
     const project = stateRef.projects.find(p => p.projectId === projectId);
     const pmId = project ? project.createdBy : null;
-    const me = stateRef.users.find((u) => Number(u.userId) === Number(sessionNumericId));
+    const me = stateRef.users.find((u) => String(u.userId || u.id) === String(sessionNumericId));
     let targetManagerStr = pmId || me?.managerId || me?.reportsTo || (stateRef.users.find(u => u.roleId === 2 || u.role_id === 2)?.userId);
     let targetManager = targetManagerStr ? parseInt(String(targetManagerStr).replace(/[^0-9]/g, ''), 10) : null;
 

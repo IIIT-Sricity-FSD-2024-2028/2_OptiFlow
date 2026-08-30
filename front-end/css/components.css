@@ -291,37 +291,46 @@
 }
 
 /* Modal */
-.modal-overlay {
+.modal-overlay,
+.modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(15, 23, 42, 0.5);
-  display: flex;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.2s;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
-.modal-overlay.active {
-  opacity: 1;
-  visibility: visible;
+.modal-overlay.active,
+.modal-backdrop.active {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
-.modal-content {
+.modal-content,
+.modal {
   background-color: white;
-  border-radius: 8px;
-  width: 500px;
-  max-width: 90vw;
-  box-shadow: var(--shadow-md);
-  transform: translateY(20px);
-  transition: transform 0.2s;
+  border-radius: 12px;
+  width: 520px;
+  max-width: 92vw;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  transform: translateY(12px) scale(0.98);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
-.modal-overlay.active .modal-content {
-  transform: translateY(0);
+.modal-overlay.active .modal-content,
+.modal-backdrop.active .modal {
+  transform: translateY(0) scale(1);
 }
 
 .modal-header {

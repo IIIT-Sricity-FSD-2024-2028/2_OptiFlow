@@ -1,137 +1,215 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService, Project, Task, TaskStatus, TaskPriority } from '../../core/database/database.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import {
+  buildProjectListWhere,
+  TenantListScope,
+  assertBranchManagerScope,
+} from '../../core/utils/tenant-scope.util';
+import { RequestUser } from '../../core/middleware/tenant.middleware';
 
 @Injectable()
 export class ProjectsService {
   constructor(
-    private readonly db: DatabaseService,
+    private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
     private readonly notifications: NotificationsService,
   ) {}
 
-  findAll(): Project[] { return this.db.projects; }
+  async findAll(scope: TenantListScope) {
+    return this.prisma.project.findMany({
+      where: buildProjectListWhere(scope),
+      include: {
+        team: {
+          include: {
+            branch: { select: { id: true, name: true, companyId: true } },
+          },
+        },
+        tasks: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            priority: true,
+            estimatedHours: true,
+            actualHours: true,
+          },
+        },
+        escalations: {
+          where: { status: 'Open' },
+        },
+      },
+      orderBy: { id: 'desc' },
+    });
+  }
 
-  findOne(id: number): Project {
-    const project = this.db.projects.find(p => p.project_id === id);
-    if (!project) throw new NotFoundException(`Project with ID ${id} not found`);
+  async findOne(id: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id },
+      include: {
+        team: {
+          include: {
+            branch: { select: { id: true, name: true, companyId: true } },
+          },
+        },
+        tasks: {
+          where: { deletedAt: null },
+          include: {
+            subtasks: { where: { deletedAt: null } },
+            assignedTo: { select: { id: true, fullName: true, email: true } },
+            escalations: true,
+          },
+        },
+        processInstances: {
+          include: {
+            template: true,
+            currentStep: true,
+          },
+        },
+        escalations: true,
+      },
+    });
+    if (!project) throw new NotFoundException(`Project ${id} not found`);
     return project;
   }
 
-  create(dto: CreateProjectDto, actorUserId: number): Project {
-    const newProject: Project = {
-      project_id: Date.now(),
-      project_name: dto.project_name,
-      description: dto.description ?? '',
-      department_id: dto.department_id,
-      status: dto.status ?? 'Planning',
-      start_date: dto.start_date,
-      end_date: dto.end_date ?? null,
-      created_by: dto.created_by,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+  async create(dto: CreateProjectDto, actorUserId: string, user?: RequestUser) {
+    const team = await this.prisma.team.findUnique({
+      where: { id: dto.teamId },
+      include: { branch: true },
+    });
+    if (!team) throw new NotFoundException(`Team ${dto.teamId} not found`);
 
-    // ── Template Automation ──────────────────────────────────────────────────
+    assertBranchManagerScope(user, team.branchId, 'create projects in');
+
+    const newProject = await this.prisma.project.create({
+      data: {
+        teamId: dto.teamId,
+        name: dto.project_name,
+        status: dto.status ?? 'Active',
+        startDate: dto.start_date ? new Date(dto.start_date) : null,
+        endDate: dto.end_date ? new Date(dto.end_date) : null,
+        createdById: dto.createdById ?? actorUserId,
+      },
+      include: { team: true },
+    });
+
+    // Handle template automation
     if (dto.template_id) {
-      // Find the Team Leader (Role 5) for this department
-      const teamLeaderId = this.db.user_roles.find(ur => {
-        const user = this.db.users.find(u => u.user_id === ur.user_id);
-        return user && 
-               Number(user.department_id) === Number(dto.department_id) && 
-               Number(ur.role_id) === 5; // Role 5 is Team Leader
-      })?.user_id;
-
-      const targetAssignee = teamLeaderId || actorUserId; // Fallback to PM if no TL found
-
-      const templateSteps = this.db.workflow_template_steps
-        .filter(s => s.template_id === dto.template_id)
-        .sort((a, b) => a.step_order - b.step_order);
-
-      templateSteps.forEach((step, index) => {
-        const newTask: Task = {
-          task_id: Date.now() + index + 1000, 
-          project_id: newProject.project_id,
-          workflow_instance_id: null,
-          title: step.step_name,
-          description: `Stage ${step.step_order} automatically generated from template: ${dto.project_name}`,
-          created_by: actorUserId,
-          assigned_to: targetAssignee,
-          status: (index === 0 ? 'In_Progress' : 'Pending') as TaskStatus,
-          priority: 'Medium' as TaskPriority,
-          estimated_hours: step.escalation_timeout_hours || 8,
-          actual_hours: 0,
-          start_date: index === 0 ? newProject.start_date : null,
-          due_date: newProject.end_date,
-          completed_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          deleted_at: null
-        };
-        this.db.tasks.push(newTask);
-
-        // ── Trigger Notification ─────────────────────────────────────────────
-        this.notifications.create({
-          user_id: newTask.assigned_to || actorUserId,
-          title: 'New Task Assigned',
-          message: `You have been assigned to "${newTask.title}" in project "${newProject.project_name}".`,
-          type: 'Task',
-          link: `tasks.html?id=${newTask.task_id}`
-        });
+      const templateSteps = await this.prisma.processTemplateStep.findMany({
+        where: { templateId: dto.template_id },
+        orderBy: { stepOrder: 'asc' },
       });
+
+      for (const [index, step] of templateSteps.entries()) {
+        const newTask = await this.prisma.task.create({
+          data: {
+            companyId: team.branch.companyId,
+            projectId: newProject.id,
+            title: step.name,
+            description: `Stage ${step.stepOrder} automatically generated from template`,
+            createdById: actorUserId,
+            status: index === 0 ? 'Active' : 'Draft',
+            priority: 'Medium',
+            estimatedHours: step.escalationTimeoutHours || 8,
+            dueDate: newProject.endDate,
+          },
+        });
+
+        this.notifications.create({
+          userId: actorUserId,
+          title: 'New Task Generated',
+          message: `Generated step "${newTask.title}" for project "${newProject.name}".`,
+          type: 'Task',
+          link: `tasks.html?id=${newTask.id}`,
+        });
+      }
     }
 
-    this.db.projects.push(newProject);
     this.auditLogs.create({
-      entity_id: newProject.project_id,
+      entity_id: newProject.id,
       entity_type: 'Project',
-      action: 'CREATED',
+      action: 'CREATE',
       performed_by: actorUserId,
-      new_value: { ...newProject, generated_tasks: dto.template_id ? true : false },
+      new_value: newProject as any,
     });
-    return newProject;
+
+    return this.findOne(newProject.id);
   }
 
-  update(id: number, dto: UpdateProjectDto, actorUserId: number): Project {
-    const index = this.db.projects.findIndex(p => p.project_id === id);
-    if (index === -1) throw new NotFoundException(`Project ${id} not found`);
-    const before = { ...this.db.projects[index] };
-    this.db.projects[index] = { ...this.db.projects[index], ...dto, updated_at: new Date().toISOString() };
-    const after = this.db.projects[index];
+  async update(
+    id: string,
+    dto: UpdateProjectDto,
+    actorUserId: string,
+    user?: RequestUser,
+  ) {
+    const before = await this.findOne(id);
+    await this.assertProjectBranchAccess(id, user);
+
+    if (dto.teamId) {
+      const team = await this.prisma.team.findUnique({
+        where: { id: dto.teamId },
+        select: { branchId: true },
+      });
+      if (!team) throw new NotFoundException(`Team ${dto.teamId} not found`);
+      assertBranchManagerScope(user, team.branchId, 'move projects into');
+    }
+    const updated = await this.prisma.project.update({
+      where: { id },
+      data: {
+        ...(dto.project_name ? { name: dto.project_name } : {}),
+        ...(dto.status ? { status: dto.status } : {}),
+        ...(dto.start_date ? { startDate: new Date(dto.start_date) } : {}),
+        ...(dto.end_date ? { endDate: new Date(dto.end_date) } : {}),
+        ...(dto.teamId ? { teamId: dto.teamId } : {}),
+      },
+    });
 
     this.auditLogs.create({
       entity_id: id,
       entity_type: 'Project',
-      action: 'UPDATED',
+      action: 'UPDATE',
       performed_by: actorUserId,
-      old_value: before,
-      new_value: after,
+      old_value: before as any,
+      new_value: updated as any,
     });
 
-    return after;
+    return this.findOne(updated.id);
   }
 
-  remove(id: number, actorUserId: number): void {
-    const index = this.db.projects.findIndex(p => p.project_id === id);
-    if (index === -1) throw new NotFoundException(`Project ${id} not found`);
-    const before = { ...this.db.projects[index] };
-    
-    // Audit Log the deletion
+  async remove(id: string, actorUserId: string, user?: RequestUser) {
+    const before = await this.findOne(id);
+    await this.assertProjectBranchAccess(id, user);
+    await this.prisma.project.delete({ where: { id } });
+
     this.auditLogs.create({
       entity_id: id,
       entity_type: 'Project',
-      action: 'DELETED',
+      action: 'DELETE',
       performed_by: actorUserId,
-      old_value: before,
+      old_value: before as any,
     });
 
-    // Cascade Delete: Remove all tasks associated with this project
-    this.db.tasks = this.db.tasks.filter(t => t.project_id !== id);
-    
-    // Remove the project
-    this.db.projects.splice(index, 1);
+    return { message: 'Project deleted successfully' };
+  }
+
+  private async assertProjectBranchAccess(
+    projectId: string,
+    user?: RequestUser,
+  ) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { team: { select: { branchId: true } } },
+    });
+    if (!project) throw new NotFoundException(`Project ${projectId} not found`);
+    assertBranchManagerScope(
+      user,
+      project.team?.branchId,
+      'manage projects in',
+    );
   }
 }

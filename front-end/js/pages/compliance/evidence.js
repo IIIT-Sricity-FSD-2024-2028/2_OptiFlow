@@ -6,9 +6,17 @@
 
 let state;
 let activeEvidenceId = null;
+let _eventsBound = false;
 
 document.addEventListener("DOMContentLoaded", async function () {
   if (window.Sidebar) window.Sidebar.render("evidence");
+
+  // Force hide all inert modals on initial render
+  document.querySelectorAll('.modal-overlay, .modal-backdrop').forEach(m => {
+    m.classList.remove('active');
+    m.classList.add('hidden');
+    m.style.display = 'none';
+  });
   state = await window.Helpers.getState();
   if (!state.evidence) state.evidence = [];
 
@@ -29,13 +37,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     };
   });
 
-  document.querySelectorAll(".queue-tab").forEach(function (tab) {
-    tab.addEventListener("click", function () {
-      document.querySelectorAll(".queue-tab").forEach(t => t.classList.remove("active"));
-      this.classList.add("active");
-      renderQueue(this.dataset.tab);
+  if (!_eventsBound) {
+    _eventsBound = true;
+    document.querySelectorAll(".queue-tab").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        document.querySelectorAll(".queue-tab").forEach(t => t.classList.remove("active"));
+        this.classList.add("active");
+        renderQueue(this.dataset.tab);
+      });
     });
-  });
+  }
 
   renderQueue("all");
 });
@@ -72,8 +83,10 @@ function renderQueue(filter) {
     return true;
   });
 
-  list.innerHTML = filteredData.map(item => `
-    <li class="queue-item" id="qi-${item.evidenceId || item.id}" onclick="selectEvidence(${item.evidenceId || item.id})">
+  list.innerHTML = filteredData.map(item => {
+    const eId = item.id || item.evidenceId;
+    return `
+    <li class="queue-item" id="qi-${eId}" onclick="selectEvidence('${eId}')">
       <div class="queue-item-header">
         <span class="queue-item-title">${item.title}</span>
         <span class="queue-item-date">${item.submittedOn || "Just now"}</span>
@@ -86,10 +99,11 @@ function renderQueue(filter) {
         <span class="badge policy">${item.type || "General"}</span>
       </div>
     </li>
-  `).join("") || '<li style="padding:20px; text-align:center; color:#64748b;">No evidence found.</li>';
+  `}).join("") || '<li style="padding:20px; text-align:center; color:#64748b;">No evidence found.</li>';
 
   if (filteredData.length > 0) {
-    selectEvidence(filteredData[0].evidenceId || filteredData[0].id);
+    const firstId = filteredData[0].id || filteredData[0].evidenceId;
+    selectEvidence(firstId);
   } else {
     showEmptyDetail();
   }
@@ -122,17 +136,17 @@ function showEmptyDetail() {
 
 // ── Select Evidence ───────────────────────────────────────────────────────────
 window.selectEvidence = function (id) {
-  const detailContent = document.querySelector(".detail-content");
-  const detailFooter  = document.querySelector(".detail-footer");
-  if (detailContent) detailContent.style.display = "block";
-  if (detailFooter)  detailFooter.style.display  = "flex";
+  const detailContent = document.querySelector('.detail-content');
+  const detailFooter  = document.querySelector('.detail-footer');
+  if (detailContent) detailContent.style.display = 'block';
+  if (detailFooter)  detailFooter.style.display  = 'flex';
 
-  const emptyState = document.getElementById("evidenceEmptyState");
-  if (emptyState) emptyState.style.display = "none";
+  const emptyState = document.getElementById('evidenceEmptyState');
+  if (emptyState) emptyState.style.display = 'none';
 
-  document.querySelectorAll(".queue-item").forEach(el => el.classList.remove("active"));
-  const itemEl = document.getElementById("qi-" + id);
-  if (itemEl) itemEl.classList.add("active");
+  document.querySelectorAll('.queue-item').forEach(el => el.classList.remove('active'));
+  const itemEl = document.getElementById('qi-' + id);
+  if (itemEl) itemEl.classList.add('active');
 
   activeEvidenceId = id;
   const d = state.evidence.find(e =>
@@ -142,18 +156,43 @@ window.selectEvidence = function (id) {
   );
   if (!d) return;
 
-  document.getElementById("detailTitle").textContent      = d.title;
-  document.getElementById("metaSubmitter").textContent    = d.submitterName || "Unknown";
-  document.getElementById("metaProject").textContent      = d.taskName || "N/A";
-  document.getElementById("metaRule").textContent         = d.type || "General Policy";
-  document.getElementById("metaSubmittedOn").textContent  = d.submittedOn || "Recently";
-  document.getElementById("submitterNotes").textContent   = d.notes || "No submitter notes provided.";
+  document.getElementById('detailTitle').textContent      = d.title;
+  document.getElementById('metaSubmitter').textContent    = d.submitterName || 'Unknown';
+  document.getElementById('metaProject').textContent      = d.taskName || 'N/A';
+  document.getElementById('metaRule').textContent         = d.type || 'General Policy';
+  document.getElementById('metaSubmittedOn').textContent  = d.submittedOn || 'Recently';
+  document.getElementById('submitterNotes').textContent   = d.notes || 'No submitter notes provided.';
 
-  document.getElementById("attachedFiles").innerHTML = `
+  // Render the actual fileUrl from Prisma; fall back to a safe placeholder
+  const fileUrl  = d.fileUrl || d.file_url || '';
+  const fileName = fileUrl ? fileUrl.split('/').pop() : 'No file attached';
+  const backendBase = 'http://localhost:3000';
+
+  document.getElementById('attachedFiles').innerHTML = fileUrl ? `
     <div class="attached-file-item">
-      <div class="file-info"><div class="file-name">${d.file || "attached_document.pdf"}</div></div>
-      <button class="file-download-btn" onclick="downloadEvidence()">Download</button>
-    </div>`;
+      <svg class="file-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <div class="file-info">
+        <div class="file-name">${fileName}</div>
+        <div class="file-size" style="font-size:11px;color:#94a3b8">Stored on server</div>
+      </div>
+      <a
+        href="${fileUrl.startsWith('/') ? backendBase + fileUrl : fileUrl}"
+        target="_blank"
+        rel="noopener"
+        class="file-download-btn"
+        style="text-decoration:none"
+        aria-label="Download ${fileName}"
+      >Download</a>
+    </div>` :
+    '<div style="color:#94a3b8;font-size:13px;padding:8px 0;">No file attached yet.</div>';
+
+  // Reset upload widget for this evidence record
+  const fileInput = document.getElementById('evidenceFileInput');
+  if (fileInput) fileInput.value = '';
+  const uploadResult = document.getElementById('uploadResult');
+  if (uploadResult) { uploadResult.style.display = 'none'; uploadResult.textContent = ''; }
 };
 
 // ── Core Status Updater ───────────────────────────────────────────────────────
@@ -166,31 +205,32 @@ window.updateEvidenceStatus = async function (status, label, reason) {
   );
   if (idx === -1) return;
 
-  const ev        = state.evidence[idx];
-  const numericId = ev.evidenceId || parseInt(String(activeEvidenceId).replace(/[^0-9]/g, ""), 10);
+  const ev       = state.evidence[idx];
+  const targetId = String(ev.id || ev.evidenceId || activeEvidenceId);
 
   // 1. Optimistic local update
   ev.status      = status;
   ev.statusLabel = label;
 
-  // 2. PATCH backend
+  // 2. PATCH backend with strict String UUID
   try {
-    await window.Helpers.api.request(`/evidence/${numericId}`, "PATCH", { status });
+    await window.Helpers.api.request(`/evidence/${targetId}`, "PATCH", { status });
   } catch (e) {
     console.warn("Could not persist evidence update to backend:", e);
   }
 
   // 3. Persistent notification → original submitter
-  if (ev.userId || ev.user_id) {
-    window.Helpers.pushNotification(Number(ev.userId || ev.user_id), {
+  const submitterId = ev.userId || ev.user_id;
+  if (submitterId) {
+    window.Helpers.pushNotification(submitterId, {
       title:   `Evidence ${label}`,
       message: `Your evidence "${ev.title}" was ${label}.${reason ? " Reason: " + reason : ""}`,
       type:    status === "Approved" ? "success" : "error",
     });
   }
 
-  // 4. Write to audit log
-  await _recordAuditEntry(ev, status, numericId, reason);
+  // 4. Write to audit log via backend API
+  await _recordAuditEntry(ev, status, targetId, reason);
 
   // 5. Toast
   if (window.Toast) window.Toast.show(status === "Approved" ? "success" : "error", `Evidence ${label}`, `Status updated to ${label}.`);
@@ -199,30 +239,19 @@ window.updateEvidenceStatus = async function (status, label, reason) {
 };
 
 // ── Audit Log Writer ──────────────────────────────────────────────────────────
-async function _recordAuditEntry(ev, newStatus, numericId, reason) {
+async function _recordAuditEntry(ev, newStatus, targetId, reason) {
   try {
-    const freshState = await window.Helpers.getState();
-    const session    = window.Auth ? window.Auth.getSession() : null;
-    if (!freshState.auditLogs) freshState.auditLogs = [];
-
-    freshState.auditLogs.unshift({
-      id:          Date.now(),
-      action:      "STATUS_CHANGE",
-      entityType:  "Evidence",
-      entityId:    numericId,
-      performedBy: session ? (session.userId || session.id) : null,
-      performedAt: new Date().toISOString(),
-      oldValue:    { status: ev.status },
-      newValue:    { status: newStatus, rejectionReason: reason || null },
-    });
-
-    // Keep audit log bounded to last 200 entries
-    if (freshState.auditLogs.length > 200) freshState.auditLogs = freshState.auditLogs.slice(0, 200);
-
-    // Merge back into state
-    state.auditLogs = freshState.auditLogs;
-  } catch (err) {
-    console.warn("[Audit] Could not write audit entry:", err);
+    if (window.Helpers && typeof window.Helpers.log === "function") {
+      await window.Helpers.log(
+        "STATUS_CHANGE",
+        "Evidence",
+        targetId,
+        { status: ev.status },
+        { status: newStatus, rejectionReason: reason || null }
+      );
+    }
+  } catch (e) {
+    console.warn("Audit log creation failed:", e);
   }
 }
 
@@ -401,15 +430,107 @@ window.requestMoreInfo = function () {
   }
 };
 
+// ── Real File Upload — POST /evidence/:id/upload ──────────────────────────────
+window.uploadEvidenceFile = async function () {
+  if (!activeEvidenceId) {
+    if (window.Toast) window.Toast.show('warning', 'No Evidence Selected', 'Please select an evidence record first.');
+    return;
+  }
+
+  const fileInput = document.getElementById('evidenceFileInput');
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    if (window.Toast) window.Toast.show('warning', 'No File', 'Please select a file before uploading.');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const MAX_MB = 20;
+  if (file.size > MAX_MB * 1024 * 1024) {
+    if (window.Toast) window.Toast.show('error', 'File Too Large', `File must be under ${MAX_MB} MB.`);
+    return;
+  }
+
+  const progressEl = document.getElementById('uploadProgress');
+  const resultEl   = document.getElementById('uploadResult');
+  const uploadBtn  = document.getElementById('btn-upload-evidence');
+
+  if (progressEl) progressEl.style.display = 'block';
+  if (resultEl)   { resultEl.style.display = 'none'; resultEl.textContent = ''; }
+  if (uploadBtn)  { uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading…'; }
+
+  try {
+    // Read session for auth headers
+    const session   = window.Auth ? window.Auth.getSession() : null;
+    const userRole  = session ? (session.role || 'compliance_officer') : 'compliance_officer';
+    const companyId = session ? (session.companyId || 'b7744408-190c-4b83-82c5-ab0049afb6b2') : 'b7744408-190c-4b83-82c5-ab0049afb6b2';
+    const userId    = session ? (session.id || session.userId || '') : '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers = {
+      'x-user-role':  userRole,
+      'x-company-id': companyId,
+    };
+    if (userId) {
+      headers['x-user-id'] = String(userId);
+    }
+
+    const response = await fetch(
+      `http://localhost:3000/evidence/${activeEvidenceId}/upload`,
+      {
+        method: 'POST',
+        headers,
+        body: formData,
+      }
+    );
+
+    const raw = await response.json();
+    const result = raw.data || raw;  // Unwrap NestJS TransformInterceptor envelope
+
+    if (!response.ok) {
+      throw new Error(result.message || `HTTP ${response.status}`);
+    }
+
+    // Update local state so the file panel refreshes instantly
+    const idx = state.evidence.findIndex(e =>
+      String(e.id || e.evidenceId) === String(activeEvidenceId)
+    );
+    if (idx > -1) {
+      state.evidence[idx].fileUrl = result.fileUrl;
+      // Re-render the detail panel
+      selectEvidence(activeEvidenceId);
+    }
+
+    if (resultEl) {
+      resultEl.style.display = 'block';
+      resultEl.style.color = '#16a34a';
+      resultEl.textContent = `✓ Uploaded: ${result.originalname}`;
+    }
+    if (window.Toast) window.Toast.show('success', 'File Uploaded', `"${result.originalname}" saved successfully.`);
+    fileInput.value = '';
+
+  } catch (err) {
+    console.error('[Upload] Error:', err);
+    if (resultEl) {
+      resultEl.style.display = 'block';
+      resultEl.style.color = '#dc2626';
+      resultEl.textContent = `✗ Upload failed: ${err.message}`;
+    }
+    if (window.Toast) window.Toast.show('error', 'Upload Failed', err.message || 'Could not upload file.');
+  } finally {
+    if (progressEl) progressEl.style.display = 'none';
+    if (uploadBtn)  { uploadBtn.disabled = false; uploadBtn.textContent = 'Upload'; }
+  }
+};
+
 // ── Download ──────────────────────────────────────────────────────────────────
 window.downloadEvidence = function () {
-  const modal = document.getElementById("downloadSuccessModal");
-  if (modal) modal.classList.add("active");
+  window.Modal.open('downloadSuccessModal');
 };
 
 window.closeDownloadModal = function () {
-  const modal = document.getElementById("downloadSuccessModal");
-  if (modal) modal.classList.remove("active");
+  window.Modal.close('downloadSuccessModal');
 };
 
 // ── Checklist Toggle ──────────────────────────────────────────────────────────

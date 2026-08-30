@@ -2,8 +2,11 @@
 
 .violations-layout {
   display: flex;
-  height: calc(100vh - 56px); /* Subtract top header height */
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
+  background: var(--card-bg);
 }
 
 .violations-queue {

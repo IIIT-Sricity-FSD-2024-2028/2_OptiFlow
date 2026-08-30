@@ -1,48 +1,106 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService, ComplianceViolation, SystemEntity } from '../../core/database/database.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateComplianceViolationDto } from './dto/create-compliance-violation.dto';
 import { UpdateComplianceViolationDto } from './dto/update-compliance-violation.dto';
+import {
+  buildViolationCompanyWhere,
+  buildBranchViolationWhere,
+  resolveEffectiveBranchId,
+  TenantListScope,
+} from '../../core/utils/tenant-scope.util';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ComplianceViolationsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): ComplianceViolation[] { return this.db.compliance_violations; }
+  async findAll(scope: TenantListScope) {
+    const { companyId, user } = scope;
+    let where: Prisma.ComplianceViolationWhereInput =
+      buildViolationCompanyWhere(scope);
 
-  findOne(id: number): ComplianceViolation {
-    const violation = this.db.compliance_violations.find(v => v.violation_id === id);
-    if (!violation) throw new NotFoundException(`Violation with ID ${id} not found`);
+    const effectiveBranchId = resolveEffectiveBranchId(scope);
+    if (effectiveBranchId && companyId) {
+      where = await buildBranchViolationWhere(
+        this.prisma,
+        companyId,
+        effectiveBranchId,
+      );
+    }
+
+    return this.prisma.complianceViolation.findMany({
+      where,
+      include: {
+        rule: true,
+        reportedBy: { select: { id: true, fullName: true, email: true } },
+        resolvedBy: { select: { id: true, fullName: true, email: true } },
+        evidence: true,
+      },
+      orderBy: { detectedAt: 'desc' },
+    });
+  }
+
+  async findOne(id: string, companyId?: string) {
+    const violation = await this.prisma.complianceViolation.findFirst({
+      where: {
+        id,
+        ...(companyId ? { companyId } : {}),
+      },
+      include: {
+        rule: true,
+        reportedBy: { select: { id: true, fullName: true, email: true } },
+        resolvedBy: { select: { id: true, fullName: true, email: true } },
+        evidence: true,
+      },
+    });
+    if (!violation) throw new NotFoundException(`Violation ${id} not found`);
     return violation;
   }
 
-  create(dto: CreateComplianceViolationDto): ComplianceViolation {
-    const newViolation: ComplianceViolation = {
-      violation_id: this.db.compliance_violations.length ? Math.max(...this.db.compliance_violations.map(v => v.violation_id)) + 1 : 1,
-      rule_id: dto.rule_id,
-      entity_id: dto.entity_id,
-      entity_type: dto.entity_type as SystemEntity,
-      status: 'Open',
-      detected_at: new Date().toISOString(),
-      reported_by: dto.reported_by ?? null,
-      resolved_by: null,
-      resolved_at: null,
-      resolution_remarks: null,
-      due_date: dto.due_date ?? null,
-    };
-    this.db.compliance_violations.push(newViolation);
-    return newViolation;
+  async create(dto: CreateComplianceViolationDto) {
+    const rule = await this.prisma.complianceRule.findUnique({
+      where: { id: dto.rule_id },
+    });
+    if (!rule) throw new NotFoundException(`Rule ${dto.rule_id} not found`);
+
+    return this.prisma.complianceViolation.create({
+      data: {
+        companyId: dto.companyId,
+        ruleId: dto.rule_id,
+        entityType: dto.entity_type,
+        entityId: String(dto.entity_id),
+        status: 'Open',
+        severity: dto.severity || rule.severity,
+        reportedById: dto.reported_by ?? null,
+        dueDate: dto.due_date ? new Date(dto.due_date) : null,
+      },
+      include: { rule: true },
+    });
   }
 
-  update(id: number, dto: UpdateComplianceViolationDto): ComplianceViolation {
-    const index = this.db.compliance_violations.findIndex(v => v.violation_id === id);
-    if (index === -1) throw new NotFoundException(`Violation ${id} not found`);
-    this.db.compliance_violations[index] = { ...this.db.compliance_violations[index], ...dto } as ComplianceViolation;
-    return this.db.compliance_violations[index];
+  async update(
+    id: string,
+    dto: UpdateComplianceViolationDto,
+    companyId?: string,
+  ) {
+    await this.findOne(id, companyId);
+    return this.prisma.complianceViolation.update({
+      where: { id },
+      data: {
+        ...(dto.status ? { status: dto.status as any } : {}),
+        ...(dto.resolution_remarks
+          ? { resolutionRemarks: dto.resolution_remarks }
+          : {}),
+        ...(dto.resolved_by
+          ? { resolvedById: String(dto.resolved_by), resolvedAt: new Date() }
+          : {}),
+      },
+    });
   }
 
-  remove(id: number): void {
-    const index = this.db.compliance_violations.findIndex(v => v.violation_id === id);
-    if (index === -1) throw new NotFoundException(`Violation ${id} not found`);
-    this.db.compliance_violations.splice(index, 1);
+  async remove(id: string, companyId?: string) {
+    await this.findOne(id, companyId);
+    await this.prisma.complianceViolation.delete({ where: { id } });
+    return { message: 'Compliance violation deleted successfully' };
   }
 }

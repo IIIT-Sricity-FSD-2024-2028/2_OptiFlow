@@ -7,13 +7,19 @@ export class CreateComplianceRuleDto {
   @IsNotEmpty()
   rule_name: string;
 
-  @ApiProperty({ example: 'Any task overdue by more than 7 days must be escalated.' })
+  @ApiProperty({
+    example: 'Any task overdue by more than 7 days must be escalated.',
+  })
   @IsString()
   description: string;
 
-  @ApiProperty({ example: 'Reassign task or extend deadline with PM approval.' })
+  @ApiProperty({
+    example: 'Reassign task or extend deadline with PM approval.',
+    required: false,
+  })
+  @IsOptional()
   @IsString()
-  remediation_steps: string;
+  remediation_steps?: string;
 
   @ApiProperty({ example: 'High', enum: ['Low', 'Medium', 'High', 'Critical'] })
   @IsString()
@@ -23,4 +29,19 @@ export class CreateComplianceRuleDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  @ApiProperty({ example: 'cat-uuid-1', required: false })
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @ApiProperty({ example: 'template-rule-uuid', required: false })
+  @IsOptional()
+  @IsString()
+  sourceTemplateId?: string;
+
+  @ApiProperty({ example: 'comp-uuid-1', required: false })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 }

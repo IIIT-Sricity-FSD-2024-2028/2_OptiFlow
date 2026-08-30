@@ -135,7 +135,7 @@
                 </td>
                 <td>${roleDisplay}</td>
                 <td>${deptName}</td>
-                <td>${proj ? `<a href="tasks.html?project=${proj.id}" style="color:var(--blue);font-weight:500">${proj.name}</a>` : '<span class="text-muted">—</span>'}</td>
+                <td>${proj ? `<a href="../../modules/tasks.html?project=${proj.id}" style="color:var(--blue);font-weight:500">${proj.name}</a>` : '<span class="text-muted">—</span>'}</td>
                 <td><span class="badge ${window.Helpers.statusClass(u.status)}">${u.status}</span></td>
               </tr>`;
             })

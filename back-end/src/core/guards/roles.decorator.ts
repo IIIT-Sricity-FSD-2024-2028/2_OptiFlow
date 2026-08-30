@@ -1,4 +1,5 @@
-import { SetMetadata } from '@nestjs/common';
+import { SetMetadata, applyDecorators } from '@nestjs/common';
+import { ApiHeader } from '@nestjs/swagger';
 
 /**
  * @Roles decorator
@@ -15,4 +16,13 @@ import { SetMetadata } from '@nestjs/common';
  * read back by RolesGuard via NestJS Reflector.
  */
 export const ROLES_KEY = 'roles';
-export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+export const Roles = (...roles: string[]) => {
+  return applyDecorators(
+    SetMetadata(ROLES_KEY, roles),
+    ApiHeader({
+      name: 'x-user-role',
+      description: `**Role-Based Access Control**\nAllowed roles: \`${roles.join('`, `')}\``,
+      required: true,
+    }),
+  );
+};

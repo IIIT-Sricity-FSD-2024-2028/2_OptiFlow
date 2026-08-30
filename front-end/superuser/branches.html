@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Branches - OfficeSync Admin</title>
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/layout.css" />
+  <link rel="stylesheet" href="../css/components.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container" style="padding: 0; justify-content: center">
+          <img src="../assets/images/logo_light.png" alt="OfficeSync"
+            style="height: 32px; width: auto; object-fit: contain" />
+        </div>
+        <div class="brand-subtitle">Process Admin</div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Main</div>
+          <a href="dashboard.html" class="nav-item" data-allowed-roles="company_owner,superuser,process_admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span>Dashboard</span>
+          </a>
+          <a href="processes.html" class="nav-item" data-allowed-roles="company_owner,superuser,process_admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span>Processes</span>
+          </a>
+          <a href="branches.html" class="nav-item active" data-allowed-roles="system_admin,system admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+              <rect x="9" y="9" width="6" height="6"></rect>
+            </svg>
+            <span>Branches</span>
+          </a>
+          <a href="analytics.html" class="nav-item" data-allowed-roles="company_owner,superuser,process_admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span>Analytics</span>
+          </a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Administration</div>
+          <a href="users.html" class="nav-item" data-allowed-roles="system_admin,system admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>Users & Access</span>
+          </a>
+          <a href="audit.html" class="nav-item" data-allowed-roles="system_admin,system admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span>Audit Logs</span>
+          </a>
+          <a href="billing.html" class="nav-item" data-allowed-roles="system_admin,system admin">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+            </svg>
+            <span>Billing</span>
+          </a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="settings.html" class="nav-item" style="padding-left: 0; background: transparent">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
+          </svg>
+          <span>Settings</span>
+        </a>
+        <div class="user-profile">
+          <div class="avatar" id="sidebar-user-avatar">AM</div>
+          <div class="user-info">
+            <span class="user-name" id="sidebar-user-name">Arjun Mehta</span>
+            <span class="user-role" id="sidebar-user-role">SuperUser Admin</span>
+          </div>
+        </div>
+        <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 12px; padding-top: 12px;">
+          <button class="logout-btn" onclick="logout()" style="width: 100%; justify-content: flex-start;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="top-header">
+        <div class="page-title">Branch Management</div>
+        <div class="header-actions">
+          <button class="btn-icon" style="position: relative" aria-label="Notifications">
+            <img src="../assets/images/bell.svg" alt="Notifications" style="width: 20px; height: 20px" />
+            <span style="
+                  position: absolute;
+                  top: 6px;
+                  right: 8px;
+                  width: 8px;
+                  height: 8px;
+                  background: #ef4444;
+                  border-radius: 50%;
+                  border: 2px solid white;
+                "></span>
+          </button>
+          <button class="btn btn-primary" onclick="openBranchModal()">
+            + Add Branch
+          </button>
+        </div>
+      </header>
+
+      <div class="content-wrapper">
+        <div class="card">
+          <div class="tabs-container">
+            <h2 style="font-size: 16px; font-weight: 600; margin-right: auto">
+              System Branches
+            </h2>
+            <div class="search-bar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" placeholder="Search Branches..." id="searchInput" />
+            </div>
+          </div>
+
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>BRANCH NAME</th>
+                  <th>BRANCH MANAGER</th>
+                  <th>ACTIVE USERS</th>
+                  <th>PROCESSES</th>
+                  <th>STATUS</th>
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="BranchTableBody">
+                <!-- Data rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Teams Management Section -->
+        <div class="card" style="margin-top: 24px;" id="teams-section">
+          <div class="tabs-container">
+            <h2 style="font-size: 16px; font-weight: 600; margin-right: auto">
+              Teams inside Branches
+            </h2>
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <select id="branchSelectForTeams" class="form-control" style="width: 220px; font-size: 14px;" onchange="refreshTeamsTable()">
+                <option value="">Select a Branch...</option>
+              </select>
+              <button class="btn btn-primary" onclick="openTeamModal()" id="addTeamBtn" disabled style="padding: 10px 14px; font-size: 14px;">
+                + Add Team
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-container" style="margin-top: 16px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>TEAM NAME</th>
+                  <th>BRANCH NAME</th>
+                  <th>PROJECTS COUNT</th>
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="TeamTableBody">
+                <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Please select a branch to view teams.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Branch Modal -->
+  <div class="modal-overlay" id="BranchModal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">Add New Branch</div>
+        <div class="modal-close" onclick="closeBranchModal()">&times;</div>
+      </div>
+      <div class="modal-body">
+        <div id="modal-global-error" style="color: #ef4444; font-size: 13.5px; font-weight: 600; margin-bottom: 12px; display: none; padding: 10px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;"></div>
+        <form id="BranchForm">
+          <input type="hidden" id="BranchId" />
+          <div class="form-group">
+            <label class="form-label">BRANCH NAME</label>
+            <input type="text" class="form-control" id="BranchName" placeholder="e.g. Finance" />
+            <div class="form-error">BRANCH NAME is required.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Head of Branch</label>
+            <input type="text" class="form-control" id="BranchHead" placeholder="e.g. Sarah Jenkins" />
+            <div class="form-error">Please assign a Branch head.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-control" id="BranchStatus">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBranchModal()">
+          Cancel
+        </button>
+        <button class="btn btn-primary" onclick="saveBranch()">
+          Save Branch
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Team Modal -->
+  <div class="modal-overlay" id="TeamModal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="teamModalTitle">Add New Team</div>
+        <div class="modal-close" onclick="closeTeamModal()">&times;</div>
+      </div>
+      <div class="modal-body">
+        <div id="team-modal-global-error" style="color: #ef4444; font-size: 13.5px; font-weight: 600; margin-bottom: 12px; display: none; padding: 10px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;"></div>
+        <form id="TeamForm">
+          <input type="hidden" id="TeamId" />
+          <div class="form-group">
+            <label class="form-label">TEAM NAME</label>
+            <input type="text" class="form-control" id="TeamName" placeholder="e.g. Frontend Engineering" required />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeTeamModal()">
+          Cancel
+        </button>
+        <button class="btn btn-primary" onclick="saveTeam()">
+          Save Team
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/utils/helpers.js"></script>
+  <script src="../js/helpers.js"></script>
+  <script src="../js/utils/validator.js"></script>
+  <script src="../js/components/sidebar.js"></script>
+  <script src="../js/data/branches.js"></script>
+  <script src="../js/pages/superuser/branches.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const sessionRaw = sessionStorage.getItem("currentUser");
+      if (sessionRaw) {
+        try {
+          const session = JSON.parse(sessionRaw);
+          const nameEl = document.getElementById("sidebar-user-name");
+          const roleEl = document.getElementById("sidebar-user-role");
+          const avatarEl = document.getElementById("sidebar-user-avatar");
+          if (nameEl) nameEl.textContent = session.fullName || session.name || "Process Admin";
+          if (roleEl) roleEl.textContent = session.displayRole || session.roleName || "Process Admin";
+          if (avatarEl) {
+            const name = session.fullName || session.name || "PA";
+            avatarEl.textContent = name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+          }
+        } catch(e) {}
+      }
+    });
+  </script>
+</body>
+
+</html>
+

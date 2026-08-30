@@ -4,19 +4,27 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { RolesGuard } from './core/guards/roles.guard';
 import { TransformInterceptor } from './core/interceptors/transform.interceptor';
-import * as fs from 'fs';       // Added for file system operations
-import * as path from 'path';   // Added for path resolution
+import { NestExpressApplication } from '@nestjs/platform-express';
+import * as path from 'path';
+import * as fs from 'fs'; // Added for file system operations
 
 async function bootstrap() {
   // 1. Enable CORS so your vanilla JS frontend can actually talk to this server
-  const app = await NestFactory.create(AppModule, { cors: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { cors: true });
+
+  // Serve uploaded evidence files at /uploads/...
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  app.useStaticAssets(uploadsDir, { prefix: '/uploads' });
 
   // 2. Enable Global Validation (Fulfills Rubric #5)
   // This ensures your DTOs automatically validate incoming requests
-  app.useGlobalPipes(new ValidationPipe({ 
-    transform: true,
-    whitelist: true, // Strips out any extra data not defined in the DTO
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true, // Strips out any extra data not defined in the DTO
+    }),
+  );
 
   // 3. Apply RolesGuard globally (Fulfills Rubric RBAC requirement)
   // Every route decorated with @Roles(...) will now have its x-user-role
@@ -39,7 +47,8 @@ async function bootstrap() {
       type: 'apiKey',
       in: 'header',
       name: 'x-user-role',
-      description: 'Enter your role to unlock the endpoints (e.g., superuser, hr_manager, team_leader, team_member)',
+      description:
+        'Enter your role to unlock the endpoints (e.g., platform_admin, superuser, hr_manager, team_leader, team_member)',
     })
     .addSecurityRequirements('Role-Based-Access') // This applies the locks globally
     // ========================================================
@@ -47,10 +56,24 @@ async function bootstrap() {
       in: 'header',
       required: false,
       name: 'x-user-id',
-      description: 'Integer user id for the acting user (required on task/subtask/escalation mutations)',
+      description:
+        'String user id for the acting user (required on task/subtask/escalation mutations)',
+    })
+    .addGlobalParameters({
+      in: 'header',
+      required: false,
+      name: 'x-company-id',
+      description: 'UUID of the company context (required for tenant routes)',
+    })
+    .addGlobalParameters({
+      in: 'header',
+      required: false,
+      name: 'x-platform-admin-id',
+      description:
+        'UUID of the platform admin user (required for platform routes)',
     })
     .build();
-    
+
   const document = SwaggerModule.createDocument(app, config);
 
   // ==========================================
@@ -58,7 +81,7 @@ async function bootstrap() {
   // ==========================================
   // Define the path (goes up one level from 'src' into the root folder)
   const docsFolderPath = path.join(__dirname, '..', 'docs');
-  
+
   // Check if the 'docs' folder exists; if not, create it
   if (!fs.existsSync(docsFolderPath)) {
     fs.mkdirSync(docsFolderPath, { recursive: true });
@@ -67,7 +90,7 @@ async function bootstrap() {
   // Write the document object to a file formatted with 2 spaces
   fs.writeFileSync(
     path.join(docsFolderPath, 'swagger.json'),
-    JSON.stringify(document, null, 2)
+    JSON.stringify(document, null, 2),
   );
   // ==========================================
 

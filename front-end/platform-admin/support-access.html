@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Support Access Grants — OfficeSync</title>
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+
+      <div class="main-area">
+        <header class="top-header">
+          <div>
+            <h1 class="page-title">Support Access Grants</h1>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="openGrantModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Grant Support Access
+            </button>
+            <div class="bell-btn" id="btn-notifications" title="Notifications">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content" id="main-content">
+          <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h2 style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">Tenant Delegated Access</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0;">Review and manage platform administrator temporary access grants and immutable audit logs</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Platform Operator</th>
+                    <th>Target Company</th>
+                    <th>Reason / Justification</th>
+                    <th>Status</th>
+                    <th>Granted At</th>
+                    <th>Expires At</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="support-table-body">
+                  <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">Loading support access grants...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Grant Support Access Modal -->
+    <div class="modal-backdrop" id="grant-modal" style="display: none;">
+      <div class="modal" style="max-width: 500px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Grant Delegated Support Access</h3>
+          <button class="modal-close" onclick="closeGrantModal()">✕</button>
+        </div>
+        <form id="grant-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Platform Admin Operator *</label>
+              <select class="form-select" id="gf-adminId" required>
+                <option value="">Select Platform Admin...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Target Tenant Company *</label>
+              <select class="form-select" id="gf-companyId" required>
+                <option value="">Select Tenant...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Reason / Ticket Justification *</label>
+              <textarea class="form-input" id="gf-reason" rows="3" placeholder="e.g. Investigating compliance export issue reported in Ticket #1042" required></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Access Duration *</label>
+              <select class="form-select" id="gf-duration" required>
+                <option value="1">1 Hour (Quick Diagnostic)</option>
+                <option value="4">4 Hours (Standard Session)</option>
+                <option value="24" selected>24 Hours (1 Day Maintenance)</option>
+                <option value="168">7 Days (Extended Remediation)</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeGrantModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Authorize Grant</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Action Log Inspector Modal -->
+    <div class="modal-backdrop" id="log-modal" style="display: none;">
+      <div class="modal" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Support Session Action Log</h3>
+          <button class="modal-close" onclick="closeLogModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="log-meta" style="font-size: 13px; margin-bottom: 16px; color: var(--text-muted);"></div>
+          <div id="log-content" style="background: #0f172a; color: #38bdf8; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeLogModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      const session = window.Auth.getSession();
+      const headers = { 'x-platform-admin-id': session ? (session.id || 'bootstrap') : 'bootstrap', 'x-user-role': 'platform_admin' };
+      let loadedGrants = [];
+      let loadedCompanies = [];
+      let loadedAdmins = [];
+
+      document.addEventListener('DOMContentLoaded', () => {
+        if (!session) { window.location.href = '../login.html'; return; }
+        window.Sidebar.render('support-access');
+        loadData();
+      });
+
+      async function loadData() {
+        await Promise.all([loadCompaniesList(), loadAdminsList()]);
+        await loadSupportAccess();
+      }
+
+      async function loadCompaniesList() {
+        try {
+          const comp = await window.Helpers.api.request('/companies', 'GET', null, headers);
+          loadedCompanies = Array.isArray(comp) ? comp : (comp?.data || []);
+          const select = document.getElementById('gf-companyId');
+          select.innerHTML = '<option value="">Select Tenant...</option>' + loadedCompanies.map(c => 
+            `<option value="${c.id}">${c.legalName || c.name || 'Unnamed Company'}</option>`
+          ).join('');
+        } catch(e) { console.error(e); }
+      }
+
+      async function loadAdminsList() {
+        try {
+          const admins = await window.Helpers.api.request('/platform-admin-users', 'GET', null, headers);
+          loadedAdmins = Array.isArray(admins) ? admins : (admins?.data || []);
+          const select = document.getElementById('gf-adminId');
+          select.innerHTML = '<option value="">Select Platform Admin...</option>' + loadedAdmins.map(a => 
+            `<option value="${a.id}" ${session && session.id === a.id ? 'selected' : ''}>${a.fullName || a.username || a.email} (${a.email})</option>`
+          ).join('');
+        } catch(e) { console.error(e); }
+      }
+
+      async function loadSupportAccess() {
+        try {
+          const items = await window.Helpers.api.request('/platform-support-access', 'GET', null, headers);
+          loadedGrants = Array.isArray(items) ? items : (items?.data || []);
+          const tbody = document.getElementById('support-table-body');
+          if (!loadedGrants || !loadedGrants.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">No support access grants active. Click "+ Grant Support Access" to create one.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = loadedGrants.map(s => {
+            const adminName = s.adminUser?.fullName || s.adminUser?.email || loadedAdmins.find(a => a.id === s.adminUserId)?.fullName || s.adminUserId || 'Operator';
+            const compName = s.company?.legalName || loadedCompanies.find(c => c.id === s.companyId)?.legalName || s.companyId || 'Tenant';
+            const isActive = new Date(s.expiresAt) > new Date();
+            const statusBadge = isActive 
+              ? '<span class="badge badge-green">Active</span>' 
+              : '<span class="badge badge-gray">Expired</span>';
+
+            return `
+              <tr>
+                <td>
+                  <div class="td-label" style="font-weight: 600; color: var(--text-primary);">${adminName}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Admin ID: <code>${s.adminUserId}</code></div>
+                </td>
+                <td>
+                  <div class="td-label" style="font-weight: 600; color: var(--blue);">${compName}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">ID: <code>${s.companyId}</code></div>
+                </td>
+                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${s.reason || ''}">
+                  ${s.reason || '—'}
+                </td>
+                <td>${statusBadge}</td>
+                <td>${s.grantedAt ? new Date(s.grantedAt).toLocaleString() : '—'}</td>
+                <td>${s.expiresAt ? new Date(s.expiresAt).toLocaleString() : '—'}</td>
+                <td style="text-align: right; white-space: nowrap;">
+                  <button class="btn btn-sm btn-secondary" onclick="showActionLog('${s.id}')">Logs</button>
+                  <button class="btn btn-sm btn-danger" style="margin-left: 4px;" onclick="revokeAccess('${s.id}')">Revoke</button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        } catch(e) {
+          console.error(e);
+          document.getElementById('support-table-body').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#ef4444">Failed to load support access grants.</td></tr>';
+        }
+      }
+
+      function openGrantModal() {
+        document.getElementById('grant-form').reset();
+        if (session && session.id) {
+          document.getElementById('gf-adminId').value = session.id;
+        }
+        window.Modal.open('grant-modal');
+      }
+
+      function closeGrantModal() {
+        window.Modal.close('grant-modal');
+      }
+
+      document.getElementById('grant-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const durationHours = parseInt(document.getElementById('gf-duration').value) || 24;
+        const expiresAt = new Date(Date.now() + durationHours * 3600 * 1000).toISOString();
+
+        const body = {
+          adminUserId: document.getElementById('gf-adminId').value,
+          companyId: document.getElementById('gf-companyId').value,
+          reason: document.getElementById('gf-reason').value.trim(),
+          expiresAt: expiresAt,
+        };
+        try {
+          await window.Helpers.api.request('/platform-support-access', 'POST', body, headers);
+          closeGrantModal();
+          loadSupportAccess();
+        } catch(err) { window.Toast.show('error', 'Error', 'Failed to grant support access: ' + (err.message || 'Error')); }
+      });
+
+      async function showActionLog(id) {
+        const item = loadedGrants.find(x => x.id === id);
+        if (!item) return;
+        
+        const logContentEl = document.getElementById('log-content');
+        const logs = item.actionLog || [];
+        
+        if (logs.length === 0) {
+          logContentEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">No support actions logged in this session yet.</div>';
+        } else {
+          logContentEl.innerHTML = logs.map(l => {
+            const time = l.timestamp ? new Date(l.timestamp).toLocaleString() : '—';
+            const action = l.action || 'Performed action';
+            const by = l.performedBy || 'System';
+            const detail = l.details || '';
+            return `<div style="border-bottom: 1px solid var(--border); padding: 12px 0;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span style="font-weight: 600; color: var(--text-primary);">${action}</span>
+                <span style="font-size: 11px; color: var(--text-muted);">${time}</span>
+              </div>
+              <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Operator ID: <code style="color: var(--text-primary);">${by}</code></div>
+              ${detail ? `<div style="font-size: 13px; color: var(--text-primary); margin-top: 6px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px;">${detail}</div>` : ''}
+            </div>`;
+          }).join('');
+        }
+        
+        // Remove code styling from container
+        logContentEl.style.background = 'transparent';
+        logContentEl.style.padding = '0';
+        logContentEl.style.fontFamily = 'inherit';
+        window.Modal.open('log-modal');
+      }
+
+      function closeLogModal() {
+        window.Modal.close('log-modal');
+      }
+
+      function revokeAccess(id) {
+        window.Modal.create({
+          id: 'revoke-access-modal',
+          title: 'Revoke Access',
+          body: `Are you sure you want to revoke support access grant ID: ${id}?`,
+          actions: [
+            { text: 'Cancel', class: 'btn-secondary', close: true },
+            { 
+              text: 'Revoke', 
+              class: 'btn-danger', 
+              onClick: async () => {
+                try {
+                  await window.Helpers.api.request(`/platform-support-access/${id}`, 'DELETE', null, headers);
+                  window.Toast.show('success', 'Revoked', 'Support access revoked successfully');
+                  loadSupportAccess();
+                  window.Modal.close('revoke-access-modal');
+                } catch(err) { window.Toast.show('error', 'Error', 'Failed to revoke access: ' + (err.message || 'Error')); }
+              }
+            }
+          ]
+        });
+      }
+    </script>
+  </body>
+</html>

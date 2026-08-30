@@ -10,10 +10,11 @@
   async function getDeptMap() {
     if (_deptCache) return _deptCache;
     try {
-      const depts = await window.Helpers.api.request('/departments');
+      // Changed to /branches since /departments is deleted per Phase 3 of PLAN.md
+      const depts = await window.Helpers.api.request('/branches');
       _deptCache = {};
       (depts || []).forEach(d => {
-        _deptCache[d.department_id] = d.department_name;
+        _deptCache[d.id] = d.name;
       });
     } catch (e) {
       _deptCache = {};
@@ -36,23 +37,24 @@
   // superuser/hr page code that expects { id, name, email, role, department, status, joined }
   async function getUsers() {
     try {
-      const [rawUsers, deptMap, roles, userRoles] = await Promise.all([
+      // Only fetch users and branches (roles and user-roles are merged/deleted)
+      const [rawUsers, deptMap] = await Promise.all([
         window.Helpers.api.request('/users'),
-        getDeptMap(),
-        window.Helpers.api.request('/roles'),
-        window.Helpers.api.request('/user-roles'),
+        getDeptMap()
       ]);
 
       return (rawUsers || []).map(u => {
-        // PK is now user_id; legacy code expects string id like "u5"
+        // PK is now string id; legacy code expects string id like "u5"
         const numericId = u.user_id ?? u.id;
-        const joined = u.created_at
-          ? new Date(u.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+        const joined = u.createdAt || u.created_at
+          ? new Date(u.createdAt || u.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
           : new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
 
-        const ur = (userRoles || []).find(r => r.user_id === numericId);
-        const roleObj = ur ? (roles || []).find(r => r.role_id === ur.role_id) : null;
-        let roleStr = roleObj ? roleObj.role_name : 'team_member';
+        // Retrieve role string from included roleAssignments array
+        let roleStr = 'team_member';
+        if (u.roleAssignments && u.roleAssignments.length > 0 && u.roleAssignments[0].role) {
+            roleStr = u.roleAssignments[0].role.label || 'team_member';
+        }
         
         // Normalize role string to match legacy mapping
         if (roleStr === 'Process Admin') roleStr = 'superuser';
@@ -64,26 +66,26 @@
 
         return {
           // ── Primary key (both formats for compat) ──────────────────────
-          id:          `u${numericId}`,
+          id:          isNaN(numericId) ? numericId : `u${numericId}`,
           user_id:     numericId,
           // ── Core profile ───────────────────────────────────────────────
-          name:        u.full_name || 'Unknown',
-          fullName:    u.full_name || 'Unknown',
+          name:        u.fullName || u.full_name || 'Unknown',
+          fullName:    u.fullName || u.full_name || 'Unknown',
           email:       u.email    || '',
           // ── Role ───────────────────────────────────────────────────────
           role:        roleStr,
           displayRole: ROLE_DISPLAY[roleStr] || roleStr,
           // ── Department (resolved to string name) ────────────────────────
-          department:  deptMap[u.department_id] || `Dept ${u.department_id}`,
-          department_id: u.department_id,
+          department:  deptMap[u.department_id || u.branchId] || `Operations`,
+          department_id: u.department_id || u.branchId,
           // ── Status ─────────────────────────────────────────────────────
-          status:      u.is_active === false ? 'Inactive' : 'Active',
-          is_active:   u.is_active,
+          status:      (u.isActive === false || u.is_active === false) ? 'Inactive' : 'Active',
+          is_active:   u.isActive ?? u.is_active,
           // ── Misc ────────────────────────────────────────────────────────
           joined,
           password:    '123',           // legacy login UI may still check
-          reportsTo:   u.manager_id ? `u${u.manager_id}` : null,
-          manager_id:  u.manager_id ?? null,
+          reportsTo:   u.managerUserId || u.manager_id ? `u${u.managerUserId || u.manager_id}` : null,
+          manager_id:  u.managerUserId ?? u.manager_id ?? null,
           projectId:   u.project_id ?? null,
         };
       });

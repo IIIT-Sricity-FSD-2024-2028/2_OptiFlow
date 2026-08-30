@@ -1,6 +1,24 @@
 // js/pages/superuser/users.js
+let companyRoles = [];
+let companyBranches = [];
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  if (window.Sidebar) {
+    window.Sidebar.render("users");
+  }
+  try {
+    const rawRoles = await window.Helpers.api.request('/roles');
+    companyRoles = Array.isArray(rawRoles) ? rawRoles : (rawRoles.data || []);
+  } catch (e) {
+    console.error("Failed to load roles", e);
+  }
+  try {
+    const rawBranches = await window.Helpers.api.request('/branches');
+    companyBranches = Array.isArray(rawBranches) ? rawBranches : (rawBranches.data || []);
+    populateBranchDropdown();
+  } catch (e) {
+    console.error("Failed to load branches", e);
+  }
   refreshTable();
 
   document
@@ -10,11 +28,35 @@ document.addEventListener("DOMContentLoaded", () => {
     .getElementById("roleFilter")
     .addEventListener("change", refreshTable);
 
+  const roleSelect = document.getElementById("userRole");
+  if (roleSelect) {
+    roleSelect.addEventListener("change", toggleBranchAssignment);
+  }
+
   // Outside click to close
   document.getElementById("userModal").addEventListener("click", (e) => {
     if (e.target === e.currentTarget) closeUserModal();
   });
 });
+
+function populateBranchDropdown() {
+  const select = document.getElementById("userAssignBranch");
+  if (!select) return;
+  select.innerHTML = '<option value="">Select branch…</option>';
+  companyBranches.forEach((b) => {
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.textContent = b.name;
+    select.appendChild(opt);
+  });
+}
+
+function toggleBranchAssignment() {
+  const role = document.getElementById("userRole")?.value;
+  const group = document.getElementById("assignBranchGroup");
+  if (!group) return;
+  group.style.display = role === "branch_manager" ? "block" : "none";
+}
 
 async function refreshTable() {
   // Ensure HRStore and Master users stay synchronized
@@ -147,6 +189,9 @@ function renderUserTable(data) {
     project_manager:    { name: "Project Manager",      color: "blue"   },
     team_leader:        { name: "Team Leader",          color: "yellow" },
     team_member:        { name: "Team Member",          color: "gray"   },
+    company_owner:      { name: "Company Owner",        color: "purple" },
+    branch_manager:     { name: "Branch Manager",       color: "blue"   },
+    system_admin:       { name: "System Admin",         color: "red"    },
   };
 
   data.forEach((u) => {
@@ -213,6 +258,7 @@ async function openUserModal(id = null) {
     title.innerText = "Add New User";
   }
 
+  toggleBranchAssignment();
   modal.classList.add("active");
   document.body.style.overflow = "hidden";
 }
@@ -229,87 +275,67 @@ async function saveUser() {
   const rawRole = document.getElementById("userRole").value; // e.g. "hr_manager"
   const dept = document.getElementById("userDept").value;
 
-  const teams = document.getElementById("userTeams").value;
-  const responsibilities = document.getElementById("userResp").value;
-  const tasks = document.getElementById("userTasks").value;
-  const processes = document.getElementById("userProcesses").value;
-
   const isNameValid = showError("userName", validateRequired(name));
   const isEmailValid = showError("userEmail", validateEmail(email));
 
   if (!isNameValid || !isEmailValid) return;
 
-  const users = await getUsers();
+  const errDiv = document.getElementById("user-modal-global-error");
+  if (errDiv) errDiv.style.display = "none";
 
-  // Grab the human-readable text from the dropdown (e.g. "HR Manager")
-  const roleSelect = document.getElementById("userRole");
-  const displayRole = roleSelect.options[roleSelect.selectedIndex].text;
+  // Map rawRole to matching role template label in database
+  const roleLabelMap = {
+    company_owner: 'Company Owner',
+    branch_manager: 'Branch Manager',
+    superuser: 'Process Admin',
+    hr_manager: 'Access Governance',
+    compliance_officer: 'Compliance Officer',
+    project_manager: 'Project Manager',
+    team_leader: 'Team Lead',
+    enduser: 'Team Member'
+  };
 
-  if (id) {
-    const idx = users.findIndex((u) => u.id === id);
-    if (idx > -1) {
-      const prev = { ...users[idx] };
-      users[idx] = {
-        ...users[idx],
-        name,
-        email,
-        role: rawRole, // e.g. "hr_manager"
-        displayRole: displayRole, // e.g. "HR Manager"
-        department: dept,
-        teams,
-        responsibilities,
-        tasks,
-        processes,
-      };
+  const targetLabel = roleLabelMap[rawRole] || rawRole;
+  let matchedRole = companyRoles.find(r => 
+    r.label.toLowerCase() === targetLabel.toLowerCase() ||
+    r.label.toLowerCase().includes(targetLabel.toLowerCase())
+  );
 
-      // Sync to HR employee store
-      await upsertEmployeeFromAuthUser(users[idx]);
+  const roleId = matchedRole ? matchedRole.id : (companyRoles[0] ? companyRoles[0].id : '');
+  const branchId = document.getElementById("userAssignBranch")?.value || '';
 
-      // Rule A: notify HR Manager if role/status changed
-      const roleChanged = prev.role !== users[idx].role;
-      const statusChanged = prev.status !== users[idx].status;
-      if (roleChanged || statusChanged) {
-        pushNotificationToRole("hr_manager", {
-          title: "User Account Updated",
-          message: `Superuser updated ${users[idx].name}: ${roleChanged ? `role → ${users[idx].role}` : ""}${roleChanged && statusChanged ? ", " : ""}${statusChanged ? `status → ${users[idx].status}` : ""}`,
-          type: "warning",
-        });
-      }
-
-
+  if (rawRole === 'branch_manager' && !branchId) {
+    if (errDiv) {
+      errDiv.textContent = 'Please select a branch for the Branch Manager role.';
+      errDiv.style.display = "block";
+    } else {
+      alert('Please select a branch for the Branch Manager role.');
     }
-  } else {
-    const newDate = new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-    const newUser = {
-      id: "u" + Date.now(),
-      name,
-      email,
-      password: "123", // ✅ DEFAULT PASSWORD
-      role: rawRole,
-      displayRole: displayRole,
-      department: dept,
-      status: "Active",
-      joined: newDate,
-      teams,
-      responsibilities,
-      tasks,
-      processes,
-    };
-    users.push(newUser);
-
-    // Sync to HR employee store
-    await upsertEmployeeFromAuthUser(newUser);
-
-
+    return;
   }
 
-  saveUsers(users); // Saves to master db.js
-  closeUserModal();
-  refreshTable();
+  try {
+    if (id) {
+      // For editing, let's update user info via API
+      const numericId = id.startsWith('u') ? id.substring(1) : id;
+      await window.Helpers.api.request(`/users/${numericId}`, 'PATCH', { fullName: name, email });
+    } else {
+      const payload = { email, name, roleId };
+      if (rawRole === 'branch_manager' && branchId) {
+        payload.branchId = branchId;
+      }
+      await window.Helpers.api.request('/governance/invite', 'POST', payload);
+    }
+    closeUserModal();
+    refreshTable();
+  } catch (e) {
+    if (errDiv) {
+      errDiv.textContent = e.message || 'Plan limit reached. Please upgrade to add more users.';
+      errDiv.style.display = "block";
+    } else {
+      alert(e.message || 'Plan limit reached. Please upgrade to add more users.');
+    }
+  }
 }
 
 async function deleteUser(id) {

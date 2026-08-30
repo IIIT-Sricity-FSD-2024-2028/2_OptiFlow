@@ -11,22 +11,26 @@ import { ROLES_KEY } from './roles.decorator';
 /**
  * RolesGuard
  * ──────────
- * Reads the custom `x-user-role` HTTP request header and checks its value
- * against the list of roles declared via the @Roles() decorator on the
- * target handler or controller class.
+ * Enforces role-based access control at the route level.
  *
- * Behaviour:
- *   • No @Roles() on the route  →  allow (public endpoint).
- *   • `x-user-role` header missing  →  throw UnauthorizedException (401).
- *   • Header present but role not in allowed list  →  throw ForbiddenException (403).
- *   • Role matches  →  allow (returns true).
+ * It checks the incoming request against roles declared with @Roles().
+ * The guard supports two identity surfaces so that both the browser
+ * frontend (which sends slugs like "superuser") and our TenantMiddleware
+ * (which resolves canonical labels like "Company Owner") work seamlessly:
  *
- * Binding (global):
- *   In main.ts:
- *     import { Reflector } from '@nestjs/core';
- *     import { RolesGuard } from './core/guards/roles.guard';
- *     ...
- *     app.useGlobalGuards(new RolesGuard(new Reflector()));
+ *   1. req.user.roleLabel  – canonical label resolved from the DB
+ *                            e.g. "Company Owner", "Access Governance"
+ *   2. req.user.role       – slug sent by the client via x-user-role header
+ *                            e.g. "superuser", "hr_manager"
+ *   3. x-user-role header  – raw header value (fallback for tooling / Swagger)
+ *
+ * A match on ANY of the three surfaces grants access.
+ *
+ * Behaviour matrix:
+ *   • No @Roles() on route      → allow (public endpoint)
+ *   • No user context at all    → 401 Unauthorized
+ *   • User present, no match    → 403 Forbidden
+ *   • Any surface matches       → allow (returns true)
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -34,35 +38,52 @@ export class RolesGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     // Merge metadata from both the handler method AND the controller class
-    // so @Roles() on the class applies to all its routes automatically.
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    // No @Roles() declared → public route, allow unconditionally.
+    // No @Roles() declared → public route
     if (!requiredRoles || requiredRoles.length === 0) {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<Request & { headers: Record<string, string> }>();
-    const userRole = request.headers['x-user-role'];
+    const req = context.switchToHttp().getRequest<any>();
 
-    // Header completely absent → 401 Unauthorized
-    if (!userRole) {
+    // Must have at least a header or a resolved user context
+    const headerRole = (req.headers?.['x-user-role'] as string) ?? '';
+    const userRole = req.user?.role ?? '';
+    const userRoleLabel = req.user?.roleLabel ?? '';
+
+    if (!headerRole && !userRole && !userRoleLabel) {
       throw new UnauthorizedException(
-        'Authorization required: please include the x-user-role header in your request.',
+        'Authorization required: no role context found. ' +
+          'Provide an x-user-role header or authenticate via /auth/login.',
       );
     }
 
-    // Header present but role not permitted → 403 Forbidden
-    if (!requiredRoles.includes(userRole)) {
+    // Case-insensitive multi-surface check
+    const normalise = (s: string) => s.toLowerCase().trim();
+    const normalised = requiredRoles.map(normalise);
+
+    const allowed =
+      (userRoleLabel && normalised.includes(normalise(userRoleLabel))) ||
+      (userRole && normalised.includes(normalise(userRole))) ||
+      (headerRole && normalised.includes(normalise(headerRole)));
+
+    if (!allowed) {
+      const presented = [userRoleLabel, userRole, headerRole]
+        .filter(Boolean)
+        .join(' / ');
       throw new ForbiddenException(
-        `Access denied: role "${userRole}" is not authorised for this endpoint. ` +
-        `Required: [${requiredRoles.join(', ')}]`,
+        `Access denied: your role "${presented}" is not authorised for this endpoint. ` +
+          `Required: [${requiredRoles.join(', ')}]`,
       );
     }
 
     return true;
   }
 }
+
+// Re-export decorator for controllers that import from this path
+export { Roles, ROLES_KEY } from './roles.decorator';

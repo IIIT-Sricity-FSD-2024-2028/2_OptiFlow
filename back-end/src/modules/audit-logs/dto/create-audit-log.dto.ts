@@ -1,12 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateAuditLogDto {
-  @ApiProperty({ example: 5 })
-  @IsNumber()
-  entity_id: number;
+  @ApiProperty({ example: 'comp-uuid-123', required: false })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 
-  @ApiProperty({ example: 'User' })
+  @ApiProperty({ example: 'task-uuid-123' })
+  entity_id: string | number;
+
+  @ApiProperty({ example: 'Task' })
   @IsString()
   @IsNotEmpty()
   entity_type: string;
@@ -16,10 +20,9 @@ export class CreateAuditLogDto {
   @IsNotEmpty()
   action: string;
 
-  @ApiProperty({ example: 2, required: false })
+  @ApiProperty({ example: 'user-uuid-2', required: false })
   @IsOptional()
-  @IsNumber()
-  performed_by?: number;
+  performed_by?: string | number;
 
   @ApiProperty({ example: '10.0.1.22', required: false })
   @IsOptional()
@@ -28,9 +31,19 @@ export class CreateAuditLogDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  old_value?: object;
+  old_value?: any;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  new_value?: object;
+  new_value?: any;
+
+  @ApiProperty({ example: 'user:create', required: false })
+  @IsOptional()
+  @IsString()
+  usedPermissionSlug?: string;
+
+  @ApiProperty({ example: 'Mozilla/5.0 ...', required: false })
+  @IsOptional()
+  @IsString()
+  userAgent?: string;
 }

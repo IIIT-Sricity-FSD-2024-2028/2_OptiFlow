@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Executive Overview — Command Center</title>
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/layout.css" />
+  <link rel="stylesheet" href="../../css/components.css" />
+  <link rel="stylesheet" href="css/executive.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+    .chart-container { background: white; border: 1px solid var(--exec-border); border-radius: 12px; padding: 24px; height: 380px; }
+    .chart-title { font-size: 16px; font-weight: 600; color: var(--exec-text); margin: 0 0 16px; }
+    .tables-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 30px; }
+    @media (max-width: 1000px) { .charts-row, .tables-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="admin-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content" style="display:flex;flex-direction:column;overflow:hidden;">
+      <header class="top-header">
+        <div>
+          <div class="page-title">Executive Overview</div>
+          <div id="exec-page-subtitle" style="font-size:13px;color:var(--exec-muted);margin-top:4px;">Company-wide operational intelligence</div>
+        </div>
+        <div class="exec-header-actions">
+          <div id="executive-branch-switcher"></div>
+        </div>
+      </header>
+
+      <div class="executive-content">
+        <h2 style="font-size:18px;font-weight:600;margin:0 0 16px;color:var(--exec-text);" id="dashboard-heading">Company Overview</h2>
+
+        <div class="metrics-grid exec-kpi-grid" style="margin-bottom:24px;">
+          <div class="exec-kpi">
+            <div class="exec-kpi-label">Total Employees</div>
+            <div class="exec-kpi-value" id="valUsers">--</div>
+            <div class="exec-kpi-sub" id="valTeams">Across -- Teams</div>
+          </div>
+          <div class="exec-kpi">
+            <div class="exec-kpi-label">Compliance Score</div>
+            <div class="exec-kpi-value" id="healthScore">--</div>
+            <div class="exec-kpi-sub">Out of 100</div>
+          </div>
+          <div class="exec-kpi">
+            <div class="exec-kpi-label">Active Projects</div>
+            <div class="exec-kpi-value" id="valProjects">--</div>
+            <div class="exec-kpi-sub" id="valDelayed">-- delayed</div>
+          </div>
+          <div class="exec-kpi">
+            <div class="exec-kpi-label">Critical Escalations</div>
+            <div class="exec-kpi-value" id="openEscalations">--</div>
+            <div class="exec-kpi-sub" style="color:#dc2626;">Requires attention</div>
+          </div>
+        </div>
+
+        <div class="charts-row">
+          <div class="chart-container">
+            <h3 class="chart-title">Task Completion Trend (30 Days)</h3>
+            <div style="position:relative;height:300px;"><canvas id="taskTrendChart"></canvas></div>
+          </div>
+          <div class="chart-container">
+            <h3 class="chart-title">Active Projects & Tasks by Team</h3>
+            <div style="position:relative;height:300px;"><canvas id="teamBreakdownChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="chart-container" style="margin-bottom:24px;height:320px;">
+          <h3 class="chart-title">Branch Performance Comparison</h3>
+          <div style="position:relative;height:240px;"><canvas id="branchComparisonChart"></canvas></div>
+        </div>
+
+        <div class="tables-row">
+          <div class="exec-card">
+            <div class="exec-card-header"><span class="exec-card-title">High-Priority Violations</span></div>
+            <div class="exec-table-wrap" style="max-height:300px;overflow-y:auto;">
+              <table class="exec-table">
+                <thead><tr><th>Rule</th><th>Severity</th><th>Detected</th></tr></thead>
+                <tbody id="violationsTable"><tr><td colspan="3" style="text-align:center;padding:20px;">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="exec-card">
+            <div class="exec-card-header"><span class="exec-card-title">Open Escalations</span></div>
+            <div class="exec-table-wrap" style="max-height:300px;overflow-y:auto;">
+              <table class="exec-table">
+                <thead><tr><th>Issue</th><th>Assigned To</th><th>Reported</th></tr></thead>
+                <tbody id="escalationsTable"><tr><td colspan="3" style="text-align:center;padding:20px;">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;">
+          <a href="executive_projects.html" class="exec-pill blue" style="text-decoration:none;padding:10px 16px;"><i class="ri-folder-line"></i> View All Projects</a>
+          <a href="executive_tasks.html" class="exec-pill blue" style="text-decoration:none;padding:10px 16px;"><i class="ri-list-check-2"></i> View All Tasks</a>
+          <a href="executive_compliance.html" class="exec-pill blue" style="text-decoration:none;padding:10px 16px;"><i class="ri-shield-check-line"></i> Compliance Detail</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../../js/utils/helpers.js"></script>
+  <script src="../../js/components/executive-branch-switcher.js"></script>
+  <script src="../../js/components/sidebar.js"></script>
+  <script src="js/executive-shell.js"></script>
+  <script src="executive_dashboard.js"></script>
+</body>
+</html>

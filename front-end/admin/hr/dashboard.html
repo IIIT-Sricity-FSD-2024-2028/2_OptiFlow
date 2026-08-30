@@ -101,6 +101,9 @@
             >
               <i class="ri-notification-3-line"></i>
             </button>
+            <button class="btn btn-secondary" id="customRoleBtn" style="margin-right:8px;">
+              <i class="ri-shield-keyhole-line"></i> Custom Role
+            </button>
             <button class="btn btn-primary" id="newEmployeeBtn">
               <i class="ri-add-line"></i> New Employee
             </button>
@@ -117,9 +120,9 @@
                   <i class="ri-group-line"></i>
                 </div>
               </div>
-              <div class="metric-value" id="metricTotal">42</div>
+              <div class="metric-value" id="metricTotal">—</div>
               <div class="metric-title">Total Employees</div>
-              <span class="metric-tag blue">+3 this month</span>
+              <span class="metric-tag blue">In your company</span>
             </div>
             <div class="card metric-card">
               <div class="metric-header">
@@ -127,9 +130,9 @@
                   <i class="ri-checkbox-circle-line"></i>
                 </div>
               </div>
-              <div class="metric-value" id="metricActive">40</div>
+              <div class="metric-value" id="metricActive">—</div>
               <div class="metric-title">Active Accounts</div>
-              <span class="metric-tag green">95% active rate</span>
+              <span class="metric-tag green">Currently active</span>
             </div>
             <div class="card metric-card">
               <div class="metric-header">
@@ -137,9 +140,9 @@
                   <i class="ri-team-line"></i>
                 </div>
               </div>
-              <div class="metric-value" id="metricTeams">3</div>
+              <div class="metric-value" id="metricTeams">—</div>
               <div class="metric-title">Active Teams</div>
-              <span class="metric-tag">Across 4 depts</span>
+              <span class="metric-tag">Across all branches</span>
             </div>
             <div class="card metric-card">
               <div class="metric-header">
@@ -147,9 +150,9 @@
                   <i class="ri-time-line"></i>
                 </div>
               </div>
-              <div class="metric-value" id="metricPending">2</div>
+              <div class="metric-value" id="metricPending">—</div>
               <div class="metric-title">Pending Setup</div>
-              <span class="metric-tag yellow">Needs action</span>
+              <span class="metric-tag yellow">Unprovisioned</span>
             </div>
           </div>
 
@@ -159,7 +162,7 @@
             <div class="table-toolbar">
               <div class="table-toolbar-left">
                 <span class="table-title">All Employees</span>
-                <span class="table-count" id="employeeCount">42 total</span>
+                <span class="table-count" id="employeeCount">Loading…</span>
               </div>
               <div class="table-toolbar-right">
                 <div class="search-bar">
@@ -167,23 +170,15 @@
                   <input
                     type="text"
                     id="searchInput"
-                    placeholder="Search name or ID..."
+                    placeholder="Search name or email…"
                   />
                 </div>
+                <!-- Populated dynamically from DB -->
                 <select class="dropdown-select" id="deptFilter">
                   <option value="">All Departments</option>
-                  <option value="Operations">Operations</option>
-                  <option value="Finance">Finance</option>
-                  <option value="IT">IT</option>
-                  <option value="HR">HR</option>
-                  <option value="Compliance">Compliance</option>
                 </select>
                 <select class="dropdown-select" id="roleFilter">
                   <option value="">All Roles</option>
-                  <option value="Project Manager">Project Manager</option>
-                  <option value="Team Leader">Team Leader</option>
-                  <option value="Team Member">Team Member</option>
-                  <option value="Compliance Officer">Compliance Officer</option>
                 </select>
               </div>
             </div>
@@ -232,8 +227,80 @@
     </div>
     <div class="notif-backdrop" id="notifBackdrop"></div>
 
+    <!-- ── Invite Employee Modal ── -->
+    <div class="modal-overlay" id="inviteModal" style="display:none;align-items:center;justify-content:center;">
+      <div class="modal-content" style="width:480px;">
+        <div class="modal-header">
+          <div class="modal-title"><i class="ri-user-add-line" style="margin-right:8px;"></i>Invite New Employee</div>
+          <span class="modal-close" id="closeInviteModal"><i class="ri-close-line"></i></span>
+        </div>
+        <form id="inviteForm">
+          <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Full Name</label>
+              <input type="text" id="inviteName" required placeholder="Jane Smith"
+                style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;outline:none;" />
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Work Email</label>
+              <input type="email" id="inviteEmail" required placeholder="jane@company.com"
+                style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;outline:none;" />
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Assign Role</label>
+              <select id="inviteRoleSelect" required
+                style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;outline:none;background:#fff;">
+                <option value="">Loading roles…</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancelInvite">Cancel</button>
+            <button type="submit" class="btn btn-primary">Send Invite</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── Custom Role Modal ── -->
+    <div class="modal-overlay" id="customRoleModal" style="display:none;align-items:center;justify-content:center;">
+      <div class="modal-content" style="width:520px;">
+        <div class="modal-header">
+          <div class="modal-title"><i class="ri-shield-keyhole-line" style="margin-right:8px;"></i>Create Custom Role</div>
+          <span class="modal-close" id="closeCustomRoleModal"><i class="ri-close-line"></i></span>
+        </div>
+        <form id="customRoleForm">
+          <div class="modal-body" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Role Name</label>
+              <input type="text" id="newRoleName" required placeholder="e.g. Senior Compliance Lead"
+                style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;outline:none;" />
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Clone Permissions From</label>
+              <select id="baseRoleSelect"
+                style="width:100%;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;outline:none;background:#fff;">
+                <option value="">Select a base role…</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Permissions</label>
+              <div id="permissionsGrid"
+                style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:160px;overflow-y:auto;border:1px solid #f1f5f9;border-radius:8px;padding:10px;">
+                <span style="color:#94a3b8;font-size:12px;">Select a base role first.</span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancelCustomRole">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Role</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- ── Logout Confirmation Modal ── -->
-    <div class="modal-overlay" id="logoutModal">
+    <div class="modal-overlay" id="logoutModal" style="display:none;">
       <div class="modal-content" style="width: 420px">
         <div class="modal-header">
           <div class="modal-title">
@@ -267,12 +334,11 @@
         </div>
       </div>
     </div>
-<script src="../../js/utils/helpers.js?v=999"></script>
+<script src="../../js/utils/helpers.js"></script>
     <script src="../../js/data/db.js"></script>
     <script src="../../js/data/hr-data-store.js"></script>
-    <script src="../../js/data/roles-store.js"></script>
     <script src="../../js/utils/auth.js"></script>
-    <script src="../../js/pages/hr/dashboard.js"></script>
+    <script src="dashboard.js"></script>
     <script>
       // Populate sidebar with real session user
       (function() {

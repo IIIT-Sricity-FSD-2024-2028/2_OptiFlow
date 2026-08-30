@@ -11,44 +11,41 @@
     return Array.isArray(v) ? v : [];
   }
 
-  function parseNumericUserId(sessionLike) {
+  function parseUserId(sessionLike) {
     if (sessionLike == null) return null;
-    if (typeof sessionLike.rawId === "number" && Number.isFinite(sessionLike.rawId)) {
-      return sessionLike.rawId;
-    }
-    const id =
-      sessionLike.id !== undefined
-        ? sessionLike.id
-        : sessionLike.user_id !== undefined
-          ? sessionLike.user_id
-          : sessionLike.userId;
-    if (typeof id === "number" && Number.isFinite(id)) return id;
-    if (typeof id === "string" && /^\d+$/.test(String(id).trim())) return parseInt(id, 10);
-    const digits = parseInt(String(id).replace(/\D/g, ""), 10);
-    return Number.isFinite(digits) ? digits : null;
+    return String(sessionLike.id ?? sessionLike.user_id ?? sessionLike.userId ?? "").trim() || null;
   }
 
-  /** TM execution: only tasks strictly assigned to this user (integer id). */
+  /** TM execution: tasks assigned to this user (supports UUID & numeric strings). */
   function filterExecutionTasksForMember(tasks, userId) {
-    const uid = typeof userId === "number" ? userId : parseNumericUserId({ id: userId });
-    if (!Number.isFinite(uid)) return [];
-    return (tasks || []).filter((t) => Number(t.assignedTo) === uid);
+    const targetId = String(userId || "").trim();
+    if (!targetId) return [];
+    return (tasks || []).filter((t) => {
+      const assignee = String(t.assignedToId || t.assignedTo || t.assigned_to || "").trim();
+      return assignee === targetId;
+    });
   }
 
-  /** Direct report user ids for a team leader (integer manager_id). */
-  function teamMemberUserIds(users, tlNumericId) {
-    const tl = Number(tlNumericId);
-    if (!Number.isFinite(tl)) return [];
+  /** Direct report user ids for a team leader (supports UUID & numeric strings). */
+  function teamMemberUserIds(users, tlUserId) {
+    const targetTlId = String(tlUserId || "").trim();
+    if (!targetTlId) return [];
     return (users || [])
-      .filter((u) => Number(u.managerId) === tl)
-      .map((u) => Number(u.userId))
-      .filter(Number.isFinite);
+      .filter((u) => {
+        const mgr = String(u.managerUserId || u.managerId || u.reportsTo || u.manager_id || "").trim();
+        return mgr === targetTlId;
+      })
+      .map((u) => String(u.userId || u.id).trim())
+      .filter(Boolean);
   }
 
   /** Tasks assigned to anyone on the TL’s team (direct reports). */
   function filterTeamOverviewTasksForLeader(tasks, teamMemberIds) {
-    const idSet = new Set(teamMemberIds || []);
-    return (tasks || []).filter((t) => idSet.has(Number(t.assignedTo)));
+    const idSet = new Set((teamMemberIds || []).map((id) => String(id).trim()));
+    return (tasks || []).filter((t) => {
+      const assignee = String(t.assignedToId || t.assignedTo || t.assigned_to || "").trim();
+      return idSet.has(assignee);
+    });
   }
 
   /** Tasks team members submitted for TL approval (modern + legacy statuses). */
@@ -59,16 +56,19 @@
     );
   }
 
-  /** Parse IDs from mixed formats (handles "u5", CSV noise) — digits only via regex. */
-  function strictNumericId(value) {
-    const n = parseInt(String(value == null ? "" : value).replace(/[^0-9]/g, ""), 10);
-    return Number.isFinite(n) && n > 0 ? n : null;
+  /** Parse IDs from string/UUID or numeric values without stripping non-digits. */
+  function strictId(value) {
+    if (value == null) return null;
+    const str = String(value).trim();
+    return str || null;
   }
 
   global.TasksStore = {
     unwrapApiList,
-    parseNumericUserId,
-    strictNumericId,
+    parseUserId,
+    parseNumericUserId: parseUserId,
+    strictNumericId: strictId,
+    strictId,
     filterExecutionTasksForMember,
     teamMemberUserIds,
     filterTeamOverviewTasksForLeader,

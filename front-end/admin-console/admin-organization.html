@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Console — Organization</title>
+  <link rel="stylesheet" href="../css/pm/base.css" />
+  <link rel="stylesheet" href="../css/pm/layout.css" />
+  <link rel="stylesheet" href="../css/pm/components.css" />
+  <link rel="stylesheet" href="css/admin-console.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-area">
+      <header class="top-header">
+        <div class="ac-header-block">
+          <div class="page-title">Organization</div>
+          <p id="ac-page-subtitle" class="ac-page-subtitle">Manage branches and teams</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="openBranchModal()">+ Add Branch</button>
+        </div>
+      </header>
+      <main class="page-content">
+        <div class="card">
+          <h2 class="ac-card-title">Branches</h2>
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead><tr><th>BRANCH NAME</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
+              <tbody id="BranchTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" id="teams-section">
+          <div class="ac-section-toolbar">
+            <h2 class="ac-card-title">Teams inside Branches</h2>
+            <div class="ac-toolbar-actions">
+              <select id="branchSelectForTeams" class="form-control" onchange="refreshTeamsTable()">
+                <option value="">Select a Branch…</option>
+              </select>
+              <button class="btn btn-primary" id="addTeamBtn" onclick="openTeamModal()" disabled>+ Add Team</button>
+            </div>
+          </div>
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead><tr><th>TEAM NAME</th><th>BRANCH</th><th>ACTIONS</th></tr></thead>
+              <tbody id="TeamTableBody">
+                <tr><td colspan="3" class="ac-empty-cell">Select a branch to view teams.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="BranchModal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">Add New Branch</div>
+        <div class="modal-close" onclick="closeBranchModal()">&times;</div>
+      </div>
+      <div class="modal-body">
+        <div id="modal-global-error" style="display:none;color:#ef4444;font-weight:600;margin-bottom:12px;padding:10px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;"></div>
+        <form id="BranchForm">
+          <input type="hidden" id="BranchId" />
+          <div class="form-group">
+            <label class="form-label">Branch Name</label>
+            <input type="text" class="form-control" id="BranchName" placeholder="e.g. Mumbai Office" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBranchModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveBranch()">Save Branch</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="TeamModal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Add New Team</div>
+        <div class="modal-close" onclick="closeTeamModal()">&times;</div>
+      </div>
+      <div class="modal-body">
+        <div id="team-modal-global-error" style="display:none;color:#ef4444;font-weight:600;margin-bottom:12px;padding:10px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;"></div>
+        <div class="form-group">
+          <label class="form-label">Team Name</label>
+          <input type="text" class="form-control" id="TeamName" placeholder="e.g. Core Engineering" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeTeamModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTeam()">Save Team</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/utils/helpers.js"></script>
+  <script src="../js/helpers.js"></script>
+  <script src="../js/data/branches.js"></script>
+  <script src="../js/components/sidebar.js"></script>
+  <script src="js/admin-shell.js"></script>
+  <script src="js/admin-organization.js"></script>
+</body>
+</html>
