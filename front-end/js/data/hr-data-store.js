@@ -9,11 +9,15 @@
     "team_leader",
     "hr_manager",
     "superuser",
+    "process_admin",
+    "company_owner",
     "compliance_officer",
   ];
 
   const ROLE_DISPLAY = {
-    superuser:          "Process Admin",
+    superuser:          "Superuser",
+    company_owner:      "Company Owner",
+    process_admin:      "Superuser",
     project_manager:    "Project Manager",
     compliance_officer: "Compliance Officer",
     hr_manager:         "HR Manager",
@@ -33,6 +37,27 @@
     return COLORS[(id || 0) % COLORS.length];
   }
 
+  function normalizeRoleKey(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\-]+/g, "_")
+      .replace(/[^a-z0-9_]/g, "")
+      || "team_member";
+  }
+
+  function formatRoleLabel(value, fallback = "Team Member") {
+    const raw = String(value || "").trim();
+    if (!raw) return fallback;
+    const slug = normalizeRoleKey(raw);
+    if (ROLE_DISPLAY[slug]) return ROLE_DISPLAY[slug];
+    if (slug === "process_admin") return "Superuser";
+    return raw
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+
   // ── Map backend User → HR employee object ──────────────────────────────────
   async function mapIn(u) {
     if (!u) return null;
@@ -40,12 +65,15 @@
 
     const rawId = String(u.userId || u.id || "");
     const branches = globalState.branches || globalState.departments || [];
-    const deptObj = branches.find(d => String(d.id || d.branchId) === String(u.branchId || u.department_id));
-    const deptName  = deptObj ? deptObj.name : `Branch`;
+    const deptRef = u.branchId || u.department_id || u.departmentId || u.branch_id || u.department;
+    const deptObj = branches.find(d => String(d.id || d.branchId || d.departmentId) === String(deptRef));
+    const deptName = deptObj ? (deptObj.name || deptObj.departmentName || deptObj.branchName) : (u.departmentName || u.branchName || u.department || "Operations");
     const nameParts = String(u.fullName || u.full_name || "").trim().split(/\s+/);
     const initials  =
       ((nameParts[0] || "")[0] || "").toUpperCase() +
       ((nameParts[1] || "")[0] || "").toUpperCase() || "??";
+    const roleSlug = normalizeRoleKey(u.roleName || u.role || u.roleSlug || u.role_id || "team_member");
+    const roleDisplay = formatRoleLabel(u.roleLabel || u.roleName || u.role || roleSlug, "Team Member");
     const isActive  = u.isActive !== false && u.status !== "Inactive";
 
     return {
@@ -54,10 +82,12 @@
       name:        u.fullName || u.full_name || "Unknown",
       initials,
       color:       colorFor(rawId),
-      role:        ROLE_DISPLAY[u.roleName || u.role] || u.roleName || u.role,
-      roleSlug:    u.roleName || u.role,
-      branch: deptName,
-      team:        u.teamName || null,
+      role:        roleDisplay,
+      roleSlug:    roleSlug,
+      roleLabel:   roleDisplay,
+      branch:      deptName,
+      department:  deptName,
+      team:        u.teamName || u.team || null,
       parentId:    u.managerUserId || u.manager_id ? String(u.managerUserId || u.manager_id) : null,
       status:      isActive ? "active" : "inactive",
       joined:      u.createdAt
@@ -66,30 +96,50 @@
       joinDateRaw: u.createdAt || "",
       email:       u.email || "",
       phone:       u.phone || "",
+      permissions: u.permissions || {},
     };
   }
 
   async function mapOut(emp) {
     const globalState = await window.Helpers.getState();
 
-    const DISPLAY_TO_SLUG = Object.fromEntries(
-      Object.entries(ROLE_DISPLAY).map(([k, v]) => [v, k])
-    );
-    const roleSlug = DISPLAY_TO_SLUG[emp.role] || emp.roleSlug || emp.role;
+    const roleInput = String(emp.role || emp.roleSlug || emp.roleName || "").trim();
+    const roleSlug =
+      normalizeRoleKey(roleInput) ||
+      normalizeRoleKey(Object.keys(ROLE_DISPLAY).find(key => ROLE_DISPLAY[key] === roleInput) || "") ||
+      normalizeRoleKey(emp.roleSlug || emp.role || "team_member");
 
     const branches = globalState.branches || globalState.departments || [];
-    const deptObj = branches.find(d => d.name === emp.branch || d.id === emp.branch);
-    const deptId = deptObj ? deptObj.id : null;
+    const deptObj = branches.find(d =>
+      (d.name || d.departmentName || d.branchName || d.label) === emp.branch ||
+      String(d.id || d.departmentId || d.branchId) === String(emp.branch)
+    );
+    const deptId = deptObj ? (deptObj.id || deptObj.departmentId || deptObj.branchId) : null;
 
-    const parentId = emp.parentId ? String(emp.parentId).replace(/^EMP-/, "") : null;
+    const session = (() => {
+      try {
+        return JSON.parse(sessionStorage.getItem("currentUser") || "{}");
+      } catch {
+        return {};
+      }
+    })();
+    const companyId = globalState.companyId || session.companyId;
+    if (!companyId) {
+      throw new Error("Your session is missing a company ID. Please sign in again.");
+    }
+
+    const parentId = emp.parentId && !String(emp.parentId).startsWith("EMP-")
+      ? String(emp.parentId)
+      : null;
 
     return {
       full_name:     emp.name,
       email:         emp.email,
+      companyId,
       phone:         emp.phone || null,
       role:          roleSlug,
-      branch_id:     deptId,
-      manager_id:    parentId || null,
+      branchId:      deptId,
+      managerUserId: parentId || null,
       is_active:     emp.status !== "inactive",
     };
   }
@@ -113,31 +163,42 @@
           );
         }
         
-        return mapped.map(u => {
-          const rawId = String(u.userId || u.id || "");
-          return {
-            id:          rawId,
-            rawId:       rawId,
+        const deduped = [];
+        const seenIds = new Set();
+
+        mapped.forEach((u) => {
+          const rawId = String(u.userId || u.id || u.employeeId || u.user_id || "").trim();
+          const emailKey = String(u.email || "").trim().toLowerCase();
+          const dedupeKey = rawId || emailKey;
+          if (!dedupeKey || seenIds.has(dedupeKey)) return;
+          seenIds.add(dedupeKey);
+
+          const roleKey = normalizeRoleKey(u.roleName || u.role || u.roleSlug || u.role_id || "team_member");
+          const displayRole = formatRoleLabel(u.roleLabel || u.roleName || u.role || roleKey, "Team Member");
+          const deptName = u.departmentName || u.branchName || u.department || (u.branchId ? `Branch ${u.branchId}` : "Operations");
+
+          deduped.push({
+            id:          rawId || emailKey,
+            rawId:       rawId || emailKey,
             name:        u.fullName || u.name || "Unknown",
             initials:    u.avatar || (u.fullName ? u.fullName.substring(0, 2).toUpperCase() : "??"),
-            color:       colorFor(rawId),
-              
-              // FIX: Translate snake_case into beautiful Title Case!
-              role:        ROLE_DISPLAY[u.roleName] || u.roleName, 
-              roleSlug:    u.roleName, 
-              
-              department:  u.departmentName || `Dept ${u.departmentId}`,
-              team:        u.teamName || null,
-              
-              // FIX: Re-add the manager connection so the Org Chart Tree works!
-              parentId:    u.managerId ? `EMP-${String(u.managerId).padStart(3, "0")}` : null,
-              
-              status:      u.status,
-              joined:      u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : "—",
-              email:       u.email || "",
-              phone:       u.phone || "",
-            };
+            color:       colorFor(rawId || emailKey),
+            role:        displayRole,
+            roleSlug:    roleKey,
+            roleLabel:   displayRole,
+            branch:      deptName,
+            department:  deptName,
+            team:        u.teamName || u.team || u.team_name || null,
+            parentId:    u.managerId ? `EMP-${String(u.managerId).padStart(3, "0")}` : (u.managerUserId || u.manager_id ? String(u.managerUserId || u.manager_id) : null),
+            status:      u.status || (u.isActive === false ? "inactive" : "active"),
+            joined:      u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : "—",
+            email:       u.email || "",
+            phone:       u.phone || "",
+            permissions: u.permissions || {},
+          });
         });
+
+        return deduped;
 
       } catch (error) {
         console.error("HRStore.getAll failed:", error);
@@ -148,15 +209,19 @@
 async getById(id) {
       if (!id) return null;
       try {
-        // FORCE it to use the beautifully mapped data from getAll()
-        // This instantly fixes the "undefined" role issue!
-        const allEmployees = await this.getAll();
-        return allEmployees.find(e => e.id === id) || null;
-      } catch (error) {
-        console.error("HRStore.getById failed:", error);
-        return null;
-      }
-    },
+    const allEmployees = await this.getAll();
+    const normalizedTarget = String(id).trim();
+    return (
+      allEmployees.find(e => String(e.id) === normalizedTarget) ||
+      allEmployees.find(e => String(e.rawId || e.id) === normalizedTarget) ||
+      allEmployees.find(e => String(e.id).replace(/\D/g, "") === normalizedTarget.replace(/\D/g, "")) ||
+      null
+    );
+  } catch (error) {
+    console.error("HRStore.getById failed:", error);
+    return null;
+  }
+},
     async getStats() {
       const emps = await this.getAll();
       const globalState = await window.Helpers.getState();
@@ -169,16 +234,35 @@ async getById(id) {
       };
     },
 
+    async getDepartments() {
+      const globalState = await window.Helpers.getState();
+      const sources = globalState.departments || globalState.branches || [];
+      const names = sources
+        .map(d => d.departmentName || d.name || d.branchName || d.branch || d.label)
+        .filter(Boolean);
+      return [...new Set(names)];
+    },
+
     async getTeams() {
       const globalState = await window.Helpers.getState();
-      return globalState.departments.map(d => d.departmentName);
+      const teamList = (globalState.teams || []).map(t => t.teamName || t.name || t.label).filter(Boolean);
+      if (teamList.length) return [...new Set(teamList)];
+
+      const sources = globalState.departments || globalState.branches || [];
+      return [...new Set(
+        sources
+          .map(d => d.departmentName || d.name || d.branchName || d.branch || d.label)
+          .filter(Boolean)
+      )];
     },
 
     async getTeamsForDept(dept) {
       const globalState = await window.Helpers.getState();
-      const deptObj = globalState.departments.find(d => d.departmentName === dept);
+      const departments = globalState.departments || globalState.branches || [];
+      const deptObj = departments.find(d => (d.departmentName || d.name || d.branchName || d.branch) === dept);
       if (!deptObj) return [];
-      return globalState.teams.filter(t => t.departmentId === deptObj.departmentId).map(t => t.teamName);
+      const deptId = deptObj.departmentId || deptObj.id || deptObj.branchId;
+      return (globalState.teams || []).filter(t => String(t.departmentId || t.branchId) === String(deptId)).map(t => t.teamName || t.name);
     },
 
     async getDeptTeamsMap() {

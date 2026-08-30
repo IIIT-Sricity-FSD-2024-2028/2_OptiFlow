@@ -102,20 +102,31 @@ export class UsersService {
     });
 
     if (dto.role) {
-      const role = await this.prisma.role.findFirst({
-        where: { companyId: dto.companyId, label: dto.role },
+      const normalizedRole = dto.role.trim().toLowerCase().replace(/[\s-]+/g, '_');
+      const roles = await this.prisma.role.findMany({
+        where: { companyId: dto.companyId },
       });
-      if (role) {
-        await this.prisma.roleAssignment.create({
-          data: {
-            userId: user.id,
-            roleId: role.id,
-            scopeType: 'Company',
-            scopeId: dto.companyId,
-            grantedById: user.id,
-          },
-        });
+      const role = roles.find((candidate) =>
+        candidate.id === dto.role ||
+        candidate.label.trim().toLowerCase().replace(/[\s-]+/g, '_') === normalizedRole ||
+        (normalizedRole === 'superuser' &&
+          ['superuser', 'process_admin'].includes(
+            candidate.label.trim().toLowerCase().replace(/[\s-]+/g, '_'),
+          ))
+      );
+      if (!role) {
+        await this.prisma.user.delete({ where: { id: user.id } });
+        throw new BadRequestException(`Role ${dto.role} not found in this company`);
       }
+      await this.prisma.roleAssignment.create({
+        data: {
+          userId: user.id,
+          roleId: role.id,
+          scopeType: 'Company',
+          scopeId: dto.companyId,
+          grantedById: user.id,
+        },
+      });
     }
 
     return this.findOne(user.id);

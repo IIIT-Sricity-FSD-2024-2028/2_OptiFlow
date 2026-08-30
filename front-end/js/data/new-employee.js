@@ -169,23 +169,63 @@ async function populateTeams(dept) {
 
 async function populateSystemRoles() {
   const sel = document.getElementById("systemRole");
-  const allEmps = await HRStore.getAll();
-  const roles = [...new Set(allEmps.map((e) => e.role))].sort();
   const canonical = [
-    "Project Manager",
-    "Team Leader",
-    "Team Member",
-    "Compliance Officer",
-    "Process Admin",
-    "HR Manager",
-    "HR Ops",
+    { value: "superuser", label: "Superuser" },
+    { value: "company_owner", label: "Company Owner" },
+    { value: "project_manager", label: "Project Manager" },
+    { value: "team_leader", label: "Team Leader" },
+    { value: "team_member", label: "Team Member" },
+    { value: "compliance_officer", label: "Compliance Officer" },
+    { value: "hr_manager", label: "HR Manager" },
+    { value: "hr_ops", label: "HR Ops" },
   ];
-  const merged = [...new Set([...canonical, ...roles])].sort();
+
+  let customRoles = [];
+  try {
+    const sessionRaw = sessionStorage.getItem("currentUser");
+    if (sessionRaw) {
+      const session = JSON.parse(sessionRaw);
+      const headers = {
+        "Content-Type": "application/json",
+        "x-user-role": session.roleSlug || session.role || "hr_manager",
+        "x-user-email": session.email,
+        "x-company-id": session.companyId,
+      };
+      const res = await fetch("http://localhost:3000/governance/roles", { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const roleList = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : (Array.isArray(data.roles) ? data.roles : Object.values(data || {})));
+        customRoles = roleList
+          .map((r) => ({
+            value: String(r.value || r.id || r.roleId || r.slug || r.name || r.key || "").trim(),
+            label: String(r.label || r.name || r.roleName || r.key || "").trim(),
+          }))
+          .filter((r) => r.value && r.label);
+      }
+    }
+  } catch (err) {
+    console.warn("[HR add member] Failed to load custom roles from API", err);
+  }
+
+  const combined = [...canonical, ...customRoles];
+  const merged = [];
+  const seen = new Set();
+  combined.forEach((role) => {
+    const key = String(role.value || role.label || "").trim();
+    const label = String(role.label || role.value || "").trim();
+    if (!key || !label || seen.has(key)) return;
+    seen.add(key);
+    merged.push({
+      value: key,
+      label,
+    });
+  });
+
   sel.innerHTML = '<option value="">— Select Role —</option>';
-  merged.forEach((r) => {
+  merged.forEach((role) => {
     const opt = document.createElement("option");
-    opt.value = r;
-    opt.textContent = r;
+    opt.value = role.value;
+    opt.textContent = role.label;
     sel.appendChild(opt);
   });
 }
@@ -306,16 +346,24 @@ async function handleSubmit() {
     joinDateRaw: joinDate,
   };
 
-  const result = await HRStore.add(payload);
+  let result;
+  try {
+    result = await HRStore.add(payload);
+  } catch (error) {
+    result = { ok: false, errors: { server: error.message || "Unable to create employee." } };
+  }
 
   btn.classList.remove("loading");
   btn.innerHTML = '<i class="ri-check-line"></i> Create & Provision Account';
 
   if (!result.ok) {
+    if (result.errors?.server) {
+      showBanner(result.errors.server);
+    }
     const fieldMap = {
       name: ["firstName", "lastName"],
       email: ["workEmail"],
-      department: ["department"],
+      department: ["branch"],
       role: ["systemRole"],
       phone: ["phone"],
       joined: ["joinDate"],

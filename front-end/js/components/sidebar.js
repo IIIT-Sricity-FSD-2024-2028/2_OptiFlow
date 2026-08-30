@@ -86,7 +86,7 @@ window.Sidebar = {
       { id: "audit", label: "Audit Log", icon: "audit", href: "admin/compliance/compliance_audit_log.html", absolute: true }
     ],
     HR_Manager: [
-      { id: "dashboard", label: "Dashboard", icon: "grid", href: "admin/hr/dashboard.html", absolute: true },
+      { id: "dashboard", label: "Dashboard", icon: "grid", href: "admin/pm/hr-dashboard.html", absolute: true },
       { id: "teams", label: "Teams", icon: "users", href: "admin/hr/teams-structure.html", absolute: true },
       { id: "roles", label: "Roles & Access", icon: "shield", href: "admin/hr/roles-access.html", absolute: true }
     ],
@@ -131,7 +131,7 @@ window.Sidebar = {
     if (!session) return;
 
     // Normalize role slug → navConfig key
-    const rawRole = (session.role || session.roleName || '').toLowerCase().replace(/[\s\-]/g, '_');
+    const rawRole = (session.role || session.roleName || session.roleLabel || '').toLowerCase().replace(/[\s\-]/g, '_');
     const roleLabelLower = String(session.roleLabel || '').toLowerCase();
     let rName;
     if (rawRole === 'system_admin' || roleLabelLower.includes('system admin')) {
@@ -154,7 +154,7 @@ window.Sidebar = {
       rName = 'SuperUser';
     } else if (rawRole.includes('ceo') || rawRole.includes('cto') || rawRole.includes('coo')) {
       rName = 'Company_Owner';
-    } else if (rawRole === 'hr_manager' || rawRole.includes('governance') || rawRole.includes('hr')) {
+    } else if (rawRole === 'hr_manager' || roleLabelLower.includes('governance') || roleLabelLower.includes('hr') || rawRole.includes('governance') || rawRole.includes('hr')) {
       rName = 'HR_Manager';
     } else if (rawRole === 'compliance_officer' || rawRole.includes('compliance')) {
       rName = 'Compliance_Officer';

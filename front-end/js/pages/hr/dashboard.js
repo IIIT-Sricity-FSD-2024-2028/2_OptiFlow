@@ -56,11 +56,12 @@ function renderRows(data) {
   countEl.textContent = `${data.length} total`;
 
   data.forEach((emp) => {
+    const employeeId = String(emp.id ?? emp.userId ?? emp.user_id ?? "");
     const isPending = emp.status === "pending";
     const teamDisplay = emp.team || "—";
     const actionBtn = isPending
-      ? `<button class="action-btn provision" onclick="goToEmployee('${emp.id}')">Provision</button>`
-      : `<button class="action-btn view" onclick="goToEmployee('${emp.id}')">View</button>`;
+      ? `<button class="action-btn provision" onclick="goToEmployee(${JSON.stringify(employeeId)})">Provision</button>`
+      : `<button class="action-btn view" onclick="goToEmployee(${JSON.stringify(employeeId)})">View</button>`;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -139,7 +140,11 @@ async function populateFilters() {
 // Navigation helpers
 // ─────────────────────────────────────────
 function goToEmployee(empId) {
-  window.location.href = `employee-detail.html?id=${empId}`;
+  const employeeId = empId ?? "";
+  if (!employeeId) {
+    return;
+  }
+  window.location.href = `employee-detail.html?id=${encodeURIComponent(String(employeeId))}`;
 }
 
 function goToProvision(empId) {
@@ -290,12 +295,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Load Roles for dropdowns
+  function normalizeRoleOptions(data) {
+      if (Array.isArray(data)) return data;
+      if (!data || typeof data !== 'object') return [];
+      if (Array.isArray(data.data)) return data.data;
+      if (Array.isArray(data.roles)) return data.roles;
+      if (Array.isArray(data.items)) return data.items;
+      if (Array.isArray(data.results)) return data.results;
+      return Object.values(data);
+  }
+
   async function loadRolesForAPI() {
       try {
           const res = await fetch('http://localhost:3000/governance/roles', { headers });
           if (!res.ok) return;
           const data = await res.json();
-          allRoles = data.data || data;
+          allRoles = normalizeRoleOptions(data);
           
           const inviteSelect = document.getElementById('inviteRoleSelect');
           const baseSelect = document.getElementById('baseRoleSelect');
@@ -303,10 +318,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (inviteSelect && baseSelect) {
               inviteSelect.innerHTML = '';
               baseSelect.innerHTML = '<option value="">Select a base role...</option>';
-              
+               
               allRoles.forEach(r => {
-                  inviteSelect.innerHTML += `<option value="${r.id}">${r.label}</option>`;
-                  baseSelect.innerHTML += `<option value="${r.id}">${r.label}</option>`;
+                  const roleLabel = r.label || r.name || r.roleName || r.key || 'Custom Role';
+                  const roleValue = r.id || r.roleId || roleLabel;
+                  inviteSelect.innerHTML += `<option value="${roleValue}">${roleLabel}</option>`;
+                  baseSelect.innerHTML += `<option value="${roleValue}">${roleLabel}</option>`;
               });
           }
       } catch (err) {

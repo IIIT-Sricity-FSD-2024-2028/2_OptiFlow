@@ -53,7 +53,7 @@ export class RolesController {
   }
 
   @Post()
-  @Roles('superuser')
+  @Roles('superuser', 'hr_manager')
   @ApiOperation({ summary: 'Create a role' })
   create(@Body() dto: CreateRoleDto, @CompanyId() companyId: string) {
     return this.rolesService.create(dto, companyId);

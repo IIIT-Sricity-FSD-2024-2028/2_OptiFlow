@@ -386,11 +386,11 @@ Object.assign(window.Helpers, {
       // Map role label to frontend role slug — covers all common variants
       const roleLabelMap = {
         // Owner / CEO variants
-        'Owner': 'superuser',
-        'Company Owner': 'superuser',
-        'CEO': 'superuser',
-        'CTO': 'superuser',
-        'COO': 'superuser',
+        'Owner': 'company_owner',
+        'Company Owner': 'company_owner',
+        'CEO': 'company_owner',
+        'CTO': 'company_owner',
+        'COO': 'company_owner',
         'Superuser': 'superuser',
         // Project Manager
         'Project Manager': 'project_manager',
@@ -411,7 +411,7 @@ Object.assign(window.Helpers, {
         'Compliance Officer': 'compliance_officer',
         'Compliance': 'compliance_officer',
         // Process Admin
-        'Process Admin': 'project_manager',
+        'Process Admin': 'superuser',
       };
       const roleSlug = roleLabelMap[roleLabel] || (roleLabel ? roleLabel.toLowerCase().replace(/ /g,'_') : 'team_member');
 

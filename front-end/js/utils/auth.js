@@ -85,8 +85,9 @@ window.Auth = {
     let rId = 5;
     let pmRoleName = "Team_Member";
     const r = String(u.role || u.roleLabel || "").toLowerCase().replace(/[\s\-]/g, "_");
+    const roleLabel = String(u.roleLabel || u.assignedRole || u.role || "").toLowerCase();
 
-    if (r === "company_owner" || (u.roleLabel || '').toLowerCase().includes('owner') || (u.roleLabel || '').toLowerCase().includes('ceo')) {
+    if (r === "company_owner" || roleLabel.includes('owner') || roleLabel.includes('ceo')) {
       rId = 1;
       pmRoleName = "Company_Owner";
     } else if (r === "superuser" || r === "owner" || r === "system_admin") {
@@ -95,6 +96,9 @@ window.Auth = {
     } else if (r === "platform_admin") {
       rId = 0;
       pmRoleName = "Platform_Admin";
+    } else if (r === "hr_manager" || roleLabel.includes('hr') || roleLabel.includes('governance')) {
+      rId = 6;
+      pmRoleName = "HR_Manager";
     } else if (r === "project_manager") {
       rId = 2;
       pmRoleName = "Project_Manager";

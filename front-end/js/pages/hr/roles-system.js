@@ -7,6 +7,12 @@ let activeRoleKey = null; // currently selected role
 let currentPerms = {}; // live permission state in the editor
 let originalPerms = {}; // snapshot on role select (for discard)
 let isDirty = false;
+
+function roleMatches(employee, roleKey) {
+  const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const canonical = (value) => normalize(value) === "process_admin" ? "superuser" : normalize(value);
+  return canonical(employee.roleSlug || employee.role) === canonical(roleKey);
+}
 // ─────────────────────────────────────────
 // SECURITY GUARD: Prevent Back-Button Access
 // ─────────────────────────────────────────
@@ -61,7 +67,7 @@ async function renderRoleList(activeKey) {
   container.innerHTML = "";
 
   allRoles.forEach((role) => {
-    const empCount = allEmployees.filter((e) => e.role === role.key).length;
+    const empCount = allEmployees.filter((e) => roleMatches(e, role.key)).length;
     const item = document.createElement("div");
     item.className = `role-list-item${role.key === activeKey ? " active" : ""}`;
     item.dataset.roleKey = role.key;
@@ -73,6 +79,39 @@ async function renderRoleList(activeKey) {
       </div>
       <div class="role-emp-count">${empCount}</div>
     `;
+    if (role.id && role.isSystem === false) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn btn-secondary";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.style.cssText = "font-size:11px;padding:4px 7px;margin-left:8px;";
+      deleteBtn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        if (!window.confirm(`Delete the custom role "${role.key}"?`)) return;
+        try {
+          await RolesStore.deleteSystemRole(role);
+          activeRoleKey = null;
+          document.getElementById("centerTitle").textContent = "—";
+          document.getElementById("centerBadge").textContent = "";
+          document.getElementById("permissionsContainer").innerHTML = `
+            <div class="roles-empty">
+              <i class="ri-shield-keyhole-line"></i>
+              <p>Select a role from the left to manage permissions.</p>
+            </div>`;
+          document.getElementById("empListContainer").innerHTML = `
+            <div class="roles-empty">
+              <i class="ri-group-line"></i>
+              <p>No role selected.</p>
+            </div>`;
+          document.getElementById("empCount").textContent = "0";
+          await renderRoleList(null);
+          showToast(`"${role.key}" deleted.`);
+        } catch (error) {
+          showToast(error.message || "Unable to delete the custom role.");
+        }
+      });
+      item.appendChild(deleteBtn);
+    }
     item.addEventListener("click", async () => {
       if (isDirty) {
         if (!confirm("You have unsaved changes. Discard and switch role?"))
@@ -182,7 +221,7 @@ function onPermChange(e) {
 // ─── Right panel: employees ───────────────────────────────
 async function renderEmployeesPanel(roleKey) {
   const hrUsers = await HRStore.getAll();
-  const employees = hrUsers.filter((e) => e.role === roleKey);
+  const employees = hrUsers.filter((e) => roleMatches(e, roleKey));
   const container = document.getElementById("empListContainer");
   const countEl = document.getElementById("empCount");
   countEl.textContent = employees.length;
@@ -220,7 +259,7 @@ async function selectRole(roleKey) {
   currentPerms = { ...roleConf.permissions };
 
   const hrUsers = await HRStore.getAll();
-  const empCount = hrUsers.filter((e) => e.role === roleKey).length;
+  const empCount = hrUsers.filter((e) => roleMatches(e, roleKey)).length;
   document.getElementById("centerTitle").textContent = roleKey;
   document.getElementById("centerBadge").textContent = `${empCount} employees`;
 
