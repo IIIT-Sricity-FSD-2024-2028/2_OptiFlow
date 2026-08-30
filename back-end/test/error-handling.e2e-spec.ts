@@ -143,6 +143,7 @@ describe('Global Error Handling (e2e)', () => {
   it('4. 403 Forbidden on unauthorized role returns consistent error and logs to error file', async () => {
     const res = await request(app.getHttpServer())
       .get('/processes/templates')
+      .set('x-user-email', 'employee@acme.com')
       .set('x-user-role', 'team_member');
 
     expect(res.status).toBe(403);
