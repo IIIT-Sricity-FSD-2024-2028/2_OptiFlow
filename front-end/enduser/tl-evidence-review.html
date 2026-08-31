@@ -88,30 +88,32 @@
         session,
         activeFilter = "pending";
 
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         session = window.Auth.getSession();
-        if (!session || session.roleId !== 4) {
+        if (!session || (session.roleId !== 4 && session.role !== 'team_leader' && !(session.roleLabel || '').toLowerCase().includes('lead'))) {
           window.location.replace("../login.html");
           return;
         }
         window.Sidebar.render("dashboard");
         window.Toast.init();
-        state = window.Helpers.getState();
+        state = await window.Helpers.getState();
         renderList();
       });
 
       function renderList() {
-        const masterUsers = JSON.parse(localStorage.getItem("users")) || [];
-        const myTeamIds = masterUsers
-          .filter((u) => String(u.reportsTo) === String(session.id))
-          .map((u) => String(u.id));
+        const users = state.users || [];
+        const currentUserId = String(session.id || session.rawId || '');
+        const myTeamIds = users
+          .filter((u) => String(u.managerId || u.manager_id || u.reportsTo || '') === currentUserId)
+          .map((u) => String(u.userId || u.id));
 
         let items = (state.evidence || []).filter((e) => {
-          const isTeamMember = myTeamIds.includes(String(e.userId));
+          const isTeamMember = myTeamIds.includes(String(e.userId || e.user_id || ''));
+          const st = String(e.status || '').toLowerCase();
           const matchTab =
             activeFilter === "pending"
-              ? e.status === "pending" || e.status === "under_review"
-              : e.status === "approved";
+              ? st === "pending" || st === "under_review"
+              : st === "approved";
           return isTeamMember && matchTab;
         });
 
@@ -119,39 +121,53 @@
         container.innerHTML =
           items
             .map(
-              (e) => `
-          <div style="padding:16px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer;" onclick="renderDetail(${e.id})">
-            <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">${masterUsers.find((u) => u.id === e.userId)?.name}</div>
-            <div style="font-size:14px; font-weight:600; color:var(--text-primary);">${e.title}</div>
-            <span class="badge ${e.status === "approved" ? "badge-green" : "badge-orange"}">${e.statusLabel}</span>
-          </div>`,
+              (e) => {
+                const u = users.find((x) => String(x.userId || x.id) === String(e.userId || e.user_id)) || {};
+                const name = u.fullName || u.name || 'Team Member';
+                return `
+          <div style="padding:16px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer;" onclick="renderDetail('${e.id}')">
+            <div style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">${name}</div>
+            <div style="font-size:14px; font-weight:600; color:var(--text-primary);">${e.title || 'Untitled Evidence'}</div>
+            <span class="badge ${String(e.status || '').toLowerCase() === "approved" ? "badge-green" : "badge-orange"}">${e.statusLabel || e.status || 'Pending'}</span>
+          </div>`;
+              }
             )
             .join("") || '<div class="empty-state">No items found</div>';
       }
 
       function renderDetail(id) {
-        const e = state.evidence.find((x) => x.id === id);
+        const e = (state.evidence || []).find((x) => String(x.id) === String(id));
+        if (!e) return;
         const pane = document.getElementById("evidence-detail-pane");
+        const isApproved = String(e.status || '').toLowerCase() === 'approved';
         pane.innerHTML = `
           <div style="background:#fff; padding:32px; border-radius:12px; box-shadow:var(--shadow-sm); margin-top:16px;">
-            <h2 style="font-size:20px; font-weight:800;">${e.title}</h2>
+            <h2 style="font-size:20px; font-weight:800;">${e.title || 'Evidence Detail'}</h2>
             <div class="doc-preview">
                <svg class="doc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-               <div>${e.file || "document.pdf"}</div>
+               <div>${e.file_url || e.file || "document.pdf"}</div>
             </div>
             <div style="margin-bottom:20px; font-style:italic;">"${e.notes || "No notes"}"</div>
-            ${e.status !== "approved" ? `<button class="btn btn-success btn-lg" style="width:100%" onclick="approve(${e.id})">Approve Team Evidence</button>` : '<div class="badge badge-green">Approved</div>'}
+            ${!isApproved ? `<button class="btn btn-success btn-lg" style="width:100%" onclick="approve('${e.id}')">Approve Team Evidence</button>` : '<div class="badge badge-green">Approved</div>'}
           </div>`;
       }
 
-      function approve(id) {
-        const idx = state.evidence.findIndex((x) => x.id === id);
-        state.evidence[idx].status = "approved";
-        state.evidence[idx].statusLabel = "Approved";
-        window.Helpers.saveState(state);
-        window.Toast.success("Approved", "Evidence verified.");
-        renderList();
-        document.getElementById("evidence-detail-pane").innerHTML = "";
+      async function approve(id) {
+        try {
+          await window.Helpers.api.request(`/evidence/${id}`, "PATCH", {
+            status: "Approved",
+          });
+          window.Toast.success("Approved", "Evidence verified.");
+          state = await window.Helpers.getState();
+          renderList();
+          document.getElementById("evidence-detail-pane").innerHTML = `
+            <div class="empty-state" style="margin-top: 20vh">
+              <div class="empty-state-text">Select team evidence to review</div>
+            </div>`;
+        } catch (e) {
+          console.error(e);
+          window.Toast.error("Error", "Could not approve evidence.");
+        }
       }
     </script>
   </body>

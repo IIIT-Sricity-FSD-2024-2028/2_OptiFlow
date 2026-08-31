@@ -4,6 +4,13 @@
 // SMART ROUTER
 // ─────────────────────────────────────────
 function goToLogin() {
+  // If running over HTTP(S), redirect to root /login.html
+  if (window.location.protocol.startsWith('http')) {
+    const rootPath = window.location.origin ? window.location.origin + '/login.html' : '/login.html';
+    window.location.replace(rootPath);
+    return;
+  }
+
   const path = window.location.pathname.toLowerCase();
 
   // If we are 2 folders deep (e.g., /admin/pm/ or /enduser/leader/)
@@ -12,17 +19,20 @@ function goToLogin() {
     path.includes("/admin/hr/") ||
     path.includes("/admin/compliance/") ||
     path.includes("/admin/executive/") ||
+    path.includes("/admin/processes/") ||
     path.includes("/enduser/member/") ||
     path.includes("/enduser/leader/")
   ) {
     window.location.replace("../../login.html");
   }
-  // If we are 1 folder deep (e.g., /admin/ or /enduser/)
+  // If we are 1 folder deep (e.g., /admin/, /enduser/, /modules/)
   else if (
     path.includes("/admin/") ||
+    path.includes("/admin-console/") ||
     path.includes("/superuser/") ||
     path.includes("/enduser/") ||
-    path.includes("/platform-admin/")
+    path.includes("/platform-admin/") ||
+    path.includes("/modules/")
   ) {
     window.location.replace("../login.html");
   }
@@ -61,8 +71,18 @@ function protectPage(allowedRoles) {
   }
 }
 
-function logout() {
+function clearAppSession() {
   sessionStorage.removeItem("currentUser");
+  sessionStorage.removeItem("selectedProjectId");
+  sessionStorage.removeItem("officesync_global_state");
+  localStorage.removeItem("currentUser");
+  localStorage.removeItem("selectedProjectId");
+  localStorage.removeItem("officesync_global_state");
+  if (window.Helpers) window.Helpers._stateCache = null;
+}
+
+function logout() {
+  clearAppSession();
   goToLogin();
 }
 
@@ -72,7 +92,7 @@ function logout() {
 
 window.Auth = {
   logout() {
-    sessionStorage.removeItem("currentUser");
+    clearAppSession();
     goToLogin();
   },
 

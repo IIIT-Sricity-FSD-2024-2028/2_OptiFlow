@@ -296,8 +296,8 @@
 
         container.innerHTML = items
           .map((e) => {
-            const submitter = state.users.find(
-              (u) => Number(u.userId) === Number(e.userId),
+            const submitter = (state.users || []).find(
+              (u) => String(u.userId || u.id) === String(e.userId || e.user_id),
             ) || { fullName: "Unknown User" };
             
             let badgeClass = "badge-gray";
@@ -349,8 +349,8 @@
         const e = state.evidence.find((x) => String(x.id) === String(id));
         if (!e) return;
 
-        const submitter = state.users.find(
-          (u) => Number(u.userId) === Number(e.userId),
+        const submitter = (state.users || []).find(
+          (u) => String(u.userId || u.id) === String(e.userId || e.user_id),
         ) || { fullName: "Unknown User", email: "" };
 
         const pane = document.getElementById("evidence-detail-pane");

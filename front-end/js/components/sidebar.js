@@ -6,15 +6,24 @@ window.Auth.getSession = window.Auth.getSession || function() {
 };
 window.Auth.logout = window.Auth.logout || function() {
   sessionStorage.removeItem("currentUser");
+  sessionStorage.removeItem("selectedProjectId");
+  sessionStorage.removeItem("officesync_global_state");
   localStorage.removeItem("currentUser");
+  localStorage.removeItem("selectedProjectId");
+  localStorage.removeItem("officesync_global_state");
   if (window.Helpers) window.Helpers._stateCache = null;
+
+  if (window.location.protocol.startsWith('http')) {
+    const rootPath = window.location.origin ? window.location.origin + '/login.html' : '/login.html';
+    window.location.replace(rootPath);
+    return;
+  }
+
   const path = window.location.pathname.toLowerCase();
-    let prefix = "./";
+  let prefix = "./";
   if (path.includes("/admin/pm/") || path.includes("/admin/hr/") || path.includes("/admin/compliance/") || path.includes("/admin/executive/") || path.includes("/admin/processes/") || path.includes("/enduser/member/") || path.includes("/enduser/leader/")) {
     prefix = "../../";
-  } else if (path.includes("/admin-console/")) {
-    prefix = "../";
-  } else if (path.match(/\/admin\/[^\/]+\.html/) || path.includes("/superuser/") || path.includes("/enduser/") || path.includes("/platform-admin/") || path.includes("/modules/")) {
+  } else if (path.includes("/admin-console/") || path.includes("/admin/") || path.includes("/superuser/") || path.includes("/enduser/") || path.includes("/platform-admin/") || path.includes("/modules/")) {
     prefix = "../";
   }
   window.location.href = prefix + "login.html";
@@ -317,13 +326,16 @@ window.Sidebar = {
       if (logoutBtn) {
         logoutBtn.addEventListener('click', function(e) {
           e.stopPropagation();
-          if (window.Auth && window.Auth.logout) {
+          if (window.Auth && typeof window.Auth.logout === 'function') {
             window.Auth.logout();
           } else {
-            const path = window.location.pathname.toLowerCase();
-            const loginPrefix = path.includes('/admin/executive/') ? '../../' : path.includes('/admin-console/') ? '../' : '../';
-            sessionStorage.removeItem('currentUser');
-            window.location.href = loginPrefix + 'login.html';
+            sessionStorage.clear();
+            localStorage.clear();
+            if (window.location.protocol.startsWith('http')) {
+              window.location.replace(window.location.origin ? window.location.origin + '/login.html' : '/login.html');
+            } else {
+              window.location.replace('../login.html');
+            }
           }
         });
       }

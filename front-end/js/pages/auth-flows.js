@@ -101,6 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             sessionStorage.setItem("currentUser", JSON.stringify({
               id: user.id,
+              rawId: user.id,
               name: user.fullName,
               email: user.email,
               role: roleSlug,

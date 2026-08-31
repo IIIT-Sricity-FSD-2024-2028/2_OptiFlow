@@ -78,7 +78,7 @@
 
     const sessionUser = (state.users || []).find((u) => String(u.userId || u.id) === String(rawId));
     const myLeader = sessionUser
-      ? (state.users || []).find((u) => Number(u.userId) === Number(sessionUser.managerId))
+      ? (state.users || []).find((u) => String(u.userId || u.id) === String(sessionUser.managerId || sessionUser.manager_id || sessionUser.reportsTo || ''))
       : null;
 
     const myLeaderName = myLeader ? myLeader.fullName || myLeader.name : null;
@@ -270,10 +270,7 @@
         return;
       }
       const session = window.Auth.getSession();
-      rawIdRef =
-        window.TasksStore && typeof window.TasksStore.parseNumericUserId === "function"
-          ? window.TasksStore.parseNumericUserId(session)
-          : Number(session.rawId ?? session.id);
+      rawIdRef = session ? String(session.id || session.rawId || '') : null;
 
       window.Sidebar.render("dashboard");
       window.Toast.init();
@@ -306,7 +303,7 @@
       myTasks
         .map((t) => {
           const label = (taskDisplayTitle(t) || "Task").replace(/"/g, "&quot;");
-          return `<option value="${t.taskId}" data-project-id="${t.projectId || ""}">${label}</option>`;
+          return `<option value="${t.taskId || t.id}" data-project-id="${t.projectId || ""}">${label}</option>`;
         })
         .join("");
   }
@@ -318,7 +315,7 @@
     if (!task) return;
     const newStatus = task.status === "Completed" ? "In_Progress" : "Completed";
     try {
-      await window.Helpers.api.request(`/tasks/${task.taskId}`, "PATCH", {
+      await window.Helpers.api.request(`/tasks/${task.taskId || task.id}`, "PATCH", {
         status: newStatus,
       });
       window.Toast.success(
@@ -354,39 +351,44 @@
 
     const sel = document.getElementById("member-esc-task");
     const opt = sel && sel.selectedOptions && sel.selectedOptions[0];
-    const taskId = strictId(opt && opt.value) || NaN;
-    const projRaw = opt && opt.dataset ? opt.dataset.projectId : "";
-    const projectFromOpt = strictId(projRaw);
-    if (!Number.isFinite(taskId) || taskId <= 0) {
+    const taskId = opt ? String(opt.value || '').trim() : "";
+    const projectFromOpt = opt && opt.dataset ? String(opt.dataset.projectId || '').trim() : "";
+    if (!taskId) {
       window.Toast.error("Pick a task", "Select which task is blocked.");
       return;
     }
 
-    const taskObj = state.tasks.find((t) => Number(t.taskId) === taskId);
+    const taskObj = state.tasks.find((t) => String(t.taskId || t.id) === String(taskId));
     const projectId =
-      projectFromOpt && projectFromOpt > 0
-        ? projectFromOpt
-        : taskObj && taskObj.projectId != null
-          ? strictId(taskObj.projectId)
-          : null;
+      projectFromOpt || (taskObj ? String(taskObj.projectId || taskObj.project_id || '') : "");
     if (!projectId) {
       window.Toast.error("Missing project", "Chosen task needs a linked project.");
       return;
     }
 
     const sessionUser = (state.users || []).find((u) => String(u.userId || u.id) === String(rawId));
-    let targetManagerStr = taskObj?.createdBy || sessionUser?.managerId || sessionUser?.reportsTo || (state.users[0]?.userId) || 1;
-    let targetManager = parseInt(String(targetManagerStr).replace(/[^0-9]/g, ''), 10) || 1;
+    let targetManager = taskObj?.createdBy || sessionUser?.managerId || sessionUser?.reportsTo || null;
+    if (!targetManager) {
+      const leaderUser = (state.users || []).find(u => {
+        const r = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
+        const l = String(u.roleLabel || u.role_label || '').toLowerCase();
+        return r === 'team_leader' || l.includes('lead');
+      });
+      targetManager = leaderUser ? (leaderUser.userId || leaderUser.id) : null;
+    }
 
     const priority = window.Helpers.getVal("member-esc-quick-priority");
     const blocker = window.Helpers.getVal("member-esc-quick-blocker") || "General";
 
+    const session = window.Auth ? window.Auth.getSession() : {};
+    const companyId = session.companyId || state.companyId || "comp-uuid-1";
+
     const body = {
+      companyId: companyId,
       task_id: taskId,
       project_id: projectId,
-      reported_by: strictId(rawId) || Number(rawId),
-      target_manager_id: targetManager,
-      escalated_to: targetManager,
+      reported_by: String(rawId),
+      target_manager_id: targetManager ? String(targetManager) : undefined,
       title: window.Helpers.getVal("member-esc-quick-title"),
       description: window.Helpers.getVal("member-esc-quick-title"),
       blocker_type: blocker,

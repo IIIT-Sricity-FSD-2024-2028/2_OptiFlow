@@ -359,11 +359,24 @@
               .map((p) => `<option value="${p.id}">${p.name}</option>`)
               .join("");
 
-            const userOptions = "";
+            const tlUsers = (state.users || []).filter(u => {
+              const role = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
+              const label = String(u.roleLabel || u.role_label || '').toLowerCase();
+              return (
+                role === 'team_leader' ||
+                role === 'team_lead' ||
+                label.includes('team lead') ||
+                label.includes('team leader') ||
+                label.includes('leader')
+              );
+            });
+            const userOptions = (tlUsers.length > 0 ? tlUsers : (state.users || []))
+              .map(u => `<option value="${u.id || u.userId}">${u.fullName || u.name} (${u.roleLabel || 'Team Leader'})</option>`)
+              .join("");
 
             window.Modal.create({
               id: "modal-global-add-task",
-              title: "+ Create New Task",
+              title: "+ Create New Task (Assign to Team Leader)",
               body: `
                 <div class="form-group">
                   <label class="form-label" for="gtask-project">Project *</label>
@@ -380,9 +393,9 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label" for="gtask-assigned">Assign To *</label>
+                    <label class="form-label" for="gtask-assigned">Assign To (Team Leader) *</label>
                     <select id="gtask-assigned" class="form-select">
-                      <option value="">Select member</option>
+                      <option value="">Select team leader</option>
                       ${userOptions}
                     </select>
                     <span class="form-error hidden" id="gtask-assigned-error"></span>
@@ -421,13 +434,10 @@
               const pId = projSelect.value;
               const project = myProjects.find(p => String(p.id) === String(pId));
               if (!project) {
-                assignSelect.innerHTML = '<option value="">Select member</option>';
+                assignSelect.innerHTML = '<option value="">Select team leader</option>' + userOptions;
                 return;
               }
-              
-              const users = state.users || [];
-              assignSelect.innerHTML = '<option value="">Select member</option>' + 
-                users.map(u => `<option value="${u.id || u.userId}">${u.fullName || u.name}</option>`).join("");
+              assignSelect.innerHTML = '<option value="">Select team leader</option>' + userOptions;
             };
 
             // Handle submission
