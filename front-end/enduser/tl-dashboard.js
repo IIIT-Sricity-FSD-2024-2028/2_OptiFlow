@@ -110,15 +110,14 @@
     
     console.log("[tl-dashboard] sessionNumericId:", sessionNumericId, "teamMemberIds:", teamMemberIds);
 
-    const leaderAndTeamIds = [String(sessionNumericId), ...teamMemberIds];
-
-    teamOverviewTasks = (stateRef.tasks || []).filter((t) =>
-      leaderAndTeamIds.includes(String(t.assignedTo || t.assignedToId || t.assigned_to || ''))
-    );
+    teamOverviewTasks =
+      window.TasksStore && typeof window.TasksStore.filterTeamOverviewTasksForLeader === "function"
+        ? window.TasksStore.filterTeamOverviewTasksForLeader(stateRef.tasks, teamMemberIds)
+        : (stateRef.tasks || []).filter((t) => teamMemberIds.includes(String(t.assignedTo || t.assignedToId || t.assigned_to)));
 
     const parentTasksInReview = teamOverviewTasks.filter(t => ["In_Review", "Pending_TL_Review"].includes(t.status));
     const subtasksInReview = (stateRef.subtasks || []).filter(s => 
-      leaderAndTeamIds.includes(String(s.assignedTo || s.assignedToId || s.assigned_to || '')) && ["In_Review", "Pending_TL_Review"].includes(s.status)
+      teamMemberIds.includes(String(s.assignedTo || s.assignedToId || '')) && ["In_Review", "Pending_TL_Review"].includes(s.status)
     ).map(s => ({
        ...s,
        taskId: s.taskId,
@@ -312,11 +311,11 @@
       window.Toast.success('Approved', 'Task marked complete.');
       
       const task = isSubtask 
-         ? stateRef.subtasks.find((t) => String(t.subtaskId || t.id) === String(taskId))
-         : stateRef.tasks.find((t) => String(t.taskId || t.id) === String(taskId));
+         ? stateRef.subtasks.find((t) => Number(t.subtaskId || t.id) === Number(taskId))
+         : stateRef.tasks.find((t) => Number(t.taskId) === Number(taskId));
          
       if (task && task.assignedTo) {
-        window.Helpers.pushNotification(String(task.assignedTo), {
+        window.Helpers.pushNotification(Number(task.assignedTo), {
           title:   'Task Approved',
           message: `Your work on "${task.title || task.taskName || 'Untitled'}" was approved by your Team Leader.`,
           type:    'success',
@@ -324,9 +323,9 @@
       }
 
       // ── Notify Project Manager (the project creator) ──────────────────
-      const project = (stateRef.projects || []).find(p => String(p.projectId || p.id) === String(task?.projectId));
+      const project = (stateRef.projects || []).find(p => p.projectId === task.projectId);
       if (project && project.createdBy) {
-        window.Helpers.pushNotification(String(project.createdBy), {
+        window.Helpers.pushNotification(Number(project.createdBy), {
           title:   'Task Finalized',
           message: `Team Leader has approved task: "${task.title || task.taskName || 'Untitled'}" in project "${project.name}".`,
           type:    'info',
@@ -344,16 +343,16 @@
     if (window.Modal && typeof window.Modal.create === "function") {
       window.Modal.create({
         id: "reject-task-modal",
-        title: "Reject Task / Request Changes",
+        title: "Reject Task",
         body: `
           <div class="form-group" style="margin: 0">
-            <label class="form-label" for="reject-reason">Feedback for team member *</label>
-            <textarea id="reject-reason" class="form-textarea" placeholder="Explain what changes are needed before this task can be approved..."></textarea>
+            <label class="form-label" for="reject-reason">Reason for rejection *</label>
+            <textarea id="reject-reason" class="form-textarea" placeholder="Provide feedback on what needs to be changed..."></textarea>
           </div>
         `,
         footerHTML: `
           <button type="button" class="btn btn-secondary" onclick="window.Modal.close('reject-task-modal')">Cancel</button>
-          <button type="button" class="btn btn-primary" id="tl-reject-submit-btn" style="background:var(--red,#ef4444);border-color:var(--red,#ef4444)">Return for Rework</button>
+          <button type="button" class="btn btn-danger" id="tl-reject-submit-btn">Submit & Reassign</button>
         `
       });
 
@@ -372,11 +371,11 @@
             });
             
             const task = isSubtask 
-              ? stateRef.subtasks.find((t) => String(t.subtaskId || t.id) === String(taskId))
-              : stateRef.tasks.find((t) => String(t.taskId || t.id) === String(taskId));
+              ? stateRef.subtasks.find((t) => Number(t.subtaskId || t.id) === Number(taskId))
+              : stateRef.tasks.find((t) => Number(t.taskId) === Number(taskId));
               
             if (task && task.assignedTo) {
-              window.Helpers.pushNotification(String(task.assignedTo), {
+              window.Helpers.pushNotification(Number(task.assignedTo), {
                 title:   'Task Returned for Rework',
                 message: `Task Reassigned: "${task.title || task.taskName || 'Untitled'}". Feedback: ${reason}`,
                 type:    'warning',
@@ -426,9 +425,9 @@
               notes: notes,
             });
             
-            const esc = (stateRef.escalations || []).find(e => String(e.id) === String(escId));
+            const esc = (stateRef.escalations || []).find(e => Number(e.id) === Number(escId));
             if (esc && esc.reportedBy) {
-              window.Helpers.pushNotification(String(esc.reportedBy), {
+              window.Helpers.pushNotification(Number(esc.reportedBy), {
                 title:   'Escalation Resolved',
                 message: `Escalation Resolved: "${esc.title || 'Untitled'}". Notes: ${notes}`,
                 type:    'success',
@@ -465,25 +464,16 @@
     const sel = document.getElementById("tl-sub-assignee");
     if (!sel || !stateRef) return;
     const ids = teamMemberIds.length ? teamMemberIds.map(String) : [];
-    const allMembers = (stateRef.users || []).filter(u => {
-      const role = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
-      const label = String(u.roleLabel || u.role_label || '').toLowerCase();
-      return role === 'team_member' || label.includes('team member') || label === 'member';
+    const users = (stateRef.users || []).filter((u) => {
+      const uid = String(u.userId ?? u.user_id ?? u.id ?? '');
+      return ids.length === 0 || ids.includes(uid);
     });
-
-    let eligible = allMembers;
-    if (ids.length > 0) {
-      const direct = allMembers.filter(u => ids.includes(String(u.userId ?? u.user_id ?? u.id ?? '')));
-      if (direct.length > 0) eligible = direct;
-    }
-    if (eligible.length === 0) eligible = stateRef.users || [];
-
     sel.innerHTML =
       `<option value="">Select team member …</option>` +
-      eligible
+      users
         .map((u) => {
           const uid = u.userId ?? u.user_id ?? u.id;
-          const label = `${u.fullName || u.name || "User"} (${u.roleLabel || 'Team Member'})`;
+          const label = `${u.fullName || u.name || "User"}`;
           return `<option value="${uid}">${label.replace(/"/g, "&quot;")}</option>`;
         })
         .join("");
@@ -621,41 +611,35 @@
     if (tlErr) tlErr.classList.add("hidden");
     const sel = document.getElementById("tl-esc-task");
     const opt = sel && sel.selectedOptions && sel.selectedOptions[0];
-    const taskId = opt ? String(opt.value || '').trim() : "";
-    const projectFromOpt = opt && opt.dataset ? String(opt.dataset.projectId || '').trim() : "";
-    if (!taskId) {
+    const taskId = opt ? Number(opt.value) : NaN;
+    const projectFromOpt = opt && opt.dataset ? Number(opt.dataset.projectId) : NaN;
+    if (!Number.isFinite(taskId) || taskId <= 0) {
       window.Toast.error("Task required", "Select a task for this escalation.");
       return;
     }
-    const taskObj = stateRef.tasks.find((t) => String(t.taskId || t.id) === String(taskId));
+    const taskObj = stateRef.tasks.find((t) => Number(t.taskId) === taskId);
     const projectId =
-      projectFromOpt || (taskObj ? String(taskObj.projectId || taskObj.project_id || '') : "");
+      Number.isFinite(projectFromOpt) && projectFromOpt > 0
+        ? projectFromOpt
+        : taskObj?.projectId != null
+          ? Number(taskObj.projectId)
+          : null;
     if (!projectId) {
       window.Toast.error("Missing project", "Pick a task with a linked project.");
       return;
     }
-    const project = stateRef.projects.find(p => String(p.projectId || p.id) === String(projectId));
-    const pmId = project ? (project.createdBy || project.created_by) : null;
+    const project = stateRef.projects.find(p => p.projectId === projectId);
+    const pmId = project ? project.createdBy : null;
     const me = stateRef.users.find((u) => String(u.userId || u.id) === String(sessionNumericId));
-    let targetManager = pmId || me?.managerId || me?.reportsTo || null;
-    if (!targetManager) {
-      const pmUser = (stateRef.users || []).find(u => {
-        const r = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
-        const l = String(u.roleLabel || u.role_label || '').toLowerCase();
-        return r === 'project_manager' || l.includes('project');
-      });
-      targetManager = pmUser ? (pmUser.userId || pmUser.id) : null;
-    }
-
-    const session = window.Auth ? window.Auth.getSession() : {};
-    const companyId = session.companyId || stateRef.companyId || "comp-uuid-1";
+    let targetManagerStr = pmId || me?.managerId || me?.reportsTo || (stateRef.users.find(u => u.roleId === 2 || u.role_id === 2)?.userId);
+    let targetManager = targetManagerStr ? parseInt(String(targetManagerStr).replace(/[^0-9]/g, ''), 10) : null;
 
     const body = {
-      companyId: companyId,
       task_id: taskId,
       project_id: projectId,
-      reported_by: String(sessionNumericId),
-      target_manager_id: targetManager ? String(targetManager) : undefined,
+      reported_by: Number(sessionNumericId),
+      target_manager_id: targetManager,
+      escalated_to: targetManager,
       title: window.Helpers.getVal("tl-esc-quick-title"),
       description: window.Helpers.getVal("tl-esc-quick-title"),
       blocker_type: window.Helpers.getVal("tl-esc-quick-blocker") || "General",
@@ -664,17 +648,17 @@
     try {
       await window.Helpers.api.request("/escalations", "POST", body);
       
-      // Notify the target PM/manager
+      // Notify the target PM/manager with their real numeric ID
       if (targetManager) {
         // Notification 1: General Escalation Alert
-        window.Helpers.pushNotification(String(targetManager), {
+        window.Helpers.pushNotification(targetManager, {
           title:   'New Escalation Raised',
           message: `New Escalation from Team Leader: "${window.Helpers.getVal("tl-esc-quick-title")}" for task: ${taskObj?.title || taskObj?.taskName || 'Unknown task'}.`,
           type:    'warning',
         });
 
         // Notification 2: High Priority System Alert (Requirement)
-        window.Helpers.pushNotification(String(targetManager), {
+        window.Helpers.pushNotification(targetManager, {
           title:   'Priority Management Alert',
           message: `URGENT: A new blocker has been flagged by a Team Leader that requires your immediate attention.`,
           type:    'error',
@@ -683,14 +667,10 @@
 
       window.Toast.success("Escalation recorded", "Your PM / manager chain has been notified.");
       document.getElementById("tl-esc-quick-title").value = "";
-      if (document.getElementById("tl-esc-quick-blocker"))
-        document.getElementById("tl-esc-quick-blocker").selectedIndex = 0;
-      if (document.getElementById("tl-esc-quick-priority"))
-        document.getElementById("tl-esc-quick-priority").value = "medium";
       await loadTlStateAndRender();
     } catch (e) {
       console.error(e);
-      window.Helpers.notifyApiError(e, (e && e.message) || "Could not create escalation.");
+      window.Helpers.notifyApiError(e, (e && e.message) || "Failed to raise escalation.");
     }
   }
 

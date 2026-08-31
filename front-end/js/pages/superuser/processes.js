@@ -96,8 +96,8 @@ async function loadProcessList() {
     const stagesSummary = (proc.stages && proc.stages.length) ? proc.stages.join(" → ") : `${proc.totalStages || 0} stages`;
     const complianceTags = (proc.compliance && proc.compliance.length) ? proc.compliance.map(c => `<span class="badge" style="background:#f1f5f9; color:#475569; margin-right:4px;">${c}</span>`).join("") : "";
 
-    const viewUrl = `processes.html?id=${encodeURIComponent(proc.id)}`;
-    const editUrl = `process-builder.html?id=${encodeURIComponent(proc.id)}`
+    const viewUrl = isHttp ? `processes?id=${encodeURIComponent(proc.id)}` : `processes.html?id=${encodeURIComponent(proc.id)}`;
+    const editUrl = isHttp ? `process-builder?id=${encodeURIComponent(proc.id)}` : `process-builder.html?id=${encodeURIComponent(proc.id)}`;
 
     tr.innerHTML = `
       <td>
