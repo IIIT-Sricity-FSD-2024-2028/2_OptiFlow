@@ -411,7 +411,7 @@ Object.assign(window.Helpers, {
         'Compliance Officer': 'compliance_officer',
         'Compliance': 'compliance_officer',
         // Process Admin
-        'Process Admin': 'superuser',
+        'Process Admin': 'process_admin',
       };
       const roleSlug = roleLabelMap[roleLabel] || (roleLabel ? roleLabel.toLowerCase().replace(/ /g,'_') : 'team_member');
 

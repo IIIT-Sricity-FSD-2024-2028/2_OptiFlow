@@ -610,6 +610,43 @@
         ]
       }
     },
+    "/platform/companies": {
+      "get": {
+        "operationId": "PlatformAdminController_getCompanies",
+        "parameters": [
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "String user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-company-id",
+            "description": "UUID of the company context (required for tenant routes)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-platform-admin-id",
+            "description": "UUID of the platform admin user (required for platform routes)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get all tenant companies for platform admin",
+        "tags": [
+          "Platform"
+        ]
+      }
+    },
     "/executive/branches": {
       "get": {
         "operationId": "ExecutiveController_getBranches",
@@ -617,7 +654,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `Company Owner`, `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Company Owner`, `superuser`, `Branch Manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -661,17 +698,9 @@
         "operationId": "ExecutiveController_getMetrics",
         "parameters": [
           {
-            "name": "branchId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `Company Owner`, `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Company Owner`, `superuser`, `Branch Manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -1658,12 +1687,59 @@
             "schema": {}
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterCompanyDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Company registered successfully returning a JWT"
           }
         },
         "summary": "Self-serve registration of a new company and owner",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/public-plans": {
+      "get": {
+        "operationId": "AuthController_getPublicPlans",
+        "parameters": [
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "String user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-company-id",
+            "description": "UUID of the company context (required for tenant routes)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-platform-admin-id",
+            "description": "UUID of the platform admin user (required for platform routes)",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plans fetched successfully"
+          }
+        },
+        "summary": "Get all available plans publicly for registration",
         "tags": [
           "Auth"
         ]
@@ -2478,7 +2554,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -2702,7 +2778,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `company_owner`, `Company Owner`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -2746,7 +2822,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `System Admin`, `system_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -2810,7 +2886,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -2862,7 +2938,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `System Admin`, `system_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -2924,7 +3000,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `System Admin`, `system_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -2970,7 +3046,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `guest`, `superuser`, `hr_manager`, `project_manager`, `compliance_officer`, `team_leader`, `team_member`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `guest`, `superuser`, `hr_manager`, `project_manager`, `compliance_officer`, `team_leader`, `team_member`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -3014,7 +3090,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -3078,7 +3154,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `guest`, `superuser`, `hr_manager`, `project_manager`, `compliance_officer`, `team_leader`, `team_member`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `guest`, `superuser`, `hr_manager`, `project_manager`, `compliance_officer`, `team_leader`, `team_member`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -3130,7 +3206,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -3192,7 +3268,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -3595,6 +3671,15 @@
         "operationId": "ProjectsController_findAll",
         "parameters": [
           {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "**Role-Based Access Control**\nAllowed roles: `guest`, `superuser`, `company_owner`, `Company Owner`, `Branch Manager`, `branch_manager`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "in": "header",
             "required": false,
             "name": "x-user-id",
@@ -3641,7 +3726,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `Branch Manager`, `branch_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -3750,7 +3835,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `Branch Manager`, `branch_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -3814,7 +3899,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `Branch Manager`, `branch_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -4259,7 +4344,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `company_owner`, `Company Owner`, `Branch Manager`, `branch_manager`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -4312,7 +4397,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `team_leader`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `team_leader`, `project_manager`, `Branch Manager`, `branch_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -4484,7 +4569,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `team_member`, `team_leader`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `team_member`, `team_leader`, `project_manager`, `Branch Manager`, `branch_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -4548,7 +4633,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `project_manager`, `team_leader`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `project_manager`, `team_leader`, `Branch Manager`, `branch_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5186,7 +5271,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5230,7 +5315,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5294,7 +5379,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5346,7 +5431,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5408,7 +5493,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5470,7 +5555,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5514,7 +5599,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5578,7 +5663,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5630,7 +5715,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5692,7 +5777,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5746,7 +5831,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5854,7 +5939,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -6712,7 +6797,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `guest`, `superuser`, `compliance_officer`, `project_manager`, `hr_manager`, `team_leader`, `team_member`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `guest`, `superuser`, `company_owner`, `Company Owner`, `Branch Manager`, `branch_manager`, `compliance_officer`, `project_manager`, `hr_manager`, `team_leader`, `team_member`",
             "required": true,
             "schema": {
               "type": "string"
@@ -8359,7 +8444,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -8405,7 +8490,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -8444,14 +8529,23 @@
         ]
       }
     },
-    "/governance/invite": {
-      "post": {
-        "operationId": "GovernanceController_inviteEmployee",
+    "/governance/billing": {
+      "get": {
+        "operationId": "GovernanceController_getBilling",
         "parameters": [
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`, `System Admin`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "**Role-Based Access Control**\nAllowed roles: `System Admin`, `system_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -8480,6 +8574,71 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get current company subscription and plan usage",
+        "tags": [
+          "Governance"
+        ]
+      }
+    },
+    "/governance/invite": {
+      "post": {
+        "operationId": "GovernanceController_inviteEmployee",
+        "parameters": [
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`, `System Admin`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-user-role",
+            "in": "header",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`, `System Admin`, `Branch Manager`, `branch_manager`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-user-id",
+            "description": "String user id for the acting user (required on task/subtask/escalation mutations)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-company-id",
+            "description": "UUID of the company context (required for tenant routes)",
+            "schema": {}
+          },
+          {
+            "in": "header",
+            "required": false,
+            "name": "x-platform-admin-id",
+            "description": "UUID of the platform admin user (required for platform routes)",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteEmployeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
           "201": {
             "description": ""
           }
@@ -8497,7 +8656,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `Access Governance`, `Company Owner`, `System Admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -8597,12 +8756,22 @@
           "currency": {
             "type": "string",
             "example": "USD"
+          },
+          "priceMonthly": {
+            "type": "number",
+            "example": 8500
+          },
+          "priceYearly": {
+            "type": "number",
+            "example": 82000
           }
         },
         "required": [
           "name",
           "auditLogRetentionDays",
-          "allowsIntegrations"
+          "allowsIntegrations",
+          "priceMonthly",
+          "priceYearly"
         ]
       },
       "UpdatePlanDto": {
@@ -8647,6 +8816,14 @@
           "currency": {
             "type": "string",
             "example": "USD"
+          },
+          "priceMonthly": {
+            "type": "number",
+            "example": 8500
+          },
+          "priceYearly": {
+            "type": "number",
+            "example": 82000
           }
         }
       },
@@ -8714,36 +8891,34 @@
         "type": "object",
         "properties": {
           "companyLegalName": {
-            "type": "string",
-            "description": "Legal Name of the Company",
-            "example": "Acme Innovation Corp"
+            "type": "string"
           },
           "ownerFullName": {
-            "type": "string",
-            "description": "Full Name of Company Owner / CEO",
-            "example": "Sarah Connor"
+            "type": "string"
           },
           "ownerEmail": {
-            "type": "string",
-            "description": "Email address of Company Owner",
-            "example": "owner@acme-innovation.com"
+            "type": "string"
           },
-          "ownerPassword": {
-            "type": "string",
-            "description": "Account password for Company Owner",
-            "example": "Password123!"
+          "password": {
+            "type": "string"
           },
-          "planName": {
+          "planId": {
             "type": "string",
-            "description": "Selected Plan Name",
-            "example": "Growth"
+            "example": "plan-uuid-here"
+          },
+          "billingCycle": {
+            "type": "string",
+            "example": "MONTHLY",
+            "description": "MONTHLY or YEARLY"
           }
         },
         "required": [
           "companyLegalName",
           "ownerFullName",
           "ownerEmail",
-          "ownerPassword"
+          "password",
+          "planId",
+          "billingCycle"
         ]
       },
       "CreateCompanyDto": {
@@ -8795,8 +8970,8 @@
           "billingCycle": {
             "type": "string",
             "enum": [
-              "Monthly",
-              "Annual"
+              "MONTHLY",
+              "YEARLY"
             ]
           },
           "status": {
@@ -8831,8 +9006,8 @@
           "billingCycle": {
             "type": "string",
             "enum": [
-              "Monthly",
-              "Annual"
+              "MONTHLY",
+              "YEARLY"
             ]
           },
           "status": {
@@ -9338,7 +9513,15 @@
             "type": "object",
             "example": "task-uuid-123"
           },
+          "entityId": {
+            "type": "object",
+            "example": "task-uuid-123"
+          },
           "entity_type": {
+            "type": "string",
+            "example": "Task"
+          },
+          "entityType": {
             "type": "string",
             "example": "Task"
           },
@@ -9350,14 +9533,28 @@
             "type": "object",
             "example": "user-uuid-2"
           },
+          "performedBy": {
+            "type": "object",
+            "example": "user-uuid-2"
+          },
           "ip_address": {
+            "type": "string",
+            "example": "10.0.1.22"
+          },
+          "ipAddress": {
             "type": "string",
             "example": "10.0.1.22"
           },
           "old_value": {
             "type": "object"
           },
+          "oldValue": {
+            "type": "object"
+          },
           "new_value": {
+            "type": "object"
+          },
+          "newValue": {
             "type": "object"
           },
           "usedPermissionSlug": {
@@ -9370,8 +9567,6 @@
           }
         },
         "required": [
-          "entity_id",
-          "entity_type",
           "action"
         ]
       },
@@ -10244,6 +10439,32 @@
           "fileType",
           "fileSizeBytes",
           "fileUrl"
+        ]
+      },
+      "InviteEmployeeDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "director@acme.com"
+          },
+          "name": {
+            "type": "string",
+            "example": "Jane Branch"
+          },
+          "roleId": {
+            "type": "string",
+            "description": "Company role id"
+          },
+          "branchId": {
+            "type": "string",
+            "description": "Required when role is Branch Manager"
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "roleId"
         ]
       }
     }

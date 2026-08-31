@@ -62,7 +62,7 @@ export class ProcessTemplatesService {
       };
     });
 
-    return this.prisma.processTemplate.create({
+    const created = await this.prisma.processTemplate.create({
       data: {
         companyId,
         name: dto.name,
@@ -86,10 +86,25 @@ export class ProcessTemplatesService {
         instances: true,
       },
     });
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          companyId,
+          entityType: 'ProcessTemplate',
+          entityId: created.id,
+          action: 'CREATE' as any,
+          performedById: dto.createdById && dto.createdById !== 'system' ? String(dto.createdById) : null,
+          newValue: { name: created.name, category: created.category, stepsCount: formattedSteps?.length || 0 },
+        },
+      });
+    } catch (_) {}
+
+    return created;
   }
 
   async update(id: string, dto: UpdateProcessTemplateDto, companyId?: string) {
-    await this.findOne(id, companyId);
+    const existing = await this.findOne(id, companyId);
     const { steps, ...rest } = dto;
 
     return this.prisma.$transaction(async (tx) => {
@@ -128,7 +143,7 @@ export class ProcessTemplatesService {
         }
       }
 
-      return tx.processTemplate.update({
+      const updated = await tx.processTemplate.update({
         where: { id },
         data: {
           ...(rest.name !== undefined ? { name: rest.name } : {}),
@@ -150,12 +165,41 @@ export class ProcessTemplatesService {
           instances: true,
         },
       });
+
+      try {
+        await tx.auditLog.create({
+          data: {
+            companyId: updated.companyId,
+            entityType: 'ProcessTemplate',
+            entityId: updated.id,
+            action: 'UPDATE' as any,
+            performedById: dto.createdById && dto.createdById !== 'system' ? String(dto.createdById) : null,
+            oldValue: { name: existing.name, category: existing.category },
+            newValue: { name: updated.name, category: updated.category },
+          },
+        });
+      } catch (_) {}
+
+      return updated;
     });
   }
 
   async remove(id: string, companyId?: string) {
-    await this.findOne(id, companyId);
+    const template = await this.findOne(id, companyId);
     await this.prisma.processTemplate.delete({ where: { id } });
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          companyId: template.companyId,
+          entityType: 'ProcessTemplate',
+          entityId: id,
+          action: 'DELETE' as any,
+          oldValue: { name: template.name },
+        },
+      });
+    } catch (_) {}
+
     return { message: 'Process template deleted successfully' };
   }
 }

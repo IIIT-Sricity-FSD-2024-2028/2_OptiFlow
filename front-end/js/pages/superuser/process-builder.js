@@ -1,34 +1,105 @@
 // js/pages/superuser/process-builder.js
 let currentProcess = {
   id: null,
-  name: "New Process",
+  name: "",
   department: "Finance",
   category: "Finance",
-  compliance: ["SOX"],
-  stages: ["Data Collection", "Verification & Review", "Executive Sign-off"],
+  compliance: [],
+  stages: ["Stage 1", "Stage 2"],
   steps: [
-    { name: "Data Collection", stepType: "INPUT", description: "Upload source documentation" },
-    { name: "Verification & Review", stepType: "APPROVAL", description: "Review and approve data" },
-    { name: "Executive Sign-off", stepType: "APPROVAL", description: "Final manager authorization" }
+    { name: "Stage 1", stepType: "Input_Required", description: "Initial data entry" },
+    { name: "Stage 2", stepType: "Approval", description: "Review and approval" }
   ]
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (window.Sidebar) {
-    window.Sidebar.render("workflows");
+  const urlParams = new URLSearchParams(window.location.search);
+  let processId = urlParams.get("id");
+  if (!processId) {
+    processId = sessionStorage.getItem("edit_process_id") || sessionStorage.getItem("selected_process_id");
+  }
+  if (sessionStorage.getItem("edit_process_id")) {
+    sessionStorage.removeItem("edit_process_id");
+  }
+  if (processId && !urlParams.get("id") && window.history && window.history.replaceState) {
+    const cleanUrl = window.location.pathname + '?id=' + encodeURIComponent(processId);
+    window.history.replaceState(null, '', cleanUrl);
   }
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const processId = urlParams.get("id");
+  const modeText = document.getElementById("builderModeText");
+  const modeBadge = document.getElementById("builderModeBadge");
+  const publishBtn = document.getElementById("btnPublishProcess");
+  const statusText = document.getElementById("builderStatusText");
 
   if (processId) {
+    // EDIT MODE: Load existing template from DB
     const existing = await getProcessById(processId);
     if (existing) {
-      currentProcess = { ...existing };
-      if (!currentProcess.stages || !currentProcess.stages.length) {
-        currentProcess.stages = ["Stage 1", "Stage 2"];
+      const rawStages = (existing.stages && existing.stages.length)
+        ? existing.stages
+        : (existing.steps && existing.steps.length ? existing.steps.map(s => typeof s === 'string' ? s : s.name) : ["Stage 1", "Stage 2"]);
+
+      const rawSteps = (existing.steps && existing.steps.length)
+        ? existing.steps.map((s, idx) => {
+            const name = typeof s === 'string' ? s : (s.name || rawStages[idx] || `Stage ${idx + 1}`);
+            let type = typeof s === 'object' && s.stepType ? s.stepType : 'Input_Required';
+            if (type === 'INPUT' || type === 'Input_Required') type = 'Input_Required';
+            else if (type === 'APPROVAL' || type === 'Approval') type = 'Approval';
+            else if (type === 'AUTOMATED_CHECK' || type === 'ACTION' || type === 'AUTOMATED_TASK' || type === 'Automated_Task') type = 'Automated_Task';
+            return { name, stepType: type };
+          })
+        : rawStages.map((name, idx) => ({
+            name,
+            stepType: idx === 0 ? 'Input_Required' : (idx === rawStages.length - 1 ? 'Automated_Task' : 'Approval')
+          }));
+
+      currentProcess = {
+        id: existing.id,
+        name: existing.name || "Untitled Process",
+        department: existing.department || existing.category || "Finance",
+        category: existing.category || existing.department || "Finance",
+        compliance: Array.isArray(existing.compliance) ? existing.compliance : [existing.compliance || "Standard"],
+        stages: rawStages,
+        steps: rawSteps
+      };
+
+      if (modeText) modeText.textContent = `Edit: ${currentProcess.name}`;
+      if (modeBadge) {
+        modeBadge.textContent = "Editing Existing";
+        modeBadge.style.background = "#EFF6FF";
+        modeBadge.style.color = "#1D4ED8";
       }
+      if (publishBtn) publishBtn.textContent = "Update Process";
+      if (statusText) statusText.textContent = "Editing template";
+    } else {
+      alert("Process template not found in database.");
+      window.location.href = "processes.html";
+      return;
     }
+  } else {
+    // CREATE MODE: Start completely clean afresh
+    sessionStorage.removeItem("newProcessDraft");
+    currentProcess = {
+      id: null,
+      name: "",
+      department: "Finance",
+      category: "Finance",
+      compliance: [],
+      stages: ["Stage 1", "Stage 2"],
+      steps: [
+        { name: "Stage 1", stepType: "Input_Required", description: "Initial data entry" },
+        { name: "Stage 2", stepType: "Approval", description: "Review and approval" }
+      ]
+    };
+
+    if (modeText) modeText.textContent = "Create New Process";
+    if (modeBadge) {
+      modeBadge.textContent = "New Template";
+      modeBadge.style.background = "#F0FDF4";
+      modeBadge.style.color = "#15803D";
+    }
+    if (publishBtn) publishBtn.textContent = "Create & Publish Process";
+    if (statusText) statusText.textContent = "Drafting new template";
   }
 
   initBuilderForm();
@@ -42,6 +113,7 @@ function initBuilderForm() {
 
   if (nameInput) {
     nameInput.value = currentProcess.name || "";
+    nameInput.placeholder = "Enter process name (e.g., Vendor Payment Approval)";
     nameInput.addEventListener("input", (e) => {
       currentProcess.name = e.target.value;
       updateMetaDisplay();
@@ -76,7 +148,7 @@ function updateMetaDisplay() {
 
   if (mName) mName.textContent = currentProcess.name || "Untitled Process";
   if (mDept) mDept.textContent = currentProcess.department || "Finance";
-  if (mComp) mComp.textContent = Array.isArray(currentProcess.compliance) ? currentProcess.compliance.join(", ") : "None";
+  if (mComp) mComp.textContent = Array.isArray(currentProcess.compliance) && currentProcess.compliance.length ? currentProcess.compliance.join(", ") : "None";
   if (stgCount) stgCount.textContent = currentProcess.stages ? currentProcess.stages.length : 0;
 }
 
@@ -90,6 +162,8 @@ function renderFlowBuilder() {
     const card = document.createElement("div");
     card.className = "card";
     card.style.cssText = "width: 100%; max-width: 680px; margin-bottom: 16px; padding: 20px; background: #fff; border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px;";
+
+    const currentStepType = (currentProcess.steps && currentProcess.steps[index] && currentProcess.steps[index].stepType) || "Input_Required";
 
     card.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -105,13 +179,12 @@ function renderFlowBuilder() {
           <button class="btn btn-sm btn-secondary" onclick="deleteStage(${index})" style="color: #ef4444;">Delete</button>
         </div>
       </div>
-      <div style="font-size: 12px; color: var(--text-muted, #64748b);">
-        Step Type: 
-        <select class="form-control" style="display: inline-block; width: 140px; margin-left: 6px; height: 30px; padding: 2px 8px; font-size: 12px;" onchange="updateStepType(${index}, this.value)">
-          <option value="INPUT" ${currentProcess.steps[index]?.stepType === 'INPUT' ? 'selected' : ''}>Data Input</option>
-          <option value="APPROVAL" ${currentProcess.steps[index]?.stepType === 'APPROVAL' ? 'selected' : ''}>Approval</option>
-          <option value="ACTION" ${currentProcess.steps[index]?.stepType === 'ACTION' ? 'selected' : ''}>Task Action</option>
-          <option value="AUTOMATED_CHECK" ${currentProcess.steps[index]?.stepType === 'AUTOMATED_CHECK' ? 'selected' : ''}>Automated Check</option>
+      <div style="font-size: 12px; color: var(--text-muted, #64748b); display: flex; align-items: center; gap: 8px;">
+        <span>Step Type:</span>
+        <select class="form-control" style="display: inline-block; width: 160px; height: 32px; padding: 2px 8px; font-size: 12px;" onchange="updateStepType(${index}, this.value)">
+          <option value="Input_Required" ${currentStepType === 'Input_Required' ? 'selected' : ''}>Input Required</option>
+          <option value="Approval" ${currentStepType === 'Approval' ? 'selected' : ''}>Approval</option>
+          <option value="Automated_Task" ${currentStepType === 'Automated_Task' ? 'selected' : ''}>Automated Task</option>
         </select>
       </div>
     `;
@@ -143,7 +216,7 @@ function updateStepType(index, val) {
 function addStage() {
   const newNum = currentProcess.stages.length + 1;
   currentProcess.stages.push(`Stage ${newNum}`);
-  currentProcess.steps.push({ name: `Stage ${newNum}`, stepType: "ACTION" });
+  currentProcess.steps.push({ name: `Stage ${newNum}`, stepType: "Input_Required" });
   updateMetaDisplay();
   renderFlowBuilder();
 }
@@ -176,13 +249,44 @@ function moveStage(index, direction) {
 
 async function saveProcessBuilder() {
   const nameInput = document.getElementById("newProcessName");
-  if (nameInput && nameInput.value.trim()) {
-    currentProcess.name = nameInput.value.trim();
+  const nameVal = nameInput ? nameInput.value.trim() : "";
+  if (!nameVal) {
+    alert("Please provide a process name before saving.");
+    if (nameInput) nameInput.focus();
+    return;
+  }
+  currentProcess.name = nameVal;
+
+  const deptSelect = document.getElementById("newProcessDept");
+  if (deptSelect) {
+    currentProcess.department = deptSelect.value;
+    currentProcess.category = deptSelect.value;
   }
 
-  await saveProcess(currentProcess);
-  alert("Process saved successfully!");
-  window.location.href = "processes.html";
+  const compInput = document.getElementById("newProcessCompliance");
+  if (compInput && compInput.value) {
+    currentProcess.compliance = compInput.value.split(",").map(s => s.trim()).filter(Boolean);
+  }
+
+  const isExisting = !!currentProcess.id;
+
+  try {
+    const saved = await saveProcess(currentProcess);
+    if (isExisting) {
+      alert(`Process "${currentProcess.name}" updated successfully in database!`);
+      sessionStorage.setItem("view_process_id", currentProcess.id);
+      sessionStorage.setItem("selected_process_id", currentProcess.id);
+      const isHttp = window.location.protocol.startsWith('http');
+      window.location.href = isHttp ? `processes?id=${encodeURIComponent(currentProcess.id)}` : `processes.html?id=${encodeURIComponent(currentProcess.id)}`;
+    } else {
+      alert(`New process "${currentProcess.name}" created and saved to library!`);
+      const isHttp = window.location.protocol.startsWith('http');
+      window.location.href = isHttp ? "processes" : "processes.html";
+    }
+  } catch (err) {
+    console.error("Save process error:", err);
+    alert("Failed to save process: " + (err.message || err));
+  }
 }
 
 window.updateStageName = updateStageName;
