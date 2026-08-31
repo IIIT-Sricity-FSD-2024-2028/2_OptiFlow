@@ -33,20 +33,13 @@
             </svg>
             <span>Dashboard</span>
           </a>
-          <a href="processes.html" class="nav-item" data-allowed-roles="company_owner,superuser,process_admin">
+          <a href="processes.html" class="nav-item">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
             </svg>
             <span>Processes</span>
           </a>
-          <a href="branches.html" class="nav-item" data-allowed-roles="system_admin,system admin">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-              <rect x="9" y="9" width="6" height="6"></rect>
-            </svg>
-            <span>Branches</span>
-          </a>
-          <a href="analytics.html" class="nav-item" data-allowed-roles="company_owner,superuser,process_admin">
+          <a href="analytics.html" class="nav-item">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="20" x2="18" y2="10"></line>
               <line x1="12" y1="20" x2="12" y2="4"></line>
@@ -54,19 +47,7 @@
             </svg>
             <span>Analytics</span>
           </a>
-        </div>
-        <div class="nav-section">
-          <div class="nav-section-title">Administration</div>
-          <a href="users.html" class="nav-item" data-allowed-roles="system_admin,system admin">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-              <circle cx="9" cy="7" r="4"></circle>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-            </svg>
-            <span>Users &amp; Access</span>
-          </a>
-          <a href="audit.html" class="nav-item active" data-allowed-roles="system_admin,system admin">
+          <a href="audit.html" class="nav-item active">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
@@ -76,23 +57,10 @@
             </svg>
             <span>Audit Logs</span>
           </a>
-          <a href="billing.html" class="nav-item" data-allowed-roles="system_admin,system admin">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
-            </svg>
-            <span>Billing</span>
-          </a>
         </div>
       </nav>
 
       <div class="sidebar-footer">
-        <a href="settings.html" class="nav-item" style="padding-left: 0; background: transparent">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-          <span>Settings</span>
-        </a>
         <div class="user-profile">
           <div class="avatar" id="sidebar-user-avatar">AM</div>
           <div class="user-info">
@@ -117,7 +85,10 @@
     <main class="main-content">
       <header class="top-header">
         <div class="page-title">System Audit Logs</div>
-        <div class="header-actions">
+        <div class="header-actions" style="display: flex; align-items: center; gap: 16px;">
+          <a href="process-builder.html" class="btn btn-primary" id="btnHeaderNewProcess" style="text-decoration:none;">
+            + New Process
+          </a>
           <button class="btn-icon" style="position: relative" aria-label="Notifications">
             <img src="../assets/images/bell.svg" alt="Notifications" style="width: 20px; height: 20px" />
             <span style="
@@ -152,9 +123,11 @@
             </div>
             <select class="dropdown-select" id="eventFilter">
               <option value="">All Events</option>
-              <option value="Authentication">Authentication</option>
-              <option value="Process">Process</option>
-              <option value="User Management">User Management</option>
+              <option value="LOGIN">LOGIN</option>
+              <option value="CREATE">CREATE</option>
+              <option value="UPDATE">UPDATE</option>
+              <option value="STATUS_CHANGE">STATUS_CHANGE</option>
+              <option value="PERMISSION_CHANGE">PERMISSION_CHANGE</option>
             </select>
           </div>
 
@@ -180,9 +153,9 @@
     </main>
   </div>
 
-  <script src="../js/utils/helpers.js"></script>
-  <script src="../js/data/audit-store.js"></script>
-  <script src="../js/pages/superuser/audit.js"></script>
+  <script src="../js/utils/helpers.js?v=2.1"></script>
+  <script src="../js/data/audit-store.js?v=2.1"></script>
+  <script src="../js/pages/superuser/audit.js?v=2.1"></script>
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const sessionRaw = sessionStorage.getItem("currentUser");

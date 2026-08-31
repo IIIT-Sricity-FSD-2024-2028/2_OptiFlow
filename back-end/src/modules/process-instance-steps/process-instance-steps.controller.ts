@@ -25,6 +25,7 @@ export class ProcessInstanceStepsController {
   @Get()
   @Roles(
     'superuser',
+    'process_admin',
     'project_manager',
     'team_leader',
     'team_member',
@@ -41,6 +42,7 @@ export class ProcessInstanceStepsController {
   @Get(':id')
   @Roles(
     'superuser',
+    'process_admin',
     'project_manager',
     'team_leader',
     'team_member',
