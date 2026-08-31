@@ -71,9 +71,17 @@ window.Sidebar = {
       { id: "compliance", label: "Compliance", icon: "shield", href: "modules/compliance.html", absolute: true },
       { id: "governance", label: "Governance", icon: "hr", href: "modules/governance.html", absolute: true }
     ],
+    Process_Admin: [
+      { type: "section", label: "Main" },
+      { id: "dashboard", label: "Dashboard", icon: "grid", href: "superuser/dashboard.html", absolute: true },
+      { id: "workflows", label: "Processes", icon: "flow", href: "superuser/processes.html", absolute: true },
+      { id: "analytics", label: "Analytics", icon: "reports", href: "superuser/analytics.html", absolute: true },
+      { id: "audit", label: "Audit Logs", icon: "audit", href: "superuser/audit.html", absolute: true },
+    ],
     Project_Manager: [
       { id: "dashboard", label: "Dashboard", icon: "grid", href: "admin/pm/pm-dashboard.html", absolute: true },
       { id: "projects", label: "Projects", icon: "folder", href: "modules/projects.html", absolute: true },
+      { id: "tasks", label: "Tasks", icon: "tasks", href: "modules/tasks.html", absolute: true },
       { id: "escalations", label: "Escalations", icon: "alert", href: "admin/pm/violations.html", badge: "escalations", absolute: true },
       { id: "compliance", label: "Compliance", icon: "shield", href: "modules/compliance.html", badge: "violations", absolute: true }
     ],
@@ -152,6 +160,8 @@ window.Sidebar = {
       rName = 'Branch_Manager';
     } else if (rawRole === 'superuser') {
       rName = 'SuperUser';
+    } else if (rawRole === 'process_admin' || roleLabelLower.includes('process') || rawRole.includes('process')) {
+      rName = 'Process_Admin';
     } else if (rawRole.includes('ceo') || rawRole.includes('cto') || rawRole.includes('coo')) {
       rName = 'Company_Owner';
     } else if (rawRole === 'hr_manager' || roleLabelLower.includes('governance') || roleLabelLower.includes('hr') || rawRole.includes('governance') || rawRole.includes('hr')) {
@@ -168,9 +178,8 @@ window.Sidebar = {
       rName = 'Team_Member';
     }
 
-    // SuperUser gets process-admin nav; Executive gets executive nav
-    if (rawRole === 'project_manager' && (session.roleLabel || '').toLowerCase().includes('process')) {
-      rName = 'SuperUser';
+    if (roleLabelLower.includes('process') || rawRole === 'process_admin') {
+      rName = 'Process_Admin';
     }
 
     const navItems = this.navConfig[rName] || this.navConfig['Team_Member'] || [];

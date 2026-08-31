@@ -7,13 +7,23 @@ export class CreateAuditLogDto {
   @IsString()
   companyId?: string;
 
-  @ApiProperty({ example: 'task-uuid-123' })
-  entity_id: string | number;
+  @ApiProperty({ example: 'task-uuid-123', required: false })
+  @IsOptional()
+  entity_id?: string | number;
 
-  @ApiProperty({ example: 'Task' })
+  @ApiProperty({ example: 'task-uuid-123', required: false })
+  @IsOptional()
+  entityId?: string | number;
+
+  @ApiProperty({ example: 'Task', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  entity_type: string;
+  entity_type?: string;
+
+  @ApiProperty({ example: 'Task', required: false })
+  @IsOptional()
+  @IsString()
+  entityType?: string;
 
   @ApiProperty({ example: 'STATUS_CHANGE' })
   @IsString()
@@ -24,10 +34,19 @@ export class CreateAuditLogDto {
   @IsOptional()
   performed_by?: string | number;
 
+  @ApiProperty({ example: 'user-uuid-2', required: false })
+  @IsOptional()
+  performedBy?: string | number;
+
   @ApiProperty({ example: '10.0.1.22', required: false })
   @IsOptional()
   @IsString()
   ip_address?: string;
+
+  @ApiProperty({ example: '10.0.1.22', required: false })
+  @IsOptional()
+  @IsString()
+  ipAddress?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -35,7 +54,15 @@ export class CreateAuditLogDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  oldValue?: any;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   new_value?: any;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  newValue?: any;
 
   @ApiProperty({ example: 'user:create', required: false })
   @IsOptional()

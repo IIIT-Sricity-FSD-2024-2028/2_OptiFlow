@@ -155,8 +155,9 @@
           return;
         }
         const session = window.Auth.getSession();
-        // Allow Superuser (1) or Project Manager (2)
-        if (session.roleId !== 1 && session.roleId !== 2 && session.roleName !== "Project_Manager" && session.role !== "project_manager") {
+        const rLower = String(session.roleSlug || session.role || session.roleName || session.assignedRole || session.roleLabel || '').toLowerCase();
+        const isManager = rLower.includes('project') || rLower.includes('pm') || rLower.includes('superuser') || session.roleId === 1 || session.roleId === 2;
+        if (!isManager) {
           window.location.replace("../../login.html");
           return;
         }
@@ -168,12 +169,6 @@
         const state = await window.Helpers.getState();
 
         // Filter projects for this PM (or show all if Superuser / Project Manager)
-        const isManager =
-          session.roleId === 1 ||
-          session.roleId === 2 ||
-          session.roleName === "Project_Manager" ||
-          session.role === "project_manager" ||
-          session.role === "superuser";
         const myProjects = isManager
           ? state.projects
           : state.projects.filter(
@@ -245,7 +240,7 @@
         <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:8px">${myViolations.length}</div>
         <div style="background:#fef2f2;color:#ef4444;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block">${myViolations.length > 0 ? "Open violations" : "Compliant"}</div>
       </div>
-      <div style="font-size:24px;color:#0f172a;cursor:pointer;align-self:flex-start" onclick="window.location.href='compliance-dashboard.html'">→</div>
+      <div style="font-size:24px;color:#0f172a;cursor:pointer;align-self:flex-start" onclick="window.location.href='../../modules/compliance.html'">→</div>
     </div>`;
 
         document.getElementById("stats-row").style.display = "grid";

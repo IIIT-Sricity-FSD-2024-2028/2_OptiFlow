@@ -26,6 +26,7 @@ export class ProcessInstancesController {
   @Get()
   @Roles(
     'superuser',
+    'process_admin',
     'project_manager',
     'team_leader',
     'team_member',
@@ -44,6 +45,7 @@ export class ProcessInstancesController {
   @Get(':id')
   @Roles(
     'superuser',
+    'process_admin',
     'project_manager',
     'team_leader',
     'team_member',
@@ -54,7 +56,7 @@ export class ProcessInstancesController {
     return this.svc.findOne(id, companyId);
   }
   @Post()
-  @Roles('superuser', 'project_manager')
+  @Roles('superuser', 'process_admin', 'project_manager')
   @ApiOperation({ summary: 'Create a process instance' })
   create(
     @Body() dto: CreateProcessInstanceDto,
@@ -64,7 +66,7 @@ export class ProcessInstancesController {
     return this.svc.create(dto, companyId);
   }
   @Patch(':id')
-  @Roles('superuser', 'project_manager')
+  @Roles('superuser', 'process_admin', 'project_manager')
   @ApiOperation({ summary: 'Update a process instance' })
   update(
     @Param('id') id: string,
@@ -74,7 +76,7 @@ export class ProcessInstancesController {
     return this.svc.update(id, dto, companyId);
   }
   @Delete(':id')
-  @Roles('superuser')
+  @Roles('superuser', 'process_admin')
   @ApiOperation({ summary: 'Delete a process instance' })
   remove(@Param('id') id: string, @CompanyId() companyId: string) {
     return this.svc.remove(id, companyId);

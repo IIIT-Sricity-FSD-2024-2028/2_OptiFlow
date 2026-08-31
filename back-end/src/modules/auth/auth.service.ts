@@ -142,7 +142,7 @@ export class AuthService {
       roleSlug = 'hr_manager';
     } else if (rLower.includes('process')) {
       targetRoute = 'superuser/dashboard.html'; // Process Admin -> superuser/dashboard.html
-      roleSlug = 'project_manager';
+      roleSlug = 'process_admin';
     } else if (rLower.includes('compliance')) {
       targetRoute = 'modules/compliance.html'; // Compliance Officer -> modules/compliance.html
       roleSlug = 'compliance_officer';
@@ -155,6 +155,22 @@ export class AuthService {
     } else {
       targetRoute = 'admin/pm/tasks.html'; // Team Member -> admin/pm/tasks.html
       roleSlug = 'team_member';
+    }
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          companyId: user.companyId,
+          entityType: 'User',
+          entityId: user.id,
+          action: 'LOGIN' as any,
+          performedById: user.id,
+          ipAddress: '127.0.0.1',
+          newValue: { message: `${user.fullName} logged in successfully as ${roleLabel}` },
+        },
+      });
+    } catch (e) {
+      // Non-blocking audit log catch
     }
 
     return {

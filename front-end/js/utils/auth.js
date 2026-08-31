@@ -96,6 +96,9 @@ window.Auth = {
     } else if (r === "platform_admin") {
       rId = 0;
       pmRoleName = "Platform_Admin";
+    } else if (r === "process_admin" || roleLabel.includes('process')) {
+      rId = 7;
+      pmRoleName = "Process_Admin";
     } else if (r === "hr_manager" || roleLabel.includes('hr') || roleLabel.includes('governance')) {
       rId = 6;
       pmRoleName = "HR_Manager";
