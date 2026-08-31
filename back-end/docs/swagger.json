@@ -6591,7 +6591,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`, `project_manager`, `team_leader`, `team_member`, `hr_manager`, `company_owner`",
             "required": true,
             "schema": {
               "type": "string"
@@ -6699,7 +6699,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`, `project_manager`, `team_leader`, `team_member`, `hr_manager`, `company_owner`",
             "required": true,
             "schema": {
               "type": "string"

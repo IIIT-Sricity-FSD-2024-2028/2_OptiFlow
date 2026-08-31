@@ -1,4 +1,4 @@
-# Office Domain
+# OptiFlow
 
 ### Task, Process & Compliance Management Platform
 
@@ -17,105 +17,165 @@ Common challenges include:
 - Incomplete or missing audit trails
 - Difficulty generating accurate operational and compliance reports
 
-This project aims to develop a **centralized, web-based Office & Organisational Workflow Management System** that standardizes task execution, enforces predefined workflows, integrates compliance checks, and maintains complete audit logs. The system improves transparency, accountability, and operational control across departments.
+OptiFlow is a **centralized, web-based Office & Organisational Workflow Management System** that standardizes task execution, enforces predefined workflows, integrates automated compliance checks, and maintains complete audit logs. The system improves transparency, accountability, and operational control across departments.
 
 ---
 
 ## 2. Actors and Responsibilities
 
-| Actor / Role                                   | Responsibilities                                                                                                                                            |
-| -----------------------------------------------| ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Compliance Officer**                | Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
-| **HR**                                         | Manages employee records, assigns roles and team structures, and maintains organizational hierarchy required for task and process execution.                |
-| **Process Admin**                              | Designs and maintains organizational processes and workflows, ensures processes align with policies, and optimizes process efficiency across projects.      |
-| **Project Manager**                            | Oversees project execution, assigns tasks, reviews task outcomes, handles escalations, and ensures project goals are met within defined processes.          |
-| **Team Leader**                                | Breaks tasks into subtasks, assigns work to team members, reviews subtask submissions, and escalates unresolved issues to the Project Manager.              |
-| **Team Member**                     | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
+| Actor / Role | Responsibilities |
+| --- | --- |
+| **Superuser (Platform / Business Owner)** | The SaaS business owners who manage multi-tenant client companies, subscription plans, platform-wide billing, and global system health. |
+| **Company Owner / Org Admin** | Client organization administrators who manage their company branches, departments, internal settings, employee roles, and company-level subscriptions. |
+| **Executive** | Views cross-branch performance dashboards, reports, and company-wide analytics. |
+| **Compliance Officer** | Defines compliance rules, audits task and process execution, reviews evidence, resolves violations, and monitors audit logs. |
+| **HR** | Manages employee records, assigns roles and permissions, and maintains organizational hierarchy required for workflow execution. |
+| **Process Admin** | Designs and configures workflow templates, defines process stages and approval sequences, and optimizes process efficiency. |
+| **Project Manager** | Oversees project execution, assigns tasks to Team Leaders, sets deadlines and priorities, handles escalations, and monitors compliance status. |
+| **Team Leader** | Breaks tasks into subtasks, assigns work to team members, reviews subtask submissions, and escalates unresolved issues. |
+| **Team Member** | Executes assigned tasks, updates progress, submits work and compliance evidence, and reports blockers. |
 
 ---
 
-## 3. Planned Features for Each Actor
+## 3. Features for Each Actor
 
-### 3.1 Compliance Officer
+### 3.1 Superuser (SaaS Platform & Business Owner)
 
-**Planned Features:**
+- Register, onboard, and manage tenant companies and client organizations
+- Define and configure SaaS subscription tiers, pricing, and resource limits
+- Monitor global platform usage, revenue, and system audit logs
+- Manage platform-level support and multi-tenant access control
 
-- Define and manage compliance rules and policies
-- Review task and process execution for compliance
-- Verify submitted documents and evidence
-- Approve or reject compliance status
-- Identify and flag policy violations
-- Generate audit and compliance reports
-- Access historical audit logs for review
+### 3.2 Company Owner / Org Admin
 
----
+- Configure organization settings, departments, and branch hierarchy
+- Manage tenant users, employee accounts, and role assignments
+- Monitor company-wide task execution, audit trails, and internal analytics
+- Oversee company-level billing and subscription status
 
-### 3.2 HR
+### 3.3 Executive
 
-**Planned Features:**
+- Access executive dashboard with cross-branch switching
+- Review organizational task completion and compliance rates
+- Export high-level operational and executive reports
+
+### 3.4 Compliance Officer
+
+- Define and manage automated compliance rules and policies
+- Review task and process execution for compliance adherence
+- Verify submitted compliance documents and evidence
+- Approve or reject evidence submissions and resolve violations
+- Access real-time audit logs and generate compliance reports
+
+### 3.5 HR
 
 - Create and manage employee profiles
-- Assign roles and responsibilities
+- Assign roles and granular permissions
 - Define team structures and reporting hierarchy
-- Maintain organizational data required for workflows
-- Update role-based access permissions
+- Manage role templates and access governance
 
----
-
-### 3.3 Process Admin
-
-**Planned Features:**
+### 3.6 Process Admin
 
 - Design and configure workflow templates
-- Define process stages and approval sequences
-- Modify or optimize existing workflows
-- Ensure workflows align with organizational policies
-- Monitor overall process efficiency
+- Define process stages, approval sequences, and step permissions
+- Configure loopback and rejection rules for workflows
+- Monitor overall process instances and execution efficiency
 
----
+### 3.7 Project Manager
 
-### 3.4 Project Manager
+- Create and manage projects and tasks
+- Assign tasks to Team Leaders and set priorities/deadlines
+- Monitor project progress and compliance status
+- Review completed work and handle task escalations
 
-**Planned Features:**
-
-- Create and assign tasks to Team Leaders
-- Set task priorities and deadlines
-- Monitor task and project progress
-- Review completed tasks
-- Approve or request rework
-- Escalate delayed or blocked tasks
-- View compliance status of assigned projects
-
----
-
-### 3.5 Team Leader
-
-**Planned Features:**
+### 3.8 Team Leader
 
 - Break tasks into manageable subtasks
 - Assign subtasks to Team Members
-- Review submitted work and evidence
-- Approve or reject subtasks
-- Track team-level task progress
-- Escalate unresolved issues to the Project Manager
+- Review submitted subtask work and attached evidence
+- Approve or reject subtask submissions
+- Track team progress and escalate blockers to Project Managers
+
+### 3.9 Team Member
+
+- View assigned tasks, subtasks, and deadlines
+- Update task status (Draft, Active, In Review, Completed, Blocked)
+- Submit work outputs and upload required compliance evidence
+- Add comments and notes on assigned tasks
+- Report blockers and raise escalations
 
 ---
 
-### 3.6 Team Member
+## 4. Technology Stack
 
-**Planned Features:**
-
-- View assigned tasks and deadlines
-- Update task status (Not Started, In Progress, Completed)
-- Submit work outputs and supporting documents
-- Add comments or notes on tasks
-- Report blockers or delays
-- Request deadline extensions when required
+- **Backend**: NestJS (TypeScript), Prisma ORM, EventEmitter2, Swagger / OpenAPI
+- **Frontend**: Vanilla JavaScript (ES6+), HTML5, Modular CSS3
+- **Database**: PostgreSQL
+- **Security & Governance**: Role-Based Access Control (RBAC), Multi-Tenancy Scoping, Immutable Audit Logs
 
 ---
 
-## 4. Repository Scope
+## 5. Project Structure
 
-At the current stage, this repository focuses on **requirements analysis and system design documentation** for the proposed workflow management system.
+```
+.
+├── back-end/          # NestJS backend API application
+│   ├── src/           # Domain modules, controllers, services, guards
+│   ├── prisma/        # Prisma schema, migrations, and seed scripts
+│   └── docs/          # Swagger OpenAPI documentation
+├── front-end/         # Frontend web application and dashboards
+│   ├── admin/         # Dashboards for HR, PM, Compliance, Executive
+│   ├── enduser/       # Dashboards for Team Leader and Team Member
+│   ├── superuser/     # Dashboards for SaaS Superuser (Platform / Business Owner)
+│   ├── org-admin/     # Dashboards for Company Owner / Organization Admin
+│   └── js/            # Shared components, auth, and utilities
+├── Database/          # SQL database schema and ER diagrams
+├── Figma designs/     # UI/UX design assets and PDF exports
+└── Video/             # Project demo video
+```
 
 ---
+
+## 6. Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- PostgreSQL database
+
+### Backend Setup
+
+1. Navigate to the backend directory:
+   ```bash
+   cd back-end
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Configure environment variables in `.env`:
+   ```env
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5433/optiflow?schema=public"
+   PORT=5500
+   ```
+
+4. Generate Prisma client, sync database, and seed test data:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   npm run seed
+   ```
+
+5. Start the backend development server:
+   ```bash
+   npm run start:dev
+   ```
+
+The backend API runs at `http://localhost:5500`.
+Swagger API documentation is available at `http://localhost:5500/api/docs`.
+
+### Frontend Setup
+
+Serve the `front-end` directory using any static web server (such as VS Code Live Server or `npx serve front-end`). Open `index.html` or `login.html` in your browser.
