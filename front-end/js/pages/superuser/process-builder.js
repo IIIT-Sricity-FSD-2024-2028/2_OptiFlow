@@ -277,11 +277,10 @@ async function saveProcessBuilder() {
       sessionStorage.setItem("view_process_id", currentProcess.id);
       sessionStorage.setItem("selected_process_id", currentProcess.id);
       const isHttp = window.location.protocol.startsWith('http');
-      window.location.href = isHttp ? `processes?id=${encodeURIComponent(currentProcess.id)}` : `processes.html?id=${encodeURIComponent(currentProcess.id)}`;
+      window.location.href = `processes.html?id=${encodeURIComponent(currentProcess.id)}`;
     } else {
       alert(`New process "${currentProcess.name}" created and saved to library!`);
-      const isHttp = window.location.protocol.startsWith('http');
-      window.location.href = isHttp ? "processes" : "processes.html";
+      window.location.href = "processes.html";
     }
   } catch (err) {
     console.error("Save process error:", err);
