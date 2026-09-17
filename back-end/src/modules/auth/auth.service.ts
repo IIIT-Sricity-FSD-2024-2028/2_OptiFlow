@@ -31,11 +31,7 @@ export class AuthService {
       isMatch = false;
     }
 
-    const isEvalPassword =
-      process.env.NODE_ENV !== 'production' ||
-      ['password', '123456', 'Password123!', 'password123', 'admin123', 'PlatformAdmin123!'].includes(dto.password);
-
-    if (!isMatch && !isEvalPassword) {
+    if (!isMatch) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
