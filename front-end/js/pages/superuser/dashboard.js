@@ -180,8 +180,8 @@ function renderProcessTable(data) {
   data.forEach((wf) => {
     const tr = document.createElement("tr");
 
-    const viewUrl = isHttp ? `processes?id=${encodeURIComponent(wf.id)}` : `processes.html?id=${encodeURIComponent(wf.id)}`;
-    const editUrl = isHttp ? `process-builder?id=${encodeURIComponent(wf.id)}` : `process-builder.html?id=${encodeURIComponent(wf.id)}`;
+    const viewUrl = `processes.html?id=${encodeURIComponent(wf.id)}`;
+    const editUrl = `process-builder.html?id=${encodeURIComponent(wf.id)}`
 
     tr.innerHTML = `
             <td>
