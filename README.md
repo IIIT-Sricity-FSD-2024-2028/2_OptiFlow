@@ -157,7 +157,7 @@ OptiFlow is a **centralized, web-based Office & Organisational Workflow Manageme
 
 3. Configure environment variables in `.env`:
    ```env
-   DATABASE_URL="postgresql://postgres:postgres@localhost:5433/optiflow?schema=public"
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5432/optiflow?schema=public"
    PORT=5500
    ```
 
