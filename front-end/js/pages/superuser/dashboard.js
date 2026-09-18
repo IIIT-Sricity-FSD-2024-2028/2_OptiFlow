@@ -175,13 +175,11 @@ function renderProcessTable(data) {
     return;
   }
 
-  const isHttp = window.location.protocol.startsWith('http');
-
   data.forEach((wf) => {
     const tr = document.createElement("tr");
 
-    const viewUrl = isHttp ? `processes?id=${encodeURIComponent(wf.id)}` : `processes.html?id=${encodeURIComponent(wf.id)}`;
-    const editUrl = isHttp ? `process-builder?id=${encodeURIComponent(wf.id)}` : `process-builder.html?id=${encodeURIComponent(wf.id)}`;
+    const viewUrl = `processes.html?id=${encodeURIComponent(wf.id)}`;
+    const editUrl = `process-builder.html?id=${encodeURIComponent(wf.id)}`;
 
     tr.innerHTML = `
             <td>
@@ -208,13 +206,44 @@ function renderProcessTable(data) {
 function viewProcess(id) {
   sessionStorage.setItem('view_process_id', id);
   sessionStorage.removeItem('selected_process_id');
-  const isHttp = window.location.protocol.startsWith('http');
-  window.location.href = (isHttp ? 'processes?id=' : 'processes.html?id=') + encodeURIComponent(id);
+  window.location.href = 'processes.html?id=' + encodeURIComponent(id);
 }
 
 function editProcess(id) {
   sessionStorage.setItem('edit_process_id', id);
   sessionStorage.removeItem('selected_process_id');
-  const isHttp = window.location.protocol.startsWith('http');
-  window.location.href = (isHttp ? 'process-builder?id=' : 'process-builder.html?id=') + encodeURIComponent(id);
+  window.location.href = 'process-builder.html?id=' + encodeURIComponent(id);
 }
+
+function closeNewProcessModal() {
+  const modal = document.getElementById("newProcessModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function openNewProcessModal() {
+  const modal = document.getElementById("newProcessModal");
+  if (modal) modal.classList.remove("hidden");
+  else window.location.href = "process-builder.html";
+}
+
+function createAndGoToBuilder() {
+  const nameEl = document.getElementById("newProcessNameInput");
+  const deptEl = document.getElementById("newProcessDeptInput");
+  const name = nameEl ? nameEl.value.trim() : "";
+  const dept = deptEl ? deptEl.value : "Finance";
+
+  sessionStorage.removeItem("edit_process_id");
+  sessionStorage.removeItem("selected_process_id");
+  sessionStorage.removeItem("view_process_id");
+  
+  if (name) {
+    sessionStorage.setItem("newProcessDraft", JSON.stringify({ name, department: dept }));
+  }
+  window.location.href = "process-builder.html";
+}
+
+window.viewProcess = viewProcess;
+window.editProcess = editProcess;
+window.closeNewProcessModal = closeNewProcessModal;
+window.openNewProcessModal = openNewProcessModal;
+window.createAndGoToBuilder = createAndGoToBuilder;
