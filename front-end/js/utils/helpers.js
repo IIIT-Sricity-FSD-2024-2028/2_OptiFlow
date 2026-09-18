@@ -40,9 +40,18 @@ function renderUsageBar(runs) {
 }
 
 function logout() {
-  // Always clear the session!
-  sessionStorage.removeItem("currentUser");
-  window.location.href = "../login.html";
+  if (window.Auth && typeof window.Auth.logout === 'function') {
+    window.Auth.logout();
+  } else {
+    sessionStorage.clear();
+    localStorage.clear();
+    if (window.Helpers) window.Helpers._stateCache = null;
+    if (window.location.protocol.startsWith('http')) {
+      window.location.replace(window.location.origin ? window.location.origin + '/login.html' : '/login.html');
+    } else {
+      window.location.replace('../login.html');
+    }
+  }
 }
 
 function openNewProcessModal() {

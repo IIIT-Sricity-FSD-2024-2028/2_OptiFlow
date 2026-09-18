@@ -228,27 +228,27 @@
         await window.Notifications.init();
 
         state = await window.Helpers.getState();
-        const sessionNumericId = parseInt(String(session.id).replace(/[^0-9]/g,''), 10);
+        const currentUserId = String(session.id || session.rawId || '');
 
-        // 1. Find TL's team using state (manager_id comparison — integers)
+        // 1. Find TL's team using state (manager_id comparison)
         const myTeamIds = (state.users || [])
-          .filter((u) => u.managerId === sessionNumericId || String(u.managerId) === String(session.id))
-          .map((u) => u.userId);
+          .filter((u) => String(u.managerId || u.manager_id || u.reportsTo || '') === currentUserId)
+          .map((u) => String(u.userId || u.id));
+
+        const userAndTeamIds = [currentUserId, ...myTeamIds];
 
         // 2. Pull Team Tasks + Direct Tasks
         allMyTasks = (state.tasks || []).filter((t) => {
-          const isMine = t.assignedTo === sessionNumericId;
-          const isTeam = myTeamIds.includes(t.assignedTo);
-          return isMine || isTeam;
+          const assignId = String(t.assignedTo || t.assignedToId || t.assigned_to || '');
+          return userAndTeamIds.includes(assignId);
         }).map(t => ({...t, isSubtask: false}));
 
         // 3. Add Subtasks assigned to me or my team
         const mySubtasks = (state.subtasks || []).filter((st) => {
-          const isMine = st.assignedTo === sessionNumericId;
-          const isTeam = myTeamIds.includes(st.assignedTo);
-          return isMine || isTeam;
+          const assignId = String(st.assignedTo || st.assignedToId || st.assigned_to || '');
+          return userAndTeamIds.includes(assignId);
         }).map(st => {
-           const parentTask = state.tasks.find(t => t.taskId === st.taskId || t.id === st.taskId);
+           const parentTask = (state.tasks || []).find(t => String(t.taskId || t.id) === String(st.taskId));
            return {
              ...st,
              projectId: parentTask ? parentTask.projectId : null,

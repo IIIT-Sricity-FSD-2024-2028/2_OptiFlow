@@ -22,7 +22,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
+    let isMatch = false;
+    try {
+      if (user.passwordHash) {
+        isMatch = await bcrypt.compare(dto.password, user.passwordHash);
+      }
+    } catch (_) {
+      isMatch = false;
+    }
+
     if (!isMatch) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -129,11 +137,10 @@ export class AuthService {
       rLower.includes('owner') ||
       rLower.includes('ceo') ||
       rLower.includes('cto') ||
-      rLower.includes('coo') ||
-      rLower.includes('superuser')
+      rLower.includes('coo')
     ) {
       targetRoute = 'admin/executive/executive_dashboard.html'; // Company Owner -> admin/executive/executive_dashboard.html
-      roleSlug = 'superuser';
+      roleSlug = 'company_owner';
     } else if (rLower.includes('branch manager')) {
       targetRoute = 'admin/executive/executive_dashboard.html';
       roleSlug = 'branch_manager';
@@ -153,7 +160,7 @@ export class AuthService {
       targetRoute = 'enduser/tl-dashboard.html'; // Team Lead -> enduser/tl-dashboard.html
       roleSlug = 'team_leader';
     } else {
-      targetRoute = 'admin/pm/tasks.html'; // Team Member -> admin/pm/tasks.html
+      targetRoute = 'enduser/member-dashboard.html'; // Team Member -> enduser/member-dashboard.html
       roleSlug = 'team_member';
     }
 

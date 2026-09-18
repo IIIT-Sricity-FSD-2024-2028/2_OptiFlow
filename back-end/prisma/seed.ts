@@ -90,6 +90,14 @@ async function main() {
     },
   });
 
+  await prisma.platformAdminUser.createMany({
+    data: [
+      { email: "admin@officesync.com", passwordHash, fullName: "OfficeSync Platform Administrator" },
+      { email: "admin@owms-platform.test", passwordHash, fullName: "OWMS Platform Administrator" },
+    ],
+    skipDuplicates: true,
+  });
+
   const acmeCorp = await prisma.company.create({
     data: { legalName: "Acme Corp", status: "Active" },
   });
@@ -261,7 +269,120 @@ async function main() {
     },
   });
 
-  console.log("✓ Assigned system roles to all 20 users via RoleAssignment.");
+  // =====================================================================
+  // 4b. OFFICESYNC TECHNOLOGIES TENANT (Core Domain Seed)
+  // =====================================================================
+  const officeSync = await prisma.company.create({
+    data: { legalName: "OfficeSync Technologies", status: "Active" },
+  });
+
+  const rOsProcessAdmin = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tProcessAdmin.id, label: "Process Admin", isSystem: true } });
+  const rOsPm = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tProjectManager.id, label: "Project Manager", isSystem: true } });
+  const rOsCompliance = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tComplianceOfficer.id, label: "Compliance Officer", isSystem: true } });
+  const rOsHr = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tAccessGovernance.id, label: "Access Governance", isSystem: true } });
+  const rOsTl = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tTeamLead.id, label: "Team Lead", isSystem: true } });
+  const rOsTm = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tTeamMember.id, label: "Team Member", isSystem: true } });
+
+  const uArjun = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Arjun Mehta", email: "arjun@officesync.in", passwordHash } });
+  const uAdmin = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "System Admin", email: "admin@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uPriya = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Priya Sharma", email: "priya@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uRohan = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Rohan Nair", email: "rohan@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uKiran = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Kiran Patel", email: "kiran@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uSneha = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Sneha Kapoor", email: "sneha@officesync.in", passwordHash, managerUserId: uPriya.id } });
+  const uVikram = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Vikram Desai", email: "vikram@officesync.in", passwordHash, managerUserId: uSneha.id } });
+  const uAnjali = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Anjali Rao", email: "anjali@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uDivya = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Divya Menon", email: "divya@officesync.in", passwordHash, managerUserId: uAnjali.id } });
+  const uRahul = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Rahul Iyer", email: "rahul@officesync.in", passwordHash, managerUserId: uDivya.id } });
+  const uMeera = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Meera Krishnan", email: "meera@officesync.in", passwordHash, managerUserId: uArjun.id } });
+
+  await prisma.roleAssignment.createMany({
+    data: [
+      { userId: uArjun.id, roleId: rOsProcessAdmin.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uAdmin.id, roleId: rOsProcessAdmin.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uPriya.id, roleId: rOsPm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uRohan.id, roleId: rOsCompliance.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uKiran.id, roleId: rOsHr.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uSneha.id, roleId: rOsTl.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uPriya.id },
+      { userId: uVikram.id, roleId: rOsTm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uSneha.id },
+      { userId: uAnjali.id, roleId: rOsPm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uDivya.id, roleId: rOsTl.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uAnjali.id },
+      { userId: uRahul.id, roleId: rOsTm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uDivya.id },
+      { userId: uMeera.id, roleId: rOsPm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+    ],
+  });
+
+  const osHq = await prisma.branch.create({ data: { companyId: officeSync.id, name: "Headquarters (HQ)" } });
+  const osApac = await prisma.branch.create({ data: { companyId: officeSync.id, name: "APAC Engineering Hub" } });
+  const osTeamCore = await prisma.team.create({ data: { branchId: osHq.id, name: "Core Platform Eng" } });
+  const osTeamApac = await prisma.team.create({ data: { branchId: osApac.id, name: "APAC Eng Hub" } });
+
+  const osProj1 = await prisma.project.create({
+    data: {
+      teamId: osTeamCore.id,
+      name: "OWMS Core Engine 2.0",
+      status: "Active",
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      createdById: uPriya.id,
+    },
+  });
+
+  const osTask1 = await prisma.task.create({
+    data: {
+      companyId: officeSync.id,
+      projectId: osProj1.id,
+      title: "Task Orchestration Engine Refactor",
+      description: "Implement unified process engine and state transitions.",
+      status: TaskStatus.Active,
+      priority: TaskPriority.High,
+      assignedToId: uSneha.id,
+      createdById: uPriya.id,
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      estimatedHours: 40,
+      actualHours: 12,
+    },
+  });
+
+  await prisma.subtask.create({
+    data: {
+      companyId: officeSync.id,
+      taskId: osTask1.id,
+      title: "Review ledger entries and state schemas",
+      status: TaskStatus.Active,
+      assignedToId: uVikram.id,
+      createdById: uSneha.id,
+    },
+  });
+
+  // =====================================================================
+  // 4c. CODENEST TECHNOLOGIES TENANT (DevOps / Code Review Tenant)
+  // =====================================================================
+  const codeNest = await prisma.company.create({
+    data: { legalName: "Codenest Technologies", status: "Active" },
+  });
+
+  const rCnOwner = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tCompanyOwner.id, label: "Company Owner", isSystem: true } });
+  const rCnPm = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tProjectManager.id, label: "Project Manager", isSystem: true } });
+  const rCnTm = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tTeamMember.id, label: "Team Member", isSystem: true } });
+  const rCnCompliance = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tComplianceOfficer.id, label: "Compliance Officer", isSystem: true } });
+
+  const uRohanM = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Rohan Malhotra", email: "cto@codenest.test", passwordHash } });
+  const uSnehaK = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Sneha Kapoor", email: "em@codenest.test", passwordHash, managerUserId: uRohanM.id } });
+  const uArnav = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Arnav Bose", email: "arnav@codenest.test", passwordHash, managerUserId: uSnehaK.id } });
+  const uIshita = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Ishita Roy", email: "ishita@codenest.test", passwordHash, managerUserId: uSnehaK.id } });
+  const uKunal = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Kunal Verma", email: "qa@codenest.test", passwordHash, managerUserId: uRohanM.id } });
+
+  await prisma.roleAssignment.createMany({
+    data: [
+      { userId: uRohanM.id, roleId: rCnOwner.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uRohanM.id },
+      { userId: uSnehaK.id, roleId: rCnPm.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uRohanM.id },
+      { userId: uArnav.id, roleId: rCnTm.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uSnehaK.id },
+      { userId: uIshita.id, roleId: rCnTm.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uSnehaK.id },
+      { userId: uKunal.id, roleId: rCnCompliance.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uRohanM.id },
+    ],
+  });
+
+  console.log("✓ Assigned system roles to all users across OfficeSync, CodeNest, and Acme Corp.");
 
   // =====================================================================
   // 5. MOCK DATA (Org, Projects, Tasks, Workflows & Compliance)

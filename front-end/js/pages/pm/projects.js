@@ -242,12 +242,30 @@ window.ProjectsPage = {
   },
 
   /* ── Add Modal ── */
-  openAddModal() {
+  async openAddModal() {
+    let templates = this.state.processTemplates || this.state.workflowTemplates || [];
+    if (!templates || templates.length === 0) {
+      try {
+        const fetched = await window.Helpers.api.request('/process-templates');
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          templates = fetched;
+          this.state.processTemplates = fetched;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch fallback process templates:', e);
+      }
+    }
+
     const teams = this.state.teams || [];
     const deptOptions = teams.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
 
-    const templates = this.state.processTemplates || this.state.workflowTemplates || [];
-    const templateOptions = templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    const templateOptions = (templates || []).map(t => {
+      const stepsArr = Array.isArray(t.steps || t.stages) ? (t.steps || t.stages) : [];
+      const stageCount = stepsArr.length || t.stageCount || 0;
+      const cat = t.category ? ` · ${t.category}` : '';
+      const badge = stageCount > 0 ? ` (${stageCount} stages${cat})` : '';
+      return `<option value="${t.id}">${t.name}${badge}</option>`;
+    }).join('');
 
     window.Modal.create({
       id: 'modal-add-project',
@@ -323,14 +341,26 @@ window.ProjectsPage = {
 
     const templates = this.state.processTemplates || this.state.workflowTemplates || [];
     const template = templates.find(t => String(t.id) === String(templateId));
-    if (template && (template.steps || template.stages)) {
-      const steps = template.steps || template.stages;
-      list.innerHTML = steps.map((s, i) => `
-        <span style="font-size: 12px; background: #fff; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 4px; color: #475569;">
-          ${i + 1}. ${s.name || s}
-        </span>
-      `).join('');
+    const rawSteps = template ? (template.steps || template.stages) : [];
+    let steps = [];
+    if (typeof rawSteps === 'string') {
+      try { steps = JSON.parse(rawSteps); } catch (e) { steps = []; }
+    } else if (Array.isArray(rawSteps)) {
+      steps = rawSteps;
+    }
+
+    if (steps && steps.length > 0) {
+      list.innerHTML = steps.map((s, i) => {
+        const stepName = typeof s === 'string' ? s : (s.name || s.stage_name || s.title || `Stage ${i + 1}`);
+        return `
+          <span style="font-size: 12px; background: #fff; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 4px; color: #475569; display: inline-flex; align-items: center; gap: 4px;">
+            <span style="font-weight: 700; color: var(--blue, #2563eb);">${i + 1}.</span> ${stepName}
+          </span>
+        `;
+      }).join('');
       preview.classList.remove('hidden');
+    } else {
+      preview.classList.add('hidden');
     }
   },
 
