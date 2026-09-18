@@ -50,8 +50,7 @@ function showProcessList() {
   sessionStorage.removeItem("selected_process_id");
   sessionStorage.removeItem("edit_process_id");
   if (window.history && window.history.replaceState) {
-    const isHttp = window.location.protocol.startsWith('http');
-    const cleanUrl = isHttp ? window.location.pathname.replace(/\.html$/, '') : window.location.pathname.replace(/\?.*$/, '');
+    const cleanUrl = window.location.pathname.replace(/\?.*$/, '');
     window.history.replaceState(null, '', cleanUrl);
   }
   loadProcessList();
@@ -61,8 +60,7 @@ window.showProcessList = showProcessList;
 async function showProcessDetail(id) {
   sessionStorage.setItem("view_process_id", id);
   if (window.history && window.history.replaceState) {
-    const isHttp = window.location.protocol.startsWith('http');
-    const base = isHttp ? window.location.pathname.replace(/\.html$/, '') : window.location.pathname;
+    const base = window.location.pathname.replace(/\?.*$/, '');
     const cleanUrl = base + '?id=' + encodeURIComponent(id);
     window.history.replaceState(null, '', cleanUrl);
   }
@@ -89,15 +87,13 @@ async function loadProcessList() {
     return;
   }
 
-  const isHttp = window.location.protocol.startsWith('http');
-
   processes.forEach(proc => {
     const tr = document.createElement("tr");
     const stagesSummary = (proc.stages && proc.stages.length) ? proc.stages.join(" → ") : `${proc.totalStages || 0} stages`;
     const complianceTags = (proc.compliance && proc.compliance.length) ? proc.compliance.map(c => `<span class="badge" style="background:#f1f5f9; color:#475569; margin-right:4px;">${c}</span>`).join("") : "";
 
-    const viewUrl = isHttp ? `processes?id=${encodeURIComponent(proc.id)}` : `processes.html?id=${encodeURIComponent(proc.id)}`;
-    const editUrl = isHttp ? `process-builder?id=${encodeURIComponent(proc.id)}` : `process-builder.html?id=${encodeURIComponent(proc.id)}`;
+    const viewUrl = `processes.html?id=${encodeURIComponent(proc.id)}`;
+    const editUrl = `process-builder.html?id=${encodeURIComponent(proc.id)}`;
 
     tr.innerHTML = `
       <td>
@@ -202,9 +198,7 @@ async function loadProcessDetails(id) {
   if (editBtn) {
     editBtn.onclick = () => {
       sessionStorage.setItem("edit_process_id", proc.id);
-      const isHttp = window.location.protocol.startsWith('http');
-      const target = isHttp ? `process-builder?id=${encodeURIComponent(proc.id)}` : `process-builder.html?id=${encodeURIComponent(proc.id)}`;
-      window.location.href = target;
+      window.location.href = `process-builder.html?id=${encodeURIComponent(proc.id)}`;
     };
   }
 

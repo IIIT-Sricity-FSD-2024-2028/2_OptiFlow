@@ -77,13 +77,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
   } else {
-    // CREATE MODE: Start completely clean afresh
+    // CREATE MODE: Start completely clean afresh or load draft if provided
+    let draft = null;
+    try {
+      const draftRaw = sessionStorage.getItem("newProcessDraft");
+      if (draftRaw) draft = JSON.parse(draftRaw);
+    } catch (_) {}
     sessionStorage.removeItem("newProcessDraft");
+
     currentProcess = {
       id: null,
-      name: "",
-      department: "Finance",
-      category: "Finance",
+      name: (draft && draft.name) || "",
+      department: (draft && draft.department) || "Finance",
+      category: (draft && draft.department) || "Finance",
       compliance: [],
       stages: ["Stage 1", "Stage 2"],
       steps: [
@@ -92,7 +98,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       ]
     };
 
-    if (modeText) modeText.textContent = "Create New Process";
+    if (modeText) modeText.textContent = currentProcess.name ? `Create: ${currentProcess.name}` : "Create New Process";
     if (modeBadge) {
       modeBadge.textContent = "New Template";
       modeBadge.style.background = "#F0FDF4";
@@ -276,12 +282,10 @@ async function saveProcessBuilder() {
       alert(`Process "${currentProcess.name}" updated successfully in database!`);
       sessionStorage.setItem("view_process_id", currentProcess.id);
       sessionStorage.setItem("selected_process_id", currentProcess.id);
-      const isHttp = window.location.protocol.startsWith('http');
-      window.location.href = isHttp ? `processes?id=${encodeURIComponent(currentProcess.id)}` : `processes.html?id=${encodeURIComponent(currentProcess.id)}`;
+      window.location.href = `processes.html?id=${encodeURIComponent(currentProcess.id)}`;
     } else {
       alert(`New process "${currentProcess.name}" created and saved to library!`);
-      const isHttp = window.location.protocol.startsWith('http');
-      window.location.href = isHttp ? "processes" : "processes.html";
+      window.location.href = "processes.html";
     }
   } catch (err) {
     console.error("Save process error:", err);
