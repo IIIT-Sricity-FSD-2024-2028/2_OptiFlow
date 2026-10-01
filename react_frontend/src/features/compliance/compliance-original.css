@@ -1,0 +1,567 @@
+/* =====================================================
+   OptiFlow Compliance Module Styles
+   Imported and adapted directly from front-end/css/compliance/
+   ===================================================== */
+
+:root {
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+
+  /* Sidebar */
+  --sidebar-bg: #1a223e;
+  --sidebar-hover: rgba(26, 86, 219, 0.35);
+  --sidebar-active-bg: rgba(26, 86, 219, 0.35);
+  --sidebar-active-text: #ffffff;
+  --sidebar-text: #94a3b8;
+  --sidebar-width: 250px;
+  --sidebar-border: rgba(255, 255, 255, 0.05);
+
+  --bg-color: #e2e9f8;
+  --card-bg: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+
+  /* Status Colors */
+  --success-bg: #dcfce7;
+  --success-text: #166534;
+  --warning-bg: #fef9c3;
+  --warning-text: #854d0e;
+  --danger-bg: #fee2e2;
+  --danger-text: #991b1b;
+  --info-bg: #dbeafe;
+  --info-text: #1e40af;
+
+  --border-radius: 8px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* ===============================
+   APP SHELL / ADMIN LAYOUT 
+   =============================== */
+.compliance-app-shell {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  color: var(--text-main);
+}
+
+/* ===============================
+   SIDEBAR
+   =============================== */
+.compliance-sidebar {
+  width: var(--sidebar-width);
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  z-index: 100;
+  border-right: 1px solid var(--sidebar-border);
+}
+
+.compliance-sidebar-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.compliance-sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #ffffff;
+}
+
+.compliance-sidebar-logo-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--primary-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+}
+
+.compliance-sidebar-logo-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.compliance-sidebar-role-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #c7d2fe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.compliance-sidebar-nav {
+  flex: 1;
+  padding: 16px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.compliance-nav-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 12px 10px 6px;
+}
+
+.compliance-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--sidebar-text);
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.compliance-nav-item:hover {
+  background-color: var(--sidebar-hover);
+  color: #ffffff;
+}
+
+.compliance-nav-item.active {
+  background-color: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
+  font-weight: 600;
+}
+
+.compliance-nav-item-icon {
+  font-size: 16px;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compliance-nav-badge {
+  margin-left: auto;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.compliance-sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ===============================
+   MAIN CONTENT & TOP HEADER
+   =============================== */
+.compliance-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-color);
+}
+
+.compliance-top-header {
+  height: 60px;
+  background-color: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.compliance-page-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compliance-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.compliance-pod-pill {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: #ede9fe;
+  color: #6d28d9;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid #ddd6fe;
+}
+
+/* =====================================================
+   EVIDENCE PAGE — TWO-PANEL SPLIT LAYOUT (MATCHING FIGMA & HTML)
+   ===================================================== */
+.compliance-content-wrapper {
+  flex: 1;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+  padding: 0;
+}
+
+.compliance-evidence-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------
+   LEFT: Evidence Queue Panel
+   -------------------------------------------------- */
+.compliance-evidence-queue {
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
+  height: 100%;
+}
+
+.compliance-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+  flex-shrink: 0;
+}
+
+.compliance-queue-header-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.compliance-queue-pending-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+  border-radius: 12px;
+}
+
+.compliance-queue-tabs {
+  display: flex;
+  padding: 0 24px 12px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.compliance-queue-tab {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.compliance-queue-tab:hover {
+  color: var(--text-main);
+  background: #f1f5f9;
+}
+
+.compliance-queue-tab.active {
+  color: var(--primary-color);
+  font-weight: 600;
+  background: #eff6ff;
+}
+
+.compliance-queue-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.compliance-queue-item {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.compliance-queue-item:hover {
+  background: #f8fafc;
+}
+
+.compliance-queue-item.active {
+  background: #eff6ff;
+  border-left: 3px solid var(--primary-color);
+  padding-left: 21px;
+}
+
+.compliance-queue-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.compliance-queue-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.compliance-queue-item-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.compliance-queue-item-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.compliance-queue-item-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------
+   RIGHT: Evidence Detail Panel
+   -------------------------------------------------- */
+.compliance-evidence-detail {
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  height: 100%;
+  overflow: hidden;
+}
+
+.compliance-detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+
+.compliance-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.compliance-detail-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+/* Meta 2-column Grid */
+.compliance-detail-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  margin-bottom: 22px;
+}
+
+.compliance-detail-meta-cell {
+  background: transparent;
+  padding: 0;
+}
+
+.compliance-detail-meta-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.compliance-detail-meta-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.compliance-detail-meta-value.deadline {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* Submitter notes box */
+.compliance-submitter-notes-box {
+  width: 100%;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+/* Compliance checklist */
+.compliance-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  font-size: 13px;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.compliance-checklist-item:last-child {
+  border-bottom: none;
+}
+
+.compliance-check-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.compliance-check-icon.checked {
+  background-color: #16a34a;
+  color: white;
+  border: 1.5px solid #16a34a;
+}
+
+.compliance-check-icon.unchecked {
+  border: 1.5px solid var(--border-color);
+  background: white;
+}
+
+.compliance-check-icon.blocked {
+  border: 1.5px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+/* Sticky Footer Action Buttons */
+.compliance-detail-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 28px;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.compliance-btn-request-info {
+  flex: 1;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid #f59e0b;
+  color: #d97706;
+  background: #fffbeb;
+  transition: background 0.15s;
+}
+
+.compliance-btn-request-info:hover {
+  background: #fef3c7;
+}
+
+.compliance-btn-reject {
+  flex: 1;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid #fca5a5;
+  color: #dc2626;
+  background: #fff5f5;
+  transition: background 0.15s;
+}
+
+.compliance-btn-reject:hover {
+  background: #fee2e2;
+}
+
+.compliance-btn-approve {
+  flex: 1;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  color: white;
+  background: #16a34a;
+  transition: background 0.15s;
+}
+
+.compliance-btn-approve:hover {
+  background: #15803d;
+}
