@@ -1,31 +1,25 @@
 import { useState } from "react";
-import Navbar from "./components/layout/Navbar";
-import Login from "./features/auth/Login";
-import EmployeeList from "./features/hr/EmployeeList";
-import TaskBoard from "./features/tasks/TaskBoard";
-import WorkflowDesigner from "./features/process/WorkflowDesigner";
-import AuditLogs from "./features/compliance/AuditLogs";
+import { ComplianceDashboard } from "./features/compliance";
+
+// Import legacy styles globally
+import './assets/css/base.css';
+import './assets/css/layout.css';
+import './assets/css/components.css';
+import './assets/css/compliance.css';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState("tasks");
+  const [currentTab, setCurrentTab] = useState("compliance");
 
+  if (currentTab === "compliance") {
+    // This renders the EXACT legacy HTML structure: .admin-layout > .sidebar + .main-content
+    return <ComplianceDashboard />;
+  }
+
+  // Fallback for other tabs
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f3f4f6",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <Navbar currentTab={currentTab} setCurrentTab={setCurrentTab} />
-
-      <main style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
-        {currentTab === "auth" && <Login />}
-        {currentTab === "hr" && <EmployeeList />}
-        {currentTab === "tasks" && <TaskBoard />}
-        {currentTab === "process" && <WorkflowDesigner />}
-        {currentTab === "compliance" && <AuditLogs />}
-      </main>
+    <div style={{ padding: "24px" }}>
+      <button onClick={() => setCurrentTab("compliance")}>Back to Compliance</button>
+      <p>Placeholder</p>
     </div>
   );
 }
