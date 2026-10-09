@@ -1,0 +1,35 @@
+{
+  "name": "optiflow-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OptiFlow Express.js Backend",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node test-foundation.js && node test-step2.js && node test-step3.js && node test-step4.js && node test-step5.js && node test-step6.js && node test-step7.js && node test-step8.js && node test-step9.js && node test-step10.js && node test-step11.js && node test-process.js && node test-contract-audit.js && node test-section-c.js && node test-live-integration.js",
+    "prisma:generate": "prisma generate",
+    "db:seed": "npx tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.0.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "nodemon": "^3.1.14",
+    "prisma": "^6.19.3"
+  }
+}

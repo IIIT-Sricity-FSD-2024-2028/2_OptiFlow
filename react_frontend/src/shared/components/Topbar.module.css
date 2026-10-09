@@ -1,0 +1,258 @@
+/* src/shared/components/Topbar.module.css */
+
+.topbar {
+  min-height: 64px;
+  flex-shrink: 0;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  z-index: 30;
+}
+
+/* Left Section: Role Badge / Title */
+.leftSection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.roleDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #4f46e5;
+}
+
+/* Right Section: Actions */
+.topbarActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(12px, 2vw, 28px);
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* Notification Bell Button */
+.notificationBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  color: #475569;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.notificationBtn:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.bellDot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #ef4444;
+}
+
+/* Avatar & Dropdown */
+.avatarContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.avatarBtn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: transform 0.1s ease;
+}
+
+.avatarBtn:hover {
+  transform: scale(1.05);
+}
+
+.avatarCircle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 120%;
+  right: 0;
+  width: 240px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 8px 0;
+  z-index: 50;
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdownHeader {
+  padding: 8px 16px 12px;
+}
+
+.dropdownName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+.dropdownEmail {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.dropdownRole {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f46e5;
+  background-color: #eef2ff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: capitalize;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background-color: #f1f5f9;
+  margin: 4px 0;
+}
+
+.dropdownItem, .dropdownItemLogout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  text-align: left;
+}
+
+.dropdownItem {
+  color: #475569;
+}
+
+.dropdownItem:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.dropdownItemLogout {
+  color: #dc2626;
+}
+
+.dropdownItemLogout:hover {
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+/* Dark Mode support */
+:global(.dark) .topbar {
+  background-color: #0f172a;
+  border-bottom-color: #1e293b;
+}
+
+:global(.dark) .notificationBtn {
+  color: #94a3b8;
+}
+
+:global(.dark) .notificationBtn:hover {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+:global(.dark) .badge {
+  background-color: rgba(79, 70, 229, 0.2);
+  color: #a5b4fc;
+}
+
+:global(.dark) .dropdownMenu {
+  background-color: #1e293b;
+  border-color: #334155;
+}
+
+:global(.dark) .dropdownName {
+  color: #f8fafc;
+}
+
+:global(.dark) .dropdownEmail {
+  color: #94a3b8;
+}
+
+:global(.dark) .dropdownRole {
+  background-color: rgba(79, 70, 229, 0.2);
+  color: #a5b4fc;
+}
+
+:global(.dark) .dropdownDivider {
+  background-color: #334155;
+}
+
+:global(.dark) .dropdownItem {
+  color: #cbd5e1;
+}
+
+:global(.dark) .dropdownItem:hover {
+  background-color: #334155;
+  color: #f8fafc;
+}
+
+:global(.dark) .dropdownItemLogout:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+}

@@ -1,16 +1,36 @@
-# React + Vite
+# OptiFlow Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the Vite React frontend for OptiFlow.
 
-Currently, two official plugins are available:
+## Folder Map
+- `src/app/`: Routing logic, guards, path constants, and feature route arrays.
+- `src/config/nav/`: Navigation configuration (sidebars).
+- `src/context/`: Global React contexts (AuthContext).
+- `src/services/api/`: API client wrappers matching backend endpoints.
+- `src/layouts/`: Dashboard and Platform layouts.
+- `src/shared/`: Shared components, hooks, and utilities.
+- `src/features/`: Isolated feature modules.
+  - `platform/`: M5 (Platform Admin)
+  - `executive/`: M1 (Executive/CEO)
+  - `compliance/`: M1 (Compliance)
+  - `hr/`: M2 (HR/Access Governance)
+  - `process-admin/`: M3 (Process Admin)
+  - `work/pm/`: M4 (Project Manager)
+  - `work/team-lead/`: M4 (Team Leader)
+  - `work/member/`: M4 (Team Member)
+  - `common/`: M3 (Shared/Public)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Rules
+- Each member edits **only** their own features/ folders and their own `app/routes/` file.
+- Changes to `shared/`, `layouts/`, `services/api/client.js`, or `paths.js` go through the **M3 owner by PR**.
+- `paths.js` exports every URL as a constant. No hardcoded path strings elsewhere.
+- The `services/api/client.js` module automatically unwraps {success, data} and handles 401 unauth redirect mapping.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Owner Table
+| Owner | Features | Roles |
+|---|---|---|
+| M1 | Executive, Compliance | Company Owner, Compliance Officer |
+| M2 | HR / Access Governance | HR Manager |
+| M3 | Process Admin, Common | Process Admin, Public / Shared |
+| M4 | PM, Team Lead, Member | Project Manager, Team Leader, Team Member |
+| M5 | Platform | Platform Admin (System Admin) |
