@@ -14,6 +14,7 @@ export const Button = ({ children, variant = 'primary', size = 'md', className =
     primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 border border-transparent',
     secondary: 'bg-white text-gray-700 hover:bg-gray-50 focus:ring-blue-500 border border-gray-300 shadow-sm',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 border border-transparent',
+    warning: 'bg-amber-100 text-amber-800 hover:bg-amber-200 focus:ring-amber-500 border border-transparent',
     outline: 'bg-transparent text-blue-600 hover:bg-blue-50 focus:ring-blue-500 border border-blue-600',
     ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500 border border-transparent',
   };

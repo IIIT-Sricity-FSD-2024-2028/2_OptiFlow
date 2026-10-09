@@ -7,6 +7,55 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import Table from "../../../shared/components/Table";
 import { CreateBindingModal } from "../components/CreateBindingModal";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
+import { Modal } from "../../../shared/components/Modal";
+
+const formatActionString = (str) => {
+  if (!str) return "Unknown Action";
+  return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+};
+
+const renderCriteria = (criteria) => {
+  if (!criteria) return <span className="text-gray-400 italic">No automated criteria configured.</span>;
+
+  if (criteria.trigger && criteria.requirement) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-blue-600 text-xs tracking-wider">IF</span>
+          <Badge variant="neutral">{criteria.trigger.field}</Badge>
+          <span className="text-gray-600 text-sm font-medium">changes to</span>
+          <Badge variant="info">{criteria.trigger.transitionTo}</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-emerald-600 text-xs tracking-wider">THEN</span>
+          <span className="text-gray-600 text-sm font-medium">engine will enforce</span>
+          <Badge variant="warning">{formatActionString(criteria.requirement.type)}</Badge>
+        </div>
+      </div>
+    );
+  }
+
+  if (criteria.field && criteria.operator) {
+    const operatorMap = {
+      eq: "must equal",
+      neq: "must not equal",
+      lt: "must be strictly less than",
+      gt: "must be strictly greater than",
+      lte: "must be less than or equal to",
+      gte: "must be greater than or equal to"
+    };
+    return (
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-blue-600 text-xs tracking-wider">ENFORCE</span>
+        <Badge variant="neutral">{criteria.field}</Badge>
+        <span className="text-gray-600 text-sm font-medium">{operatorMap[criteria.operator] || criteria.operator}</span>
+        <Badge variant="info">{String(criteria.value)}</Badge>
+      </div>
+    );
+  }
+
+  return <pre className="text-xs text-gray-700 font-mono bg-white p-2 rounded border border-gray-200">{JSON.stringify(criteria, null, 2)}</pre>;
+};
 
 const RuleDetail = () => {
   const { id } = useParams();
@@ -16,6 +65,8 @@ const RuleDetail = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [isBindingModalOpen, setIsBindingModalOpen] = useState(false);
   const [selectedViolation, setSelectedViolation] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({ name: "", description: "", severity: "Medium", isActive: true });
 
   useEffect(() => {
     fetchRule();
@@ -30,6 +81,31 @@ const RuleDetail = () => {
       console.error("Failed to load rule details", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenEdit = () => {
+    setEditFormData({
+      name: rule.name,
+      description: rule.description || "",
+      severity: rule.severity || "Medium",
+      isActive: rule.isActive
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    try {
+      await apiClient(`/compliance-rules/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(editFormData),
+      });
+      setIsEditModalOpen(false);
+      fetchRule();
+    } catch (err) {
+      console.error("Failed to update rule:", err);
+      alert("Failed to update rule");
     }
   };
 
@@ -84,15 +160,15 @@ const RuleDetail = () => {
                 </dd>
               </div>
               <div className="sm:col-span-2">
-                <dt className="text-sm font-medium text-gray-500">Engine Evaluation Criteria (JSON)</dt>
-                <dd className="mt-1 text-sm text-gray-900 bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto max-h-48 font-mono">
-                  {rule.criteria ? JSON.stringify(rule.criteria, null, 2) : "No machine-readable criteria defined."}
+                <dt className="text-sm font-medium text-gray-500 mb-2">Engine Evaluation Criteria</dt>
+                <dd className="mt-1 text-sm text-gray-900 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                  {renderCriteria(rule.criteria)}
                 </dd>
               </div>
               <div className="sm:col-span-2">
-                <dt className="text-sm font-medium text-gray-500">Action on Fail</dt>
-                <dd className="mt-1 text-sm font-medium text-red-600">
-                  {rule.actionOnFail || "BLOCK_TRANSITION"}
+                <dt className="text-sm font-medium text-gray-500 mb-2">Action on Fail</dt>
+                <dd className="mt-1 text-sm">
+                  <Badge variant="error">{formatActionString(rule.actionOnFail || "BLOCK_TRANSITION")}</Badge>
                 </dd>
               </div>
             </dl>
@@ -146,7 +222,7 @@ const RuleDetail = () => {
                     accessor: "actions", 
                     render: (row) => (
                       <Button 
-                        variant="ghost" 
+                        variant={row.status === 'Resolved' ? 'ghost' : 'warning'} 
                         size="sm"
                         onClick={() => setSelectedViolation(row)}
                         disabled={row.status === 'Resolved'}
@@ -192,7 +268,7 @@ const RuleDetail = () => {
           </div>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline">Edit Rule</Button>
+          <Button variant="outline" onClick={handleOpenEdit}>Edit Rule</Button>
         </div>
       </div>
 
@@ -239,6 +315,89 @@ const RuleDetail = () => {
         violation={selectedViolation}
         onResolved={fetchRule}
       />
+
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Compliance Rule"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleSaveEdit}>
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-slate-700">
+              Rule Name *
+            </label>
+            <input
+              type="text"
+              required
+              className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              value={editFormData.name}
+              onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-slate-700">
+              Description *
+            </label>
+            <textarea
+              required
+              rows={3}
+              className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              value={editFormData.description}
+              onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+            />
+          </div>
+          
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-slate-700">
+              Severity
+            </label>
+            <select
+              className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+              value={editFormData.severity}
+              onChange={(e) => setEditFormData({ ...editFormData, severity: e.target.value })}
+            >
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between mt-2 p-3 bg-gray-50 border border-gray-100 rounded-lg">
+            <div className="flex flex-col">
+              <label htmlFor="editIsActive" className="text-sm font-semibold text-slate-700">
+                Rule is Active
+              </label>
+              <span className="text-xs text-gray-500">Enable or disable this rule</span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                id="editIsActive" 
+                checked={editFormData.isActive}
+                onChange={(e) => setEditFormData({ ...editFormData, isActive: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+          
+          <button type="submit" className="hidden">
+            Submit
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 };

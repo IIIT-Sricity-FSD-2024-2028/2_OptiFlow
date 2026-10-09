@@ -171,26 +171,6 @@ export default function ComplianceRules() {
         </Badge>
       ),
     },
-    {
-      header: "ACTIONS",
-      accessor: "actions",
-      render: (row) => (
-        <div className="flex gap-2">
-          <button 
-            onClick={() => handleOpenEdit(row)}
-            className="text-[13px] text-gray-600 hover:text-gray-800 font-semibold px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
-          >
-            Edit
-          </button>
-          <button 
-            onClick={() => navigate(`/compliance/rules/${row.id}`)}
-            className="text-[13px] text-blue-600 hover:text-blue-800 font-semibold px-3 py-1.5 border border-blue-200 rounded bg-blue-50 hover:bg-blue-100 transition-colors"
-          >
-            Manage
-          </button>
-        </div>
-      ),
-    },
   ];
 
   if (loading) {
@@ -294,36 +274,26 @@ export default function ComplianceRules() {
               </select>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-semibold text-slate-700">
-                Apply To (Scope)
-              </label>
-              <select
-                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                value={formData.scopeType}
-                onChange={(e) => setFormData({ ...formData, scopeType: e.target.value })}
-              >
-                <option value="Company">Entire Company</option>
-                <option value="Project">Specific Project</option>
-                <option value="Team">Specific Team</option>
-              </select>
-            </div>
           </div>
 
-          {editingRuleId && (
-            <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center justify-between mt-2 p-3 bg-gray-50 border border-gray-100 rounded-lg">
+            <div className="flex flex-col">
+              <label htmlFor="isActive" className="text-sm font-semibold text-slate-700">
+                Rule is Active
+              </label>
+              <span className="text-xs text-gray-500">Enable or disable this rule</span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
               <input 
                 type="checkbox" 
                 id="isActive" 
                 checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                className="sr-only peer"
               />
-              <label htmlFor="isActive" className="text-sm font-semibold text-slate-700">
-                Rule is Active
-              </label>
-            </div>
-          )}
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
           
           <button type="submit" className="hidden">
             Submit

@@ -30,7 +30,9 @@ async function main() {
   // 0. IDEMPOTENT CLEANUP (Reverse FK Dependency Order)
   // =====================================================================
   await prisma.attachment.deleteMany({});
-  await prisma.auditLog.deleteMany({});
+  await prisma.systemAuditLog.deleteMany({});
+  await prisma.processAuditLog.deleteMany({});
+  await prisma.complianceAuditLog.deleteMany({});
   // await prisma.comment.deleteMany({});
   await prisma.complianceEvidence.deleteMany({});
   await prisma.complianceViolation.deleteMany({});
@@ -375,6 +377,8 @@ async function main() {
       severity: Severity.Critical,
       categoryId: categorySecurity.id,
       isActive: true,
+      criteria: { "field": "two_factor_auth", "operator": "eq", "value": true },
+      actionOnFail: "BLOCK_TRANSITION",
     },
   });
 
@@ -388,8 +392,41 @@ async function main() {
       severity: Severity.Medium,
       categoryId: categorySecurity.id,
       isActive: true,
+      criteria: { "field": "dueDate", "operator": "lt", "value": "NOW()" },
+      actionOnFail: "ALLOW_WITH_WARNING",
     },
   });
+
+  const ruleGDPR = await prisma.complianceRule.create({
+    data: {
+      companyId: acmeCorp.id,
+      name: "GDPR Data Masking Policy",
+      description: "Ensure all sensitive customer data fields are masked.",
+      severity: Severity.High,
+      categoryId: categorySecurity.id,
+      isActive: true,
+      criteria: { "field": "data_masking", "operator": "eq", "value": true },
+      actionOnFail: "REQUIRE_MANUAL_OVERRIDE",
+    },
+  });
+
+  const rulePeerReview = await prisma.complianceRule.create({
+    data: {
+      companyId: acmeCorp.id,
+      name: "Mandatory Evidence for Task Completion",
+      description: "A task cannot be marked as Completed unless approved Compliance Evidence is attached.",
+      severity: Severity.High,
+      categoryId: categorySecurity.id,
+      isActive: true,
+      criteria: { 
+        trigger: { field: "status", transitionTo: "Completed" },
+        requirement: { type: "EVIDENCE_REQUIRED" }
+      },
+      actionOnFail: "BLOCK_TRANSITION",
+    },
+  });
+
+
 
   const violation = await prisma.complianceViolation.create({
     data: {
@@ -429,13 +466,14 @@ async function main() {
     },
   });
 
-  await prisma.auditLog.createMany({
+  await prisma.processAuditLog.createMany({
     data: [
-      { companyId: acmeCorp.id, entityType: "Project", entityId: project.id, action: AuditAction.CREATE, performedById: userAlice.id },
-      { companyId: acmeCorp.id, entityType: "ProcessTemplate", entityId: processTemplate.id, action: AuditAction.CREATE, performedById: userArjun.id },
-      { companyId: acmeCorp.id, entityType: "Task", entityId: task1.id, action: AuditAction.STATUS_CHANGE, performedById: userDavid.id },
+      { companyId: acmeCorp.id, projectId: project.id, action: AuditAction.CREATE, performedById: userAlice.id },
+      { companyId: acmeCorp.id, templateId: processTemplate.id, action: AuditAction.CREATE, performedById: userArjun.id },
+      { companyId: acmeCorp.id, taskId: task1.id, action: AuditAction.STATUS_CHANGE, performedById: userDavid.id },
     ],
   });
+
 
   
   // =====================================================================
@@ -455,6 +493,7 @@ async function main() {
   const teamMembers = [userDavid, userEmma, userFrank, userGrace, userIan, userJulia, userKevin];
   const demoProjects = [projectQ3, projectMobile, projectSOC2, projectCRM];
   await prisma.complianceBinding.create({ data: { companyId: acmeCorp.id, ruleId: ruleOverdue.id, scopeType: ScopeType.Project, scopeId: projectQ3.id } });
+  await prisma.complianceBinding.create({ data: { companyId: acmeCorp.id, ruleId: rulePeerReview.id, scopeType: ScopeType.Project, scopeId: projectQ3.id } });
   const taskPriorities = [TaskPriority.Low, TaskPriority.Medium, TaskPriority.High, TaskPriority.Urgent];
   
   const createdTasks: any[] = [];
@@ -504,68 +543,79 @@ async function main() {
   }
 
   for (let i = 0; i < 20; i++) {
-    await prisma.auditLog.create({
+    if (i % 3 === 0) {
+      await prisma.systemAuditLog.create({
+        data: {
+          companyId: acmeCorp.id,
+          action: AuditAction.LOGIN,
+          targetUserId: userDavid.id,
+          performedById: teamMembers[i % teamMembers.length].id,
+          ipAddress: "192.168.1." + (100 + i),
+          userAgent: "Mozilla/5.0 Demo Browser",
+        }
+      });
+    } else if (i % 3 === 1) {
+      await prisma.processAuditLog.create({
+        data: {
+          companyId: acmeCorp.id,
+          action: AuditAction.UPDATE,
+          taskId: createdTasks[i % createdTasks.length].id,
+          performedById: teamMembers[i % teamMembers.length].id,
+        }
+      });
+    } else {
+      await prisma.complianceAuditLog.create({
+        data: {
+          companyId: acmeCorp.id,
+          action: AuditAction.CREATE,
+          ruleId: rule2FA.id,
+          performedById: userSamuel.id,
+        }
+      });
+    }
+  }
+
+  // Diverse Compliance Violations for Dashboard testing
+  await prisma.complianceViolation.createMany({
+    data: [
+      // Critical (rule2FA)
+      { companyId: acmeCorp.id, ruleId: rule2FA.id, entityType: "User", entityId: userFrank.id, status: ViolationStatus.Open, severity: Severity.Critical, reportedById: userSamuel.id, resolutionRemarks: "Frank has not setup 2FA yet." },
+      { companyId: acmeCorp.id, ruleId: rule2FA.id, entityType: "User", entityId: userEmma.id, status: ViolationStatus.Resolved, severity: Severity.Critical, reportedById: userSamuel.id, resolutionRemarks: "Resolved via manual override." },
+      { companyId: acmeCorp.id, ruleId: rule2FA.id, entityType: "User", entityId: userIan.id, status: ViolationStatus.Ignored, severity: Severity.Critical, reportedById: userSamuel.id, resolutionRemarks: "Ignored for testing." },
+
+      // High (ruleGDPR)
+      { companyId: acmeCorp.id, ruleId: ruleGDPR.id, entityType: "Project", entityId: projectQ3.id, status: ViolationStatus.Under_Review, severity: Severity.High, reportedById: userSamuel.id, resolutionRemarks: "Pending review of newly submitted data masking script." },
+      { companyId: acmeCorp.id, ruleId: ruleGDPR.id, entityType: "Project", entityId: projectMobile.id, status: ViolationStatus.Open, severity: Severity.High, reportedById: userSamuel.id, resolutionRemarks: "Data masking missing on mobile API." },
+      { companyId: acmeCorp.id, ruleId: rulePeerReview.id, entityType: "Task", entityId: createdTasks[2].id, status: ViolationStatus.Resolved, severity: Severity.High, reportedById: userSamuel.id, resolutionRemarks: "Approved evidence uploaded." },
+
+      // Medium (ruleOverdue)
+      { companyId: acmeCorp.id, ruleId: ruleOverdue.id, entityType: "Task", entityId: createdTasks[3].id, status: ViolationStatus.Open, severity: Severity.Medium, reportedById: userSamuel.id, resolutionRemarks: "Task past due date." },
+      { companyId: acmeCorp.id, ruleId: ruleOverdue.id, entityType: "Task", entityId: createdTasks[4].id, status: ViolationStatus.Under_Review, severity: Severity.Medium, reportedById: userSamuel.id, resolutionRemarks: "Evidence of delay approved." },
+      { companyId: acmeCorp.id, ruleId: ruleOverdue.id, entityType: "Project", entityId: projectSOC2.id, status: ViolationStatus.Resolved, severity: Severity.Medium, reportedById: userSamuel.id, resolutionRemarks: "Approved financial log audit trail." },
+      
+      // Low (ruleOverdue - overriding severity just for demo)
+      { companyId: acmeCorp.id, ruleId: ruleOverdue.id, entityType: "Task", entityId: createdTasks[5].id, status: ViolationStatus.Open, severity: Severity.Low, reportedById: userSamuel.id, resolutionRemarks: "Minor documentation delay." },
+      { companyId: acmeCorp.id, ruleId: ruleOverdue.id, entityType: "Task", entityId: createdTasks[6].id, status: ViolationStatus.Ignored, severity: Severity.Low, reportedById: userSamuel.id, resolutionRemarks: "Known delay, acceptable." },
+    ]
+  });
+
+  // Get one of the Under_Review violations to link evidence to
+  const violationUnderReview = await prisma.complianceViolation.findFirst({
+    where: { companyId: acmeCorp.id, status: ViolationStatus.Under_Review }
+  });
+
+  if (violationUnderReview) {
+    await prisma.complianceEvidence.create({
       data: {
-        companyId: acmeCorp.id,
-        action: i % 2 === 0 ? AuditAction.LOGIN : AuditAction.UPDATE,
-        entityType: i % 2 === 0 ? "User" : "Task",
-        entityId: i % 2 === 0 ? userDavid.id : createdTasks[0].id,
-        performedById: teamMembers[i % teamMembers.length].id,
-        ipAddress: "192.168.1." + (100 + i),
-        userAgent: "Mozilla/5.0 Demo Browser"
+        companyId: acmeCorp.id, userId: userDavid.id,
+        violationId: violationUnderReview.id,
+        taskId: createdTasks[0].id,
+        title: "Data Masking Script Evidence",
+        evidenceType: "Code Snippet", fileUrl: "/uploads/fake.pdf",
+        status: EvidenceStatus.Pending
       }
     });
   }
-
-  await prisma.complianceViolation.create({
-    data: {
-      companyId: acmeCorp.id,
-      ruleId: rule2FA.id,
-      entityType: "User",
-      entityId: userFrank.id,
-      status: ViolationStatus.Open,
-      severity: Severity.Critical,
-      reportedById: userSamuel.id,
-      resolutionRemarks: "Frank has not setup 2FA yet."
-    }
-  });
-
-  const violationUnderReview = await prisma.complianceViolation.create({
-    data: {
-      companyId: acmeCorp.id,
-      ruleId: rule2FA.id, // Reused a safe rule since ruleGDPR might not exist depending on the state
-      entityType: "Project",
-      entityId: projectQ3.id,
-      status: ViolationStatus.Under_Review,
-      severity: Severity.High,
-      reportedById: userSamuel.id,
-      resolutionRemarks: "Pending review of newly submitted data masking script."
-    }
-  });
-
-  await prisma.complianceEvidence.create({
-    data: {
-      companyId: acmeCorp.id, userId: userDavid.id,
-      violationId: violationUnderReview.id,
-      taskId: createdTasks[0].id,
-      title: "Data Masking Script Evidence",
-      evidenceType: "Code Snippet", fileUrl: "/uploads/fake.pdf",
-      status: EvidenceStatus.Pending
-    }
-  });
-
-  await prisma.complianceViolation.create({
-    data: {
-      companyId: acmeCorp.id,
-      ruleId: rule2FA.id,
-      entityType: "Project",
-      entityId: projectSOC2.id,
-      status: ViolationStatus.Resolved,
-      severity: Severity.Medium,
-      reportedById: userSamuel.id,
-      resolutionRemarks: "Approved financial log audit trail."
-    }
-  });
 
   await prisma.platformSupportAccess.createMany({
     data: [
