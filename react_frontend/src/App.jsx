@@ -1,25 +1,19 @@
-import { useState } from "react";
-import { ComplianceDashboard } from "./features/compliance";
+import React from 'react';
+import { RouterProvider } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './shared/components/Toast';
+import { router } from './app/router';
 
-// Import legacy styles globally
-import './assets/css/base.css';
-import './assets/css/layout.css';
-import './assets/css/components.css';
-import './assets/css/compliance.css';
-
-export default function App() {
-  const [currentTab, setCurrentTab] = useState("compliance");
-
-  if (currentTab === "compliance") {
-    // This renders the EXACT legacy HTML structure: .admin-layout > .sidebar + .main-content
-    return <ComplianceDashboard />;
-  }
-
-  // Fallback for other tabs
+// WHY: Wrapping RouterProvider with ToastProvider allows any page or modal across
+// all 9 actor roles to trigger toasts seamlessly via the useToast() hook.
+function App() {
   return (
-    <div style={{ padding: "24px" }}>
-      <button onClick={() => setCurrentTab("compliance")}>Back to Compliance</button>
-      <p>Placeholder</p>
-    </div>
+    <AuthProvider>
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
+    </AuthProvider>
   );
 }
+
+export default App;
