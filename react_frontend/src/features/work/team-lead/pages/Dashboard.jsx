@@ -51,6 +51,7 @@ export default function TeamLeadDashboard() {
   const [subtaskAssignee, setSubtaskAssignee] = useState('');
   const [subtaskDeadline, setSubtaskDeadline] = useState('');
   const [savingSubtask, setSavingSubtask] = useState(false);
+  const [subtaskError, setSubtaskError] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
 
 
@@ -318,6 +319,7 @@ export default function TeamLeadDashboard() {
   // ---------------------------------------------------------------------------
 
   const openSubtaskModal = (parentId = '') => {
+    setSubtaskError('');
     setSelectedParentTaskId(parentId);
     setIsParentLocked(!!parentId);
     setSubtaskModalOpen(true);
@@ -325,6 +327,7 @@ export default function TeamLeadDashboard() {
 
   const closeSubtaskModal = () => {
     setSubtaskModalOpen(false);
+    setSubtaskError('');
     setSelectedParentTaskId('');
     setIsParentLocked(false);
     setSubtaskTitle('');
@@ -334,19 +337,14 @@ export default function TeamLeadDashboard() {
   };
 
   const handleSaveSubtask = async () => {
+    setSubtaskError('');
     if (!selectedParentTaskId) {
-      showToast(
-        'error',
-        'Please select a parent task.'
-      );
+      setSubtaskError('Please select a parent task.');
       return;
     }
 
     if (!subtaskTitle.trim()) {
-      showToast(
-        'error',
-        'Subtask title is required.'
-      );
+      setSubtaskError('Subtask title is required.');
       return;
     }
 
@@ -422,10 +420,7 @@ export default function TeamLeadDashboard() {
         error
       );
 
-      showToast(
-        'error',
-        'Failed to create subtask.'
-      );
+      setSubtaskError(error?.message || 'Failed to create subtask.');
     } finally {
       setSavingSubtask(false);
     }
@@ -1012,6 +1007,14 @@ export default function TeamLeadDashboard() {
           </div>
         }
       >
+        {subtaskError && (
+          <div
+            className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            role="alert"
+          >
+            {subtaskError}
+          </div>
+        )}
         <div className="space-y-4">
 
           <p className="text-sm text-gray-500">

@@ -6,20 +6,24 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const apiClient = async (endpoint, options = {}) => {
   const token = sessionStorage.getItem('authToken');
+  const method = (options.method || (options.body !== undefined ? 'POST' : 'GET')).toUpperCase();
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData;
   
   const headers = {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
-    const serializedBody =
-    options.body && typeof options.body === 'object' && !(options.body instanceof FormData)
+  const serializedBody =
+    options.body && typeof options.body === 'object' && !isFormData
       ? JSON.stringify(options.body)
       : options.body;
 
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
+    method,
     headers,
     ...(serializedBody !== undefined ? { body: serializedBody } : {}),
   });

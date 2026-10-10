@@ -539,6 +539,21 @@ export async function createSubtask(req, res, next) {
 
     const assignedToId = body.assignedToId || body.assigned_to_id || body.assignedTo || null;
 
+    if (assignedToId) {
+      const assignee = await prisma.user.findFirst({
+        where: {
+          id: assignedToId,
+          companyId: req.user.companyId,
+        },
+      });
+
+      if (!assignee) {
+        throw new BadRequestError(
+          'Assigned user does not belong to this company'
+        );
+      }
+    }
+
     const subtask = await prisma.subtask.create({
       data: {
         companyId: req.user.companyId,

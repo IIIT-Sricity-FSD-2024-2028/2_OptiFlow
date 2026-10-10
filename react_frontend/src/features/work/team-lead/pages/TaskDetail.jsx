@@ -52,6 +52,7 @@ export default function TeamLeadTaskDetail() {
   const [subtaskOpen, setSubtaskOpen] = useState(false);
   const [stForm, setStForm] = useState({ title: '', assignee: '', due: '' });
   const [savingSt, setSavingSt] = useState(false);
+  const [subtaskError, setSubtaskError] = useState('');
 
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
   const showToast = (type, message) => {
@@ -106,7 +107,11 @@ export default function TeamLeadTaskDetail() {
   };
 
   const handleSaveSubtask = async () => {
-    if (!stForm.title.trim()) return showToast('error', 'Title is required.');
+    setSubtaskError('');
+    if (!stForm.title.trim()) {
+      setSubtaskError('Title is required.');
+      return;
+    }
     setSavingSt(true);
     try {
       const assignedMember = members.find(m => String(m.id || m.userId) === String(stForm.assignee));
@@ -127,8 +132,10 @@ export default function TeamLeadTaskDetail() {
       };
       setSubtasks(prev => [...prev, subtaskItem]);
       showToast('success', 'Subtask created.');
-      setSubtaskOpen(false); setStForm({ title: '', assignee: '', due: '' });
-    } catch { showToast('error', 'Failed to create subtask.'); }
+      setSubtaskOpen(false); setSubtaskError(''); setStForm({ title: '', assignee: '', due: '' });
+    } catch (error) {
+      setSubtaskError(error?.message || 'Failed to create subtask.');
+    }
     finally { setSavingSt(false); }
   };
 
@@ -173,7 +180,7 @@ export default function TeamLeadTaskDetail() {
             ) : null}
           >
             <div className="flex justify-end -mb-4 relative z-10 pr-2">
-              <Button variant="outline" onClick={() => setSubtaskOpen(true)}>+ Add Subtask</Button>
+              <Button variant="outline" onClick={() => { setSubtaskError(''); setSubtaskOpen(true); }}>+ Add Subtask</Button>
             </div>
             <SubtaskList 
               subtasks={subtasks}
@@ -260,12 +267,20 @@ export default function TeamLeadTaskDetail() {
       </Modal>
 
       {/* Subtask modal */}
-      <Modal isOpen={subtaskOpen} onClose={() => setSubtaskOpen(false)} title="Create Subtask"
+      <Modal isOpen={subtaskOpen} onClose={() => { setSubtaskOpen(false); setSubtaskError(''); }} title="Create Subtask"
         footer={<>
-          <Button variant="outline" onClick={() => setSubtaskOpen(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => { setSubtaskOpen(false); setSubtaskError(''); }}>Cancel</Button>
           <Button variant="primary" onClick={handleSaveSubtask} disabled={savingSt}>{savingSt ? 'Saving…' : 'Assign Subtask'}</Button>
         </>}>
         <div className="space-y-4">
+          {subtaskError && (
+            <div
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              role="alert"
+            >
+              {subtaskError}
+            </div>
+          )}
           <FormField label="Subtask Title" required>
             <Input value={stForm.title} onChange={e => setStForm(f => ({ ...f, title: e.target.value }))} placeholder="What needs to be done?" />
           </FormField>
