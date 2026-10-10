@@ -537,6 +537,8 @@ export async function createSubtask(req, res, next) {
       throw new NotFoundError(`Parent task ${taskId} not found in this company`);
     }
 
+    const assignedToId = body.assignedToId || body.assigned_to_id || body.assignedTo || null;
+
     const subtask = await prisma.subtask.create({
       data: {
         companyId: req.user.companyId,
@@ -544,6 +546,7 @@ export async function createSubtask(req, res, next) {
         title,
         description,
         status,
+        assignedToId,
         createdById: req.user.id,
         dueDate: dueDate ? new Date(dueDate) : null,
       },

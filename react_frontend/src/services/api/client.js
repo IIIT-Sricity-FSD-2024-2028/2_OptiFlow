@@ -13,9 +13,15 @@ export const apiClient = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
+    const serializedBody =
+    options.body && typeof options.body === 'object' && !(options.body instanceof FormData)
+      ? JSON.stringify(options.body)
+      : options.body;
+
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,
+    ...(serializedBody !== undefined ? { body: serializedBody } : {}),
   });
 
   const data = await response.json().catch(() => null);
