@@ -2,6 +2,7 @@ import { env, validateEnv } from './config/env.js';
 import { prisma, testDbConnection } from './config/prisma.js';
 import { app } from './app.js';
 
+// OptiFlow Server Entry Point
 async function startServer() {
   try {
     // 1. Validate environment configuration
