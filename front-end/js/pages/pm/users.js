@@ -30,6 +30,7 @@ window.UsersPage = {
       
       const roleBadgeCls = u.roleId === 1 ? 'purple' : u.roleId === 2 ? 'blue' : 'gray';
 
+      const uidStr = u.id || u.userId;
       return `
       <tr>
         <td>
@@ -51,8 +52,8 @@ window.UsersPage = {
         <td><span class="badge ${window.Helpers.statusClass(u.status === 'active' ? 'Active' : 'Inactive')}">${u.status}</span></td>
         <td>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-secondary btn-sm" onclick="window.UsersPage.openEdit(${u.id})">Edit</button>
-            ${u.roleId !== 1 ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="window.UsersPage.toggleStatus(${u.id})">${u.status === 'active' ? 'Deactivate' : 'Activate'}</button>` : ''}
+            <button class="btn btn-secondary btn-sm" onclick="window.UsersPage.openEdit('${uidStr}')">Edit</button>
+            ${u.roleId !== 1 ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="window.UsersPage.toggleStatus('${uidStr}')">${u.status === 'active' ? 'Deactivate' : 'Activate'}</button>` : ''}
           </div>
         </td>
       </tr>`;
@@ -173,10 +174,10 @@ window.UsersPage = {
   },
 
   openEdit(userId) {
-    const u = this.state.users.find(x => x.id === userId);
+    const u = this.state.users.find(x => String(x.id || x.userId) === String(userId));
     if (!u) return;
     
-    const managers = this.state.users.filter(x => x.id !== userId && x.roleId <= 4);
+    const managers = this.state.users.filter(x => String(x.id || x.userId) !== String(userId) && x.roleId <= 4);
 
     window.Modal.create({
       id: 'modal-edit-user',
@@ -209,24 +210,24 @@ window.UsersPage = {
         </div>`,
       footerHTML: `
         <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-edit-user')">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="window.UsersPage.submitEdit(${userId})">Save Changes</button>`
+        <button class="btn btn-primary btn-sm" onclick="window.UsersPage.submitEdit('${userId}')">Save Changes</button>`
     });
   },
 
   async submitEdit(userId) {
-    const numericId = parseInt(String(userId).replace(/[^0-9]/g, ''), 10);
-    const idx = this.state.users.findIndex(u => u.userId === numericId || String(u.userId) === String(userId));
+    const uidStr = String(userId);
+    const idx = this.state.users.findIndex(u => String(u.userId || u.id) === uidStr);
     if (idx === -1) return;
 
     const patch = {
-      department_id: parseInt(window.Helpers.getVal('eu-dept')) || undefined,
-      manager_id:    parseInt(window.Helpers.getVal('eu-manager')) || null,
+      department_id: window.Helpers.getVal('eu-dept') || undefined,
+      manager_id:    window.Helpers.getVal('eu-manager') || null,
     };
     const newName = window.Helpers.getVal('eu-name');
     if (newName) patch.full_name = newName;
 
     try {
-      await window.Helpers.api.request(`/users/${numericId}`, 'PATCH', patch);
+      await window.Helpers.api.request(`/users/${uidStr}`, 'PATCH', patch);
       this.state = await window.Helpers.getState();
       window.Modal.close('modal-edit-user');
       window.Toast.success('User Updated', 'Changes saved.');
@@ -239,12 +240,12 @@ window.UsersPage = {
   },
 
   async toggleStatus(userId) {
-    const numericId = parseInt(String(userId).replace(/[^0-9]/g, ''), 10);
-    const u = this.state.users.find(x => x.userId === numericId || String(x.userId) === String(userId));
+    const uidStr = String(userId);
+    const u = this.state.users.find(x => String(x.userId || x.id) === uidStr);
     if (!u) return;
     const newStatus = u.isActive === false ? true : false; // toggle
     try {
-      await window.Helpers.api.request(`/users/${numericId}`, 'PATCH', { is_active: newStatus });
+      await window.Helpers.api.request(`/users/${uidStr}`, 'PATCH', { is_active: newStatus });
       this.state = await window.Helpers.getState();
       window.Toast.info('Status Updated', 'User status changed.');
       this.filtered = [...this.state.users];

@@ -179,8 +179,8 @@
 
       function getMyEvidence() {
         if (!state.evidence) return [];
-        const sessId = Number(session.rawId);
-        return state.evidence.filter((e) => Number(e.userId) === sessId);
+        const sessId = String(session.id || session.rawId || '');
+        return state.evidence.filter((e) => String(e.userId || e.user_id || '') === sessId);
       }
 
       function render() {
@@ -247,9 +247,9 @@
       }
 
       function openAddModal() {
-        const sessId = Number(session.rawId);
-        const myTasks = state.tasks.filter(
-          (t) => Number(t.assignedUserId) === sessId || Number(t.assignedTo) === sessId
+        const sessId = String(session.id || session.rawId || '');
+        const myTasks = (state.tasks || []).filter(
+          (t) => String(t.assignedUserId || t.assignedTo || t.assignedToId || '') === sessId
         );
         window.Modal.create({
           id: "modal-ev-add",
@@ -367,11 +367,12 @@
         if (!result.valid) return;
 
         const taskEl = document.getElementById("ev-task");
-        const taskId = parseInt(taskEl.value) || 0;
+        const taskId = taskEl && taskEl.value ? String(taskEl.value).trim() : null;
 
+        const sessionUser = window.Auth ? window.Auth.getSession() : {};
         const newEv = {
-          user_id:       Number(session.rawId),
-          task_id:       taskId ? parseInt(taskId) : null,
+          user_id:       String(session.id || session.rawId || ''),
+          task_id:       taskId || null,
           title:         window.Helpers.getVal("ev-title"),
           evidence_type: window.Helpers.getVal("ev-type"),
           notes:         window.Helpers.getVal("ev-notes"),
@@ -383,11 +384,15 @@
           state = await window.Helpers.getState();
 
           // Notify Compliance Officer
-          const recipient = state.users.find(u => u.roleName === 'Compliance_Officer');
+          const recipient = (state.users || []).find(u => {
+            const r = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
+            const l = String(u.roleLabel || u.role_label || '').toLowerCase();
+            return r === 'compliance_officer' || l.includes('compliance');
+          });
           if (recipient) {
-            window.Helpers.pushNotification(recipient.userId, {
+            window.Helpers.pushNotification(String(recipient.userId || recipient.id), {
               title:   'New Evidence',
-              message: `New evidence submitted by ${session.name}: "${newEv.title}"`,
+              message: `New evidence submitted by ${session.name || session.fullName || 'User'}: "${newEv.title}"`,
               type:    'info',
             });
           }

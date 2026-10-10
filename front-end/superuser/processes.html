@@ -363,19 +363,12 @@
                         </svg>
                         <span>Dashboard</span>
                     </a>
-                    <a href="processes.html" class="nav-item active">
+                    <a href="processes.html" onclick="if(window.showProcessList){window.showProcessList(); return false;}" class="nav-item active">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                         </svg>
                         <span>Processes</span>
-                    </a>
-                    <a href="branches.html" class="nav-item" data-allowed-roles="system_admin,system admin">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-                            <rect x="9" y="9" width="6" height="6"></rect>
-                        </svg>
-                        <span>Branches</span>
                     </a>
                     <a href="analytics.html" class="nav-item">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -385,19 +378,6 @@
                             <line x1="6" y1="20" x2="6" y2="14"></line>
                         </svg>
                         <span>Analytics</span>
-                    </a>
-                </div>
-                <div class="nav-section">
-                    <div class="nav-section-title">Administration</div>
-                    <a href="users.html" class="nav-item">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <span>Users &amp; Access</span>
                     </a>
                     <a href="audit.html" class="nav-item">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -413,20 +393,11 @@
                 </div>
             </nav>
             <div class="sidebar-footer">
-                <a href="settings.html" class="nav-item" style="padding-left:0; background:transparent">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path
-                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                        </path>
-                    </svg>
-                    <span>Settings</span>
-                </a>
                 <div class="user-profile">
                     <div class="avatar" id="sidebar-user-avatar">AM</div>
                     <div class="user-info">
                         <span class="user-name" id="sidebar-user-name">Arjun Mehta</span>
-                        <span class="user-role" id="sidebar-user-role">SuperUser Admin</span>
+                        <span class="user-role" id="sidebar-user-role">Process Admin</span>
                     </div>
                 </div>
                 <div style="border-top: 1px solid rgba(255,255,255,0.05); margin-top: 12px; padding-top: 12px;">
@@ -447,20 +418,18 @@
             <header class="top-header">
                 <div class="page-title" id="processesPageTitle">Processes</div>
                 <div class="header-actions" style="display: flex; align-items: center; gap: 16px;">
+                    <a href="process-builder.html" class="btn btn-primary" id="btnHeaderNewProcess" style="text-decoration:none;">
+                        + New Process
+                    </a>
                     <button class="btn-icon" style="position: relative;" aria-label="Notifications">
                         <img src="../assets/images/bell.svg" alt="Notifications" style="width: 20px; height: 20px;">
                         <span
                             style="position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; background: #EF4444; border-radius: 50%; border: 2px solid white;"></span>
                     </button>
-                    <button class="btn btn-primary" id="listHeaderActionNew" onclick="openNewProcessModal()"
-                        style="display:none;">+ New Process</button>
-                    <div id="detailHeaderActions" style="display:none;">
-                        <button class="btn btn-primary" id="editProcessBtn">Edit Process</button>
-                    </div>
                 </div>
             </header>
 
-            <div id="processListView" style="display: none; padding: 32px; flex: 1; overflow-y: auto;">
+            <div id="processListView" style="display: block; padding: 32px; flex: 1; overflow-y: auto;">
                 <div class="card">
                     <div class="tabs-container">
                         <h2 style="font-size: 16px; font-weight: 600; margin-right: auto;">Process Library</h2>
@@ -471,6 +440,7 @@
                                 <tr>
                                     <th>PROCESS NAME</th>
                                     <th>DEPARTMENT</th>
+                                    <th>STAGES</th>
                                     <th>STATUS</th>
                                     <th>LAST UPDATED</th>
                                     <th>ACTIONS</th>
@@ -485,8 +455,8 @@
             </div>
 
             <div id="processDetailView"
-                style="display: none; flex: 1; display: flex; flex-direction: column; overflow-y: auto;">
-                <div class="page-header" id="processHeader">
+                style="display: none; flex: 1; flex-direction: column; overflow-y: auto;">
+                <div class="page-header" id="processHeader" style="padding: 24px 32px; background: white; border-bottom: 1px solid var(--border-color);">
                     <!-- Injected via JS -->
                 </div>
 
@@ -495,10 +465,8 @@
                     <div class="col-main">
                         <div class="section-header">
                             <div class="section-title">Process Stages</div>
-                            <button class="btn btn-secondary btn-sm"
-                                onclick="window.location.href='process-builder.html'"
-                                style="font-size: 13px; padding: 6px 12px; background: #2563EB; color: white;">Edit in
-                                Builder</button>
+                            <button class="btn btn-primary btn-sm" id="btnEditInBuilder"
+                                style="font-size: 13px; padding: 6px 12px;">Edit in Builder</button>
                         </div>
 
                         <div class="stages-path" id="stagesContainer">
@@ -507,10 +475,10 @@
 
                         <div class="section-header" style="margin-top: 32px;">
                             <div class="section-title">Active Usage</div>
-                            <span class="badge blue">2 projects</span>
+                            <span class="badge blue" id="activeUsageBadge">Workflows in progress</span>
                         </div>
 
-                        <div class="usage-list">
+                        <div class="usage-list" id="activeUsageList">
                             <div class="usage-item">
                                 <div>
                                     <div class="usage-item-title">
@@ -520,24 +488,9 @@
                                                 d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
                                             </path>
                                         </svg>
-                                        Finance Q4 Reporting — Project Alpha
+                                        Active Workflow Pipeline
                                     </div>
-                                    <div class="usage-item-meta">Stage 2 of 4 · In Progress · PM: Arjun Mehta</div>
-                                </div>
-                                <span class="badge blue">Active</span>
-                            </div>
-                            <div class="usage-item">
-                                <div>
-                                    <div class="usage-item-title">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <path
-                                                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
-                                            </path>
-                                        </svg>
-                                        Finance Q4 Reporting — Project Beta
-                                    </div>
-                                    <div class="usage-item-meta">Stage 1 of 4 · Starting · PM: Sunita Rao</div>
+                                    <div class="usage-item-meta">Standard Operating Procedure Execution</div>
                                 </div>
                                 <span class="badge blue">Active</span>
                             </div>
@@ -548,126 +501,47 @@
                     <div class="col-side">
                         <div class="side-card">
                             <div class="section-title" style="margin-bottom: 20px;">Compliance Rules</div>
-                            <div class="rule-item">
-                                <div class="rule-icon">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="rule-title">SOX Section 404</div>
-                                    <div class="rule-desc">Internal controls documentation required. Variance report
-                                        sign-off mandatory at Stage 4.</div>
-                                </div>
-                            </div>
-                            <div class="rule-item" style="margin-bottom:0;">
-                                <div class="rule-icon" style="color: #7E22CE; background: #F3E8FF;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="rule-title">IFRS Reporting Standards</div>
-                                    <div class="rule-desc">All financial data must conform to IFRS format. Evidence
-                                        required at Stages 1 and 2.</div>
+                            <div id="complianceRulesList">
+                                <div class="rule-item">
+                                    <div class="rule-icon">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="2">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="rule-title" id="ruleTitle1">Corporate Compliance Policy</div>
+                                        <div class="rule-desc" id="ruleDesc1">Mandatory verification and approval checkpoints enforced before sign-off.</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-
                         <div class="side-card" style="border: none; padding: 0;">
-                            <div class="section-title" style="margin-bottom: 20px; padding: 20px 20px 0;">Modification
-                                History</div>
+                            <div class="section-title" style="margin-bottom: 20px; padding: 20px 20px 0;">Modification History</div>
                             <div style="padding: 0 20px 20px;">
                                 <div class="history-item">
-                                    <div class="history-text">Vikram P. added SOX compliance tag to Stage 4</div>
-                                    <div class="history-date">Dec 10, 2024</div>
+                                    <div class="history-text">Arjun Mehta updated stage configurations</div>
+                                    <div class="history-date">Recent</div>
                                 </div>
                                 <div class="history-item">
-                                    <div class="history-text">Vikram P. made evidence upload mandatory in Stage 2</div>
-                                    <div class="history-date">Nov 28, 2024</div>
-                                </div>
-                                <div class="history-item">
-                                    <div class="history-text">Vikram P. created process from template</div>
-                                    <div class="history-date">Oct 15, 2024</div>
+                                    <div class="history-text">Template published to process library</div>
+                                    <div class="history-date">Seeded</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
         </main>
     </div>
 
-    <script src="../js/data/Processes.js"></script>
-    <script src="../js/utils/helpers.js"></script>
-    <script src="../js/helpers.js"></script>
-    <script src="../js/pages/superuser/Processes.js"></script>
-</body>
-
-</html>
-<span class="badge blue">Active</span>
-</div>
-</div>
-</div>
-
-<!-- Right Column -->
-<div class="col-side">
-    <div class="side-card">
-        <div class="section-title" style="margin-bottom: 20px;">Compliance Rules</div>
-        <div class="rule-item">
-            <div class="rule-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                </svg>
-            </div>
-            <div>
-                <div class="rule-title">SOX Section 404</div>
-                <div class="rule-desc">Internal controls documentation required. Variance report sign-off mandatory at
-                    Stage 4.</div>
-            </div>
-        </div>
-        <div class="rule-item" style="margin-bottom:0;">
-            <div class="rule-icon" style="color: #7E22CE; background: #F3E8FF;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                </svg>
-            </div>
-            <div>
-                <div class="rule-title">IFRS Reporting Standards</div>
-                <div class="rule-desc">All financial data must conform to IFRS format. Evidence required at Stages 1 and
-                    2.</div>
-            </div>
-        </div>
-    </div>
-
-
-    <div class="side-card" style="border: none; padding: 0;">
-        <div class="section-title" style="margin-bottom: 20px; padding: 20px 20px 0;">Modification History</div>
-        <div style="padding: 0 20px 20px;">
-            <div class="history-item">
-                <div class="history-text">Vikram P. added SOX compliance tag to Stage 4</div>
-                <div class="history-date">Dec 10, 2024</div>
-            </div>
-            <div class="history-item">
-                <div class="history-text">Vikram P. made evidence upload mandatory in Stage 2</div>
-                <div class="history-date">Nov 28, 2024</div>
-            </div>
-            <div class="history-item">
-                <div class="history-text">Vikram P. created process from template</div>
-                <div class="history-date">Oct 15, 2024</div>
-            </div>
-        </div>
-    </div>
-</div>
-</div>
-</main>
-</div>
-
-<script src="../js/utils/helpers.js"></script>
-<script src="../js/data/processes.js"></script>
-<script src="../js/pages/superuser/processes.js"></script>
+    <script src="../js/utils/helpers.js?v=2.3"></script>
+    <script src="../js/helpers.js?v=2.3"></script>
+    <script src="../js/data/db.js?v=2.3"></script>
+    <script src="../js/data/processes.js?v=2.3"></script>
+    <script src="../js/data/audit-store.js?v=2.3"></script>
+    <script src="../js/pages/superuser/processes.js?v=2.3"></script>
 </body>
 
 </html>

@@ -214,7 +214,7 @@
             <div style="font-size:11px;color:var(--text-muted)">${name} · Due ${t.dueDate ? new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "N/A"}</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;margin-left:8px;">
-            <button type="button" class="btn btn-sm btn-secondary" onclick="event.preventDefault(); event.stopPropagation(); window.TlDashboard.openCreateSubtaskModal(${tid})">Break down</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="event.preventDefault(); event.stopPropagation(); window.TlDashboard.openCreateSubtaskModal('${tid}')">Break down</button>
             <span class="badge ${badgeClass}">${t.status || "Pending"}</span>
           </div>
         </div>`;
@@ -242,9 +242,9 @@
               <div style="font-size:11px;color:var(--text-muted)">Submitted by ${name}</div>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
-              <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); window.TlDashboard.approveWork(${tid}, ${isSub})">Approve work</button>
-              <button type="button" class="btn btn-sm btn-secondary" style="background:#fff;border:1px solid var(--border);color:var(--text-primary)" onclick="event.stopPropagation(); window.TlDashboard.rejectWork(${tid}, ${isSub})">Reject / request changes</button>
-              ${t.isSubtask ? '' : `<button type="button" class="btn btn-sm btn-secondary" onclick="event.preventDefault(); event.stopPropagation(); window.TlDashboard.openCreateSubtaskModal(${tid})">Create subtasks</button>`}
+              <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); window.TlDashboard.approveWork('${tid}', ${isSub})">Approve work</button>
+              <button type="button" class="btn btn-sm btn-secondary" style="background:#fff;border:1px solid var(--border);color:var(--text-primary)" onclick="event.stopPropagation(); window.TlDashboard.rejectWork('${tid}', ${isSub})">Reject / request changes</button>
+              ${t.isSubtask ? '' : `<button type="button" class="btn btn-sm btn-secondary" onclick="event.preventDefault(); event.stopPropagation(); window.TlDashboard.openCreateSubtaskModal('${tid}')">Create subtasks</button>`}
             </div>
           </div>`;
           })
@@ -463,16 +463,16 @@
   function populateSubtaskAssignees() {
     const sel = document.getElementById("tl-sub-assignee");
     if (!sel || !stateRef) return;
-    const ids = teamMemberIds.length ? teamMemberIds : [];
+    const ids = teamMemberIds.length ? teamMemberIds.map(String) : [];
     const users = (stateRef.users || []).filter((u) => {
-      const uid = Number(u.userId || u.user_id || u.id);
-      return ids.includes(uid);
+      const uid = String(u.userId ?? u.user_id ?? u.id ?? '');
+      return ids.length === 0 || ids.includes(uid);
     });
     sel.innerHTML =
       `<option value="">Select team member …</option>` +
       users
         .map((u) => {
-          const uid = u.userId || u.user_id || u.id;
+          const uid = u.userId ?? u.user_id ?? u.id;
           const label = `${u.fullName || u.name || "User"}`;
           return `<option value="${uid}">${label.replace(/"/g, "&quot;")}</option>`;
         })
@@ -480,8 +480,7 @@
   }
 
   function openCreateSubtaskModal(parentTaskId) {
-    tlSubtaskParentLockedId =
-      parentTaskId != null && Number.isFinite(Number(parentTaskId)) ? Number(parentTaskId) : null;
+    tlSubtaskParentLockedId = parentTaskId != null ? String(parentTaskId) : null;
     populateSubtaskParentSelect();
     populateSubtaskAssignees();
     const parentSel = document.getElementById("tl-sub-parent-task");
@@ -523,8 +522,8 @@
     const assigneeRaw = (document.getElementById("tl-sub-assignee") || {}).value;
     const due = (document.getElementById("tl-sub-due") || {}).value;
     let parentSel = document.getElementById("tl-sub-parent-task");
-    let pid = parentSel && parentSel.value ? Number(parentSel.value) : NaN;
-    if (tlSubtaskParentLockedId != null) pid = tlSubtaskParentLockedId;
+    let pid = parentSel && parentSel.value ? String(parentSel.value).trim() : "";
+    if (tlSubtaskParentLockedId != null) pid = String(tlSubtaskParentLockedId).trim();
 
     let ok = true;
     const terr = document.getElementById("tl-sub-title-error");
@@ -551,7 +550,7 @@
         aerr.classList.remove("hidden");
       }
     }
-    if (!Number.isFinite(pid) || pid <= 0) {
+    if (!pid) {
       ok = false;
       if (perr) {
         perr.textContent = "Pick a parent task.";
@@ -560,10 +559,14 @@
     }
     if (!ok) return;
 
+    const session = window.Auth ? window.Auth.getSession() : {};
+    const companyId = session.companyId || (stateRef && stateRef.companyId);
+
     const body = {
+      companyId: companyId || undefined,
       task_id: pid,
       title: String(title).trim(),
-      assigned_to: Number(assigneeRaw),
+      assigned_to: String(assigneeRaw).trim(),
       description: "",
     };
     if (due) body.due_date = due;

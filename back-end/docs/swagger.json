@@ -5271,7 +5271,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5315,7 +5315,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5379,7 +5379,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `hr_manager`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5431,7 +5431,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5493,7 +5493,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5555,7 +5555,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5599,7 +5599,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5663,7 +5663,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5715,7 +5715,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5777,7 +5777,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5831,7 +5831,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -5939,7 +5939,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `process_admin`, `project_manager`, `team_leader`, `team_member`, `compliance_officer`",
             "required": true,
             "schema": {
               "type": "string"
@@ -6591,7 +6591,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`, `project_manager`, `team_leader`, `team_member`, `hr_manager`, `company_owner`",
             "required": true,
             "schema": {
               "type": "string"
@@ -6699,7 +6699,7 @@
           {
             "name": "x-user-role",
             "in": "header",
-            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`",
+            "description": "**Role-Based Access Control**\nAllowed roles: `superuser`, `compliance_officer`, `project_manager`, `team_leader`, `team_member`, `hr_manager`, `company_owner`",
             "required": true,
             "schema": {
               "type": "string"
@@ -9513,7 +9513,15 @@
             "type": "object",
             "example": "task-uuid-123"
           },
+          "entityId": {
+            "type": "object",
+            "example": "task-uuid-123"
+          },
           "entity_type": {
+            "type": "string",
+            "example": "Task"
+          },
+          "entityType": {
             "type": "string",
             "example": "Task"
           },
@@ -9525,14 +9533,28 @@
             "type": "object",
             "example": "user-uuid-2"
           },
+          "performedBy": {
+            "type": "object",
+            "example": "user-uuid-2"
+          },
           "ip_address": {
+            "type": "string",
+            "example": "10.0.1.22"
+          },
+          "ipAddress": {
             "type": "string",
             "example": "10.0.1.22"
           },
           "old_value": {
             "type": "object"
           },
+          "oldValue": {
+            "type": "object"
+          },
           "new_value": {
+            "type": "object"
+          },
+          "newValue": {
             "type": "object"
           },
           "usedPermissionSlug": {
@@ -9545,8 +9567,6 @@
           }
         },
         "required": [
-          "entity_id",
-          "entity_type",
           "action"
         ]
       },

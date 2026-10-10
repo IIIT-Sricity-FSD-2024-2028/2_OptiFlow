@@ -25,68 +25,43 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  const newBtn = document.getElementById("btnHeaderNewProcess");
+  if (newBtn) {
+    newBtn.addEventListener("click", () => {
+      sessionStorage.removeItem("edit_process_id");
+      sessionStorage.removeItem("selected_process_id");
+      sessionStorage.removeItem("view_process_id");
+      sessionStorage.removeItem("newProcessDraft");
+    });
+  }
 });
 
 async function renderOmniscientMetrics() {
-  let currentUserStr = sessionStorage.getItem("currentUser");
-  let currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
-  if (!currentUser) return;
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-user-role': currentUser.roleId || currentUser.roleSlug || currentUser.assignedRole || "Company Owner",
-    'x-user-email': currentUser.email,
-    'x-company-id': currentUser.companyId
-  };
-
-  try {
-    const res = await fetch("http://localhost:5500/dashboard/metrics", { headers });
-    if (res.ok) {
-      const data = await res.json();
-      const metrics = data.data || data;
-
-      const setText = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = String(val);
-      };
-
-      setText("metricTotalProcesses", metrics.activeProjects || 0);
-      setText("metricTotalProcessesTag", "Active company projects");
-
-      setText("metricActiveUsage", metrics.openViolations || 0);
-      const metricViolationsTag = document.getElementById("metricActiveUsageTag");
-      if (metricViolationsTag) {
-        metricViolationsTag.textContent = "Requires remediation";
-        metricViolationsTag.className = metrics.openViolations > 0 ? "metric-tag yellow" : "metric-tag green";
-      }
-
-      setText("metricAvgCompletion", metrics.taskBreakdown?.Active || 0);
-      setText("metricAvgCompletionTag", "Active tasks");
-
-      setText("metricPendingReview", metrics.openEscalations || 0);
-      setText("metricPendingReviewTag", "Open escalations");
-      return; // Stop if API success
-    }
-  } catch (err) {
-    console.error("Failed to fetch dashboard metrics", err);
-  }
-
-  // Fallback to local state if API fails
   const state = window.Helpers ? await window.Helpers.getState() : {};
-  const projects = state.projects || [];
-  const activeProjectsCount = projects.filter(p => p.status === 'Active' || !p.status).length;
-  
-  const metricProjectsEl = document.getElementById("metricTotalProcesses");
-  if (metricProjectsEl) metricProjectsEl.textContent = activeProjectsCount || projects.length || "2";
 
-  const metricProjectsTag = document.getElementById("metricTotalProcessesTag");
-  if (metricProjectsTag) metricProjectsTag.textContent = `${projects.length} Total Projects`;
+  // 1. Process Templates (Process Admin core domain)
+  let templates = [];
+  if (typeof getProcesses === 'function') {
+    templates = await getProcesses();
+  }
+  if (!templates.length && state.processTemplates) {
+    templates = state.processTemplates;
+  }
+  const activeTemplatesCount = templates.filter(t => t.status === 'Active' || t.isActive !== false).length;
 
+  const metricTemplatesEl = document.getElementById("metricTotalProcesses");
+  if (metricTemplatesEl) metricTemplatesEl.textContent = String(templates.length);
+
+  const metricTemplatesTag = document.getElementById("metricTotalProcessesTag");
+  if (metricTemplatesTag) metricTemplatesTag.textContent = `${activeTemplatesCount} Active in Library`;
+
+  // 2. Open Compliance Violations
   const violations = state.complianceViolations || [];
   const openViolationsCount = violations.filter(v => v.status === 'Open' || v.status === 'Under_Review').length;
 
   const metricViolationsEl = document.getElementById("metricActiveUsage");
-  if (metricViolationsEl) metricViolationsEl.textContent = openViolationsCount;
+  if (metricViolationsEl) metricViolationsEl.textContent = String(openViolationsCount);
 
   const metricViolationsTag2 = document.getElementById("metricActiveUsageTag");
   if (metricViolationsTag2) {
@@ -94,24 +69,45 @@ async function renderOmniscientMetrics() {
     metricViolationsTag2.className = openViolationsCount > 0 ? "metric-tag yellow" : "metric-tag green";
   }
 
-  const instances = state.processInstances || [];
+  // 3. Process Instances (accurately queried directly from API or state)
+  let instances = state.processInstances || [];
+  try {
+    if (window.Helpers && window.Helpers.api) {
+      const rawInst = await window.Helpers.api.request('/process-instances', 'GET');
+      if (Array.isArray(rawInst)) instances = rawInst;
+      else if (rawInst && Array.isArray(rawInst.data)) instances = rawInst.data;
+    }
+  } catch (_) {}
+
   const activeInstancesCount = instances.filter(i => i.status === 'Active' || i.status === 'In_Progress').length;
 
   const metricAvgEl = document.getElementById("metricAvgCompletion");
-  if (metricAvgEl) metricAvgEl.textContent = activeInstancesCount || instances.length || "1";
+  if (metricAvgEl) metricAvgEl.textContent = String(activeInstancesCount);
 
   const metricAvgTag = document.getElementById("metricAvgCompletionTag");
-  if (metricAvgTag) metricAvgTag.textContent = `${instances.length} Total Workflow Instances`;
+  if (metricAvgTag) {
+    metricAvgTag.textContent = `${instances.length} Total Workflow Instances`;
+    metricAvgTag.className = activeInstancesCount > 0 ? "metric-tag green" : "metric-tag gray";
+  }
 
+  // 4. Company Employees
   const users = state.users || [];
   const metricPendingEl = document.getElementById("metricPendingReview");
-  if (metricPendingEl) metricPendingEl.textContent = users.length || "17";
+  if (metricPendingEl) metricPendingEl.textContent = String(users.length);
+
+  const metricPendingTag = document.getElementById("metricPendingReviewTag");
+  if (metricPendingTag) metricPendingTag.textContent = `${users.length} Active Users`;
 }
 
 async function updateTabCounts() {
-  const state = await window.Helpers.getState();
-  let all = state.workflowTemplates || [];
-  if (all.length === 0 && typeof getWorkflows === 'function') all = getWorkflows();
+  let all = [];
+  if (typeof getProcesses === 'function') {
+    all = await getProcesses();
+  }
+  if (!all.length && window.Helpers) {
+    const state = await window.Helpers.getState();
+    all = state.processTemplates || state.workflowTemplates || [];
+  }
 
   const counts = {
     "": all.length,
@@ -130,10 +126,13 @@ async function updateTabCounts() {
 }
 
 async function refreshProcessTable() {
-  const state = await window.Helpers.getState();
-  let workflows = state.workflowTemplates || [];
-  if (workflows.length === 0 && typeof getWorkflows === 'function') {
-    workflows = getWorkflows();
+  let workflows = [];
+  if (typeof getProcesses === 'function') {
+    workflows = await getProcesses();
+  }
+  if (!workflows.length && window.Helpers) {
+    const state = await window.Helpers.getState();
+    workflows = state.processTemplates || state.workflowTemplates || [];
   }
 
   const searchInput = document.getElementById("searchInput");
@@ -176,8 +175,13 @@ function renderProcessTable(data) {
     return;
   }
 
+  const isHttp = window.location.protocol.startsWith('http');
+
   data.forEach((wf) => {
     const tr = document.createElement("tr");
+
+    const viewUrl = isHttp ? `processes?id=${encodeURIComponent(wf.id)}` : `processes.html?id=${encodeURIComponent(wf.id)}`;
+    const editUrl = isHttp ? `process-builder?id=${encodeURIComponent(wf.id)}` : `process-builder.html?id=${encodeURIComponent(wf.id)}`;
 
     tr.innerHTML = `
             <td>
@@ -190,7 +194,10 @@ function renderProcessTable(data) {
             <td>${renderUsageBar(wf.runs)}</td>
             <td style="color: var(--text-muted);">${wf.lastModified}</td>
             <td>
-                <a href="process-builder.html?id=${wf.id}" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:8px 16px;">View</a>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <a href="${viewUrl}" onclick="sessionStorage.setItem('view_process_id', '${wf.id}'); sessionStorage.removeItem('selected_process_id');" class="action-btn view" style="text-decoration:none; display:inline-block; line-height:1; padding:6px 12px; background:#f1f5f9; color:#1e293b; border-radius:6px; font-size:12px; font-weight:600;">View</a>
+                    <a href="${editUrl}" onclick="sessionStorage.setItem('edit_process_id', '${wf.id}'); sessionStorage.removeItem('selected_process_id');" class="action-btn edit" style="text-decoration:none; display:inline-block; line-height:1; padding:6px 12px; background:#2563eb; color:white; border-radius:6px; font-size:12px; font-weight:600;">Edit in Builder</a>
+                </div>
             </td>
         `;
 
@@ -199,10 +206,15 @@ function renderProcessTable(data) {
 }
 
 function viewProcess(id) {
-  const target = 'process-builder.html?id=' + encodeURIComponent(id);
-  window.location.href = target;
+  sessionStorage.setItem('view_process_id', id);
+  sessionStorage.removeItem('selected_process_id');
+  const isHttp = window.location.protocol.startsWith('http');
+  window.location.href = (isHttp ? 'processes?id=' : 'processes.html?id=') + encodeURIComponent(id);
 }
 
 function editProcess(id) {
-  window.location.href = `process-builder.html?id=${id}`;
+  sessionStorage.setItem('edit_process_id', id);
+  sessionStorage.removeItem('selected_process_id');
+  const isHttp = window.location.protocol.startsWith('http');
+  window.location.href = (isHttp ? 'process-builder?id=' : 'process-builder.html?id=') + encodeURIComponent(id);
 }

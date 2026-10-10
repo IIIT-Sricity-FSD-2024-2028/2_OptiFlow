@@ -300,14 +300,27 @@ window.TasksPage = {
   },
 
   openAddModal() {
-    let users = this.state.users || [];
+    const allUsers = this.state.users || [];
+    let users = allUsers.filter(u => {
+      const role = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
+      const label = String(u.roleLabel || u.role_label || '').toLowerCase();
+      return (
+        role === 'team_leader' ||
+        role === 'team_lead' ||
+        label.includes('team lead') ||
+        label.includes('team leader') ||
+        label.includes('leader')
+      );
+    });
+    if (users.length === 0) users = allUsers;
+
     const userOptions = users
-      .map((u) => `<option value="${u.id || u.userId}">${u.fullName || u.name}</option>`)
+      .map((u) => `<option value="${u.id || u.userId}">${u.fullName || u.name} (${u.roleLabel || 'Team Leader'})</option>`)
       .join("");
 
     window.Modal.create({
       id: "modal-add-task",
-      title: "+ Create Task",
+      title: "+ Create Task (Assign to Team Leader)",
       body: `
         <div class="form-group">
           <label class="form-label" for="task-name">Task Name *</label>
@@ -316,9 +329,9 @@ window.TasksPage = {
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="task-assigned">Assign To *</label>
+            <label class="form-label" for="task-assigned">Assign To (Team Leader) *</label>
             <select id="task-assigned" class="form-select">
-              <option value="">Select member</option>
+              <option value="">Select team leader</option>
               ${userOptions}
             </select>
             <span class="form-error hidden" id="task-assigned-error"></span>

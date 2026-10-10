@@ -22,7 +22,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
+    let isMatch = false;
+    try {
+      if (user.passwordHash) {
+        isMatch = await bcrypt.compare(dto.password, user.passwordHash);
+      }
+    } catch (_) {
+      isMatch = false;
+    }
+
     if (!isMatch) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -129,11 +137,10 @@ export class AuthService {
       rLower.includes('owner') ||
       rLower.includes('ceo') ||
       rLower.includes('cto') ||
-      rLower.includes('coo') ||
-      rLower.includes('superuser')
+      rLower.includes('coo')
     ) {
       targetRoute = 'admin/executive/executive_dashboard.html'; // Company Owner -> admin/executive/executive_dashboard.html
-      roleSlug = 'superuser';
+      roleSlug = 'company_owner';
     } else if (rLower.includes('branch manager')) {
       targetRoute = 'admin/executive/executive_dashboard.html';
       roleSlug = 'branch_manager';
@@ -142,7 +149,7 @@ export class AuthService {
       roleSlug = 'hr_manager';
     } else if (rLower.includes('process')) {
       targetRoute = 'superuser/dashboard.html'; // Process Admin -> superuser/dashboard.html
-      roleSlug = 'project_manager';
+      roleSlug = 'process_admin';
     } else if (rLower.includes('compliance')) {
       targetRoute = 'modules/compliance.html'; // Compliance Officer -> modules/compliance.html
       roleSlug = 'compliance_officer';
@@ -153,8 +160,24 @@ export class AuthService {
       targetRoute = 'enduser/tl-dashboard.html'; // Team Lead -> enduser/tl-dashboard.html
       roleSlug = 'team_leader';
     } else {
-      targetRoute = 'admin/pm/tasks.html'; // Team Member -> admin/pm/tasks.html
+      targetRoute = 'enduser/member-dashboard.html'; // Team Member -> enduser/member-dashboard.html
       roleSlug = 'team_member';
+    }
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          companyId: user.companyId,
+          entityType: 'User',
+          entityId: user.id,
+          action: 'LOGIN' as any,
+          performedById: user.id,
+          ipAddress: '127.0.0.1',
+          newValue: { message: `${user.fullName} logged in successfully as ${roleLabel}` },
+        },
+      });
+    } catch (e) {
+      // Non-blocking audit log catch
     }
 
     return {

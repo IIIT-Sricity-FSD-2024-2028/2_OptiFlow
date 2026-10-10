@@ -21,14 +21,30 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 export class ComplianceBindingsController {
   constructor(private readonly svc: ComplianceBindingsService) {}
   @Get()
-  @Roles('superuser', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'compliance_officer',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'hr_manager',
+    'company_owner',
+  )
   @ApiQuery({ name: 'ruleId', required: false })
   @ApiOperation({ summary: 'List compliance bindings' })
   findAll(@CompanyId() companyId: string, @Query('ruleId') ruleId?: string) {
     return this.svc.findAll(companyId, ruleId);
   }
   @Get(':id')
-  @Roles('superuser', 'compliance_officer')
+  @Roles(
+    'superuser',
+    'compliance_officer',
+    'project_manager',
+    'team_leader',
+    'team_member',
+    'hr_manager',
+    'company_owner',
+  )
   @ApiOperation({ summary: 'Get a compliance binding' })
   findOne(@Param('id') id: string, @CompanyId() companyId: string) {
     return this.svc.findOne(id);

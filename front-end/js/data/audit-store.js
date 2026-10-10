@@ -28,16 +28,22 @@
     async add(action, entityType, entityId, opts = {}) {
       const performedBy = opts.performedBy != null ? String(opts.performedBy) : _getActorId();
       const payload = {
-        action:       action || "SYSTEM_ACTION",
+        action:       action || "UPDATE",
         entityType:   entityType || "System",
+        entity_type:  entityType || "System",
         entityId:     String(entityId || "0"),
+        entity_id:    String(entityId || "0"),
         performedBy:  performedBy,
+        performed_by: performedBy,
         oldValue:     opts.oldValue  || undefined,
+        old_value:    opts.oldValue  || undefined,
         newValue:     opts.newValue  || undefined,
+        new_value:    opts.newValue  || undefined,
       };
 
       try {
         await window.Helpers.api.request('/audit-logs', 'POST', payload);
+        if (window.Helpers) window.Helpers._stateCache = null;
       } catch (error) {
         console.warn("[AuditStore] Backend write failed:", error.message || error);
       }

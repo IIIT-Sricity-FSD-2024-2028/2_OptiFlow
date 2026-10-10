@@ -6,15 +6,24 @@ window.Auth.getSession = window.Auth.getSession || function() {
 };
 window.Auth.logout = window.Auth.logout || function() {
   sessionStorage.removeItem("currentUser");
+  sessionStorage.removeItem("selectedProjectId");
+  sessionStorage.removeItem("officesync_global_state");
   localStorage.removeItem("currentUser");
+  localStorage.removeItem("selectedProjectId");
+  localStorage.removeItem("officesync_global_state");
   if (window.Helpers) window.Helpers._stateCache = null;
+
+  if (window.location.protocol.startsWith('http')) {
+    const rootPath = window.location.origin ? window.location.origin + '/login.html' : '/login.html';
+    window.location.replace(rootPath);
+    return;
+  }
+
   const path = window.location.pathname.toLowerCase();
-    let prefix = "./";
+  let prefix = "./";
   if (path.includes("/admin/pm/") || path.includes("/admin/hr/") || path.includes("/admin/compliance/") || path.includes("/admin/executive/") || path.includes("/admin/processes/") || path.includes("/enduser/member/") || path.includes("/enduser/leader/")) {
     prefix = "../../";
-  } else if (path.includes("/admin-console/")) {
-    prefix = "../";
-  } else if (path.match(/\/admin\/[^\/]+\.html/) || path.includes("/superuser/") || path.includes("/enduser/") || path.includes("/platform-admin/") || path.includes("/modules/")) {
+  } else if (path.includes("/admin-console/") || path.includes("/admin/") || path.includes("/superuser/") || path.includes("/enduser/") || path.includes("/platform-admin/") || path.includes("/modules/")) {
     prefix = "../";
   }
   window.location.href = prefix + "login.html";
@@ -71,9 +80,17 @@ window.Sidebar = {
       { id: "compliance", label: "Compliance", icon: "shield", href: "modules/compliance.html", absolute: true },
       { id: "governance", label: "Governance", icon: "hr", href: "modules/governance.html", absolute: true }
     ],
+    Process_Admin: [
+      { type: "section", label: "Main" },
+      { id: "dashboard", label: "Dashboard", icon: "grid", href: "superuser/dashboard.html", absolute: true },
+      { id: "workflows", label: "Processes", icon: "flow", href: "superuser/processes.html", absolute: true },
+      { id: "analytics", label: "Analytics", icon: "reports", href: "superuser/analytics.html", absolute: true },
+      { id: "audit", label: "Audit Logs", icon: "audit", href: "superuser/audit.html", absolute: true },
+    ],
     Project_Manager: [
       { id: "dashboard", label: "Dashboard", icon: "grid", href: "admin/pm/pm-dashboard.html", absolute: true },
       { id: "projects", label: "Projects", icon: "folder", href: "modules/projects.html", absolute: true },
+      { id: "tasks", label: "Tasks", icon: "tasks", href: "modules/tasks.html", absolute: true },
       { id: "escalations", label: "Escalations", icon: "alert", href: "admin/pm/violations.html", badge: "escalations", absolute: true },
       { id: "compliance", label: "Compliance", icon: "shield", href: "modules/compliance.html", badge: "violations", absolute: true }
     ],
@@ -152,6 +169,8 @@ window.Sidebar = {
       rName = 'Branch_Manager';
     } else if (rawRole === 'superuser') {
       rName = 'SuperUser';
+    } else if (rawRole === 'process_admin' || roleLabelLower.includes('process') || rawRole.includes('process')) {
+      rName = 'Process_Admin';
     } else if (rawRole.includes('ceo') || rawRole.includes('cto') || rawRole.includes('coo')) {
       rName = 'Company_Owner';
     } else if (rawRole === 'hr_manager' || roleLabelLower.includes('governance') || roleLabelLower.includes('hr') || rawRole.includes('governance') || rawRole.includes('hr')) {
@@ -168,9 +187,8 @@ window.Sidebar = {
       rName = 'Team_Member';
     }
 
-    // SuperUser gets process-admin nav; Executive gets executive nav
-    if (rawRole === 'project_manager' && (session.roleLabel || '').toLowerCase().includes('process')) {
-      rName = 'SuperUser';
+    if (roleLabelLower.includes('process') || rawRole === 'process_admin') {
+      rName = 'Process_Admin';
     }
 
     const navItems = this.navConfig[rName] || this.navConfig['Team_Member'] || [];
@@ -308,13 +326,16 @@ window.Sidebar = {
       if (logoutBtn) {
         logoutBtn.addEventListener('click', function(e) {
           e.stopPropagation();
-          if (window.Auth && window.Auth.logout) {
+          if (window.Auth && typeof window.Auth.logout === 'function') {
             window.Auth.logout();
           } else {
-            const path = window.location.pathname.toLowerCase();
-            const loginPrefix = path.includes('/admin/executive/') ? '../../' : path.includes('/admin-console/') ? '../' : '../';
-            sessionStorage.removeItem('currentUser');
-            window.location.href = loginPrefix + 'login.html';
+            sessionStorage.clear();
+            localStorage.clear();
+            if (window.location.protocol.startsWith('http')) {
+              window.location.replace(window.location.origin ? window.location.origin + '/login.html' : '/login.html');
+            } else {
+              window.location.replace('../login.html');
+            }
           }
         });
       }

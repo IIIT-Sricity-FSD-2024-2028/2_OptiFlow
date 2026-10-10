@@ -149,12 +149,17 @@ export async function createTemplate(req, res, next) {
       },
     });
 
-    await createProcessAuditLog({companyId: req.user.companyId,
-      templateId: created.id,
-      action: AUDIT_ACTIONS.CREATE,
-      performedById: req.user.id,
-      newValue: { name: created.name, stepsCount: formattedSteps.length },
-    });
+    try {
+      await createProcessAuditLog({
+        companyId: req.user.companyId,
+        templateId: created.id,
+        action: AUDIT_ACTIONS.CREATE,
+        performedById: req.user.id,
+        newValue: { name: created.name, stepsCount: formattedSteps.length },
+      });
+    } catch (auditErr) {
+      console.warn('Process audit log error on create template:', auditErr?.message);
+    }
 
     res.status(201).json({
       success: true,
@@ -189,7 +194,7 @@ export async function updateTemplate(req, res, next) {
 
     const updated = await prisma.$transaction(async (tx) => {
       if (Array.isArray(steps)) {
-        await tx.processTemplateStep.deleteMany({
+        const existingSteps = await tx.processTemplateStep.findMany({
           where: { templateId: req.params.id },
         });
 
@@ -207,19 +212,84 @@ export async function updateTemplate(req, res, next) {
             validateEnum(s.stepType, ALLOWED_STEP_TYPES, `steps[${index}].stepType`);
           }
           return {
+            id: s.id,
             templateId: req.params.id,
             companyId: req.user.companyId,
             stepOrder: s.stepOrder ?? index + 1,
             name: s.name || `Step ${index + 1}`,
-            stepType: s.stepType || 'Automated_Task',
+            stepType: s.stepType || 'Approval',
             onRejectGotoStepId: s.onRejectGotoStepId ?? null,
+            onRejectGotoStepOrder: s.onRejectGotoStepOrder ?? null,
           };
         });
 
-        if (formattedSteps.length > 0) {
-          await tx.processTemplateStep.createMany({
-            data: formattedSteps,
-          });
+        const stepIdMap = new Map();
+        const existingIdSet = new Set(existingSteps.map((es) => es.id));
+
+        // Phase 1: Update existing steps or insert new ones
+        for (let i = 0; i < formattedSteps.length; i++) {
+          const s = formattedSteps[i];
+          const isExisting = s.id && existingIdSet.has(s.id);
+
+          if (isExisting) {
+            const updatedStep = await tx.processTemplateStep.update({
+              where: { id: s.id },
+              data: {
+                name: s.name,
+                stepOrder: s.stepOrder,
+                stepType: s.stepType,
+              },
+            });
+            stepIdMap.set(s.id, updatedStep.id);
+            stepIdMap.set(`order-${s.stepOrder}`, updatedStep.id);
+          } else {
+            const createdStep = await tx.processTemplateStep.create({
+              data: {
+                templateId: req.params.id,
+                companyId: req.user.companyId,
+                name: s.name,
+                stepOrder: s.stepOrder,
+                stepType: s.stepType,
+                onRejectGotoStepId: null,
+              },
+            });
+            if (s.id) stepIdMap.set(s.id, createdStep.id);
+            stepIdMap.set(`order-${s.stepOrder}`, createdStep.id);
+          }
+        }
+
+        // Delete removed steps safely
+        const incomingIds = new Set(formattedSteps.map((s) => s.id).filter(Boolean));
+        const toDelete = existingSteps.filter((es) => !incomingIds.has(es.id));
+        for (const delStep of toDelete) {
+          try {
+            await tx.processTemplateStep.delete({ where: { id: delStep.id } });
+          } catch (_) {
+            // Preserves step if already referenced in execution history
+          }
+        }
+
+        // Phase 2: Resolve and update onRejectGotoStepId loopback links
+        for (let i = 0; i < formattedSteps.length; i++) {
+          const s = formattedSteps[i];
+          const currentDbId = stepIdMap.get(s.id) || stepIdMap.get(`order-${s.stepOrder}`);
+          if (!currentDbId) continue;
+
+          let targetDbId = null;
+          if (s.onRejectGotoStepId) {
+            targetDbId = stepIdMap.get(s.onRejectGotoStepId) || s.onRejectGotoStepId;
+          } else if (s.onRejectGotoStepOrder) {
+            targetDbId = stepIdMap.get(`order-${s.onRejectGotoStepOrder}`);
+          }
+
+          if (targetDbId && targetDbId !== currentDbId) {
+            try {
+              await tx.processTemplateStep.update({
+                where: { id: currentDbId },
+                data: { onRejectGotoStepId: targetDbId },
+              });
+            } catch (_) {}
+          }
         }
       }
 
@@ -240,13 +310,18 @@ export async function updateTemplate(req, res, next) {
       });
     });
 
-    await createProcessAuditLog({companyId: req.user.companyId,
-      templateId: updated.id,
-      action: AUDIT_ACTIONS.UPDATE,
-      performedById: req.user.id,
-      oldValue: { name: existing.name, isActive: existing.isActive },
-      newValue: { name: updated.name, isActive: updated.isActive },
-    });
+    try {
+      await createProcessAuditLog({
+        companyId: req.user.companyId,
+        templateId: updated.id,
+        action: AUDIT_ACTIONS.UPDATE,
+        performedById: req.user.id,
+        oldValue: { name: existing.name, isActive: existing.isActive },
+        newValue: { name: updated.name, isActive: updated.isActive },
+      });
+    } catch (auditErr) {
+      console.warn('Process audit log error on update template:', auditErr?.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -278,12 +353,17 @@ export async function deleteTemplate(req, res, next) {
       where: { id: req.params.id },
     });
 
-    await createProcessAuditLog({companyId: req.user.companyId,
-      templateId: req.params.id,
-      action: AUDIT_ACTIONS.DELETE,
-      performedById: req.user.id,
-      oldValue: { name: existing.name },
-    });
+    try {
+      await createProcessAuditLog({
+        companyId: req.user.companyId,
+        templateId: null,
+        action: AUDIT_ACTIONS.DELETE,
+        performedById: req.user.id,
+        oldValue: { templateId: existing.id, name: existing.name, version: existing.version },
+      });
+    } catch (auditErr) {
+      console.warn('Process audit log error on delete template:', auditErr?.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -493,6 +573,7 @@ export async function createInstance(req, res, next) {
         data: {
           companyId: req.user.companyId,
           templateId: template.id,
+          title: req.body.title?.trim() || `${template.name} - Instance #${Date.now().toString().slice(-4)}`,
           projectId: projectId ?? null,
           status: status || (template.steps.length > 0 ? 'Active' : 'Draft'),
           initiatedById: req.user.id,
@@ -554,11 +635,16 @@ export async function createInstance(req, res, next) {
       });
     });
 
-    await createSystemAuditLog({companyId: req.user.companyId,
-      action: AUDIT_ACTIONS.CREATE,
-      performedById: req.user.id,
-      newValue: { templateId: template.id, status: createdInstance.status },
-    });
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.CREATE,
+        performedById: req.user.id,
+        newValue: { templateId: template.id, status: createdInstance.status },
+      });
+    } catch (auditErr) {
+      console.warn('Audit log error on create instance:', auditErr?.message);
+    }
 
     res.status(201).json({
       success: true,
@@ -627,12 +713,17 @@ export async function updateInstance(req, res, next) {
       },
     });
 
-    await createSystemAuditLog({companyId: req.user.companyId,
-      action: AUDIT_ACTIONS.UPDATE,
-      performedById: req.user.id,
-      oldValue: { status: existing.status },
-      newValue: { status: updated.status },
-    });
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.UPDATE,
+        performedById: req.user.id,
+        oldValue: { status: existing.status },
+        newValue: { status: updated.status },
+      });
+    } catch (auditErr) {
+      console.warn('Audit log error on update instance:', auditErr?.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -668,11 +759,16 @@ export async function deleteInstance(req, res, next) {
       where: { id: req.params.id },
     });
 
-    await createSystemAuditLog({companyId: req.user.companyId,
-      action: AUDIT_ACTIONS.DELETE,
-      performedById: req.user.id,
-      oldValue: { status: existing.status },
-    });
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.DELETE,
+        performedById: req.user.id,
+        oldValue: { status: existing.status },
+      });
+    } catch (auditErr) {
+      console.warn('Audit log error on delete instance:', auditErr?.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -686,6 +782,7 @@ export async function deleteInstance(req, res, next) {
 // ============================================================================
 // 3. PROCESS INSTANCE STEPS & ACTIONS ENDPOINTS
 // ============================================================================
+
 
 /**
  * GET /process-instance-steps & /processes/steps
@@ -948,12 +1045,17 @@ export async function actionStep(req, res, next) {
       return updatedStep;
     });
 
-    await createSystemAuditLog({companyId: req.user.companyId,
-      action: AUDIT_ACTIONS.UPDATE,
-      performedById: req.user.id,
-      oldValue: { status: currentStep.status },
-      newValue: { status: result.status },
-    });
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.UPDATE,
+        performedById: req.user.id,
+        oldValue: { status: currentStep.status },
+        newValue: { status: result.status },
+      });
+    } catch (auditErr) {
+      console.warn('Audit log error on action step:', auditErr?.message);
+    }
 
     res.status(200).json({
       success: true,

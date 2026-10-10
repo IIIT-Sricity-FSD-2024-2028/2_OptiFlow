@@ -155,8 +155,9 @@
           return;
         }
         const session = window.Auth.getSession();
-        // Allow Superuser (1) or Project Manager (2)
-        if (session.roleId !== 1 && session.roleId !== 2 && session.roleName !== "Project_Manager" && session.role !== "project_manager") {
+        const rLower = String(session.roleSlug || session.role || session.roleName || session.assignedRole || session.roleLabel || '').toLowerCase();
+        const isManager = rLower.includes('project') || rLower.includes('pm') || rLower.includes('superuser') || session.roleId === 1 || session.roleId === 2;
+        if (!isManager) {
           window.location.replace("../../login.html");
           return;
         }
@@ -168,12 +169,6 @@
         const state = await window.Helpers.getState();
 
         // Filter projects for this PM (or show all if Superuser / Project Manager)
-        const isManager =
-          session.roleId === 1 ||
-          session.roleId === 2 ||
-          session.roleName === "Project_Manager" ||
-          session.role === "project_manager" ||
-          session.role === "superuser";
         const myProjects = isManager
           ? state.projects
           : state.projects.filter(
@@ -245,7 +240,7 @@
         <div style="font-size:32px;font-weight:800;color:#0f172a;line-height:1;margin-bottom:8px">${myViolations.length}</div>
         <div style="background:#fef2f2;color:#ef4444;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block">${myViolations.length > 0 ? "Open violations" : "Compliant"}</div>
       </div>
-      <div style="font-size:24px;color:#0f172a;cursor:pointer;align-self:flex-start" onclick="window.location.href='compliance-dashboard.html'">→</div>
+      <div style="font-size:24px;color:#0f172a;cursor:pointer;align-self:flex-start" onclick="window.location.href='../../modules/compliance.html'">→</div>
     </div>`;
 
         document.getElementById("stats-row").style.display = "grid";
@@ -364,11 +359,24 @@
               .map((p) => `<option value="${p.id}">${p.name}</option>`)
               .join("");
 
-            const userOptions = "";
+            const tlUsers = (state.users || []).filter(u => {
+              const role = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
+              const label = String(u.roleLabel || u.role_label || '').toLowerCase();
+              return (
+                role === 'team_leader' ||
+                role === 'team_lead' ||
+                label.includes('team lead') ||
+                label.includes('team leader') ||
+                label.includes('leader')
+              );
+            });
+            const userOptions = (tlUsers.length > 0 ? tlUsers : (state.users || []))
+              .map(u => `<option value="${u.id || u.userId}">${u.fullName || u.name} (${u.roleLabel || 'Team Leader'})</option>`)
+              .join("");
 
             window.Modal.create({
               id: "modal-global-add-task",
-              title: "+ Create New Task",
+              title: "+ Create New Task (Assign to Team Leader)",
               body: `
                 <div class="form-group">
                   <label class="form-label" for="gtask-project">Project *</label>
@@ -385,9 +393,9 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label" for="gtask-assigned">Assign To *</label>
+                    <label class="form-label" for="gtask-assigned">Assign To (Team Leader) *</label>
                     <select id="gtask-assigned" class="form-select">
-                      <option value="">Select member</option>
+                      <option value="">Select team leader</option>
                       ${userOptions}
                     </select>
                     <span class="form-error hidden" id="gtask-assigned-error"></span>
@@ -426,13 +434,10 @@
               const pId = projSelect.value;
               const project = myProjects.find(p => String(p.id) === String(pId));
               if (!project) {
-                assignSelect.innerHTML = '<option value="">Select member</option>';
+                assignSelect.innerHTML = '<option value="">Select team leader</option>' + userOptions;
                 return;
               }
-              
-              const users = state.users || [];
-              assignSelect.innerHTML = '<option value="">Select member</option>' + 
-                users.map(u => `<option value="${u.id || u.userId}">${u.fullName || u.name}</option>`).join("");
+              assignSelect.innerHTML = '<option value="">Select team leader</option>' + userOptions;
             };
 
             // Handle submission

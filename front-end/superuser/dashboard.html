@@ -128,18 +128,11 @@
             </svg>
             <span>Dashboard</span>
           </a>
-          <a href="processes.html" class="nav-item">
+          <a href="processes.html" onclick="sessionStorage.removeItem('view_process_id'); sessionStorage.removeItem('selected_process_id');" class="nav-item">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
             </svg>
             <span>Processes</span>
-          </a>
-          <a href="branches.html" class="nav-item" data-allowed-roles="system_admin,system admin">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-              <rect x="9" y="9" width="6" height="6"></rect>
-            </svg>
-            <span>Branches</span>
           </a>
           <a href="analytics.html" class="nav-item">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -149,19 +142,7 @@
             </svg>
             <span>Analytics</span>
           </a>
-        </div>
-        <div class="nav-section">
-          <div class="nav-section-title">Administration</div>
-          <a href="users.html" class="nav-item" data-allowed-roles="system_admin,system admin">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-              <circle cx="9" cy="7" r="4"></circle>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-            </svg>
-            <span>Users &amp; Access</span>
-          </a>
-          <a href="audit.html" class="nav-item" data-allowed-roles="system_admin,system admin">
+          <a href="audit.html" class="nav-item">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
@@ -175,13 +156,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <a href="settings.html" class="nav-item" style="padding-left: 0; background: transparent">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-          <span>Settings</span>
-        </a>
         <div class="user-profile">
           <div class="avatar" id="sidebar-user-avatar">AM</div>
           <div class="user-info">
@@ -206,7 +180,10 @@
     <main class="main-content">
       <header class="top-header">
         <div class="page-title">Dashboard &amp; Process Library</div>
-        <div class="header-actions">
+        <div class="header-actions" style="display: flex; align-items: center; gap: 16px;">
+          <a href="process-builder.html" class="btn btn-primary" id="btnHeaderNewProcess" style="text-decoration: none;">
+            + New Process
+          </a>
           <button class="btn-icon" style="position: relative" aria-label="Notifications">
             <img src="../assets/images/bell.svg" alt="Notifications" style="width: 20px; height: 20px" />
             <span style="
@@ -220,9 +197,6 @@
                   border: 2px solid white;
                 "></span>
           </button>
-          <button class="btn btn-primary" onclick="openNewProcessModal()">
-            + New Process
-          </button>
         </div>
       </header>
 
@@ -231,20 +205,15 @@
         <div class="metrics-grid">
           <div class="card metric-card" style="cursor: pointer; transition: transform 0.2s"
             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'"
-            onclick="window.location.href='../modules/projects.html'">
-            <div class="metric-title">Total Active Projects</div>
+            onclick="window.location.href='processes.html'">
+            <div class="metric-title">Process Templates</div>
             <div class="metric-value" id="metricTotalProcesses">—</div>
-            <div class="metric-tag blue" id="metricTotalProcessesTag">Across company teams</div>
-            <svg class="metric-icon-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
+            <div class="metric-tag blue" id="metricTotalProcessesTag">Defined in library</div>
           </div>
 
           <div class="card metric-card" style="cursor: pointer; transition: transform 0.2s"
             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'"
-            onclick="window.location.href='../admin/compliance/compliance_violations.html'">
+            onclick="window.location.href='analytics.html'">
             <div class="metric-title">Open Compliance Violations</div>
             <div class="metric-value" id="metricActiveUsage">—</div>
             <div class="metric-tag yellow" id="metricActiveUsageTag">Requires remediation</div>
@@ -256,16 +225,11 @@
             <div class="metric-title">Active Process Instances</div>
             <div class="metric-value" id="metricAvgCompletion">—</div>
             <div class="metric-tag green" id="metricAvgCompletionTag">Workflows in progress</div>
-            <svg class="metric-icon-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
           </div>
 
           <div class="card metric-card" style="cursor: pointer; transition: transform 0.2s"
             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'"
-            onclick="window.location.href='../admin/pm/hr-dashboard.html'">
+            onclick="window.location.href='audit.html'">
             <div class="metric-title">Company Employees</div>
             <div class="metric-value" id="metricPendingReview">—</div>
             <div class="metric-tag blue" id="metricPendingReviewTag">Active tenant roster</div>
@@ -357,32 +321,13 @@
     </div>
   </div>
 
-  <script src="../js/utils/helpers.js"></script>
-  <script src="../js/helpers.js"></script>
-  <script src="../js/data/db.js"></script>
-  <script src="../js/data/hr-data-store.js"></script>
-  <script src="../js/data/pm-data-store.js"></script>
-  <script src="../js/data/workflows.js"></script>
-  <script src="../js/data/audit-store.js"></script>
-  <script src="../js/pages/superuser/dashboard.js"></script>
+  <script src="../js/utils/helpers.js?v=2.3"></script>
+  <script src="../js/helpers.js?v=2.3"></script>
+  <script src="../js/data/db.js?v=2.3"></script>
+  <script src="../js/data/processes.js?v=2.3"></script>
+  <script src="../js/data/audit-store.js?v=2.3"></script>
+  <script src="../js/pages/superuser/dashboard.js?v=2.3"></script>
   <script>
-    // Override helpers.js global — must come AFTER helpers.js loads
-    window.openNewProcessModal = function() {
-      document.getElementById("newProcessModal").classList.remove("hidden");
-    };
-
-    function closeNewProcessModal() {
-      document.getElementById("newProcessModal").classList.add("hidden");
-    }
-
-    function createAndGoToBuilder() {
-      const name = document.getElementById("newProcessNameInput").value.trim();
-      const dept = document.getElementById("newProcessDeptInput").value;
-      if (!name) { alert("Please enter a process name."); return; }
-      sessionStorage.setItem("newProcessDraft", JSON.stringify({ name, department: dept }));
-      window.location.href = "process-builder.html";
-    }
-
     document.addEventListener("DOMContentLoaded", () => {
       const sessionRaw = sessionStorage.getItem("currentUser");
       if (sessionRaw) {

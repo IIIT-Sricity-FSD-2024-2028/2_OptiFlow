@@ -7,6 +7,7 @@ import {
   Patch,
   Delete,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { SubtasksService } from './subtasks.service';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
@@ -72,9 +73,16 @@ export class SubtasksController {
   create(
     @Body() dto: CreateSubtaskDto,
     @ActorUserId() actorUserId: any,
+    @RequestUserRole() actorRole: string,
     @CompanyId() companyId: string,
+    @Req() req: any,
   ) {
-    return this.subtasksService.create(dto, String(actorUserId));
+    return this.subtasksService.create(
+      dto,
+      String(actorUserId),
+      actorRole,
+      req.user,
+    );
   }
 
   @Patch(':id')
@@ -87,8 +95,15 @@ export class SubtasksController {
     @ActorUserId() actorUserId: any,
     @RequestUserRole() actorRole: string,
     @CompanyId() companyId: string,
+    @Req() req: any,
   ) {
-    return this.subtasksService.update(id, dto, String(actorUserId), actorRole);
+    return this.subtasksService.update(
+      id,
+      dto,
+      String(actorUserId),
+      actorRole,
+      req.user,
+    );
   }
 
   @Delete(':id')

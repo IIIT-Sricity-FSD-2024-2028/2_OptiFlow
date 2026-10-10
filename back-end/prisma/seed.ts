@@ -90,6 +90,14 @@ async function main() {
     },
   });
 
+  await prisma.platformAdminUser.createMany({
+    data: [
+      { email: "admin@officesync.com", passwordHash, fullName: "OfficeSync Platform Administrator" },
+      { email: "admin@owms-platform.test", passwordHash, fullName: "OWMS Platform Administrator" },
+    ],
+    skipDuplicates: true,
+  });
+
   const acmeCorp = await prisma.company.create({
     data: { legalName: "Acme Corp", status: "Active" },
   });
@@ -261,7 +269,120 @@ async function main() {
     },
   });
 
-  console.log("✓ Assigned system roles to all 20 users via RoleAssignment.");
+  // =====================================================================
+  // 4b. OFFICESYNC TECHNOLOGIES TENANT (Core Domain Seed)
+  // =====================================================================
+  const officeSync = await prisma.company.create({
+    data: { legalName: "OfficeSync Technologies", status: "Active" },
+  });
+
+  const rOsProcessAdmin = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tProcessAdmin.id, label: "Process Admin", isSystem: true } });
+  const rOsPm = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tProjectManager.id, label: "Project Manager", isSystem: true } });
+  const rOsCompliance = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tComplianceOfficer.id, label: "Compliance Officer", isSystem: true } });
+  const rOsHr = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tAccessGovernance.id, label: "Access Governance", isSystem: true } });
+  const rOsTl = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tTeamLead.id, label: "Team Lead", isSystem: true } });
+  const rOsTm = await prisma.role.create({ data: { companyId: officeSync.id, roleTemplateId: tTeamMember.id, label: "Team Member", isSystem: true } });
+
+  const uArjun = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Arjun Mehta", email: "arjun@officesync.in", passwordHash } });
+  const uAdmin = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "System Admin", email: "admin@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uPriya = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Priya Sharma", email: "priya@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uRohan = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Rohan Nair", email: "rohan@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uKiran = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Kiran Patel", email: "kiran@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uSneha = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Sneha Kapoor", email: "sneha@officesync.in", passwordHash, managerUserId: uPriya.id } });
+  const uVikram = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Vikram Desai", email: "vikram@officesync.in", passwordHash, managerUserId: uSneha.id } });
+  const uAnjali = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Anjali Rao", email: "anjali@officesync.in", passwordHash, managerUserId: uArjun.id } });
+  const uDivya = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Divya Menon", email: "divya@officesync.in", passwordHash, managerUserId: uAnjali.id } });
+  const uRahul = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Rahul Iyer", email: "rahul@officesync.in", passwordHash, managerUserId: uDivya.id } });
+  const uMeera = await prisma.user.create({ data: { companyId: officeSync.id, fullName: "Meera Krishnan", email: "meera@officesync.in", passwordHash, managerUserId: uArjun.id } });
+
+  await prisma.roleAssignment.createMany({
+    data: [
+      { userId: uArjun.id, roleId: rOsProcessAdmin.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uAdmin.id, roleId: rOsProcessAdmin.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uPriya.id, roleId: rOsPm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uRohan.id, roleId: rOsCompliance.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uKiran.id, roleId: rOsHr.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uSneha.id, roleId: rOsTl.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uPriya.id },
+      { userId: uVikram.id, roleId: rOsTm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uSneha.id },
+      { userId: uAnjali.id, roleId: rOsPm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+      { userId: uDivya.id, roleId: rOsTl.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uAnjali.id },
+      { userId: uRahul.id, roleId: rOsTm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uDivya.id },
+      { userId: uMeera.id, roleId: rOsPm.id, scopeType: ScopeType.Company, scopeId: officeSync.id, grantedById: uArjun.id },
+    ],
+  });
+
+  const osHq = await prisma.branch.create({ data: { companyId: officeSync.id, name: "Headquarters (HQ)" } });
+  const osApac = await prisma.branch.create({ data: { companyId: officeSync.id, name: "APAC Engineering Hub" } });
+  const osTeamCore = await prisma.team.create({ data: { branchId: osHq.id, name: "Core Platform Eng" } });
+  const osTeamApac = await prisma.team.create({ data: { branchId: osApac.id, name: "APAC Eng Hub" } });
+
+  const osProj1 = await prisma.project.create({
+    data: {
+      teamId: osTeamCore.id,
+      name: "OWMS Core Engine 2.0",
+      status: "Active",
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      createdById: uPriya.id,
+    },
+  });
+
+  const osTask1 = await prisma.task.create({
+    data: {
+      companyId: officeSync.id,
+      projectId: osProj1.id,
+      title: "Task Orchestration Engine Refactor",
+      description: "Implement unified process engine and state transitions.",
+      status: TaskStatus.Active,
+      priority: TaskPriority.High,
+      assignedToId: uSneha.id,
+      createdById: uPriya.id,
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      estimatedHours: 40,
+      actualHours: 12,
+    },
+  });
+
+  await prisma.subtask.create({
+    data: {
+      companyId: officeSync.id,
+      taskId: osTask1.id,
+      title: "Review ledger entries and state schemas",
+      status: TaskStatus.Active,
+      assignedToId: uVikram.id,
+      createdById: uSneha.id,
+    },
+  });
+
+  // =====================================================================
+  // 4c. CODENEST TECHNOLOGIES TENANT (DevOps / Code Review Tenant)
+  // =====================================================================
+  const codeNest = await prisma.company.create({
+    data: { legalName: "Codenest Technologies", status: "Active" },
+  });
+
+  const rCnOwner = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tCompanyOwner.id, label: "Company Owner", isSystem: true } });
+  const rCnPm = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tProjectManager.id, label: "Project Manager", isSystem: true } });
+  const rCnTm = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tTeamMember.id, label: "Team Member", isSystem: true } });
+  const rCnCompliance = await prisma.role.create({ data: { companyId: codeNest.id, roleTemplateId: tComplianceOfficer.id, label: "Compliance Officer", isSystem: true } });
+
+  const uRohanM = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Rohan Malhotra", email: "cto@codenest.test", passwordHash } });
+  const uSnehaK = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Sneha Kapoor", email: "em@codenest.test", passwordHash, managerUserId: uRohanM.id } });
+  const uArnav = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Arnav Bose", email: "arnav@codenest.test", passwordHash, managerUserId: uSnehaK.id } });
+  const uIshita = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Ishita Roy", email: "ishita@codenest.test", passwordHash, managerUserId: uSnehaK.id } });
+  const uKunal = await prisma.user.create({ data: { companyId: codeNest.id, fullName: "Kunal Verma", email: "qa@codenest.test", passwordHash, managerUserId: uRohanM.id } });
+
+  await prisma.roleAssignment.createMany({
+    data: [
+      { userId: uRohanM.id, roleId: rCnOwner.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uRohanM.id },
+      { userId: uSnehaK.id, roleId: rCnPm.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uRohanM.id },
+      { userId: uArnav.id, roleId: rCnTm.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uSnehaK.id },
+      { userId: uIshita.id, roleId: rCnTm.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uSnehaK.id },
+      { userId: uKunal.id, roleId: rCnCompliance.id, scopeType: ScopeType.Company, scopeId: codeNest.id, grantedById: uRohanM.id },
+    ],
+  });
+
+  console.log("✓ Assigned system roles to all users across OfficeSync, CodeNest, and Acme Corp.");
 
   // =====================================================================
   // 5. MOCK DATA (Org, Projects, Tasks, Workflows & Compliance)
@@ -326,11 +447,94 @@ async function main() {
     ],
   });
 
+  // ── 5 Process Templates for Acme Corp (Managed by Arjun Mehta - Process Admin) ──
+  const processTemplateFinance = await prisma.processTemplate.create({
+    data: {
+      companyId: acmeCorp.id,
+      name: "Finance Q4 Reporting & Audit",
+      category: "Finance",
+      compliance: ["SOX Section 404", "IFRS Reporting"],
+      version: 1,
+      isActive: true,
+      createdById: userArjun.id,
+    },
+  });
+  await prisma.processTemplateStep.createMany({
+    data: [
+      { templateId: processTemplateFinance.id, stepOrder: 1, name: "Data Collection", stepType: StepType.Input_Required },
+      { templateId: processTemplateFinance.id, stepOrder: 2, name: "Financial Draft Preparation", stepType: StepType.Input_Required },
+      { templateId: processTemplateFinance.id, stepOrder: 3, name: "Executive Review", stepType: StepType.Approval },
+      { templateId: processTemplateFinance.id, stepOrder: 4, name: "Compliance & SOX Audit", stepType: StepType.Automated_Task },
+    ],
+  });
+
+  const processTemplateHR = await prisma.processTemplate.create({
+    data: {
+      companyId: acmeCorp.id,
+      name: "Employee Onboarding & Access Provisioning",
+      category: "HR",
+      compliance: ["HR Security Policy"],
+      version: 1,
+      isActive: true,
+      createdById: userArjun.id,
+    },
+  });
+  await prisma.processTemplateStep.createMany({
+    data: [
+      { templateId: processTemplateHR.id, stepOrder: 1, name: "Documentation & ID Verification", stepType: StepType.Input_Required },
+      { templateId: processTemplateHR.id, stepOrder: 2, name: "HR Background Verification", stepType: StepType.Approval },
+      { templateId: processTemplateHR.id, stepOrder: 3, name: "IT Setup & Hardware Provisioning", stepType: StepType.Input_Required },
+      { templateId: processTemplateHR.id, stepOrder: 4, name: "Role & Permission Assignment", stepType: StepType.Approval },
+      { templateId: processTemplateHR.id, stepOrder: 5, name: "Compliance Orientation", stepType: StepType.Automated_Task },
+    ],
+  });
+
+  const processTemplateIT = await prisma.processTemplate.create({
+    data: {
+      companyId: acmeCorp.id,
+      name: "IT Security Audit Protocol",
+      category: "IT",
+      compliance: ["ISO 27001", "SOC2"],
+      version: 1,
+      isActive: true,
+      createdById: userArjun.id,
+    },
+  });
+  await prisma.processTemplateStep.createMany({
+    data: [
+      { templateId: processTemplateIT.id, stepOrder: 1, name: "Vulnerability Scan & Discovery", stepType: StepType.Automated_Task },
+      { templateId: processTemplateIT.id, stepOrder: 2, name: "Risk Assessment & CVE Rating", stepType: StepType.Input_Required },
+      { templateId: processTemplateIT.id, stepOrder: 3, name: "Remediation & Patch Deployment", stepType: StepType.Input_Required },
+      { templateId: processTemplateIT.id, stepOrder: 4, name: "CISO Compliance Sign-off", stepType: StepType.Approval },
+    ],
+  });
+
+  const processTemplateGDPR = await prisma.processTemplate.create({
+    data: {
+      companyId: acmeCorp.id,
+      name: "GDPR Client Data Verification",
+      category: "Operations",
+      compliance: ["GDPR"],
+      version: 1,
+      isActive: true,
+      createdById: userArjun.id,
+    },
+  });
+  await prisma.processTemplateStep.createMany({
+    data: [
+      { templateId: processTemplateGDPR.id, stepOrder: 1, name: "Data Subject Access Request Intake", stepType: StepType.Input_Required },
+      { templateId: processTemplateGDPR.id, stepOrder: 2, name: "Identity & Authenticity Check", stepType: StepType.Approval },
+      { templateId: processTemplateGDPR.id, stepOrder: 3, name: "Consent & Scope Review", stepType: StepType.Approval },
+      { templateId: processTemplateGDPR.id, stepOrder: 4, name: "DPO Compliance Sign-off", stepType: StepType.Approval },
+    ],
+  });
+
   const processTemplate = await prisma.processTemplate.create({
     data: {
       companyId: acmeCorp.id,
       name: "Vendor Security & Compliance Onboarding",
       category: "Procurement",
+      compliance: ["Vendor Risk Policy"],
       version: 1,
       isActive: true,
       createdById: userArjun.id,
@@ -512,18 +716,203 @@ async function main() {
     });
   }
 
-  for (let i = 0; i < 20; i++) {
+  const now = Date.now();
+  const realisticAuditEvents = [
+    {
+      action: AuditAction.LOGIN,
+      entityType: "User",
+      entityId: userArjun.id,
+      performedById: userArjun.id,
+      offsetMs: 8 * 60 * 1000, // 8 minutes ago
+      ip: "192.168.1.15",
+      details: { message: "Process Admin Arjun Mehta logged in successfully" },
+    },
+    {
+      action: AuditAction.UPDATE,
+      entityType: "ProcessTemplate",
+      entityId: processTemplateFinance.id,
+      performedById: userArjun.id,
+      offsetMs: 35 * 60 * 1000, // 35 minutes ago
+      ip: "192.168.1.15",
+      details: { templateName: "Finance Q4 Reporting & Audit", changes: "Added SOX 404 compliance verification step" },
+    },
+    {
+      action: AuditAction.LOGIN,
+      entityType: "User",
+      entityId: userBob.id,
+      performedById: userBob.id,
+      offsetMs: 75 * 60 * 1000, // 1 hour 15 mins ago
+      ip: "192.168.1.42",
+      details: { message: "Project Manager Bob Miller logged in" },
+    },
+    {
+      action: AuditAction.STATUS_CHANGE,
+      entityType: "Task",
+      entityId: task1.id,
+      performedById: userDavid.id,
+      offsetMs: 2.5 * 3600 * 1000, // 2.5 hours ago
+      ip: "192.168.1.88",
+      details: { task: task1.title, oldStatus: "Draft", newStatus: "In_Review" },
+    },
+    {
+      action: AuditAction.CREATE,
+      entityType: "ProcessTemplate",
+      entityId: processTemplateIT.id,
+      performedById: userArjun.id,
+      offsetMs: 4 * 3600 * 1000, // 4 hours ago
+      ip: "192.168.1.15",
+      details: { name: "IT Security Audit Protocol", category: "IT" },
+    },
+    {
+      action: AuditAction.LOGIN,
+      entityType: "User",
+      entityId: userAlice.id,
+      performedById: userAlice.id,
+      offsetMs: 6 * 3600 * 1000, // 6 hours ago
+      ip: "10.0.0.1",
+      details: { message: "Company Owner Alice Vance authenticated" },
+    },
+    {
+      action: AuditAction.CREATE,
+      entityType: "Project",
+      entityId: projectQ3.id,
+      performedById: userBob.id,
+      offsetMs: 14 * 3600 * 1000, // 14 hours ago
+      ip: "192.168.1.42",
+      details: { projectName: "Q3 Cloud Migration", budget: "Enterprise" },
+    },
+    {
+      action: AuditAction.UPDATE,
+      entityType: "ProcessTemplate",
+      entityId: processTemplateHR.id,
+      performedById: userArjun.id,
+      offsetMs: 22 * 3600 * 1000, // 22 hours ago
+      ip: "192.168.1.15",
+      details: { template: "Employee Onboarding", action: "Updated IT Provisioning step requirements" },
+    },
+    {
+      action: AuditAction.PERMISSION_CHANGE,
+      entityType: "RoleAssignment",
+      entityId: userRachel.id,
+      performedById: userAlice.id,
+      offsetMs: 28 * 3600 * 1000, // 1 day ago
+      ip: "10.0.0.1",
+      details: { targetUser: "Rachel Green", assignedRole: "Project Manager" },
+    },
+    {
+      action: AuditAction.STATUS_CHANGE,
+      entityType: "Task",
+      entityId: createdTasks[0].id,
+      performedById: userCharlie.id,
+      offsetMs: 36 * 3600 * 1000, // 1.5 days ago
+      ip: "192.168.1.70",
+      details: { task: createdTasks[0].title, newStatus: "Active" },
+    },
+    {
+      action: AuditAction.CREATE,
+      entityType: "ProcessTemplate",
+      entityId: processTemplateGDPR.id,
+      performedById: userArjun.id,
+      offsetMs: 48 * 3600 * 1000, // 2 days ago
+      ip: "192.168.1.15",
+      details: { name: "GDPR Client Data Verification", category: "Operations" },
+    },
+    {
+      action: AuditAction.LOGIN,
+      entityType: "User",
+      entityId: userSamuel.id,
+      performedById: userSamuel.id,
+      offsetMs: 52 * 3600 * 1000, // 2+ days ago
+      ip: "192.168.1.33",
+      details: { message: "Compliance Officer Samuel Jackson logged in" },
+    },
+    {
+      action: AuditAction.UPDATE,
+      entityType: "ComplianceViolation",
+      entityId: violation.id,
+      performedById: userSamuel.id,
+      offsetMs: 60 * 3600 * 1000, // 2.5 days ago
+      ip: "192.168.1.33",
+      details: { violation: "2FA Policy", status: "Under_Review" },
+    },
+    {
+      action: AuditAction.CREATE,
+      entityType: "Task",
+      entityId: createdTasks[1].id,
+      performedById: userBob.id,
+      offsetMs: 72 * 3600 * 1000, // 3 days ago
+      ip: "192.168.1.42",
+      details: { title: createdTasks[1].title, priority: "High" },
+    },
+    {
+      action: AuditAction.LOGIN,
+      entityType: "User",
+      entityId: userArjun.id,
+      performedById: userArjun.id,
+      offsetMs: 80 * 3600 * 1000, // 3.3 days ago
+      ip: "192.168.1.15",
+      details: { message: "Process Admin routine session login" },
+    },
+    {
+      action: AuditAction.CREATE,
+      entityType: "ProcessTemplate",
+      entityId: processTemplateFinance.id,
+      performedById: userArjun.id,
+      offsetMs: 96 * 3600 * 1000, // 4 days ago
+      ip: "192.168.1.15",
+      details: { message: "Published initial version of Finance Q4 Reporting & Audit" },
+    },
+    {
+      action: AuditAction.LOGIN,
+      entityType: "User",
+      entityId: userDavid.id,
+      performedById: userDavid.id,
+      offsetMs: 110 * 3600 * 1000, // 4.5 days ago
+      ip: "192.168.1.88",
+      details: { message: "Team Member David Smith logged in" },
+    },
+    {
+      action: AuditAction.STATUS_CHANGE,
+      entityType: "Task",
+      entityId: createdTasks[2].id,
+      performedById: userDavid.id,
+      offsetMs: 120 * 3600 * 1000, // 5 days ago
+      ip: "192.168.1.88",
+      details: { task: createdTasks[2].title, status: "Completed" },
+    },
+    {
+      action: AuditAction.LOGIN,
+      entityType: "User",
+      entityId: userVictor.id,
+      performedById: userVictor.id,
+      offsetMs: 130 * 3600 * 1000, // 5.4 days ago
+      ip: "10.0.0.2",
+      details: { message: "CTO Victor Stone authenticated" },
+    },
+    {
+      action: AuditAction.CREATE,
+      entityType: "Project",
+      entityId: projectMobile.id,
+      performedById: userBob.id,
+      offsetMs: 144 * 3600 * 1000, // 6 days ago
+      ip: "192.168.1.42",
+      details: { name: "Mobile App V2", team: "Core Engineering" },
+    },
+  ];
+
+  for (const logItem of realisticAuditEvents) {
     await prisma.auditLog.create({
       data: {
         companyId: acmeCorp.id,
-        action: i % 2 === 0 ? AuditAction.LOGIN : AuditAction.UPDATE,
-        entityType: i % 2 === 0 ? "User" : "Task",
-        entityId: i % 2 === 0 ? userDavid.id : createdTasks[0].id,
-        performedById: teamMembers[i % teamMembers.length].id,
-        ipAddress: "192.168.1." + (100 + i),
-        userAgent: "Mozilla/5.0 Demo Browser",
-        usedPermissionSlug: i % 2 === 0 ? null : "tasks.manage"
-      }
+        action: logItem.action,
+        entityType: logItem.entityType,
+        entityId: logItem.entityId,
+        performedById: logItem.performedById,
+        performedAt: new Date(now - logItem.offsetMs),
+        ipAddress: logItem.ip,
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0",
+        newValue: logItem.details,
+      },
     });
   }
 

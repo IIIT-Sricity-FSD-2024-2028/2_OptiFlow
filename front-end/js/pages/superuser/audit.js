@@ -1,129 +1,217 @@
 // js/pages/superuser/audit.js
-// Renders the global unified audit log from backend API state.
+// Renders the global unified audit log from backend API state with real timestamps and actors.
 
-let state;
+let state = null;
+let auditLogs = [];
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (window.Sidebar) window.Sidebar.render("audit");
-  
-  state = await window.Helpers.getState();
+  const sessionRaw = sessionStorage.getItem("currentUser");
+  if (sessionRaw) {
+    try {
+      const session = JSON.parse(sessionRaw);
+      const nameEl = document.getElementById("sidebar-user-name");
+      const roleEl = document.getElementById("sidebar-user-role");
+      const avatarEl = document.getElementById("sidebar-user-avatar");
+      if (nameEl) nameEl.textContent = session.fullName || session.name || "Arjun Mehta";
+      if (roleEl) roleEl.textContent = "Process Admin";
+      if (avatarEl) {
+        const name = session.fullName || session.name || "AM";
+        avatarEl.textContent = name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+      }
+    } catch(e) {}
+  }
+
+  // Load state and latest audit logs directly from backend
+  try {
+    if (window.Helpers) {
+      state = await window.Helpers.getState();
+      const rawLogs = await window.Helpers.api.request('/audit-logs', 'GET');
+      auditLogs = Array.isArray(rawLogs) ? rawLogs : (rawLogs && rawLogs.data ? rawLogs.data : (state.auditLogs || []));
+    }
+  } catch (err) {
+    console.warn("[audit.js] Direct fetch failed, falling back to state:", err);
+    if (state) auditLogs = state.auditLogs || [];
+  }
 
   refreshAuditTable();
-  document
-    .getElementById("searchInput")
-    .addEventListener("input", refreshAuditTable);
-  document
-    .getElementById("eventFilter")
-    .addEventListener("change", refreshAuditTable);
 
-  // Wire up Export CSV button
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput) searchInput.addEventListener("input", refreshAuditTable);
+
+  const eventFilter = document.getElementById("eventFilter");
+  if (eventFilter) eventFilter.addEventListener("change", refreshAuditTable);
+
   const exportBtn = document.getElementById("exportBtn");
-  if (exportBtn) {
-    exportBtn.addEventListener("click", exportToCSV);
-  }
+  if (exportBtn) exportBtn.addEventListener("click", exportToCSV);
 });
 
-function exportToCSV() {
-  const auditLogsData = state ? state.auditLogs : [];
-  if (!auditLogsData || auditLogsData.length === 0) return;
+function formatAuditTimestamp(isoString) {
+  if (!isoString) return "Recently";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "Recently";
 
-  // Define headers
-  const headers = [
-    "Timestamp",
-    "Event Type",
-    "User",
-    "IP Address",
-    "Details",
-    "Outcome",
-  ];
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  // Map data to CSV rows
-  const rows = auditLogsData.map((log) => {
-    const ts = new Date(log.performedAt).toLocaleString();
-    const type = log.entityType;
-    const user = log.performedBy ? log.performedBy : "System"; // Ideally mapped to user name
-    const ip = log.ipAddress || "localhost";
-    const desc = `${log.action} on ${log.entityType} #${log.entityId}`;
-    const outcome = log.action;
-    
-    // Enclose strings in quotes to handle commas
-    return `"${ts}","${type}","${user}","${ip}","${desc.replace(/"/g, '""')}","${outcome}"`;
+  let relative = "";
+  if (diffMinutes >= 0 && diffMinutes < 60) {
+    relative = diffMinutes <= 1 ? "Just now" : `${diffMinutes}m ago`;
+  } else if (diffHours >= 0 && diffHours < 24) {
+    relative = `${diffHours}h ago`;
+  } else if (diffDays >= 0 && diffDays < 7) {
+    relative = `${diffDays}d ago`;
+  }
+
+  const formattedDate = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+  const formattedTime = date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit"
   });
 
-  // Combine Headers and Rows
-  const csvContent =
-    "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+  return {
+    full: `${formattedDate}, ${formattedTime}`,
+    relative: relative ? ` (${relative})` : ""
+  };
+}
 
-  // Trigger download
+function resolveActorName(log) {
+  const users = (state && state.users) ? state.users : [];
+  const actorId = log.performedById || log.performedBy;
+  if (!actorId) return "System";
+
+  const match = users.find(u => String(u.id) === String(actorId) || String(u.userId) === String(actorId));
+  if (match) return match.fullName || match.name || `User #${actorId}`;
+
+  // Check if oldValue or newValue carries a name
+  if (log.newValue && log.newValue.userName) return log.newValue.userName;
+  return `User #${actorId}`;
+}
+
+function resolveLogDetails(log) {
+  if (log.newValue && log.newValue.message) {
+    return log.newValue.message;
+  }
+  if (log.newValue && log.newValue.name) {
+    return `${log.action} ${log.entityType}: "${log.newValue.name}"`;
+  }
+  return `${log.action} action performed on ${log.entityType} (ID: ${log.entityId})`;
+}
+
+function exportToCSV() {
+  if (!auditLogs || auditLogs.length === 0) return;
+
+  const headers = [
+    "Timestamp",
+    "Action",
+    "Entity Type",
+    "Entity ID",
+    "User",
+    "IP Address",
+    "Details"
+  ];
+
+  const rows = auditLogs.map((log) => {
+    const ts = new Date(log.performedAt || log.createdAt).toLocaleString();
+    const action = log.action || "ACTION";
+    const entityType = log.entityType || "System";
+    const entityId = log.entityId || "";
+    const user = resolveActorName(log);
+    const ip = log.ipAddress || "127.0.0.1";
+    const details = resolveLogDetails(log);
+
+    return `"${ts}","${action}","${entityType}","${entityId}","${user}","${ip}","${details.replace(/"/g, '""')}"`;
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
   const encodedUri = encodeURI(csvContent);
   const link = document.createElement("a");
   link.setAttribute("href", encodedUri);
-  link.setAttribute("download", "audit_logs_export.csv");
-  document.body.appendChild(link); // Required for Firefox
+  link.setAttribute("download", `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 }
 
 function refreshAuditTable() {
-  let logs = state ? state.auditLogs : [];
-  const search = document.getElementById("searchInput").value.toLowerCase();
-  const type = document.getElementById("eventFilter").value;
+  let filtered = [...auditLogs];
+
+  const searchInput = document.getElementById("searchInput");
+  const search = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  const eventFilter = document.getElementById("eventFilter");
+  const type = eventFilter ? eventFilter.value.trim() : "";
 
   if (search) {
-    logs = logs.filter(
-      (l) =>
-        l.entityType.toLowerCase().includes(search) ||
-        l.action.toLowerCase().includes(search) ||
-        String(l.performedBy).toLowerCase().includes(search),
-    );
-  }
-  if (type) {
-    logs = logs.filter((l) => l.action === type);
+    filtered = filtered.filter((l) => {
+      const userStr = resolveActorName(l).toLowerCase();
+      const entityStr = (l.entityType || "").toLowerCase();
+      const actionStr = (l.action || "").toLowerCase();
+      const descStr = resolveLogDetails(l).toLowerCase();
+      return (
+        userStr.includes(search) ||
+        entityStr.includes(search) ||
+        actionStr.includes(search) ||
+        descStr.includes(search)
+      );
+    });
   }
 
-  renderAuditTable(logs);
+  if (type) {
+    filtered = filtered.filter((l) => (l.action || "").toUpperCase() === type.toUpperCase());
+  }
+
+  renderAuditTable(filtered);
 }
 
 function processSeverityTag(action) {
-  if (action === "DELETE" || action === "STATUS_CHANGE")
-    return `<span class="badge" style="background:#FEE2E2; color:#DC2626;">High</span>`;
-  if (action === "UPDATE")
-    return `<span class="badge" style="background:#FEF3C7; color:#D97706;">Medium</span>`;
-  return `<span class="badge gray">Info</span>`;
+  const a = (action || "").toUpperCase();
+  if (a === "DELETE" || a === "STATUS_CHANGE" || a === "PERMISSION_CHANGE") {
+    return `<span class="badge" style="background:#FEE2E2; color:#DC2626; font-weight:600;">High</span>`;
+  }
+  if (a === "UPDATE" || a === "CREATE") {
+    return `<span class="badge" style="background:#FEF3C7; color:#D97706; font-weight:600;">Medium</span>`;
+  }
+  return `<span class="badge" style="background:#F1F5F9; color:#475569; font-weight:600;">Info</span>`;
 }
 
 function renderAuditTable(data) {
   const tbody = document.getElementById("auditTableBody");
   if (!tbody) return;
+
   tbody.innerHTML = "";
 
-  if (data.length === 0) {
-    tbody.innerHTML =
-      '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No audit logs found</td></tr>';
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 32px;">No audit events found.</td></tr>';
     return;
   }
 
-  // Find user details helper
-  const allUsers = state.users || [];
-  const getUserName = (id) => {
-    const u = allUsers.find(u => String(u.id) === String(id));
-    return u ? u.fullName : "System";
-  };
-
   data.forEach((l) => {
-    const ts = window.Helpers.formatDate(l.performedAt) + " " + new Date(l.performedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-    const userName = getUserName(l.performedBy);
-    const desc = `${l.action} on ${l.entityType} #${l.entityId}`;
+    const timeInfo = formatAuditTimestamp(l.performedAt || l.createdAt);
+    const userName = resolveActorName(l);
+    const details = resolveLogDetails(l);
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-            <td style="color: var(--text-muted); font-size:13px;">${ts}</td>
-            <td><span class="badge" style="background:#F1F5F9; color:#475569;">${l.entityType}</span></td>
-            <td><div class="td-title">${userName}</div></td>
-            <td style="color: var(--text-muted); font-size:13px; font-family: monospace;">${l.ipAddress || "localhost"}</td>
-            <td>${desc}</td>
-            <td>${processSeverityTag(l.action)}</td>
-        `;
+      <td style="color: var(--text-muted); font-size:13px; white-space: nowrap;">
+        <strong>${timeInfo.full}</strong>
+        <span style="color:#64748b; font-size:12px;">${timeInfo.relative}</span>
+      </td>
+      <td>
+        <span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:600;">${l.action || 'ACTION'}</span>
+        <span class="badge" style="background:#F1F5F9; color:#475569; margin-left: 4px;">${l.entityType || 'System'}</span>
+      </td>
+      <td><div class="td-title" style="font-weight: 600;">${userName}</div></td>
+      <td style="color: var(--text-muted); font-size:12px; font-family: monospace;">${l.ipAddress || "127.0.0.1"}</td>
+      <td style="font-size: 13px; color: #334155; max-width: 320px;">${details}</td>
+      <td>${processSeverityTag(l.action)}</td>
+    `;
     tbody.appendChild(tr);
   });
 }

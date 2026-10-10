@@ -25,6 +25,7 @@ export class ProcessTemplatesController {
   @Get()
   @Roles(
     'superuser',
+    'process_admin',
     'hr_manager',
     'project_manager',
     'team_leader',
@@ -38,6 +39,7 @@ export class ProcessTemplatesController {
   @Get(':id')
   @Roles(
     'superuser',
+    'process_admin',
     'hr_manager',
     'project_manager',
     'team_leader',
@@ -49,7 +51,7 @@ export class ProcessTemplatesController {
     return this.svc.findOne(id, companyId);
   }
   @Post()
-  @Roles('superuser', 'project_manager')
+  @Roles('superuser', 'process_admin', 'project_manager')
   @ApiOperation({ summary: 'Create a process template' })
   create(
     @Body() dto: CreateProcessTemplateDto,
@@ -59,7 +61,7 @@ export class ProcessTemplatesController {
     return this.svc.create(dto, companyId);
   }
   @Patch(':id')
-  @Roles('superuser', 'project_manager')
+  @Roles('superuser', 'process_admin', 'project_manager')
   @ApiOperation({ summary: 'Update a process template' })
   update(
     @Param('id') id: string,
@@ -69,7 +71,7 @@ export class ProcessTemplatesController {
     return this.svc.update(id, dto, companyId);
   }
   @Delete(':id')
-  @Roles('superuser')
+  @Roles('superuser', 'process_admin')
   @ApiOperation({ summary: 'Delete a process template' })
   remove(@Param('id') id: string, @CompanyId() companyId: string) {
     return this.svc.remove(id, companyId);

@@ -100,6 +100,11 @@ export class TasksService {
       await this.assertTaskProjectBranchAccess(dto.project_id, user);
     }
 
+    const isPm = user?.role === 'project_manager' || (user?.roleLabel || '').toLowerCase().includes('project');
+    if (isPm && dto.assigned_to) {
+      await this.assertProjectManagerAssigneeIsTeamLeader(dto.assigned_to);
+    }
+
     const newTask = await this.prisma.task.create({
       data: {
         companyId: dto.companyId,
@@ -150,6 +155,11 @@ export class TasksService {
       throw new ForbiddenException(
         'Only team leaders or project managers may reassign tasks.',
       );
+    }
+
+    const isPm = actorRole === 'project_manager' || user?.role === 'project_manager' || (user?.roleLabel || '').toLowerCase().includes('project');
+    if (isPm && dto.assigned_to && dto.assigned_to !== before.assignedToId) {
+      await this.assertProjectManagerAssigneeIsTeamLeader(dto.assigned_to);
     }
 
     const updated = await this.prisma.task.update({
@@ -246,5 +256,37 @@ export class TasksService {
       task.project?.team?.branchId,
       'manage tasks in',
     );
+  }
+
+  private async assertProjectManagerAssigneeIsTeamLeader(
+    assigneeUserId: string,
+  ) {
+    const assignee = await this.prisma.user.findUnique({
+      where: { id: assigneeUserId },
+      include: {
+        roleAssignments: {
+          include: { role: true },
+        },
+      },
+    });
+    if (!assignee) {
+      throw new NotFoundException(`Assignee user ${assigneeUserId} not found`);
+    }
+
+    const isTeamLeader = (assignee.roleAssignments || []).some((ra) => {
+      const label = (ra.role?.label || '').toLowerCase();
+      return (
+        label.includes('team lead') ||
+        label.includes('team leader') ||
+        label.includes('leader') ||
+        label === 'team_leader'
+      );
+    });
+
+    if (!isTeamLeader) {
+      throw new ForbiddenException(
+        'Project Managers can only assign tasks to Team Leaders.',
+      );
+    }
   }
 }

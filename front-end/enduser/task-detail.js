@@ -39,24 +39,21 @@ function taskDisplayTitle(t) {
 }
 
 function strictNumericId(v) {
-  if (window.TasksStore && typeof window.TasksStore.strictNumericId === "function") {
-    return window.TasksStore.strictNumericId(v);
-  }
-  const n = parseInt(String(v == null ? "" : v).replace(/[^0-9]/g, ""), 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
 }
 
 function numericSessionUserId(sess) {
-  if (window.TasksStore && typeof window.TasksStore.parseNumericUserId === "function") {
-    return window.TasksStore.parseNumericUserId(sess);
-  }
-  return Number(sess.rawId ?? sess.id);
+  if (!sess) return null;
+  return String(sess.id || sess.rawId || '');
 }
 
 function tlTeamMemberIds() {
   const tid = numericSessionUserId(session);
-  if (!window.TasksStore || typeof window.TasksStore.teamMemberUserIds !== "function") return [];
-  return window.TasksStore.teamMemberUserIds(state.users, tid);
+  return (state.users || [])
+    .filter(u => String(u.managerId || u.manager_id || u.reportsTo || '') === String(tid))
+    .map(u => String(u.userId || u.id));
 }
 
 function statusLabel(raw) {
@@ -147,13 +144,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   project =
     state.projects.find(
-      (p) => Number(p.projectId) === Number(task.projectId),
-    ) ||
-    state.projects.find((p) => String(p.id) === String(task.projectId)) ||
-    { name: "General process", createdBy: null };
+      (p) => String(p.projectId || p.id) === String(task.projectId || task.project_id),
+    ) || { name: "General process", createdBy: null };
 
   manager =
-    state.users.find((u) => Number(u.userId) === Number(task.createdBy || project.createdBy)) || {
+    state.users.find((u) => String(u.userId || u.id) === String(task.createdBy || project.createdBy)) || {
       fullName: "System Admin",
       name: "System Admin",
     };
@@ -242,7 +237,9 @@ function renderPage() {
       const isTm = !tl;
       let isAssignedToMe = (String(task.assignedTo || task.assignedToId) === String(numericSessionUserId(session)));
       
-      const mySubtasks = (state.subtasks || []).filter(s => String(s.taskId) === Number(task.taskId) && Number(s.assignedTo || s.taskId) === Number(task.taskId) && Number(s.assignedToId) === String(numericSessionUserId(session)));
+      const currentTaskId = String(task.taskId || task.id);
+      const currentUserId = String(numericSessionUserId(session));
+      const mySubtasks = (state.subtasks || []).filter(s => String(s.taskId) === currentTaskId && String(s.assignedTo || s.assignedToId) === currentUserId);
       if (isTm && !isAssignedToMe && mySubtasks.length > 0) {
         isAssignedToMe = true;
         // Check if all their active subtasks are pending review
@@ -468,21 +465,31 @@ function openSubtaskModal() {
   if (dueEl) dueEl.value = "";
 
   const selectEl = document.getElementById("subtask-assignee");
-  const members = tlTeamMemberIds();
-  const users = (state.users || []).filter((u) => members.includes(Number(u.userId)));
-  if (users.length > 0) {
-    selectEl.innerHTML =
-      '<option value="">Select a team member…</option>' +
-      users
-        .map(
-          (u) =>
-            `<option value="${u.userId}">${escapeHtml(u.fullName || u.name || "User")}</option>`,
-        )
-        .join("");
-  } else {
-    selectEl.innerHTML =
-      '<option value="">No direct reports found — add subtasks from the TL dashboard</option>';
+  const allMembers = (state.users || []).filter(u => {
+    const role = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
+    const label = String(u.roleLabel || u.role_label || '').toLowerCase();
+    return role === 'team_member' || label.includes('team member') || label === 'member';
+  });
+
+  const directMemberIds = (state.users || [])
+    .filter(u => String(u.managerId || u.manager_id || u.reportsTo || '') === String(numericSessionUserId(session)))
+    .map(u => String(u.userId || u.id));
+
+  let users = allMembers;
+  if (directMemberIds.length > 0) {
+    const direct = allMembers.filter(u => directMemberIds.includes(String(u.userId || u.id)));
+    if (direct.length > 0) users = direct;
   }
+  if (users.length === 0) users = state.users || [];
+
+  selectEl.innerHTML =
+    '<option value="">Select a team member…</option>' +
+    users
+      .map(
+        (u) =>
+          `<option value="${u.userId || u.id}">${escapeHtml(u.fullName || u.name || "User")} (${escapeHtml(u.roleLabel || 'Team Member')})</option>`,
+      )
+      .join("");
 
   document.getElementById("subtask-modal").classList.add("open");
 }
@@ -524,10 +531,14 @@ async function saveSubtask() {
     return;
   }
 
+  const sessionUser = window.Auth ? window.Auth.getSession() : {};
+  const companyId = sessionUser.companyId || state.companyId || "comp-uuid-1";
+
   const body = {
-    task_id: Number(task.taskId),
+    companyId: companyId,
+    task_id: String(task.taskId || task.id),
     title,
-    assigned_to: Number(assigneeRaw),
+    assigned_to: String(assigneeRaw),
     description: "",
   };
   if (dueEl && dueEl.value) body.due_date = dueEl.value;
@@ -535,14 +546,14 @@ async function saveSubtask() {
   try {
     await window.Helpers.api.request("/subtasks", "POST", body);
     state = await window.Helpers.getState();
-    task = state.tasks.find((t) => Number(t.taskId) === Number(task.taskId));
+    task = state.tasks.find((t) => String(t.taskId || t.id) === String(task.taskId || task.id));
     closeSubtaskModal();
     renderPage();
     window.Toast.success("Subtask created", "Assigned to your team.");
 
     // ── Notify the assigned team member ──────────────────────────────────
-    if (Number(assigneeRaw) && window.Helpers.pushNotification) {
-      window.Helpers.pushNotification(Number(assigneeRaw), {
+    if (assigneeRaw && window.Helpers.pushNotification) {
+      window.Helpers.pushNotification(String(assigneeRaw), {
         title:   'New Subtask Assigned',
         message: `You have been assigned a new subtask: "${title}" under task "${task ? (task.title || task.taskName || 'Unknown') : 'Unknown'}".`,
         type:    'info',
@@ -693,24 +704,26 @@ async function submitAct(type) {
     }
 
     try {
-      await window.Helpers.api.request(`/tasks/${task.taskId}`, "PATCH", { status: "Blocked" });
+      await window.Helpers.api.request(`/tasks/${task.taskId || task.id}`, "PATCH", { status: "Blocked" });
 
-      const pid = strictNumericId(task.projectId);
+      const pid = strictNumericId(task.projectId || task.project_id);
       const raw = numericSessionUserId(session);
-      const sessionUser = state.users.find((u) => Number(u.userId) === Number(raw));
+      const sessionUser = state.users.find((u) => String(u.userId || u.id) === String(raw));
       const tlOrPm =
         strictNumericId(sessionUser?.managerId) ||
         strictNumericId(sessionUser?.reportsTo) ||
-        (state.users[0] ? strictNumericId(state.users[0].userId) : null) ||
-        1;
+        (state.users[0] ? strictNumericId(state.users[0].userId || state.users[0].id) : null);
 
       if (pid) {
+        const sessionObj = window.Auth ? window.Auth.getSession() : {};
+        const companyId = sessionObj.companyId || state.companyId || "comp-uuid-1";
+
         const body = {
-          task_id: strictNumericId(task.taskId) || Number(task.taskId),
-          project_id: pid,
-          reported_by: strictNumericId(raw) || Number(raw),
-          target_manager_id: tlOrPm,
-          escalated_to: tlOrPm,
+          companyId: companyId,
+          task_id: String(task.taskId || task.id),
+          project_id: String(pid),
+          reported_by: String(raw),
+          target_manager_id: tlOrPm ? String(tlOrPm) : undefined,
           title: `Blocked: ${taskDisplayTitle(task)}`,
           description: notes,
           blocker_type: document.getElementById("blocker-type").value || "General",
@@ -719,7 +732,7 @@ async function submitAct(type) {
         await window.Helpers.api.request("/escalations", "POST", body);
         
         if (tlOrPm) {
-          window.Helpers.pushNotification(tlOrPm, {
+          window.Helpers.pushNotification(String(tlOrPm), {
             title:   'New Blocker Reported',
             message: `Task Blocked: "${taskDisplayTitle(task)}". Reported by team member.`,
             type:    'warning',
@@ -733,7 +746,7 @@ async function submitAct(type) {
       );
       closeModals();
       state = await window.Helpers.getState();
-      task = state.tasks.find((t) => Number(t.taskId) === Number(task.taskId));
+      task = state.tasks.find((t) => String(t.taskId || t.id) === String(task.taskId || task.id));
       renderPage();
     } catch (e) {
       console.error(e);
@@ -768,12 +781,12 @@ async function submitAct(type) {
       const isAssignedToTmTask = isTm && (String(task.assignedTo || task.assignedToId) === String(numericSessionUserId(session)));
 
       if (isTm && !isAssignedToTmTask) {
-        const mySubtasks = (state.subtasks || []).filter(s => String(s.taskId) === Number(task.taskId) && Number(s.assignedTo || s.taskId) === Number(task.taskId) && Number(s.assignedToId) === String(numericSessionUserId(session)) && s.status !== "Completed");
+        const mySubtasks = (state.subtasks || []).filter(s => String(s.taskId) === String(task.taskId || task.id) && String(s.assignedTo || s.assignedToId) === String(numericSessionUserId(session)) && s.status !== "Completed");
         for (const st of mySubtasks) {
           await window.Helpers.api.request(`/subtasks/${st.subtaskId || st.id}`, "PATCH", { status: nextStatus });
         }
       } else {
-        await window.Helpers.api.request(`/tasks/${task.taskId}`, "PATCH", { status: nextStatus });
+        await window.Helpers.api.request(`/tasks/${task.taskId || task.id}`, "PATCH", { status: nextStatus });
       }
 
       window.Toast.success(
@@ -784,8 +797,8 @@ async function submitAct(type) {
       );
       closeModals();
       state = await window.Helpers.getState();
-      task = state.tasks.find((t) => Number(t.taskId) === Number(task.taskId)) || task;
-      project = state.projects.find(p => Number(p.projectId || p.id) === Number(task.projectId || task.project_id)) || project;
+      task = state.tasks.find((t) => String(t.taskId || t.id) === String(task.taskId || task.id)) || task;
+      project = state.projects.find(p => String(p.projectId || p.id) === String(task.projectId || task.project_id)) || project;
       renderPage();
 
       try {
@@ -796,7 +809,7 @@ async function submitAct(type) {
         
         if (tl) {
           // If Team Leader, notify the Project Manager
-          const proj = p.projectId ? p : (state.projects.find(prj => Number(prj.projectId || prj.id) === Number(task.projectId || task.project_id)) || {});
+          const proj = p.projectId ? p : (state.projects.find(prj => String(prj.projectId || prj.id) === String(task.projectId || task.project_id)) || {});
           targetId = proj.createdBy || proj.created_by || (state.users.find(u => u.roleId === 2 || u.roleName === "Project_Manager")?.userId);
         } else {
           // If Team Member, notify their Team Leader (managerId) or the task creator
@@ -804,7 +817,7 @@ async function submitAct(type) {
         }
         
         if (targetId) {
-          window.Helpers.pushNotification(Number(targetId), {
+          window.Helpers.pushNotification(String(targetId), {
             title:   'Work Submitted for Review',
             message: `${sessionUser?.name || sessionUser?.fullName || 'A team member'} submitted "${tTitle}" for review.`,
             type:    'info',
