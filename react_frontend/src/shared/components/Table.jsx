@@ -1,4 +1,3 @@
-import React from 'react';
 import styles from './Table.module.css';
 
 export const Table = ({
@@ -7,6 +6,7 @@ export const Table = ({
   loading = false,
   emptyMessage = 'No records found',
   onRowClick,
+  rowClassName,
 }) => {
   return (
     <div className={styles.container}>
@@ -39,7 +39,7 @@ export const Table = ({
               <tr
                 key={row.id || rowIndex}
                 onClick={() => onRowClick && onRowClick(row)}
-                className={onRowClick ? styles.clickableRow : ''}
+                className={`${onRowClick ? styles.clickableRow : ''} ${rowClassName?.(row) || ''}`}
               >
                 {columns.map((col, colIndex) => {
                   let cellContent;

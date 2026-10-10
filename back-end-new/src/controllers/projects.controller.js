@@ -91,7 +91,6 @@ export async function getProjectById(req, res, next) {
         processInstances: {
           include: {
             template: true,
-            currentStep: true,
           },
         },
         escalations: true,
@@ -126,7 +125,7 @@ export async function createProject(req, res, next) {
     const teamId = (body.teamId || body.team_id || '').trim();
     const status = body.status || 'Active';
     const startDate = body.startDate || body.start_date || null;
-    const endDate = body.endDate || body.end_date || null;
+    const targetDate = body.targetDate || body.target_date || body.endDate || body.end_date || null;
 
     validateRequired({ name, teamId }, ['name', 'teamId']);
 
@@ -145,11 +144,13 @@ export async function createProject(req, res, next) {
 
     const newProject = await prisma.project.create({
       data: {
+        companyId: req.user.companyId,
         teamId,
         name,
+        description: body.description ? String(body.description).trim() : null,
         status,
         startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        targetDate: targetDate ? new Date(targetDate) : null,
         createdById: req.user.id,
       },
       include: {
@@ -209,6 +210,9 @@ export async function updateProject(req, res, next) {
     if (body.name || body.project_name) {
       updateData.name = String(body.name || body.project_name).trim();
     }
+    if (body.description !== undefined) {
+      updateData.description = body.description ? String(body.description).trim() : null;
+    }
     if (body.status) {
       updateData.status = String(body.status).trim();
     }
@@ -216,9 +220,9 @@ export async function updateProject(req, res, next) {
       const val = body.startDate !== undefined ? body.startDate : body.start_date;
       updateData.startDate = val ? new Date(val) : null;
     }
-    if (body.endDate !== undefined || body.end_date !== undefined) {
-      const val = body.endDate !== undefined ? body.endDate : body.end_date;
-      updateData.endDate = val ? new Date(val) : null;
+    if (body.targetDate !== undefined || body.target_date !== undefined || body.endDate !== undefined || body.end_date !== undefined) {
+      const val = body.targetDate ?? body.target_date ?? body.endDate ?? body.end_date;
+      updateData.targetDate = val ? new Date(val) : null;
     }
 
     const targetTeamId = body.teamId || body.team_id;
@@ -316,4 +320,3 @@ export async function deleteProject(req, res, next) {
     next(err);
   }
 }
-
