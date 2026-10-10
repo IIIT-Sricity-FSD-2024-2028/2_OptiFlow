@@ -6,7 +6,7 @@ import {
   ConflictError,
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
-import { ROLES } from '../utils/roles.js';
+import { hasRole, ROLES } from '../utils/roles.js';
 import {
   buildTaskListWhere,
   assertBranchManagerScope,
@@ -19,6 +19,7 @@ import { evaluateTaskTransition } from '../services/compliance.service.js';
 const ALLOWED_TASK_STATUSES = ['Draft', 'Active', 'In_Review', 'Blocked', 'Completed', 'Cancelled'];
 const ALLOWED_TASK_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 const ALLOWED_ESCALATION_STATUSES = ['Open', 'Reviewed', 'Resolved', 'Closed'];
+const ALLOWED_ESCALATION_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 
 // ============================================================================
 // 1. TASKS ENDPOINTS
@@ -269,6 +270,13 @@ export async function updateTask(req, res, next) {
     }
 
     const updateData = {};
+    if (
+      (body.assignedToId !== undefined || body.assigned_to_id !== undefined) &&
+      !hasRole(req.user.roleLabel || req.user.role, [ROLES.PROJECT_MANAGER])
+    ) {
+      throw new ForbiddenError('Only Project Managers can assign tasks');
+    }
+
     if (body.title) updateData.title = String(body.title).trim();
     if (body.description !== undefined) updateData.description = body.description;
     if (body.status) {
@@ -545,12 +553,21 @@ export async function createSubtask(req, res, next) {
           id: assignedToId,
           companyId: req.user.companyId,
         },
+        select: { id: true, managerUserId: true },
       });
 
       if (!assignee) {
         throw new BadRequestError(
           'Assigned user does not belong to this company'
         );
+      }
+
+      if (
+        hasRole(req.user.roleLabel || req.user.role, [ROLES.TEAM_LEAD]) &&
+        assignee.id !== req.user.id &&
+        assignee.managerUserId !== req.user.id
+      ) {
+        throw new ForbiddenError('Team Leads can assign subtasks only to themselves or their team members');
       }
     }
 
@@ -720,9 +737,11 @@ export async function createEscalation(req, res, next) {
     const taskId = body.taskId || body.task_id || null;
     const projectId = body.projectId || body.project_id || null;
     const blockerType = body.blockerType || body.blocker_type || null;
-    const priority = body.priority || 'High';
+    const rawPriority = String(body.priority || 'High').trim().toLowerCase();
+    const priority = rawPriority.charAt(0).toUpperCase() + rawPriority.slice(1);
 
     validateRequired({ title }, ['title']);
+    validateEnum(priority, ALLOWED_ESCALATION_PRIORITIES, 'priority');
 
     if (taskId) {
       const task = await prisma.task.findFirst({
@@ -832,4 +851,3 @@ export async function deleteEscalation(req, res, next) {
     next(err);
   }
 }
-

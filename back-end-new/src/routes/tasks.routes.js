@@ -31,7 +31,7 @@ router.get(['/tasks/:id', '/api/tasks/:id'], authenticate, getTaskById);
 router.post(
   ['/tasks', '/api/tasks'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'branch_manager', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.PROJECT_MANAGER, 'project_manager', 'pm'),
   createTask
 );
 router.patch(
@@ -81,13 +81,13 @@ router.post(
 router.patch(
   ['/escalations/:id', '/api/escalations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, 'superuser', 'project_manager', 'pm'),
   updateEscalation
 );
 router.delete(
   ['/escalations/:id', '/api/escalations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, 'superuser', 'project_manager', 'pm'),
   deleteEscalation
 );
 

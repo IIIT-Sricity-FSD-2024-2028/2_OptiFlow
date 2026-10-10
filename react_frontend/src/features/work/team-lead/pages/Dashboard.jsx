@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '../../../../shared/components/Button';
@@ -53,12 +53,6 @@ export default function TeamLeadDashboard() {
   const [savingSubtask, setSavingSubtask] = useState(false);
   const [subtaskError, setSubtaskError] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
-
-
-  const [escTaskId, setEscTaskId] = useState('');
-  const [escTitle, setEscTitle] = useState('');
-  const [escType, setEscType] = useState('Access / permission');
-  const [escPriority, setEscPriority] = useState('medium');
 
 
   const [isApproveConfirmOpen, setApproveConfirmOpen] = useState(false);
@@ -163,7 +157,7 @@ export default function TeamLeadDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user.id]);
 
   const teamOverviewTasks = tasks.filter(
     (task) => !task.isSubtask && !task.parentId && !task.taskId
@@ -175,7 +169,7 @@ export default function TeamLeadDashboard() {
 
   const inProgressCount = teamOverviewTasks.filter((task) =>
     [
-      'In_Progress',
+      'Active',
       'In_Review',
       'Pending_TL_Review',
     ].includes(task.status)
@@ -283,7 +277,7 @@ export default function TeamLeadDashboard() {
 
     try {
       await tasksApi.update(selectedTask.id, {
-        status: 'In_Progress',
+        status: 'Active',
       });
 
       setTasks((previousTasks) =>
@@ -291,7 +285,7 @@ export default function TeamLeadDashboard() {
           task.id === selectedTask.id
             ? {
                 ...task,
-                status: 'In_Progress',
+                status: 'Active',
               }
             : task
         )
@@ -376,13 +370,12 @@ export default function TeamLeadDashboard() {
 
       const subtaskForDisplay = {
         ...createdSubtask,
-        assignedTo:
-          assignedMember?.fullName ||
+        assignedTo: assignedMember?.fullName ||
           assignedMember?.name ||
-          subtaskAssignee,
-        assignedToName:
-          assignedMember?.fullName ||
-          assignedMember?.name,
+          (String(subtaskAssignee) === String(user.id) ? user.fullName : subtaskAssignee),
+        assignedToName: assignedMember?.fullName ||
+          assignedMember?.name ||
+          (String(subtaskAssignee) === String(user.id) ? user.fullName : undefined),
       };
 
       // 1. Immediately update parent task in local state so its subtasks array reflects the new subtask
@@ -436,8 +429,6 @@ export default function TeamLeadDashboard() {
       title: description.trim(),
       blockerType: reason,
       priority: urgency,
-      status: 'Pending',
-      createdAt: new Date().toISOString(),
     };
 
     try {
@@ -512,14 +503,12 @@ export default function TeamLeadDashboard() {
             title="Team Size"
             value={teamMembers.length}
             trend="Direct reports"
-            icon="👥"
           />
 
           <StatCard
             title="Team Workload"
             value={teamOverviewTasks.length}
             trend={`${inProgressCount} active`}
-            icon="📋"
           />
 
           <StatCard
@@ -530,7 +519,6 @@ export default function TeamLeadDashboard() {
                 ? 'Awaiting approval'
                 : 'Clear'
             }
-            icon="🔍"
           />
 
           <StatCard
@@ -541,14 +529,12 @@ export default function TeamLeadDashboard() {
                 ? 'Needs attention'
                 : 'None'
             }
-            icon="🚨"
           />
 
           <StatCard
             title="Escalations"
             value={escalations.length}
             trend="Filed blockers"
-            icon="⚠️"
           />
 
         </div>
@@ -968,7 +954,7 @@ export default function TeamLeadDashboard() {
                             )
                       }
                     >
-                      {escalation.status || 'Pending'}
+                      {escalation.status || 'Open'}
                     </Badge>
 
                   </div>
@@ -1077,6 +1063,10 @@ export default function TeamLeadDashboard() {
                 {
                   value: '',
                   label: 'Select team member…',
+                },
+                {
+                  value: user.id,
+                  label: user.fullName || 'Me',
                 },
                 ...teamMembers.map(
                   (member) => ({

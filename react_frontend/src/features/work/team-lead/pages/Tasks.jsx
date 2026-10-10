@@ -1,41 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 // Owner: M4
 // Endpoints: GET /api/tasks
 
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
-import { useAuth } from '../../../../context/AuthContext';
 
-import { Button } from '../../../../shared/components/Button';
-import { Badge } from '../../../../shared/components/Badge';
 import { Loader } from '../../../../shared/components/Loader';
-import { EmptyState } from '../../../../shared/components/EmptyState';
 import { TaskTable } from '../../components/TaskTable';
 
 import * as tasksApi from '../../../../services/api/tasks';
-import * as usersApi from '../../../../services/api/users';
-
-const toStr = (val, fallback = '—') => {
-  if (val === null || val === undefined) return fallback;
-
-  if (typeof val === 'object') {
-    return (
-      val.fullName ||
-      val.name ||
-      val.label ||
-      val.title ||
-      fallback
-    );
-  }
-
-  return String(val) || fallback;
-};
 
 export default function TeamLeadTasks() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,11 +22,7 @@ export default function TeamLeadTasks() {
       setLoading(true);
 
       try {
-        const [tasksResponse, membersResponse] =
-          await Promise.all([
-            tasksApi.list().catch(() => []),
-            usersApi.list().catch(() => []),
-          ]);
+        const tasksResponse = await tasksApi.list();
 
         if (!mounted) return;
 
@@ -57,21 +30,12 @@ export default function TeamLeadTasks() {
           ? tasksResponse
           : tasksResponse?.data || [];
 
-        const normalizedMembers = Array.isArray(membersResponse)
-          ? membersResponse
-          : membersResponse?.data || [];
-
-        // Filter to only include users managed by the current Team Lead
-        const myTeamMembers = normalizedMembers.filter(member => member.managerUserId === user.id);
-
         setTasks(normalizedTasks);
-        setTeamMembers(myTeamMembers);
       } catch (error) {
         console.error('Failed to load team tasks:', error);
 
         if (mounted) {
           setTasks([]);
-          setTeamMembers([]);
         }
       } finally {
         if (mounted) {
@@ -86,84 +50,6 @@ export default function TeamLeadTasks() {
       mounted = false;
     };
   }, []);
-
-  const getStatusBadge = (status) => {
-    if (!status) return 'default';
-
-    const value = String(status).toLowerCase();
-
-    if (value.includes('complet')) {
-      return 'success';
-    }
-
-    if (value.includes('progress')) {
-      return 'info';
-    }
-
-    if (
-      value.includes('review') ||
-      value.includes('pending')
-    ) {
-      return 'warning';
-    }
-
-    if (value.includes('block')) {
-      return 'warning';
-    }
-
-    return 'default';
-  };
-
-  const getPriorityBadge = (priority) => {
-    if (!priority) return 'default';
-
-    const value = String(priority).toLowerCase();
-
-    if (value === 'high') {
-      return 'warning';
-    }
-
-    if (value === 'medium') {
-      return 'info';
-    }
-
-    return 'default';
-  };
-
-  const formatStatus = (status) => {
-    return String(status || 'Unknown').replace(/_/g, ' ');
-  };
-
-  const handleCreateTask = async () => {
-    const title = window.prompt('Enter task title:');
-
-    if (!title?.trim()) return;
-
-    const newTask = {
-      title: title.trim(),
-      priority: 'Medium',
-      status: 'In_Progress',
-      deadline: new Date().toISOString().split('T')[0],
-    };
-
-    try {
-      const response = await tasksApi.create(newTask);
-
-      const createdTask =
-        response?.data ||
-        response || {
-          id: Date.now(),
-          ...newTask,
-        };
-
-      setTasks((previousTasks) => [
-        ...previousTasks,
-        createdTask,
-      ]);
-    } catch (error) {
-      console.error('Create task failed:', error);
-    }
-  };
 
   const handleViewTask = (task) => {
     const path = PATHS.TEAM_LEAD.TASK_DETAIL.replace(':id', task.id);
@@ -199,12 +85,6 @@ export default function TeamLeadTasks() {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={handleCreateTask}
-        >
-          + Create Task
-        </Button>
       </div>
 
       {/* Main content */}

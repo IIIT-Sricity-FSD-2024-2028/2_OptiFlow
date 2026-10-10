@@ -37,7 +37,8 @@ const TOAST_STYLES = {
 };
 
 // Standalone Toast Card
-export const Toast = ({ message, type = 'info', onClose, className = '' }) => {
+export const Toast = ({ visible = false,message, type = 'info', onClose, className = '' }) => {
+  if (!visible || !message) return null;
   const style = TOAST_STYLES[type] || TOAST_STYLES.info;
   const icon = ICONS[type] || ICONS.info;
 

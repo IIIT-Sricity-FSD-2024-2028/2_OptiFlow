@@ -1,199 +1,227 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { PATHS } from '../../../../app/paths';
+import { useAuth } from '../../../../context/AuthContext';
 import { Badge } from '../../../../shared/components/Badge';
 import { Button } from '../../../../shared/components/Button';
-import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
-import { Modal } from '../../../../shared/components/Modal';
+import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
+import { Loader } from '../../../../shared/components/Loader';
 import { Toast } from '../../../../shared/components/Toast';
-import { FormField, Input, Select } from '../../../../shared/components/FormField';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as tasksApi from '../../../../services/api/tasks';
+import * as usersApi from '../../../../services/api/users';
 
-const BLOCKER_TYPES = ['Access / permission', 'Missing Information / Data', 'System Issue / Bug', 'Dependency Delay', 'Other'];
-const PRIORITIES = ['low', 'medium', 'high', 'critical'];
-
-const escVariant = (s) => {
-  s = String(s || '').toLowerCase();
-  if (s === 'resolved') return 'success';
-  if (s === 'pending') return 'warning';
-  if (s === 'in_progress' || s === 'open') return 'info';
-  return 'default';
-};
-const priVariant = (p) => {
-  p = String(p || '').toLowerCase();
-  if (p === 'critical' || p === 'high') return 'danger';
-  if (p === 'medium') return 'warning';
-  return 'default';
-};
-const fmt = (s) => String(s || 'Unknown').replace(/_/g, ' ');
-const normalize = (r) => Array.isArray(r) ? r : r?.data || [];
+const BLOCKER_TYPES = [
+  'Access / permission',
+  'Dependency delay',
+  'Awaiting approval',
+  'System outage / bug',
+  'Unclear requirements',
+  'Technical issue',
+  'Other',
+];
+const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 
 export default function TeamLeadEscalations() {
+  const { user } = useAuth();
   const [escalations, setEscalations] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [teamUserIds, setTeamUserIds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [isOpen, setIsOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [resolvingId, setResolvingId] = useState(null);
-  const [form, setForm] = useState({ taskId: '', title: '', type: BLOCKER_TYPES[0], priority: 'medium' });
+  const [form, setForm] = useState({
+    taskId: '',
+    title: '',
+    blockerType: BLOCKER_TYPES[0],
+    priority: 'Medium',
+    description: '',
+  });
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
     setToast({ visible: true, type, message });
-    setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
+    setTimeout(() => setToast((current) => ({ ...current, visible: false })), 3000);
   };
 
   useEffect(() => {
     let active = true;
-    Promise.all([escalationsApi.list().catch(() => []), tasksApi.list().catch(() => [])])
-      .then(([e, t]) => { if (!active) return; setEscalations(normalize(e)); setTasks(normalize(t)); })
-      .catch(() => active && showToast('error', 'Failed to load escalations.'))
-      .finally(() => active && setLoading(false));
+    Promise.all([escalationsApi.list(), tasksApi.list(), usersApi.list()])
+      .then(([escalationResponse, taskResponse, userResponse]) => {
+        if (!active) return;
+        setEscalations(normalize(escalationResponse));
+        setTasks(normalize(taskResponse));
+        const reports = normalize(userResponse)
+          .filter((member) => String(member.managerUserId || member.managerId || '') === String(user.id))
+          .map((member) => String(member.id || member.userId));
+        setTeamUserIds([String(user.id), ...reports]);
+      })
+      .catch((error) => {
+        if (active) showToast('error', error.message || 'Failed to load escalation data.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => { active = false; };
-  }, []);
+  }, [user.id]);
 
-  const filtered = escalations.filter(e =>
-    filter === 'all' ? true : String(e.status || '').toLowerCase() === filter
-  );
+  const teamEscalations = escalations.filter((escalation) => {
+    const reporterId = escalation.reportedById || escalation.reportedBy?.id;
+    return reporterId && teamUserIds.includes(String(reporterId));
+  });
 
-  const handleCreate = async () => {
-    if (!form.title.trim()) return showToast('error', 'Please enter a title.');
+  const handleCreate = async (event) => {
+    event.preventDefault();
+    if (!form.taskId || form.title.trim().length < 5) {
+      showToast('error', 'Select a task and enter an issue title of at least 5 characters.');
+      return;
+    }
+
     setCreating(true);
     try {
-      const res = await escalationsApi.create({
-        ...form,
-        taskId: form.taskId || undefined,
+      const response = await escalationsApi.create({
+        taskId: form.taskId,
         title: form.title.trim(),
-        status: 'Pending',
-        createdAt: new Date().toISOString(),
+        blockerType: form.blockerType,
+        priority: form.priority,
+        description: form.description.trim() || undefined,
       });
-      setEscalations(prev => [res?.data || res || { id: Date.now(), ...form }, ...prev]);
-      showToast('success', 'Escalation sent.');
-      setIsOpen(false);
-      setForm({ taskId: '', title: '', type: BLOCKER_TYPES[0], priority: 'medium' });
-    } catch {
-      showToast('error', 'Failed to send escalation.');
-    } finally { setCreating(false); }
+      setEscalations((current) => [response?.data || response, ...current]);
+      setForm({ taskId: '', title: '', blockerType: BLOCKER_TYPES[0], priority: 'Medium', description: '' });
+      showToast('success', 'Escalation sent to the Project Manager.');
+    } catch (error) {
+      showToast('error', error.message || 'Failed to send escalation.');
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const handleResolve = async (esc) => {
-    setResolvingId(esc.id);
-    try {
-      await escalationsApi.update(esc.id, { status: 'Resolved' });
-      setEscalations(prev => prev.map(e => e.id === esc.id ? { ...e, status: 'Resolved' } : e));
-      showToast('success', 'Escalation resolved.');
-    } catch {
-      showToast('error', 'Failed to resolve.');
-    } finally { setResolvingId(null); }
-  };
-
-  if (loading) return (
-    <div className="min-h-full flex items-center justify-center p-8">
-      <div className="flex flex-col items-center gap-3"><Loader /><p className="text-sm text-gray-500">Loading escalations...</p></div>
-    </div>
-  );
-
-  const pendingCount = escalations.filter(e => String(e.status || '').toLowerCase() === 'pending').length;
+  if (loading) {
+    return (
+      <div className="min-h-full flex items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3">
+          <Loader />
+          <p className="text-sm text-gray-500">Loading team escalations...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Escalations</h1>
-          <p className="text-gray-500 mt-1">Manage blockers and notify the Project Manager</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {pendingCount > 0 && <Badge status="warning">{pendingCount} pending</Badge>}
-          <Button variant="primary" onClick={() => setIsOpen(true)}>+ New Escalation</Button>
-        </div>
-      </div>
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <header>
+        <h1 className="text-3xl font-bold text-gray-900">Escalations</h1>
+        <p className="text-gray-500 mt-1">Raise blockers to the Project Manager and follow your team’s reports.</p>
+      </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Total', count: escalations.length, color: 'text-gray-900', bg: 'bg-gray-50' },
-          { label: 'Pending', count: escalations.filter(e => String(e.status||'').toLowerCase()==='pending').length, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'In Progress', count: escalations.filter(e => ['in_progress','open'].includes(String(e.status||'').toLowerCase())).length, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Resolved', count: escalations.filter(e => String(e.status||'').toLowerCase()==='resolved').length, color: 'text-green-600', bg: 'bg-green-50' },
-        ].map(({ label, count, color, bg }) => (
-          <div key={label} className={`${bg} rounded-lg p-4 text-center`}>
-            <p className={`text-2xl font-bold ${color}`}>{count}</p>
-            <p className="text-xs text-gray-500 mt-1">{label}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <section className="bg-white border border-amber-200 rounded-lg overflow-hidden shadow-sm">
+          <div className="px-5 py-4 bg-amber-50 border-b border-amber-200">
+            <h2 className="font-semibold text-amber-800">Escalate to PM</h2>
+            <p className="text-xs text-gray-600 mt-1">Escalate a dependency, outage, or other blocker to the Project Manager.</p>
           </div>
-        ))}
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="border-b border-gray-200 flex px-5 gap-6">
-          {['all', 'pending', 'in_progress', 'resolved'].map(t => (
-            <button key={t} onClick={() => setFilter(t)}
-              className={`py-3 text-sm font-semibold capitalize transition-colors ${filter===t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-              {t === 'in_progress' ? 'In Progress' : t.charAt(0).toUpperCase()+t.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {filtered.length === 0
-          ? <div className="p-8"><EmptyState title="No escalations" description="No escalations match this filter." /></div>
-          : <div className="divide-y divide-gray-100">
-              {filtered.map(esc => {
-                const isResolved = String(esc.status||'').toLowerCase() === 'resolved';
-                const linkedTask = tasks.find(t => String(t.id) === String(esc.taskId||esc.task_id||''));
-                return (
-                  <div key={esc.id} className="px-5 py-4 flex items-start justify-between gap-4 hover:bg-gray-50">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="font-semibold text-gray-900 truncate">{esc.title || 'Untitled'}</p>
-                        <Badge status={priVariant(esc.priority)}>{String(esc.priority||'medium')}</Badge>
-                      </div>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <Badge status={escVariant(esc.status)}>{fmt(esc.status)}</Badge>
-                        {esc.blockerType && <span className="text-xs text-gray-500">{esc.blockerType}</span>}
-                        {linkedTask && <span className="text-xs text-gray-400">Task: {linkedTask.title || '#'+linkedTask.id}</span>}
-                        {esc.createdAt && <span className="text-xs text-gray-400">{new Date(esc.createdAt).toLocaleDateString()}</span>}
-                      </div>
-                    </div>
-                    {!isResolved && (
-                      <Button variant="outline" onClick={() => handleResolve(esc)} disabled={resolvingId===esc.id}>
-                        {resolvingId===esc.id ? 'Resolving…' : 'Resolve'}
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
+          <form onSubmit={handleCreate} className="p-5 space-y-4">
+            <FormField label="Task" required>
+              <Select
+                value={form.taskId}
+                onChange={(event) => setForm((current) => ({ ...current, taskId: event.target.value }))}
+                disabled={creating}
+              >
+                <option value="">Select a team task…</option>
+                {tasks.map((task) => <option key={task.id} value={task.id}>{task.title || `Task #${task.id}`}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Issue title" required>
+              <Input
+                value={form.title}
+                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                placeholder="Brief description of the blocker"
+                minLength={5}
+                disabled={creating}
+              />
+            </FormField>
+            <FormField label="Blocker type">
+              <Select
+                value={form.blockerType}
+                onChange={(event) => setForm((current) => ({ ...current, blockerType: event.target.value }))}
+                disabled={creating}
+              >
+                {BLOCKER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </Select>
+            </FormField>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
+              <FormField label="Priority">
+                <Select
+                  value={form.priority}
+                  onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}
+                  disabled={creating}
+                >
+                  {['High', 'Medium', 'Low'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                </Select>
+              </FormField>
+              <Button type="submit"  variant="primary" disabled={creating || !form.taskId || form.title.trim().length < 5} 
+              className="transition-all duration-200 hover:scale-105 hover:shadow-lg disabled:hover:scale-100 disabled:hover:shadow-none">
+                {creating ? 'Sending…' : 'Send escalation' }
+              </Button>
             </div>
-        }
+            <FormField label="Details">
+              <Textarea
+                value={form.description}
+                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                rows={3}
+                placeholder="Add context to help the Project Manager resolve the blocker."
+                disabled={creating}
+              />
+            </FormField>
+          </form>
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-200">
+            <h2 className="font-semibold text-gray-900">Team escalation watch</h2>
+            <p className="text-xs text-gray-500 mt-1">Blockers reported by you and your team members.</p>
+          </div>
+          <div className="max-h-[520px] overflow-y-auto divide-y divide-gray-100">
+            {teamEscalations.length === 0 ? (
+              <div className="p-5">
+                <EmptyState title="No team escalations" description="When your team reports blockers, they will appear here." />
+              </div>
+            ) : teamEscalations.map((escalation) => {
+              const status = String(escalation.status || 'Open');
+              const isClosed = ['Resolved', 'Closed'].includes(status);
+              const task = escalation.task || tasks.find((item) => String(item.id) === String(escalation.taskId));
+              const taskPath = task?.id
+                ? PATHS.TEAM_LEAD.TASK_DETAIL.replace(':id', task.id)
+                : null;
+              return (
+                <article key={escalation.id} className={`p-4 ${!isClosed ? 'bg-rose-50/50' : ''}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-gray-900">{escalation.title || 'Untitled escalation'}</h3>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {escalation.createdAt
+                          ? new Date(escalation.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                          : 'Date unavailable'}
+                        {' · '}{escalation.blockerType || 'Blocker'}
+                        {escalation.reportedBy?.fullName && ` · ${escalation.reportedBy.fullName}`}
+                      </p>
+                    </div>
+                    <Badge status={isClosed ? 'success' : status === 'Reviewed' ? 'info' : 'warning'}>{status}</Badge>
+                  </div>
+                  {escalation.description && <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{escalation.description}</p>}
+                  {taskPath && (
+                    <Link to={taskPath} className="inline-block mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700">
+                      View task →
+                    </Link>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
       </div>
 
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="New Escalation"
-        footer={<>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleCreate} disabled={creating}>{creating ? 'Sending…' : 'Send Escalation'}</Button>
-        </>}>
-        <div className="space-y-4">
-          <FormField label="Related Task">
-            <Select value={form.taskId} onChange={e => setForm(f => ({ ...f, taskId: e.target.value }))}>
-              <option value="">— No specific task —</option>
-              {tasks.map(t => <option key={t.id} value={t.id}>{t.title || 'Task #'+t.id}</option>)}
-            </Select>
-          </FormField>
-          <FormField label="Issue Title" required>
-            <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Briefly describe the blocker..." />
-          </FormField>
-          <FormField label="Blocker Type">
-            <Select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-              {BLOCKER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </Select>
-          </FormField>
-          <FormField label="Priority">
-            <Select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
-              {PRIORITIES.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
-            </Select>
-          </FormField>
-        </div>
-      </Modal>
-
-      <Toast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast(t => ({ ...t, visible: false }))} />
+      <Toast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast((current) => ({ ...current, visible: false }))} />
     </div>
   );
 }

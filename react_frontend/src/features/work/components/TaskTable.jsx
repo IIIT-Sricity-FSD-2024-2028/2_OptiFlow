@@ -1,4 +1,3 @@
-import React from 'react';
 import { Badge } from '../../../shared/components/Badge';
 
 export function TaskTable({
@@ -97,7 +96,11 @@ export function TaskTable({
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{task.priority}</td>
                 )}
                 {visibleColumns.includes('assignee') && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigneeName || task.assignee || 'Unassigned'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {task.assigneeName || (typeof task.assignedTo === 'object'
+                      ? task.assignedTo?.fullName || task.assignedTo?.email
+                      : task.assignedTo) || task.assignee || 'Unassigned'}
+                  </td>
                 )}
                 {visibleColumns.includes('dueDate') && (
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{task.dueDate || task.deadline || '—'}</td>

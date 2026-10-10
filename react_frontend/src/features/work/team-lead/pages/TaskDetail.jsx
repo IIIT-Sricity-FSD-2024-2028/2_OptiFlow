@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Badge } from '../../../../shared/components/Badge';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Modal } from '../../../../shared/components/Modal';
 import { Toast } from '../../../../shared/components/Toast';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
-import { TaskDetailPanel, SubtaskList, EscalationForm } from '../../components';
+import { TaskDetailPanel, SubtaskList } from '../../components';
 import { useAuth } from '../../../../context/AuthContext';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
@@ -16,20 +15,12 @@ import * as usersApi from '../../../../services/api/users';
 
 const BLOCKER_TYPES = ['Missing Information / Data', 'System Issue / Bug', 'Dependency Delay', 'Access / permission', 'Other'];
 const STAGES = ['Data Collection', 'Work In Progress', 'Team Leader Review', 'Compliance Audit'];
-const STAGE_MAP = { In_Progress: 1, In_Review: 2, Pending_TL_Review: 2, Completed: 3 };
+const STAGE_MAP = { Active: 1, In_Review: 2, Pending_TL_Review: 2, Completed: 3 };
 
 const toStr = (val, fb = '—') => {
   if (val == null) return fb;
   if (typeof val === 'object') return val.fullName || val.name || val.label || val.title || fb;
   return String(val) || fb;
-};
-const badgeVariant = (s) => {
-  s = String(s || '').toLowerCase();
-  if (s.includes('complet') || s.includes('approved')) return 'success';
-  if (s.includes('progress') || s.includes('review')) return 'info';
-  if (s.includes('pending') || s.includes('blocked')) return 'warning';
-  if (s.includes('reject') || s.includes('fail')) return 'danger';
-  return 'default';
 };
 const fmt = (s) => String(s || 'Unknown').replace(/_/g, ' ');
 
@@ -61,7 +52,7 @@ export default function TeamLeadTaskDetail() {
   };
 
   useEffect(() => {
-    if (!taskId) { setNotFound(true); setLoading(false); return; }
+    if (!taskId) return;
     let active = true;
     Promise.all([tasksApi.get(taskId).catch(() => null), usersApi.list().catch(() => [])])
       .then(([taskRes, membersRes]) => {
@@ -76,7 +67,7 @@ export default function TeamLeadTaskDetail() {
       .catch(() => active && showToast('error', 'Failed to load task.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [taskId]);
+  }, [taskId, user.id]);
 
   const patchTask = async (patch) => {
     try {
@@ -86,12 +77,12 @@ export default function TeamLeadTaskDetail() {
   };
 
   const handleApprove = () => patchTask({ status: 'Completed' }).then(() => showToast('success', 'Task approved.'));
-  const handleReject  = () => patchTask({ status: 'In_Progress' }).then(() => showToast('success', 'Sent back for changes.'));
+  const handleReject  = () => patchTask({ status: 'Active' }).then(() => showToast('success', 'Sent back for changes.'));
 
   const handleReportBlocker = async () => {
     if (!blockerDesc.trim()) return showToast('error', 'Please describe the blocker.');
     try {
-      await escalationsApi.create({ taskId, title: `Blocker: ${blockerType}`, blockerType, description: blockerDesc.trim(), priority: 'high', status: 'Pending', createdAt: new Date().toISOString() });
+      await escalationsApi.create({ taskId, title: `Blocker: ${blockerType}`, blockerType, description: blockerDesc.trim(), priority: 'High' });
       showToast('success', 'Blocker reported.');
       setActionOpen(false); setBlockerDesc('');
     } catch { showToast('error', 'Failed to report blocker.'); }
@@ -100,7 +91,13 @@ export default function TeamLeadTaskDetail() {
   const handleExtension = async () => {
     if (!extDate || !extReason.trim()) return showToast('error', 'Please fill all fields.');
     try {
-      await tasksApi.update(taskId, { extensionRequest: { requestedDate: extDate, reason: extReason.trim() } });
+      await escalationsApi.create({
+        taskId,
+        title: `Extension request: ${task.title}`,
+        blockerType: 'Extension Request',
+        description: `Requested deadline: ${extDate}\nReason: ${extReason.trim()}`,
+        priority: 'Medium',
+      });
       showToast('success', 'Extension requested.');
       setActionOpen(false); setExtDate(''); setExtReason('');
     } catch { showToast('error', 'Failed to submit request.'); }
@@ -125,10 +122,12 @@ export default function TeamLeadTaskDetail() {
         status: 'Active'
       });
       const created = res?.data || res || { id: Date.now(), ...stForm };
+      const assigneeName = assignedMember?.fullName || assignedMember?.name ||
+        (String(stForm.assignee) === String(user.id) ? user.fullName : stForm.assignee);
       const subtaskItem = {
         ...created,
-        assignedTo: assignedMember?.fullName || assignedMember?.name || stForm.assignee,
-        assignedToName: assignedMember?.fullName || assignedMember?.name,
+        assignedTo: assigneeName,
+        assignedToName: assigneeName,
       };
       setSubtasks(prev => [...prev, subtaskItem]);
       showToast('success', 'Subtask created.');
@@ -145,7 +144,7 @@ export default function TeamLeadTaskDetail() {
     </div>
   );
 
-  if (notFound || !task) return (
+  if (!taskId || notFound || !task) return (
     <div className="p-8">
       <Link to="/team-lead/tasks" className="text-sm text-blue-600 hover:underline">← Back to Tasks</Link>
       <div className="mt-4"><EmptyState title="Task not found" description="This task does not exist or you lack access." /></div>
@@ -287,6 +286,7 @@ export default function TeamLeadTaskDetail() {
           <FormField label="Assign To">
             <Select value={stForm.assignee} onChange={e => setStForm(f => ({ ...f, assignee: e.target.value }))}>
               <option value="">— Unassigned —</option>
+              <option value={user.id}>{user.fullName || 'Me'}</option>
               {members.map(m => <option key={m.id || m.userId} value={m.id || m.userId}>{m.fullName || m.name || 'Member #' + m.id}</option>)}
             </Select>
           </FormField>
