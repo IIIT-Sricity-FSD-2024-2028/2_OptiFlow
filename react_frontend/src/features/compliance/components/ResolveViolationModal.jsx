@@ -50,7 +50,7 @@ export function ResolveViolationModal({
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <Button 
-            variant="primary" 
+            variant="warning" 
             onClick={handleSubmit}
             disabled={isSubmitting || resolutionNotes.trim().length < 5}
           >
@@ -60,21 +60,27 @@ export function ResolveViolationModal({
       }
     >
       {error && (
-        <div className="mb-4 text-[13px] text-red-800 bg-red-50 p-3 rounded-lg border border-red-200">
+        <div className="mb-4 text-sm text-red-800 bg-red-50 p-3 rounded-lg border border-red-200">
           {error}
         </div>
       )}
-      <div className="mb-4 text-[13px] text-blue-800 bg-blue-50 p-3 rounded-lg border border-blue-200">
-        WARNING: You are manually bypassing the evidence workflow. Please provide explicit justification. This will be permanently logged for audit purposes.
+      <div className="mb-5 flex gap-3 text-sm text-amber-800 bg-amber-50 p-4 rounded-lg border border-amber-200">
+        <svg className="w-5 h-5 flex-shrink-0 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <div>
+          <strong className="block font-semibold mb-1">WARNING: Bypassing standard workflow</strong>
+          You are manually bypassing the evidence review workflow. Please provide explicit justification below. This action and your notes will be permanently logged for audit purposes.
+        </div>
       </div>
       <div className="flex flex-col gap-2">
         <label className="text-sm font-semibold text-slate-700">Resolution Notes *</label>
         <textarea 
           value={resolutionNotes}
           onChange={(e) => setResolutionNotes(e.target.value)}
-          className="w-full border border-slate-300 rounded-md p-3 text-sm focus:ring-2 focus:ring-[#10b981] focus:border-[#10b981] outline-none"
+          className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-shadow"
           rows={4}
-          placeholder="Describe the actions taken to clear this violation..."
+          placeholder="Describe the specific reason or actions taken to clear this violation..."
         />
       </div>
     </Modal>

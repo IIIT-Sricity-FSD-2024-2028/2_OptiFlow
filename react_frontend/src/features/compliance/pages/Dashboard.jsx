@@ -7,6 +7,7 @@ import { Badge } from "../../../shared/components/Badge";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { ShieldCheck, CheckCircle, AlertTriangle, Clock, PlayCircle, Loader2 } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 export default function ComplianceDashboard() {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function ComplianceDashboard() {
     pendingReviews: 0,
   });
   const [violationsData, setViolationsData] = useState([]);
+  const [chartData, setChartData] = useState({ severity: [], trend: [] });
 
   const [loading, setLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
@@ -55,6 +57,34 @@ export default function ComplianceDashboard() {
         resolvedViolations: resolved.length,
         pendingReviews: pendingReviews,
       });
+
+      // Calculate chart data
+      const severityCounts = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+      active.forEach(v => {
+        const severity = v.rule?.severity || 'Medium';
+        if (severityCounts[severity] !== undefined) {
+          severityCounts[severity]++;
+        } else {
+          severityCounts['Medium']++;
+        }
+      });
+      
+      const severityChartData = Object.keys(severityCounts)
+        .filter(key => severityCounts[key] > 0)
+        .map(key => ({ name: key, value: severityCounts[key] }));
+
+      const statusCounts = { Open: 0, Under_Review: 0, Resolved: 0, Ignored: 0 };
+      violations.forEach(v => {
+        if (statusCounts[v.status] !== undefined) {
+          statusCounts[v.status]++;
+        }
+      });
+
+      const statusChartData = Object.keys(statusCounts)
+        .filter(key => statusCounts[key] > 0)
+        .map(key => ({ name: key.replace('_', ' '), value: statusCounts[key] }));
+
+      setChartData({ severity: severityChartData, status: statusChartData });
 
       // Format data for the table
       const formattedViolations = active.map(v => ({
@@ -236,6 +266,81 @@ export default function ComplianceDashboard() {
           }
           icon={<Clock size={20} className={metrics.pendingReviews > 0 ? 'text-[#f59e0b]' : 'text-gray-400'} />}
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-[12px] border border-[#e2e8f0] shadow-sm">
+          <h3 className="text-[15px] font-bold text-[#1a2332] mb-4">Violations by Severity</h3>
+          {chartData.severity && chartData.severity.length > 0 ? (
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData.severity}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {chartData.severity.map((entry, index) => {
+                      const colors = {
+                        Critical: '#ef4444',
+                        High: '#f97316',
+                        Medium: '#eab308',
+                        Low: '#3b82f6'
+                      };
+                      return <Cell key={`cell-${index}`} fill={colors[entry.name] || '#94a3b8'} />;
+                    })}
+                  </Pie>
+                  <RechartsTooltip 
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[250px] flex items-center justify-center text-gray-400 text-sm">
+              No severity data available
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white p-6 rounded-[12px] border border-[#e2e8f0] shadow-sm">
+          <h3 className="text-[15px] font-bold text-[#1a2332] mb-4">Violations by Status</h3>
+          {chartData.status && chartData.status.length > 0 ? (
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData.status} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                  <RechartsTooltip 
+                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={40}>
+                    {chartData.status.map((entry, index) => {
+                      const colors = {
+                        'Open': '#ef4444',
+                        'Under Review': '#f59e0b',
+                        'Resolved': '#10b981',
+                        'Ignored': '#94a3b8'
+                      };
+                      return <Cell key={`cell-${index}`} fill={colors[entry.name] || '#3b82f6'} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[250px] flex items-center justify-center text-gray-400 text-sm">
+              No status data available
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-[12px] border border-[#e2e8f0] shadow-sm overflow-hidden mb-8">

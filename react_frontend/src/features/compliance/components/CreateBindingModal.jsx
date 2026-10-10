@@ -146,7 +146,7 @@ export function CreateBindingModal({
               
               {options.map((opt) => (
                 <option key={opt.id} value={opt.id}>
-                  {opt.name || `${opt.firstName} ${opt.lastName}` || opt.email}
+                  {opt.name || opt.fullName || opt.email}
                 </option>
               ))}
             </select>
