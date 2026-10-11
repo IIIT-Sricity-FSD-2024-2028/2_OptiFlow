@@ -66,7 +66,14 @@ const RuleDetail = () => {
   const [isBindingModalOpen, setIsBindingModalOpen] = useState(false);
   const [selectedViolation, setSelectedViolation] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editFormData, setEditFormData] = useState({ name: "", description: "", severity: "Medium", isActive: true });
+  const [categories, setCategories] = useState([]);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    description: "",
+    severity: "Medium",
+    categoryId: "",
+    isActive: true,
+  });
 
   useEffect(() => {
     fetchRule();
@@ -75,8 +82,13 @@ const RuleDetail = () => {
   const fetchRule = async () => {
     try {
       setLoading(true);
-      const data = await apiClient(`/compliance-rules/${id}`);
+      const [data, catRes] = await Promise.all([
+        apiClient(`/compliance-rules/${id}`),
+        apiClient("/compliance-categories").catch(() => []),
+      ]);
       setRule(data);
+      const catList = Array.isArray(catRes) ? catRes : catRes?.data || [];
+      setCategories(catList);
     } catch (err) {
       console.error("Failed to load rule details", err);
     } finally {
@@ -89,7 +101,8 @@ const RuleDetail = () => {
       name: rule.name,
       description: rule.description || "",
       severity: rule.severity || "Medium",
-      isActive: rule.isActive
+      categoryId: rule.categoryId || rule.category?.id || "",
+      isActive: rule.isActive,
     });
     setIsEditModalOpen(true);
   };
@@ -98,14 +111,20 @@ const RuleDetail = () => {
     e.preventDefault();
     try {
       await apiClient(`/compliance-rules/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(editFormData),
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editFormData.name,
+          description: editFormData.description,
+          severity: editFormData.severity,
+          categoryId: editFormData.categoryId || null,
+          isActive: editFormData.isActive,
+        }),
       });
       setIsEditModalOpen(false);
       fetchRule();
     } catch (err) {
       console.error("Failed to update rule:", err);
-      alert("Failed to update rule");
+      alert("Failed to update rule: " + err.message);
     }
   };
 
@@ -358,20 +377,40 @@ const RuleDetail = () => {
             />
           </div>
           
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-slate-700">
-              Severity
-            </label>
-            <select
-              className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-              value={editFormData.severity}
-              onChange={(e) => setEditFormData({ ...editFormData, severity: e.target.value })}
-            >
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Critical">Critical</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-slate-700">
+                Category
+              </label>
+              <select
+                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                value={editFormData.categoryId || ""}
+                onChange={(e) => setEditFormData({ ...editFormData, categoryId: e.target.value })}
+              >
+                <option value="">-- No Category (Unassigned) --</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-slate-700">
+                Severity
+              </label>
+              <select
+                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                value={editFormData.severity}
+                onChange={(e) => setEditFormData({ ...editFormData, severity: e.target.value })}
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center justify-between mt-2 p-3 bg-gray-50 border border-gray-100 rounded-lg">

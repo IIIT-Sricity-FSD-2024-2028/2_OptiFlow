@@ -366,7 +366,15 @@ async function main() {
   });
 
   const categorySecurity = await prisma.complianceCategory.create({
-    data: { companyId: acmeCorp.id, name: "IT Security Controls", ownerId: userAlice.id },
+    data: { companyId: acmeCorp.id, name: "IT Security Controls", description: "Identity, credentialing, and infrastructure security requirements.", ownerId: userAlice.id },
+  });
+
+  const categoryOperations = await prisma.complianceCategory.create({
+    data: { companyId: acmeCorp.id, name: "Operational & Process Quality", description: "Sprint delivery SLA, task lifecycle deadlines, and signoff requirements.", ownerId: userAlice.id },
+  });
+
+  const categoryPrivacy = await prisma.complianceCategory.create({
+    data: { companyId: acmeCorp.id, name: "Data Privacy & Governance", description: "PII protection, GDPR/CCPA data retention and masking policies.", ownerId: userAlice.id },
   });
 
   const rule2FA = await prisma.complianceRule.create({
@@ -390,7 +398,7 @@ async function main() {
       name: "No Overdue Tasks Allowed",
       description: "Any task past its due date will trigger a compliance violation.",
       severity: Severity.Medium,
-      categoryId: categorySecurity.id,
+      categoryId: categoryOperations.id,
       isActive: true,
       criteria: { "field": "dueDate", "operator": "lt", "value": "NOW()" },
       actionOnFail: "ALLOW_WITH_WARNING",
@@ -403,7 +411,7 @@ async function main() {
       name: "GDPR Data Masking Policy",
       description: "Ensure all sensitive customer data fields are masked.",
       severity: Severity.High,
-      categoryId: categorySecurity.id,
+      categoryId: categoryPrivacy.id,
       isActive: true,
       criteria: { "field": "data_masking", "operator": "eq", "value": true },
       actionOnFail: "REQUIRE_MANUAL_OVERRIDE",
@@ -416,7 +424,7 @@ async function main() {
       name: "Mandatory Evidence for Task Completion",
       description: "A task cannot be marked as Completed unless approved Compliance Evidence is attached.",
       severity: Severity.High,
-      categoryId: categorySecurity.id,
+      categoryId: categoryOperations.id,
       isActive: true,
       criteria: { 
         trigger: { field: "status", transitionTo: "Completed" },

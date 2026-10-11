@@ -61,16 +61,27 @@ export async function listAuditLogsByUser(req, res, next) {
   try {
     const { userId } = req.params;
 
-    const logs = await prisma.auditLog.findMany({
-      where: {
-        companyId: req.user.companyId,
-        performedById: userId,
-      },
-      include: {
-        performedBy: { select: { id: true, fullName: true, email: true } },
-      },
-      orderBy: { performedAt: 'desc' },
-    });
+    const [complianceLogs, systemLogs, processLogs] = await Promise.all([
+      prisma.complianceAuditLog.findMany({
+        where: { companyId: req.user.companyId, performedById: userId },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      }),
+      prisma.systemAuditLog.findMany({
+        where: { companyId: req.user.companyId, performedById: userId },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      }),
+      prisma.processAuditLog.findMany({
+        where: { companyId: req.user.companyId, performedById: userId },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      }),
+    ]);
+
+    const logs = [...complianceLogs, ...systemLogs, ...processLogs].sort(
+      (a, b) => new Date(b.performedAt) - new Date(a.performedAt)
+    );
 
     res.status(200).json({
       success: true,
@@ -85,17 +96,44 @@ export async function listAuditLogsByEntity(req, res, next) {
   try {
     const { entityType, entityId } = req.params;
 
-    const logs = await prisma.auditLog.findMany({
-      where: {
-        companyId: req.user.companyId,
-        entityType,
-        entityId: String(entityId),
-      },
-      include: {
-        performedBy: { select: { id: true, fullName: true, email: true } },
-      },
-      orderBy: { performedAt: 'desc' },
-    });
+    let logs = [];
+    if (entityType === 'ComplianceRule' || entityType === 'rule') {
+      logs = await prisma.complianceAuditLog.findMany({
+        where: { companyId: req.user.companyId, ruleId: String(entityId) },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      });
+    } else if (entityType === 'ComplianceViolation' || entityType === 'violation') {
+      logs = await prisma.complianceAuditLog.findMany({
+        where: { companyId: req.user.companyId, violationId: String(entityId) },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      });
+    } else if (entityType === 'ComplianceEvidence' || entityType === 'evidence') {
+      logs = await prisma.complianceAuditLog.findMany({
+        where: { companyId: req.user.companyId, evidenceId: String(entityId) },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      });
+    } else if (entityType === 'Task' || entityType === 'task') {
+      logs = await prisma.processAuditLog.findMany({
+        where: { companyId: req.user.companyId, taskId: String(entityId) },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      });
+    } else if (entityType === 'Project' || entityType === 'project') {
+      logs = await prisma.processAuditLog.findMany({
+        where: { companyId: req.user.companyId, projectId: String(entityId) },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      });
+    } else if (entityType === 'User' || entityType === 'user') {
+      logs = await prisma.systemAuditLog.findMany({
+        where: { companyId: req.user.companyId, targetUserId: String(entityId) },
+        include: { performedBy: { select: { id: true, fullName: true, email: true } } },
+        orderBy: { performedAt: 'desc' },
+      });
+    }
 
     res.status(200).json({
       success: true,

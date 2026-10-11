@@ -233,6 +233,21 @@ export async function updateComplianceRule(req, res, next) {
     } else if (body.is_active !== undefined) {
       updateData.isActive = Boolean(body.is_active);
     }
+    if (body.categoryId !== undefined || body.category_id !== undefined) {
+      const catId = body.categoryId !== undefined ? body.categoryId : body.category_id;
+      if (catId) {
+        const category = await prisma.complianceCategory.findFirst({
+          where: {
+            id: catId,
+            OR: [{ companyId: null }, { companyId: req.user.companyId }],
+          },
+        });
+        if (!category) {
+          throw new NotFoundError(`Compliance category ${catId} not found`);
+        }
+      }
+      updateData.categoryId = catId || null;
+    }
 
     const updated = await prisma.complianceRule.update({
       where: { id },
