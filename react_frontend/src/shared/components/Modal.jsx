@@ -3,14 +3,17 @@ import { createPortal } from 'react-dom';
 
 export const Modal = ({
   isOpen,
+  open,
   onClose,
   title,
   children,
   footer,
   className = '',
 }) => {
+  const isActuallyOpen = isOpen !== undefined ? isOpen : open;
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isActuallyOpen) return;
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose?.();
@@ -24,9 +27,9 @@ export const Modal = ({
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isActuallyOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isActuallyOpen) return null;
 
   return createPortal(
     <div
