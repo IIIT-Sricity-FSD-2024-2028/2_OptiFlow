@@ -168,6 +168,7 @@ model User {
   ownedComplianceCategories ComplianceCategory[]  @relation("ComplianceCategoryOwner")
   notifications             Notification[]
   complianceAuditLogs       ComplianceAuditLog[]
+  teamMembers               TeamMember[]
 
   systemAuditLogsTargeted   SystemAuditLog[]  @relation("SystemAuditTargetUser")
   systemAuditLogsPerformed  SystemAuditLog[]  @relation("SystemPerformedBy")
@@ -324,13 +325,15 @@ model TeamMember {
   id        String   @id @default(uuid())
   companyId String
   teamId    String
-  team      Team     @relation(fields: [teamId], references: [id])
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   role      String?  @default("Member")
   joinedAt  DateTime @default(now())
 
   @@unique([teamId, userId])
   @@index([teamId])
+  @@index([userId])
   @@map("team_members")
 }
 
