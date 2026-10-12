@@ -8,6 +8,8 @@ import {
   UnauthorizedError,
 } from '../utils/errors.js';
 import { validateRequired, validateEmail, validateNumber } from '../utils/validation.js';
+import { parseListParams, formatListResponse } from '../utils/pagination.js';
+import { writeAuditLog } from '../utils/platformAudit.js';
 
 
 // ============================================================================
@@ -52,8 +54,17 @@ export async function platformLogin(req, res, next) {
         fullName: admin.fullName,
       },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN || '8h' }
+      { expiresIn: env.PLATFORM_JWT_EXPIRES_IN || '1h' }
     );
+
+    // Set httpOnly cookie scoped to /api/platform
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: 'Strict',
+      path: '/api/platform',
+      maxAge: 3600 * 1000,
+    });
 
     res.status(200).json({
       success: true,
@@ -68,6 +79,115 @@ export async function platformLogin(req, res, next) {
           isActive: admin.isActive,
           createdAt: admin.createdAt,
         },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /platform/auth/logout & POST /api/platform/auth/logout
+ * Clears the platform admin httpOnly cookie
+ */
+export async function platformLogout(req, res, next) {
+  try {
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: 'Strict',
+      path: '/api/platform',
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Platform administrator logged out successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /platform/auth/change-password & POST /api/platform/auth/change-password
+ * Authenticated platform admin password change with audit logging
+ */
+export async function changePlatformPassword(req, res, next) {
+  try {
+    const body = req.body || {};
+    const { currentPassword, newPassword } = body;
+
+    validateRequired({ currentPassword, newPassword }, ['currentPassword', 'newPassword']);
+
+    if (typeof newPassword !== 'string' || newPassword.length < 10) {
+      throw new BadRequestError('New password must be at least 10 characters long');
+    }
+
+    if (newPassword === currentPassword) {
+      throw new BadRequestError('New password must be different from current password');
+    }
+
+    const admin = await prisma.platformAdminUser.findUnique({
+      where: { id: req.platformAdmin.id },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedError('Platform administrator account not found');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, admin.passwordHash);
+    if (!isMatch) {
+      throw new UnauthorizedError('Invalid current password');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordChangedAt = new Date();
+
+    await prisma.$transaction(async (tx) => {
+      await tx.platformAdminUser.update({
+        where: { id: admin.id },
+        data: {
+          passwordHash,
+          passwordChangedAt,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'admin.password_change',
+        { type: 'PlatformAdminUser', id: admin.id },
+        null,
+        { changedAt: passwordChangedAt.toISOString() },
+        tx
+      );
+    });
+
+    // Issue fresh token and update cookie
+    const freshToken = jwt.sign(
+      {
+        sub: admin.id,
+        role: 'platform_admin',
+        type: 'platform_admin',
+        email: admin.email,
+        fullName: admin.fullName,
+      },
+      env.JWT_SECRET,
+      { expiresIn: env.PLATFORM_JWT_EXPIRES_IN || '1h' }
+    );
+
+    res.cookie('token', freshToken, {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: 'Strict',
+      path: '/api/platform',
+      maxAge: 3600 * 1000,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully',
+      data: {
+        token: freshToken,
       },
     });
   } catch (err) {
@@ -160,29 +280,58 @@ export async function getPlatformMetrics(req, res, next) {
 /**
  * GET /platform/companies & GET /api/platform/companies
  */
+//Pagination Added
+
 export async function listPlatformCompanies(req, res, next) {
   try {
-    const companies = await prisma.company.findMany({
-      include: {
-        subscriptions: {
-          include: { plan: true },
-          where: { status: 'Active' },
-        },
-        _count: {
-          select: { users: true, branches: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    // 1. Parse params and enforce limits with allowedStatuses
+    const { page, pageSize, skip, take, q, status } = parseListParams(req.query, {
+      defaultPageSize: 20,
+      maxPageSize: 100,
+      allowedStatuses: ['Active', 'Suspended', 'Closed'],
     });
 
+    // 2. Build Prisma 'where' clause dynamically
+    const where = {};
+    if (status) {
+      where.status = status;
+    }
+    if (q) {
+      where.legalName = { contains: q, mode: 'insensitive' };
+    }
+
+    // 3. Query Prisma: data and total count concurrently with deterministic order
+    const [companies, total] = await Promise.all([
+      prisma.company.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          subscriptions: {
+            include: { plan: true },
+            where: { status: 'Active' },
+          },
+          _count: {
+            select: { users: true, branches: true },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      }),
+      prisma.company.count({ where }),
+    ]);
+
+    // 4. Return standard list contract
     res.status(200).json({
       success: true,
-      data: companies,
+      data: formatListResponse(companies, total, page, pageSize),
     });
   } catch (err) {
     next(err);
   }
 }
+
+
+
 
 /**
  * GET /platform/companies/:id & GET /api/platform/companies/:id
@@ -195,7 +344,7 @@ export async function getPlatformCompanyById(req, res, next) {
       where: { id },
       include: {
         subscriptions: { include: { plan: true } },
-        users: { select: { id: true, fullName: true, email: true, status: true, jobTitle: true } },
+        users: { select: { id: true, fullName: true, email: true, isActive: true, jobTitle: true } },
         branches: true,
       },
     });
@@ -254,10 +403,17 @@ export async function updatePlatformCompany(req, res, next) {
  */
 export async function listPlans(req, res, next) {
   try {
+    const where = {};
+    if (req.query.isActive !== undefined) {
+      where.isActive = req.query.isActive === 'true' || req.query.isActive === true;
+    }
+
     const plans = await prisma.plan.findMany({
+      where,
       include: {
         _count: { select: { subscriptions: true } },
       },
+      orderBy: { name: 'asc' },
     });
 
     res.status(200).json({
@@ -294,19 +450,34 @@ export async function createPlan(req, res, next) {
     const name = (body.name || '').trim();
     const auditLogRetentionDays = Number(body.auditLogRetentionDays ?? 90);
     const allowsIntegrations = Boolean(body.allowsIntegrations ?? false);
+    const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
 
     validateRequired({ name }, ['name']);
 
-    const newPlan = await prisma.plan.create({
-      data: {
-        name,
-        maxBranches: body.maxBranches !== undefined ? Number(body.maxBranches) : null,
-        maxUsers: body.maxUsers !== undefined ? Number(body.maxUsers) : null,
-        maxActiveProcessTemplates: body.maxActiveProcessTemplates !== undefined ? Number(body.maxActiveProcessTemplates) : null,
-        maxComplianceRules: body.maxComplianceRules !== undefined ? Number(body.maxComplianceRules) : null,
-        auditLogRetentionDays,
-        allowsIntegrations,
-      },
+    const newPlan = await prisma.$transaction(async (tx) => {
+      const plan = await tx.plan.create({
+        data: {
+          name,
+          maxBranches: body.maxBranches !== undefined ? (body.maxBranches === null ? null : Number(body.maxBranches)) : null,
+          maxUsers: body.maxUsers !== undefined ? (body.maxUsers === null ? null : Number(body.maxUsers)) : null,
+          maxActiveProcessTemplates: body.maxActiveProcessTemplates !== undefined ? (body.maxActiveProcessTemplates === null ? null : Number(body.maxActiveProcessTemplates)) : null,
+          maxComplianceRules: body.maxComplianceRules !== undefined ? (body.maxComplianceRules === null ? null : Number(body.maxComplianceRules)) : null,
+          auditLogRetentionDays,
+          allowsIntegrations,
+          isActive,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'plan.create',
+        { type: 'Plan', id: plan.id },
+        null,
+        plan,
+        tx
+      );
+
+      return plan;
     });
 
     res.status(201).json({
@@ -332,13 +503,40 @@ export async function updatePlan(req, res, next) {
 
     const updateData = {};
     if (body.name) updateData.name = body.name.trim();
-    if (body.maxBranches !== undefined) updateData.maxBranches = Number(body.maxBranches);
-    if (body.maxUsers !== undefined) updateData.maxUsers = Number(body.maxUsers);
+    if (body.maxBranches !== undefined) updateData.maxBranches = body.maxBranches === null ? null : Number(body.maxBranches);
+    if (body.maxUsers !== undefined) updateData.maxUsers = body.maxUsers === null ? null : Number(body.maxUsers);
+    if (body.maxActiveProcessTemplates !== undefined)
+      updateData.maxActiveProcessTemplates = body.maxActiveProcessTemplates === null ? null : Number(body.maxActiveProcessTemplates);
+    if (body.maxComplianceRules !== undefined)
+      updateData.maxComplianceRules = body.maxComplianceRules === null ? null : Number(body.maxComplianceRules);
+    if (body.auditLogRetentionDays !== undefined)
+      updateData.auditLogRetentionDays = Number(body.auditLogRetentionDays);
     if (body.allowsIntegrations !== undefined) updateData.allowsIntegrations = Boolean(body.allowsIntegrations);
+    if (body.isActive !== undefined) updateData.isActive = Boolean(body.isActive);
 
-    const updated = await prisma.plan.update({
-      where: { id },
-      data: updateData,
+    const action =
+      body.isActive === false
+        ? 'plan.archive'
+        : body.isActive === true && plan.isActive === false
+        ? 'plan.unarchive'
+        : 'plan.update';
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.plan.update({
+        where: { id },
+        data: updateData,
+      });
+
+      await writeAuditLog(
+        req,
+        action,
+        { type: 'Plan', id },
+        plan,
+        result,
+        tx
+      );
+
+      return result;
     });
 
     res.status(200).json({
@@ -395,6 +593,9 @@ export async function createSubscription(req, res, next) {
 
     const plan = await prisma.plan.findUnique({ where: { id: planId } });
     if (!plan) throw new NotFoundError(`Plan ${planId} not found`);
+    if (plan.isActive === false) {
+      throw new BadRequestError('Cannot assign an archived plan to a new subscription');
+    }
 
     const periodEnd = new Date();
     periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === 'annual' ? 12 : 1));

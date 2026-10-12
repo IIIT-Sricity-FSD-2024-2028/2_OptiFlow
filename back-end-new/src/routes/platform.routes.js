@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { authenticatePlatformAdmin } from '../middleware/authenticatePlatformAdmin.js';
+import { authLimiter } from '../middleware/rateLimit.js';
 import {
   platformLogin,
+  platformLogout,
+  changePlatformPassword,
   platformAuthMe,
   getPlatformMetrics,
   listPlatformCompanies,
@@ -27,6 +30,13 @@ import {
 const router = Router();
 
 router.post(['/platform/auth/login', '/api/platform/auth/login'], platformLogin);
+router.post(['/platform/auth/logout', '/api/platform/auth/logout'], platformLogout);
+router.post(
+  ['/platform/auth/change-password', '/api/platform/auth/change-password'],
+  authLimiter,
+  authenticatePlatformAdmin,
+  changePlatformPassword
+);
 router.get(['/platform/auth/me', '/api/platform/auth/me'], authenticatePlatformAdmin, platformAuthMe);
 router.get(['/platform/metrics', '/api/platform/metrics'], authenticatePlatformAdmin, getPlatformMetrics);
 router.get(['/platform/companies', '/api/platform/companies'], authenticatePlatformAdmin, listPlatformCompanies);

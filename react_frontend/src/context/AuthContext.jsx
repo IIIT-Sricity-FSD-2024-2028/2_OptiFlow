@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { apiClient } from '../services/api/client';
 
 // 1. Create the Context
@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
           // The backend wraps the identity in `userData.user`
           const restoredUser = userData.user || userData;
           setUser({ ...restoredUser, isPlatform });
-        } catch (error) {
+        } catch {
           sessionStorage.removeItem('authToken');
           sessionStorage.removeItem('isPlatform');
         }
@@ -65,7 +65,35 @@ export const AuthProvider = ({ children }) => {
     return response;
   };
 
-  const logout = () => {
+  const platformLogout = async () => {
+    try {
+      await apiClient('/api/platform/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('Failed to logout from platform:', err);
+    } finally {
+      sessionStorage.removeItem('authToken');
+      sessionStorage.removeItem('isPlatform');
+      setUser(null);
+      window.location.href = '/login';
+    }
+  };
+
+  const logout = async () => {
+    const isPlatform =
+      user?.isPlatform ||
+      user?.role === 'platform_admin' ||
+      user?.role === 'system_admin' ||
+      sessionStorage.getItem('isPlatform') === 'true' ||
+      window.location.pathname.startsWith('/platform');
+
+    if (isPlatform) {
+      await platformLogout();
+      return;
+    }
+
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('isPlatform');
     setUser(null);
@@ -73,7 +101,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, platformLogin, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, platformLogin, logout, platformLogout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );
