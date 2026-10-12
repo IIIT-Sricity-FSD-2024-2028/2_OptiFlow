@@ -9,6 +9,7 @@ import { TaskTable } from '../../components/TaskTable';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
+import * as complianceApi from '../../../../services/api/compliance';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 
@@ -20,6 +21,8 @@ export default function PmTasks() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [complianceError, setComplianceError] = useState('');
+  const [complianceBlockedIds, setComplianceBlockedIds] = useState(new Set());
   const [form, setForm] = useState({ title: '', projectId: '', assignedToId: '', dueDate: '', priority: 'Medium' });
 
   useEffect(() => {
@@ -39,6 +42,17 @@ export default function PmTasks() {
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+    complianceApi.getViolations()
+      .then((response) => {
+        if (!active) return;
+        const violations = normalize(response).filter((violation) => (
+          ['Open', 'Under_Review'].includes(violation.status) && violation.entityType === 'Task'
+        ));
+        setComplianceBlockedIds(new Set(violations.map((violation) => String(violation.entityId))));
+      })
+      .catch((loadError) => {
+        if (active) setComplianceError(loadError.message || 'Failed to load compliance status.');
       });
     return () => { active = false; };
   }, []);
@@ -75,6 +89,10 @@ export default function PmTasks() {
   };
 
   if (loading) return <div className="min-h-full flex items-center justify-center p-8"><Loader /></div>;
+  const taskRows = tasks.map((task) => ({
+    ...task,
+    complianceBlocked: complianceBlockedIds.has(String(task.id)),
+  }));
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -114,11 +132,12 @@ export default function PmTasks() {
         <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Assigning…' : 'Assign task'}</Button>
       </form>
 
+      {complianceError && <p className="text-sm text-amber-700" role="status">{complianceError}</p>}
       {tasks.length === 0 ? (
         <EmptyState title="No tasks" description="Tasks assigned by the Project Manager will appear here." />
       ) : (
         <TaskTable
-          tasks={tasks}
+          tasks={taskRows}
           visibleColumns={['title', 'assignee', 'priority', 'status', 'dueDate']}
           onRowClick={(task) => navigate(PATHS.PM.TASK_DETAIL.replace(':id', task.id))}
         />

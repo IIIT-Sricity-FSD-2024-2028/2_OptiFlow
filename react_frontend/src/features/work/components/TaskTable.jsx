@@ -87,9 +87,10 @@ export function TaskTable({
                 )}
                 {visibleColumns.includes('status') && (
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <Badge status={badgeStatus}>
-                      {statusStr.replace(/_/g, ' ')}
-                    </Badge>
+                    <div className="flex flex-col items-start gap-1">
+                      <Badge status={badgeStatus}>{statusStr.replace(/_/g, ' ')}</Badge>
+                      {task.complianceBlocked && <Badge status="danger">⚠ Blocked by Compliance</Badge>}
+                    </div>
                   </td>
                 )}
                 {visibleColumns.includes('priority') && (

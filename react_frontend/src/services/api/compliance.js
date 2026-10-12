@@ -5,3 +5,5 @@ export const get = (id) => apiClient(`/api/compliance/${id}`);
 export const create = (data) => apiClient('/api/compliance', { body: data });
 export const update = (id, data) => apiClient(`/api/compliance/${id}`, { method: 'PATCH', body: data });
 export const remove = (id) => apiClient(`/api/compliance/${id}`, { method: 'DELETE' });
+export const getBindings = () => apiClient('/compliance-bindings');
+export const getViolations = () => apiClient('/compliance-violations');

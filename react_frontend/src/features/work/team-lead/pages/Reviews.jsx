@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '../../../../shared/components/Badge';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
@@ -48,8 +48,8 @@ export default function TeamLeadReviews() {
       setList(l => l.map(update));
       setSelected(s => s?.id === item.id ? { ...s, status: 'Approved' } : s);
       showToast('success', 'Evidence approved.');
-    } catch {
-      showToast('error', 'Failed to approve evidence.');
+    } catch (error) {
+      showToast('error', error.message || 'Failed to approve evidence.');
     } finally {
       setApproving(false);
     }
@@ -91,6 +91,11 @@ export default function TeamLeadReviews() {
                   className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${selected?.id === e.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{e.submittedBy || e.userName || 'Team Member'}</p>
                   <p className="text-sm font-semibold text-gray-900 mb-2 truncate">{e.title || 'Untitled Evidence'}</p>
+                  {(e.task?.title || e.violation?.rule?.name) && (
+                    <p className="mb-2 truncate text-xs text-gray-500">
+                      {e.task?.title ? `Task: ${e.task.title}` : `Rule: ${e.violation.rule.name}`}
+                    </p>
+                  )}
                   <Badge status={statusVariant(e.status)}>{String(e.status || 'Pending').replace(/_/g, ' ')}</Badge>
                 </button>
               ))}
@@ -117,6 +122,13 @@ export default function TeamLeadReviews() {
                   <p className="text-sm font-medium text-gray-700">{selected.file_url || selected.file || selected.fileName || 'document.pdf'}</p>
                   {(selected.file_url || selected.file) && (
                     <a href={selected.file_url || selected.file} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs text-blue-600 hover:underline">Open document →</a>
+                  )}
+                  {(selected.task?.title || selected.taskTitle || selected.violation?.rule?.name) && (
+                    <p className="mt-3 text-sm text-gray-600">
+                      {selected.task?.title || selected.taskTitle
+                        ? <>Task: <span className="font-semibold text-gray-900">{selected.task?.title || selected.taskTitle}</span></>
+                        : <>Rule: <span className="font-semibold text-gray-900">{selected.violation.rule.name}</span></>}
+                    </p>
                   )}
                 </div>
 

@@ -7,10 +7,10 @@ import { FormField, Input, Select, Textarea } from '../../../../shared/component
 import { Loader } from '../../../../shared/components/Loader';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
-import { apiClient } from '../../../../services/api/client';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
+import * as complianceApi from '../../../../services/api/compliance';
 
 const STATUSES = ['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'];
 const normalize = (response) => response?.data || response;
@@ -27,6 +27,7 @@ export default function PmProjectDetail() {
   const [violations, setViolations] = useState([]);
   const [complianceLoading, setComplianceLoading] = useState(true);
   const [complianceError, setComplianceError] = useState('');
+  const [complianceOpen, setComplianceOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
@@ -64,9 +65,9 @@ export default function PmProjectDetail() {
         if (active) setUsersLoading(false);
       });
 
-    apiClient('/compliance-violations')
+    complianceApi.getViolations()
       .then((response) => {
-        if (active) setViolations(Array.isArray(response) ? response : []);
+        if (active) setViolations(Array.isArray(response) ? response : response?.data || []);
       })
       .catch((loadError) => {
         if (active) setComplianceError(loadError.message || 'Failed to load compliance information.');
@@ -113,32 +114,48 @@ export default function PmProjectDetail() {
   const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const taskIds = tasks.map((task) => task.id);
   const projectViolations = violations.filter((violation) => (
-    (violation.entityType === 'Project' && violation.entityId === project.id)
-    || (violation.entityType === 'Task' && taskIds.includes(violation.entityId))
+    (violation.entityType === 'Project' && String(violation.entityId) === String(project.id))
+    || (violation.entityType === 'Task' && taskIds.some((taskId) => String(taskId) === String(violation.entityId)))
   ));
+  const activeProjectViolations = projectViolations.filter((violation) => (
+    ['Open', 'Under_Review'].includes(violation.status)
+  ));
+  const blockedTaskIds = new Set(activeProjectViolations
+    .filter((violation) => violation.entityType === 'Task')
+    .map((violation) => String(violation.entityId)));
   const assignedUserIds = tasks.flatMap((task) => [
     task.assignedTo?.id,
     ...(task.subtasks || []).map((subtask) => subtask.assignedToId),
   ]).filter(Boolean);
+  const teamRoster = (project.team?.teamMembers || []).map((membership) => {
+    const member = users.find((user) => String(user.id) === String(membership.userId));
+    return member ? { ...member, teamRole: membership.role || 'Member' } : null;
+  }).filter((member) => member && member.isActive !== false);
   const isTeamLead = (user) => user?.roleAssignments?.some(({ role }) => (
     [role?.name, role?.label].some((name) => (
       String(name || '').toLowerCase().replace(/[^a-z]/g, '').includes('teamlead')
     ))
-  ));
-  const teamLeadIds = [...new Set(assignedUserIds.flatMap((userId) => {
+  )) || /team.?lead/i.test(user?.teamRole || '');
+  const assignedLeadIds = assignedUserIds.flatMap((userId) => {
     const assignedUser = users.find((user) => user.id === userId);
     const manager = users.find((user) => user.id === assignedUser?.managerUserId);
     if (isTeamLead(assignedUser)) return [assignedUser.id];
     return isTeamLead(manager) ? [manager.id] : [];
-  }))];
-  const members = users.filter((user) => (
-    user.isActive !== false
-    && teamLeadIds.includes(user.managerUserId)
-    && assignedUserIds.includes(user.id)
-  ));
-  const taskAssignees = users.filter((user) => (
-    teamLeadIds.includes(user.id) || teamLeadIds.includes(user.managerUserId)
-  ));
+  });
+  const teamLeadIds = [...new Set([
+    ...teamRoster.filter(isTeamLead).map((user) => user.id),
+    ...assignedLeadIds,
+  ])];
+  const members = teamRoster.length
+    ? teamRoster
+    : users.filter((user) => (
+      user.isActive !== false
+      && (teamLeadIds.includes(user.id) || teamLeadIds.includes(user.managerUserId))
+      && (teamLeadIds.includes(user.id) || assignedUserIds.some((id) => String(id) === String(user.id)))
+    ));
+  const taskAssignees = teamRoster.length
+    ? teamRoster
+    : users.filter((user) => teamLeadIds.includes(user.id) || teamLeadIds.includes(user.managerUserId));
   const formatDate = (date) => date
     ? new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
@@ -200,12 +217,13 @@ export default function PmProjectDetail() {
             )}
           </div>
           <div className="flex flex-wrap items-end gap-2">
-            <Link
-              to={PATHS.COMPLIANCE.VIOLATIONS}
+            <button
+              type="button"
+              onClick={() => setComplianceOpen(true)}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               View Compliance
-            </Link>
+            </button>
             <Button
               type="button"
               onClick={() => setCreateTaskOpen(true)}
@@ -274,6 +292,7 @@ export default function PmProjectDetail() {
                       <td className="px-4 py-4">
                         <div className="font-semibold text-slate-900">{task.title}</div>
                         <div className="mt-1 text-xs text-slate-500">{task.subtasks?.length || 0} subtasks</div>
+                        {blockedTaskIds.has(String(task.id)) && <div className="mt-1 text-xs font-semibold text-rose-700">⚠ Blocked by Compliance</div>}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-600">{task.assignedTo?.fullName || task.assignedTo?.email || 'Unassigned'}</td>
                       <td className="px-4 py-4 text-sm text-slate-600">{task.priority || 'Medium'}</td>
@@ -310,8 +329,8 @@ export default function PmProjectDetail() {
                 {members.map((member) => {
                   const assignedCount = tasks.reduce((count, task) => (
                     count
-                    + (task.assignedTo?.id === member.id ? 1 : 0)
-                    + (task.subtasks || []).filter((subtask) => subtask.assignedToId === member.id).length
+                    + (String(task.assignedTo?.id) === String(member.id) ? 1 : 0)
+                    + (task.subtasks || []).filter((subtask) => String(subtask.assignedToId) === String(member.id)).length
                   ), 0);
                   return (
                     <div key={member.id} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0">
@@ -320,7 +339,7 @@ export default function PmProjectDetail() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold text-slate-900">{member.fullName || member.email}</div>
-                        <div className="text-xs text-slate-500">Team member</div>
+                        <div className="text-xs text-slate-500">{isTeamLead(member) ? 'Team Lead' : member.teamRole}</div>
                       </div>
                       <span className="whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{assignedCount} tasks</span>
                     </div>
@@ -333,13 +352,13 @@ export default function PmProjectDetail() {
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <h2 className="font-bold text-slate-900">Compliance</h2>
-              <Link to={PATHS.COMPLIANCE.VIOLATIONS} className="text-sm font-semibold text-blue-600 hover:text-blue-700">Full view →</Link>
+              <button type="button" onClick={() => setComplianceOpen(true)} className="text-sm font-semibold text-blue-600 hover:text-blue-700">Full view →</button>
             </div>
             {complianceError ? (
               <p className="p-4 text-sm text-rose-600">{complianceError}</p>
             ) : complianceLoading ? (
               <p className="p-4 text-sm text-slate-500">Loading compliance...</p>
-            ) : projectViolations.length === 0 ? (
+            ) : activeProjectViolations.length === 0 ? (
               <div className="flex items-center gap-3 p-4">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-sm font-bold text-emerald-600">✓</span>
                 <div>
@@ -348,7 +367,7 @@ export default function PmProjectDetail() {
                 </div>
               </div>
             ) : (
-              projectViolations.map((violation) => {
+              activeProjectViolations.map((violation) => {
                 const isOpen = violation.status === 'Open';
                 const isUnderReview = violation.status === 'Under_Review';
                 return (
@@ -369,6 +388,39 @@ export default function PmProjectDetail() {
           </section>
         </aside>
       </section>
+
+      <Modal
+        isOpen={complianceOpen}
+        onClose={() => setComplianceOpen(false)}
+        title={`Active compliance issues — ${project.name}`}
+      >
+        {activeProjectViolations.length === 0 ? (
+          <p className="text-sm text-slate-600">This project has no active compliance violations.</p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {activeProjectViolations.map((violation) => (
+              <div key={violation.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div>
+                  <p className="font-semibold text-slate-900">{violation.rule?.name || 'Compliance violation'}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {violation.entityType === 'Task' ? violation.entityName || 'Task' : project.name}
+                    {' · '}{String(violation.status).replace(/_/g, ' ')}
+                  </p>
+                </div>
+                {violation.entityType === 'Task' && (
+                  <Link
+                    to={PATHS.PM.TASK_DETAIL.replace(':id', violation.entityId)}
+                    className="shrink-0 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    onClick={() => setComplianceOpen(false)}
+                  >
+                    View task →
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         isOpen={createTaskOpen}
