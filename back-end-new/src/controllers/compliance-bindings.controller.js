@@ -26,9 +26,34 @@ export async function listComplianceBindings(req, res, next) {
       },
     });
 
+    // Hydrate scopeName
+    const projectIds = bindings.filter((b) => b.scopeType === 'Project').map((b) => b.scopeId);
+    const teamIds = bindings.filter((b) => b.scopeType === 'Team').map((b) => b.scopeId);
+
+    const [projects, teams] = await Promise.all([
+      projectIds.length > 0 ? prisma.project.findMany({ where: { id: { in: projectIds } }, select: { id: true, name: true } }) : [],
+      teamIds.length > 0 ? prisma.team.findMany({ where: { id: { in: teamIds } }, select: { id: true, name: true } }) : [],
+    ]);
+
+    const projectMap = new Map(projects.map((p) => [p.id, p.name]));
+    const teamMap = new Map(teams.map((t) => [t.id, t.name]));
+
+    const hydrated = bindings.map((b) => {
+      let scopeName = 'Company-wide (All)';
+      if (b.scopeType === 'Project') {
+        scopeName = projectMap.get(b.scopeId) || `Project #${b.scopeId.substring(0, 8)}`;
+      } else if (b.scopeType === 'Team') {
+        scopeName = teamMap.get(b.scopeId) || `Team #${b.scopeId.substring(0, 8)}`;
+      }
+      return {
+        ...b,
+        scopeName,
+      };
+    });
+
     res.status(200).json({
       success: true,
-      data: bindings,
+      data: hydrated,
     });
   } catch (err) {
     next(err);

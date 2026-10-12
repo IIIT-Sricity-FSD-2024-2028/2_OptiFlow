@@ -122,6 +122,18 @@ export async function handleLogin(req, res, next) {
           include: { role: true },
           orderBy: { grantedAt: 'desc' },
         },
+        teamMembers: {
+          include: {
+            team: {
+              select: {
+                id: true,
+                name: true,
+                branch: { select: { id: true, name: true } },
+              },
+            },
+          },
+          orderBy: { joinedAt: 'asc' },
+        },
       },
     });
 
@@ -221,6 +233,13 @@ export async function handleLogin(req, res, next) {
           scopeType: matchedAssignment?.scopeType || null,
           scopeId: matchedAssignment?.scopeId || null,
           branchName,
+          teams: (user.teamMembers || []).map((tm) => ({
+            teamId: tm.team?.id,
+            teamName: tm.team?.name,
+            role: tm.role || 'Member',
+            branchId: tm.team?.branch?.id,
+            branchName: tm.team?.branch?.name,
+          })),
         },
       },
     });

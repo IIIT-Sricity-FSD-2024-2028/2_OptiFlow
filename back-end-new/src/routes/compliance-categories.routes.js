@@ -30,7 +30,7 @@ router.patch(
 router.delete(
   ['/compliance-categories/:id', '/api/compliance-categories/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, 'superuser'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
   deleteComplianceCategory
 );
 

@@ -158,28 +158,52 @@ export async function updateEvidence(req, res, next) {
     });
 
     // Auto-resolve violation if evidence is Approved and violation exists
-    if (body.status === 'Approved' && existing.violationId) {
-      await prisma.complianceViolation.update({
-        where: { id: existing.violationId },
-        data: {
-          status: 'Resolved',
-          resolvedById: req.user.id,
-          resolvedAt: new Date(),
-          resolutionRemarks: `Auto-resolved via approved evidence "${existing.title}"`,
-        },
-      });
-
-      try {
-        await createComplianceAuditLog({
-          companyId: req.user.companyId,
-          violationId: existing.violationId,
-          action: AUDIT_ACTIONS.STATUS_CHANGE,
-          performedById: req.user.id,
-          oldValue: { status: 'OPEN' },
-          newValue: { status: 'RESOLVED', resolutionRemarks: `Auto-resolved via approved evidence "${existing.title}"` },
+    if (body.status === 'Approved') {
+      if (existing.violationId) {
+        await prisma.complianceViolation.update({
+          where: { id: existing.violationId },
+          data: {
+            status: 'Resolved',
+            resolvedById: req.user.id,
+            resolvedAt: new Date(),
+            resolutionRemarks: `Auto-resolved via approved evidence "${existing.title}"`,
+          },
         });
-      } catch (auditErr) {
-        console.warn('[AuditLog] Notice: Audit logging for violation auto-resolve failed:', auditErr.message);
+
+        try {
+          await createComplianceAuditLog({
+            companyId: req.user.companyId,
+            violationId: existing.violationId,
+            action: AUDIT_ACTIONS.STATUS_CHANGE,
+            performedById: req.user.id,
+            oldValue: { status: 'OPEN' },
+            newValue: { status: 'RESOLVED', resolutionRemarks: `Auto-resolved via approved evidence "${existing.title}"` },
+          });
+        } catch (auditErr) {
+          console.warn('[AuditLog] Notice: Audit logging for violation auto-resolve failed:', auditErr.message);
+        }
+      } else if (existing.taskId) {
+        // Also auto-resolve any open violation flagged against this task
+        const taskViolations = await prisma.complianceViolation.findMany({
+          where: {
+            companyId: req.user.companyId,
+            entityType: 'Task',
+            entityId: existing.taskId,
+            status: 'Open',
+          },
+        });
+
+        for (const tv of taskViolations) {
+          await prisma.complianceViolation.update({
+            where: { id: tv.id },
+            data: {
+              status: 'Resolved',
+              resolvedById: req.user.id,
+              resolvedAt: new Date(),
+              resolutionRemarks: `Auto-resolved via approved evidence "${existing.title}"`,
+            },
+          });
+        }
       }
     }
 

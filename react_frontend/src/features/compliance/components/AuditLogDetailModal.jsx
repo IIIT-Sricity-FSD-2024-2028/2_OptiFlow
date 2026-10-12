@@ -41,7 +41,7 @@ export function AuditLogDetailModal({ isOpen, onClose, log }) {
           <div>
             <span className="font-semibold block text-slate-500 mb-1">Entity Affected</span>
             <span className="font-mono text-xs bg-slate-200 px-2 py-1 rounded text-slate-700">
-              {log.entityType} #{log.entityId.substring(0,8)}
+              {log.entityType} {log.entityId ? `#${log.entityId.substring(0,8)}` : ''}
             </span>
           </div>
         </div>

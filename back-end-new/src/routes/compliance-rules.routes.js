@@ -28,12 +28,17 @@ router.patch(
   requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
   updateComplianceRule
 );
+router.put(
+  ['/compliance-rules/:id', '/api/compliance-rules/:id'],
+  authenticate,
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  updateComplianceRule
+);
 router.delete(
   ['/compliance-rules/:id', '/api/compliance-rules/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, 'superuser'),
-  deleteComplianceRule,
-  triggerComplianceEngine
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  deleteComplianceRule
 );
 
 

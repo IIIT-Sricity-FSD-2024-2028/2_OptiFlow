@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
-import { Plus, Loader2, Trash2, Edit2 } from "lucide-react";
+import { Plus, Loader2, Trash2, Edit2, ExternalLink } from "lucide-react";
 
 export default function ComplianceCategories() {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -16,7 +18,8 @@ export default function ComplianceCategories() {
     try {
       setLoading(true);
       const res = await apiClient("/compliance-categories");
-      setCategories(res.data);
+      const list = Array.isArray(res) ? res : res?.data || [];
+      setCategories(list);
     } catch (error) {
       console.error("Failed to fetch categories:", error);
     } finally {
@@ -76,9 +79,13 @@ export default function ComplianceCategories() {
       header: "NAME",
       accessor: "name",
       render: (row) => (
-        <span className="font-semibold text-[13px] text-gray-800">
+        <button
+          onClick={() => navigate(`/compliance/rules?categoryId=${row.id}&categoryName=${encodeURIComponent(row.name)}`)}
+          className="font-semibold text-[13px] text-blue-600 hover:text-blue-800 text-left hover:underline"
+          title={`View rules in ${row.name}`}
+        >
           {row.name}
-        </span>
+        </button>
       ),
     },
     { header: "DESCRIPTION", accessor: "description" },
@@ -95,26 +102,38 @@ export default function ComplianceCategories() {
       header: "RULES",
       accessor: "_count",
       render: (row) => (
-        <span className="text-sm font-medium bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
-          {row._count?.rules || 0}
-        </span>
+        <button
+          onClick={() => navigate(`/compliance/rules?categoryId=${row.id}&categoryName=${encodeURIComponent(row.name)}`)}
+          className="text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+          title={`Filter to ${row._count?.rules || 0} rule(s)`}
+        >
+          {row._count?.rules || 0} rule{row._count?.rules === 1 ? "" : "s"}
+        </button>
       ),
     },
     {
       header: "ACTIONS",
       accessor: "actions",
       render: (row) => (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(`/compliance/rules?categoryId=${row.id}&categoryName=${encodeURIComponent(row.name)}`)}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition-colors"
+            title="View Rules"
+          >
+            <ExternalLink size={13} />
+            <span>Rules</span>
+          </button>
           <button 
             onClick={() => handleOpenEdit(row)}
-            className="text-gray-500 hover:text-blue-600 transition-colors"
+            className="text-gray-500 hover:text-blue-600 p-1 transition-colors"
             title="Edit Category"
           >
             <Edit2 size={16} />
           </button>
           <button 
             onClick={() => handleDelete(row.id)}
-            className="text-gray-500 hover:text-red-600 transition-colors"
+            className="text-gray-500 hover:text-red-600 p-1 transition-colors"
             title="Delete Category"
           >
             <Trash2 size={16} />
@@ -140,7 +159,7 @@ export default function ComplianceCategories() {
             Compliance Categories
           </h1>
           <p className="text-sm text-gray-500">
-            Organize your rules into logical groups like Data Privacy, Security, or HR.
+            Group compliance policies into operational domains (e.g., Security, Data Privacy, Operations). Click any category to view its associated policies.
           </p>
         </div>
 

@@ -55,7 +55,7 @@ export default function ComplianceAuditLogs() {
       accessor: "entity",
       render: (row) => (
         <span className="font-medium text-slate-700">
-          {row.entityName || `${row.entityType} #${row.entityId.substring(0,8)}`}
+          {row.entityName || (row.entityId ? `${row.entityType} #${row.entityId.substring(0,8)}` : row.entityType || 'General')}
         </span>
       )
     },

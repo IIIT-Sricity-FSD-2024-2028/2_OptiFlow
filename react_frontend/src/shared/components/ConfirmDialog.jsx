@@ -2,6 +2,7 @@ import { Modal } from './Modal';
 
 export const ConfirmDialog = ({
   isOpen,
+  open,
   onConfirm,
   onCancel,
   title = 'Confirm Action',
@@ -11,11 +12,12 @@ export const ConfirmDialog = ({
   variant = 'danger',
   loading = false,
 }) => {
+  const isActuallyOpen = isOpen !== undefined ? isOpen : open;
   const isDanger = variant === 'danger';
 
   return (
     <Modal
-      isOpen={isOpen}
+      isOpen={isActuallyOpen}
       onClose={loading ? undefined : onCancel}
       title={title}
       className="max-w-md"
