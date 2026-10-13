@@ -7,6 +7,7 @@ import { Loader } from '../../../../shared/components/Loader';
 import { Modal } from '../../../../shared/components/Modal';
 import { Table } from '../../../../shared/components/Table';
 import { Toast } from '../../../../shared/components/Toast';
+import { Pagination } from '../../../../shared/components/Pagination';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as projectsApi from '../../../../services/api/projects';
 
@@ -14,6 +15,7 @@ const FILTERS = ['all', 'high', 'medium', 'resolved'];
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const formatStatus = (status) => String(status || 'Open').replace(/_/g, ' ');
 const isResolved = (escalation) => ['Resolved', 'Closed'].includes(String(escalation.status));
+const PAGE_SIZE = 10;
 
 const formatDate = (date) => date
   ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -21,6 +23,7 @@ const formatDate = (date) => date
 
 export default function PmEscalations() {
   const [escalations, setEscalations] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [filter, setFilter] = useState('all');
@@ -196,7 +199,7 @@ export default function PmEscalations() {
           </div>
           <Table
             columns={columns}
-            data={visibleEscalations}
+            data={visibleEscalations.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)}
             loading={false}
             emptyMessage="No escalations"
             onRowClick={(item) => {
@@ -204,6 +207,12 @@ export default function PmEscalations() {
               setResolutionNotes('');
             }}
             rowClassName={(item) => String(item.id) === String(selectedId) ? 'bg-blue-50' : ''}
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalItems={visibleEscalations.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={(page) => setCurrentPage(page)}
           />
         </section>
 

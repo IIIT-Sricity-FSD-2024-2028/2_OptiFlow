@@ -86,27 +86,44 @@ export default function TeamLeadTaskDetail() {
       const violations = Array.isArray(violationResponse) ? violationResponse : violationResponse?.data || [];
       const evidence = Array.isArray(evidenceResponse) ? evidenceResponse : evidenceResponse?.data || [];
       const projectId = task.projectId || task.project?.id;
-      const relevantBindings = bindings.filter((binding) => (
-        binding.rule?.isActive !== false
-        && ((binding.scopeType === 'Project' && String(binding.scopeId) === String(projectId))
-          || (binding.scopeType === 'Task' && String(binding.scopeId) === String(taskId)))
-      ));
+      const teamId = task.project?.teamId || task.project?.team?.id;
+      const branchId = task.project?.team?.branchId;
+      const companyId = task.companyId;
+
+      const relevantBindings = bindings.filter((binding) => {
+        if (binding.rule?.isActive === false) return false;
+        if (binding.scopeType === 'Task' && String(binding.scopeId) === String(taskId)) return true;
+        if (binding.scopeType === 'Project' && String(binding.scopeId) === String(projectId)) return true;
+        if (binding.scopeType === 'Team' && String(binding.scopeId) === String(teamId)) return true;
+        if (binding.scopeType === 'Branch' && String(binding.scopeId) === String(branchId)) return true;
+        if (binding.scopeType === 'Company' && String(binding.scopeId) === String(companyId)) return true;
+        return false;
+      });
+
       const activeViolations = violations.filter((violation) => (
         ['Open', 'Under_Review'].includes(violation.status)
         && ((violation.entityType === 'Task' && String(violation.entityId) === String(taskId))
           || (violation.entityType === 'Project' && String(violation.entityId) === String(projectId)))
       ));
+
       const evidenceRules = [
         ...relevantBindings.map((binding) => binding.rule),
         ...activeViolations.map((violation) => violation.rule),
-      ].filter((rule) => rule?.criteria?.requirement?.type === 'EVIDENCE_REQUIRED');
+      ].filter((rule) => {
+        if (!rule?.criteria) return false;
+        const trigger = rule.criteria.trigger;
+        const req = rule.criteria.requirement;
+        return req?.type === 'EVIDENCE_REQUIRED' || (trigger?.field === 'status' && trigger?.transitionTo === 'Completed');
+      });
+
       const hasApprovedEvidence = evidence.some((item) => (
         String(item.taskId || item.task_id || item.task?.id) === String(taskId)
         && String(item.status).toLowerCase() === 'approved'
       ));
+
       setCompliance({
         hasRules: relevantBindings.length > 0 || activeViolations.length > 0,
-        evidenceBlocked: evidenceRules.length > 0 && !hasApprovedEvidence,
+        evidenceBlocked: (evidenceRules.length > 0 || activeViolations.length > 0) && !hasApprovedEvidence,
       });
     }).catch((error) => {
       if (active) showToast('error', error.message || 'Failed to load compliance status.');
@@ -224,9 +241,19 @@ export default function TeamLeadTaskDetail() {
         {/* Left column */}
         <div className="space-y-5">
           {compliance.hasRules && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
-              <strong>🛡 Compliance rules apply to this task.</strong>
-              {compliance.evidenceBlocked && <span className="ml-1">Evidence must be approved before this task can be completed.</span>}
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" role="status">
+              <div>
+                <strong>🛡 Compliance rules apply to this task.</strong>
+                {compliance.evidenceBlocked && <p className="text-xs text-amber-800 mt-0.5">Mandatory evidence must be reviewed and approved in the vault before this task can be completed.</p>}
+              </div>
+              {compliance.evidenceBlocked && (
+                <Link
+                  to="/team-lead/reviews"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 shrink-0 shadow-sm"
+                >
+                  Review Evidence Vault →
+                </Link>
+              )}
             </div>
           )}
           <TaskDetailPanel

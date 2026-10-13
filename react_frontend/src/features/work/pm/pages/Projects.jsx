@@ -8,12 +8,15 @@ import { FormField, Input, Select, Textarea } from '../../../../shared/component
 import { Loader } from '../../../../shared/components/Loader';
 import { Modal } from '../../../../shared/components/Modal';
 import { Toast } from '../../../../shared/components/Toast';
+import { Pagination } from '../../../../shared/components/Pagination';
 import * as projectsApi from '../../../../services/api/projects';
 import * as teamsApi from '../../../../services/api/teams';
 import { createInstance, listTemplates } from '../../../../services/api/process';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const projectPath = (id) => PATHS.PM.PROJECT_DETAIL.replace(':id', id);
+const PAGE_SIZE = 9;
+
 const PROJECT_FILTERS = [
   { value: 'All', label: 'All' },
   { value: 'Active', label: 'Active' },
@@ -35,6 +38,7 @@ const formatDate = (date) => date
 
 export default function PmProjects() {
   const [projects, setProjects] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [teams, setTeams] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [templateError, setTemplateError] = useState('');
@@ -196,58 +200,67 @@ export default function PmProjects() {
           action={projects.length === 0 ? <Button variant="primary" onClick={() => setIsOpen(true)}>Create Project</Button> : undefined}
         />
       ) : (
-        <section className="grid grid-cols-1 gap-5 pt-1 md:grid-cols-2 lg:grid-cols-3">
-          {filteredProjects.map((project) => {
-            const style = statusStyle(project.status);
-            const projectTasks = project.tasks || [];
-            const completed = projectTasks.filter((task) => task.status === 'Completed').length;
-            const progress = projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0;
-            const openEscalations = (project.escalations || []).filter(
-              (item) => !['Resolved', 'Closed'].includes(item.status)
-            ).length;
-            return (
-              <Link
-                key={project.id}
-                to={projectPath(project.id)}
-                className={`group flex min-h-64 flex-col gap-4 rounded-xl border border-slate-200 border-t-4 ${style.border} bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-bold leading-snug text-slate-900 group-hover:text-blue-700">{project.name}</h2>
-                  <Badge status={style.badge}>{project.status === 'OnHold' || project.status === 'On_Hold' ? 'On Hold' : project.status || 'Planning'}</Badge>
-                </div>
+        <div className="space-y-6">
+          <section className="grid grid-cols-1 gap-5 pt-1 md:grid-cols-2 lg:grid-cols-3">
+            {filteredProjects.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((project) => {
+              const style = statusStyle(project.status);
+              const projectTasks = project.tasks || [];
+              const completed = projectTasks.filter((task) => task.status === 'Completed').length;
+              const progress = projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0;
+              const openEscalations = (project.escalations || []).filter(
+                (item) => !['Resolved', 'Closed'].includes(item.status)
+              ).length;
+              return (
+                <Link
+                  key={project.id}
+                  to={projectPath(project.id)}
+                  className={`group flex min-h-64 flex-col gap-4 rounded-xl border border-slate-200 border-t-4 ${style.border} bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="text-base font-bold leading-snug text-slate-900 group-hover:text-blue-700">{project.name}</h2>
+                    <Badge status={style.badge}>{project.status === 'OnHold' || project.status === 'On_Hold' ? 'On Hold' : project.status || 'Planning'}</Badge>
+                  </div>
 
-                <p className="min-h-10 text-sm leading-relaxed text-slate-600 line-clamp-2">
-                  {project.description || 'No description provided.'}
-                </p>
+                  <p className="min-h-10 text-sm leading-relaxed text-slate-600 line-clamp-2">
+                    {project.description || 'No description provided.'}
+                  </p>
 
-                <div className="mt-auto space-y-3">
-                  <div>
-                    <div className="mb-1.5 flex justify-between text-xs text-slate-500">
-                      <span>Progress</span>
-                      <span className="font-semibold">{progress}%</span>
+                  <div className="mt-auto space-y-3">
+                    <div>
+                      <div className="mb-1.5 flex justify-between text-xs text-slate-500">
+                        <span>Progress</span>
+                        <span className="font-semibold">{progress}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${progress}%` }} />
+                      </div>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${progress}%` }} />
+
+                    <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                      <span className="truncate">{project.team?.name || 'No team assigned'}</span>
+                      <span className="shrink-0">Due {formatDate(project.targetDate)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
+                      <span className="text-slate-500">{projectTasks.length} task{projectTasks.length === 1 ? '' : 's'}</span>
+                      <span className={openEscalations ? 'font-semibold text-rose-600' : 'text-slate-400'}>
+                        {openEscalations} open escalation{openEscalations === 1 ? '' : 's'}
+                      </span>
+                      <span className="font-semibold text-blue-600">View details →</span>
                     </div>
                   </div>
+                </Link>
+              );
+            })}
+          </section>
 
-                  <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-                    <span className="truncate">{project.team?.name || 'No team assigned'}</span>
-                    <span className="shrink-0">Due {formatDate(project.targetDate)}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
-                    <span className="text-slate-500">{projectTasks.length} task{projectTasks.length === 1 ? '' : 's'}</span>
-                    <span className={openEscalations ? 'font-semibold text-rose-600' : 'text-slate-400'}>
-                      {openEscalations} open escalation{openEscalations === 1 ? '' : 's'}
-                    </span>
-                    <span className="font-semibold text-blue-600">View details →</span>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </section>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredProjects.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={(page) => setCurrentPage(page)}
+          />
+        </div>
       )}
 
       <Modal

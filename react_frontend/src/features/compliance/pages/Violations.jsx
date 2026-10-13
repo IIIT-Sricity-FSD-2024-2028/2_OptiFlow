@@ -3,8 +3,11 @@ import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
+import { Pagination } from "../../../shared/components/Pagination";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
 import { AlertTriangle, Filter, Loader2, ShieldCheck } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceViolations() {
   const [violations, setViolations] = useState([]);
@@ -12,6 +15,7 @@ export default function ComplianceViolations() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [severityFilter, setSeverityFilter] = useState("All");
   const [selectedViolation, setSelectedViolation] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchViolations = async () => {
     try {
@@ -46,6 +50,11 @@ export default function ComplianceViolations() {
     const matchesSeverity = severityFilter === "All" || v.severity === severityFilter || v.rule?.severity === severityFilter;
     return matchesStatus && matchesSeverity;
   });
+
+  const paginatedViolations = filteredViolations.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const columns = [
     {
@@ -161,7 +170,10 @@ export default function ComplianceViolations() {
           
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="text-xs border border-slate-200 rounded-md px-2.5 py-1.5 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 font-medium"
           >
             <option value="All">All Statuses</option>
@@ -173,7 +185,10 @@ export default function ComplianceViolations() {
 
           <select
             value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
+            onChange={(e) => {
+              setSeverityFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="text-xs border border-slate-200 rounded-md px-2.5 py-1.5 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 font-medium"
           >
             <option value="All">All Severities</option>
@@ -199,9 +214,17 @@ export default function ComplianceViolations() {
         <div className="p-0">
           <Table
             columns={columns}
-            data={filteredViolations}
+            data={paginatedViolations}
             loading={loading}
             emptyMessage="No violations match the selected filters."
+          />
+        </div>
+        <div className="border-t border-slate-100 px-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredViolations.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
           />
         </div>
       </div>

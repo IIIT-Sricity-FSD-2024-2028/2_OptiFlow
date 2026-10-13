@@ -4,7 +4,10 @@ import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
+import { Pagination } from "../../../shared/components/Pagination";
 import { Plus, Loader2, Trash2, Edit2, ExternalLink } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceCategories() {
   const navigate = useNavigate();
@@ -13,6 +16,7 @@ export default function ComplianceCategories() {
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: "", description: "" });
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchCategories = async () => {
     try {
@@ -151,6 +155,11 @@ export default function ComplianceCategories() {
     );
   }
 
+  const paginatedCategories = categories.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   return (
     <div className="p-8 max-w-7xl mx-auto bg-[#f0f4f8] min-h-screen text-[#1a2332]">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
@@ -179,8 +188,16 @@ export default function ComplianceCategories() {
         <div className="p-0">
           <Table
             columns={columns}
-            data={categories}
+            data={paginatedCategories}
             emptyMessage="No categories found. Create one to organize your rules."
+          />
+        </div>
+        <div className="border-t border-slate-100 px-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={categories.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
           />
         </div>
       </div>

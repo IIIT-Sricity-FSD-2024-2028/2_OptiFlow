@@ -6,16 +6,19 @@ import { EmptyState } from '../../../../shared/components/EmptyState';
 import { FormField, Input, Select } from '../../../../shared/components/FormField';
 import { Loader } from '../../../../shared/components/Loader';
 import { TaskTable } from '../../components/TaskTable';
+import { Pagination } from '../../../../shared/components/Pagination';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
+const PAGE_SIZE = 10;
 
 export default function PmTasks() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +97,9 @@ export default function PmTasks() {
     complianceBlocked: complianceBlockedIds.has(String(task.id)),
   }));
 
+  // Pagination slice (10 per page)
+  const paginatedTasks = taskRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div>
@@ -136,11 +142,19 @@ export default function PmTasks() {
       {tasks.length === 0 ? (
         <EmptyState title="No tasks" description="Tasks assigned by the Project Manager will appear here." />
       ) : (
-        <TaskTable
-          tasks={taskRows}
-          visibleColumns={['title', 'assignee', 'priority', 'status', 'dueDate']}
-          onRowClick={(task) => navigate(PATHS.PM.TASK_DETAIL.replace(':id', task.id))}
-        />
+        <div className="space-y-4">
+          <TaskTable
+            tasks={paginatedTasks}
+            visibleColumns={['title', 'assignee', 'priority', 'status', 'dueDate']}
+            onRowClick={(task) => navigate(PATHS.PM.TASK_DETAIL.replace(':id', task.id))}
+          />
+          <Pagination
+            currentPage={currentPage}
+            totalItems={taskRows.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={(page) => setCurrentPage(page)}
+          />
+        </div>
       )}
     </div>
   );

@@ -5,7 +5,10 @@ import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
+import { Pagination } from "../../../shared/components/Pagination";
 import { Plus, Loader2, Edit2, Trash2 } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceRules() {
   const navigate = useNavigate();
@@ -15,6 +18,7 @@ export default function ComplianceRules() {
   const [rules, setRules] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState(null);
@@ -165,6 +169,11 @@ export default function ComplianceRules() {
             r.category?.id === activeCategoryId
         );
 
+  const paginatedRules = filteredRules.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   const columns = [
     {
       header: "RULE NAME",
@@ -310,6 +319,7 @@ export default function ComplianceRules() {
             <select
               value={activeCategoryId}
               onChange={(e) => {
+                setCurrentPage(1);
                 if (e.target.value === "ALL") {
                   const newParams = new URLSearchParams(searchParams);
                   newParams.delete("categoryId");
@@ -336,6 +346,7 @@ export default function ComplianceRules() {
             {activeCategoryId !== "ALL" && (
               <button
                 onClick={() => {
+                  setCurrentPage(1);
                   const newParams = new URLSearchParams(searchParams);
                   newParams.delete("categoryId");
                   newParams.delete("categoryName");
@@ -357,12 +368,20 @@ export default function ComplianceRules() {
         <div className="p-0">
           <Table
             columns={columns}
-            data={filteredRules}
+            data={paginatedRules}
             emptyMessage={
               activeCategoryId !== "ALL"
                 ? "No compliance rules found for this category."
                 : "No compliance rules found. Create one to start scanning."
             }
+          />
+        </div>
+        <div className="border-t border-slate-100 px-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredRules.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
           />
         </div>
       </div>

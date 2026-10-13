@@ -3,20 +3,24 @@ import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
+import { Pagination } from "../../../shared/components/Pagination";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { ReviewEvidenceModal } from "../components/ReviewEvidenceModal";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceEvidence() {
   const [evidenceList, setEvidenceList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvidence, setSelectedEvidence] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch data from the API
   const fetchEvidence = async () => {
     try {
       setLoading(true);
       const data = await apiClient("/evidence");
-      setEvidenceList(data);
+      setEvidenceList(Array.isArray(data) ? data : data?.data || []);
     } catch (error) {
       console.error("Failed to fetch evidence", error);
     } finally {
@@ -28,6 +32,11 @@ export default function ComplianceEvidence() {
   useEffect(() => {
     fetchEvidence();
   }, []);
+
+  const paginatedEvidence = evidenceList.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   // Define how the table should map our data
   const tableColumns = [
@@ -95,12 +104,20 @@ export default function ComplianceEvidence() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden mb-8">
         <Table 
           columns={tableColumns} 
-          data={evidenceList} 
+          data={paginatedEvidence} 
           emptyMessage="No evidence submissions found in the queue."
         />
+        <div className="border-t border-slate-100 px-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={evidenceList.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
+          />
+        </div>
       </div>
 
       <ReviewEvidenceModal

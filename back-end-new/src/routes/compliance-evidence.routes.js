@@ -61,6 +61,12 @@ router.patch(
   requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_lead'),
   updateEvidence
 );
+router.put(
+  ['/evidence/:id', '/api/evidence/:id'],
+  authenticate,
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_lead'),
+  updateEvidence
+);
 router.delete(
   ['/evidence/:id', '/api/evidence/:id'],
   authenticate,

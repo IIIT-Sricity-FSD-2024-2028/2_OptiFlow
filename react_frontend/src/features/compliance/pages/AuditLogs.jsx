@@ -3,13 +3,17 @@ import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
+import { Pagination } from "../../../shared/components/Pagination";
 import { Loader2, ShieldCheck, Eye } from "lucide-react";
 import { AuditLogDetailModal } from "../components/AuditLogDetailModal";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceAuditLogs() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -74,6 +78,11 @@ export default function ComplianceAuditLogs() {
     }
   ];
 
+  const paginatedLogs = logs.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -92,12 +101,20 @@ export default function ComplianceAuditLogs() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden mb-8">
         <Table 
           columns={tableColumns} 
-          data={logs} 
+          data={paginatedLogs} 
           emptyMessage="No audit logs found."
         />
+        <div className="border-t border-slate-100 px-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={logs.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
+          />
+        </div>
       </div>
 
       <AuditLogDetailModal 

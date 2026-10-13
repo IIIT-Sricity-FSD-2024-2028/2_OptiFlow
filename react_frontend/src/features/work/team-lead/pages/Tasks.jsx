@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 // Owner: M4
 // Endpoints: GET /api/tasks
 
@@ -7,13 +7,17 @@ import { PATHS } from '../../../../app/paths';
 
 import { Loader } from '../../../../shared/components/Loader';
 import { TaskTable } from '../../components/TaskTable';
+import { Pagination } from '../../../../shared/components/Pagination';
 
 import * as tasksApi from '../../../../services/api/tasks';
+
+const PAGE_SIZE = 10;
 
 export default function TeamLeadTasks() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     let mounted = true;
@@ -50,6 +54,11 @@ export default function TeamLeadTasks() {
       mounted = false;
     };
   }, []);
+
+  const paginatedTasks = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return tasks.slice(start, start + PAGE_SIZE);
+  }, [tasks, currentPage]);
 
   const handleViewTask = (task) => {
     const path = PATHS.TEAM_LEAD.TASK_DETAIL.replace(':id', task.id);
@@ -107,9 +116,18 @@ export default function TeamLeadTasks() {
 
           <div className="overflow-x-auto">
             <TaskTable 
-              tasks={tasks}
+              tasks={paginatedTasks}
               onRowClick={handleViewTask}
               visibleColumns={['title', 'assignee', 'priority', 'status', 'dueDate']}
+            />
+          </div>
+
+          <div className="border-t border-gray-100 px-4">
+            <Pagination
+              currentPage={currentPage}
+              totalItems={tasks.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setCurrentPage}
             />
           </div>
         </section>

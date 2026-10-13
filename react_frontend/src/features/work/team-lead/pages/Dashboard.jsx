@@ -252,11 +252,18 @@ export default function TeamLeadDashboard() {
       );
     } catch (error) {
       console.error('Approve task failed:', error);
-
-      showToast(
-        'error',
-        'Failed to approve task.'
-      );
+      const errMsg = error.message || '';
+      if (errMsg.includes('COMPLIANCE_BLOCK') || errMsg.includes('blocked by active compliance')) {
+        showToast(
+          'error',
+          'Approval blocked: Mandatory compliance evidence must be approved before completion.'
+        );
+      } else {
+        showToast(
+          'error',
+          errMsg || 'Failed to approve task.'
+        );
+      }
     } finally {
       setApproveConfirmOpen(false);
       setSelectedTask(null);

@@ -4,6 +4,7 @@ import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Toast } from '../../../../shared/components/Toast';
+import { Pagination } from '../../../../shared/components/Pagination';
 import * as evidenceApi from '../../../../services/api/evidence';
 
 const statusVariant = (s) => {
@@ -35,10 +36,15 @@ export default function TeamLeadReviews() {
     return () => { active = false; };
   }, []);
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 8;
+
   const filtered = list.filter(e => {
     const s = String(e.status || '').toLowerCase();
     return tab === 'pending' ? (s === 'pending' || s === 'under_review') : s === 'approved';
   });
+
+  const paginatedList = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleApprove = async (item) => {
     setApproving(true);
@@ -74,10 +80,10 @@ export default function TeamLeadReviews() {
       <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6 items-start">
 
         {/* Master list */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col">
           <div className="border-b border-gray-200 flex">
             {['pending', 'approved'].map(t => (
-              <button key={t} onClick={() => { setTab(t); setSelected(null); }}
+              <button key={t} onClick={() => { setTab(t); setSelected(null); setPage(1); }}
                 className={`flex-1 py-3 text-sm font-semibold transition-colors ${tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
                 {t === 'pending' ? 'Pending Review' : 'Approved'}
               </button>
@@ -86,10 +92,10 @@ export default function TeamLeadReviews() {
           <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
             {filtered.length === 0
               ? <div className="p-6"><EmptyState title="No items" description={tab === 'pending' ? 'No pending evidence.' : 'No approved evidence.'} /></div>
-              : filtered.map(e => (
+              : paginatedList.map(e => (
                 <button key={e.id} onClick={() => setSelected(e)}
                   className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${selected?.id === e.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{e.submittedBy || e.userName || 'Team Member'}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{e.user?.fullName || e.user?.email || e.submittedBy || e.userName || 'Team Member'}</p>
                   <p className="text-sm font-semibold text-gray-900 mb-2 truncate">{e.title || 'Untitled Evidence'}</p>
                   {(e.task?.title || e.violation?.rule?.name) && (
                     <p className="mb-2 truncate text-xs text-gray-500">
@@ -100,6 +106,16 @@ export default function TeamLeadReviews() {
                 </button>
               ))}
           </div>
+          {filtered.length > PAGE_SIZE && (
+            <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
+              <Pagination
+                currentPage={page}
+                totalItems={filtered.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </div>
 
         {/* Detail pane */}
@@ -110,7 +126,7 @@ export default function TeamLeadReviews() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">{selected.title || 'Evidence Detail'}</h2>
-                    <p className="text-sm text-gray-500 mt-1">Submitted by <span className="font-medium text-gray-700">{selected.submittedBy || selected.userName || 'Team Member'}</span></p>
+                    <p className="text-sm text-gray-500 mt-1">Submitted by <span className="font-medium text-gray-700">{selected.user?.fullName || selected.user?.email || selected.submittedBy || selected.userName || 'Team Member'}</span></p>
                   </div>
                   <Badge status={statusVariant(selected.status)}>{String(selected.status || 'Pending').replace(/_/g, ' ')}</Badge>
                 </div>

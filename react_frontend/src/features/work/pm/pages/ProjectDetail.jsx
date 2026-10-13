@@ -7,6 +7,7 @@ import { FormField, Input, Select, Textarea } from '../../../../shared/component
 import { Loader } from '../../../../shared/components/Loader';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
+import { Pagination } from '../../../../shared/components/Pagination';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
@@ -14,10 +15,12 @@ import * as complianceApi from '../../../../services/api/compliance';
 
 const STATUSES = ['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'];
 const normalize = (response) => response?.data || response;
+const TASK_PAGE_SIZE = 10;
 
 export default function PmProjectDetail() {
   const { id } = useParams();
   const [project, setProject] = useState(null);
+  const [currentTaskPage, setCurrentTaskPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -25,9 +28,11 @@ export default function PmProjectDetail() {
   const [usersLoading, setUsersLoading] = useState(true);
   const [teamError, setTeamError] = useState('');
   const [violations, setViolations] = useState([]);
+  const [bindings, setBindings] = useState([]);
   const [complianceLoading, setComplianceLoading] = useState(true);
   const [complianceError, setComplianceError] = useState('');
   const [complianceOpen, setComplianceOpen] = useState(false);
+  const [complianceTab, setComplianceTab] = useState('rules');
   const [selectedTask, setSelectedTask] = useState(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
@@ -65,9 +70,15 @@ export default function PmProjectDetail() {
         if (active) setUsersLoading(false);
       });
 
-    complianceApi.getViolations()
-      .then((response) => {
-        if (active) setViolations(Array.isArray(response) ? response : response?.data || []);
+    Promise.all([
+      complianceApi.getViolations().catch(() => []),
+      complianceApi.getBindings().catch(() => []),
+    ])
+      .then(([violationsRes, bindingsRes]) => {
+        if (active) {
+          setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
+          setBindings(Array.isArray(bindingsRes) ? bindingsRes : bindingsRes?.data || []);
+        }
       })
       .catch((loadError) => {
         if (active) setComplianceError(loadError.message || 'Failed to load compliance information.');
@@ -123,6 +134,30 @@ export default function PmProjectDetail() {
   const blockedTaskIds = new Set(activeProjectViolations
     .filter((violation) => violation.entityType === 'Task')
     .map((violation) => String(violation.entityId)));
+
+  // All compliance rules bound to this project, its team, or company
+  const projectTeamId = project.teamId || project.team?.id;
+  const projectBranchId = project.team?.branchId;
+  const projectCompanyId = project.companyId;
+
+  const projectApplicableBindings = bindings.filter((binding) => {
+    if (binding.rule?.isActive === false) return false;
+    if (binding.scopeType === 'Project' && String(binding.scopeId) === String(project.id)) return true;
+    if (binding.scopeType === 'Team' && String(binding.scopeId) === String(projectTeamId)) return true;
+    if (binding.scopeType === 'Branch' && String(binding.scopeId) === String(projectBranchId)) return true;
+    if (binding.scopeType === 'Company' && String(binding.scopeId) === String(projectCompanyId)) return true;
+    return false;
+  });
+
+  // Deduplicate rules
+  const projectRulesMap = new Map();
+  for (const b of projectApplicableBindings) {
+    if (b.rule && !projectRulesMap.has(b.rule.id)) {
+      projectRulesMap.set(b.rule.id, { ...b.rule, scopeType: b.scopeType });
+    }
+  }
+  const projectApplicableRules = Array.from(projectRulesMap.values());
+
   const assignedUserIds = tasks.flatMap((task) => [
     task.assignedTo?.id,
     ...(task.subtasks || []).map((subtask) => subtask.assignedToId),
@@ -287,7 +322,9 @@ export default function PmProjectDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {tasks.map((task) => (
+                  {tasks
+                    .slice((currentTaskPage - 1) * TASK_PAGE_SIZE, currentTaskPage * TASK_PAGE_SIZE)
+                    .map((task) => (
                     <tr key={task.id} className="hover:bg-slate-50">
                       <td className="px-4 py-4">
                         <div className="font-semibold text-slate-900">{task.title}</div>
@@ -309,6 +346,14 @@ export default function PmProjectDetail() {
                   ))}
                 </tbody>
               </table>
+              <div className="border-t border-slate-100 px-4">
+                <Pagination
+                  currentPage={currentTaskPage}
+                  totalItems={tasks.length}
+                  pageSize={TASK_PAGE_SIZE}
+                  onPageChange={(page) => setCurrentTaskPage(page)}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -392,34 +437,113 @@ export default function PmProjectDetail() {
       <Modal
         isOpen={complianceOpen}
         onClose={() => setComplianceOpen(false)}
-        title={`Active compliance issues — ${project.name}`}
+        title={`Compliance Overview — ${project.name}`}
       >
-        {activeProjectViolations.length === 0 ? (
-          <p className="text-sm text-slate-600">This project has no active compliance violations.</p>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {activeProjectViolations.map((violation) => (
-              <div key={violation.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div>
-                  <p className="font-semibold text-slate-900">{violation.rule?.name || 'Compliance violation'}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {violation.entityType === 'Task' ? violation.entityName || 'Task' : project.name}
-                    {' · '}{String(violation.status).replace(/_/g, ' ')}
-                  </p>
-                </div>
-                {violation.entityType === 'Task' && (
-                  <Link
-                    to={PATHS.PM.TASK_DETAIL.replace(':id', violation.entityId)}
-                    className="shrink-0 text-sm font-semibold text-blue-600 hover:text-blue-700"
-                    onClick={() => setComplianceOpen(false)}
-                  >
-                    View task →
-                  </Link>
-                )}
-              </div>
-            ))}
+        <div className="space-y-4">
+          {/* Tab Switcher */}
+          <div className="flex border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setComplianceTab('rules')}
+              className={`pb-2.5 px-4 text-sm font-semibold border-b-2 transition-colors ${
+                complianceTab === 'rules'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Bound Rules ({projectApplicableRules.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setComplianceTab('violations')}
+              className={`pb-2.5 px-4 text-sm font-semibold border-b-2 transition-colors ${
+                complianceTab === 'violations'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Active Violations ({activeProjectViolations.length})
+            </button>
           </div>
-        )}
+
+          {/* Tab 1: Bound Rules */}
+          {complianceTab === 'rules' && (
+            <div className="space-y-3">
+              {projectApplicableRules.length === 0 ? (
+                <p className="text-sm text-slate-500 py-4 text-center">
+                  No active compliance rules are bound to this project or its team hierarchy.
+                </p>
+              ) : (
+                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                  {projectApplicableRules.map((rule) => {
+                    const req = rule.criteria?.requirement;
+                    const trigger = rule.criteria?.trigger;
+                    return (
+                      <div key={rule.id} className="py-3 first:pt-0 last:pb-0 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-bold text-slate-900">{rule.name}</p>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Badge status={rule.scopeType === 'Company' ? 'default' : 'info'}>
+                              {rule.scopeType || 'Project'} Scope
+                            </Badge>
+                            <Badge status={rule.severity === 'Critical' || rule.severity === 'High' ? 'danger' : 'warning'}>
+                              {rule.severity || 'Medium'}
+                            </Badge>
+                          </div>
+                        </div>
+                        {rule.description && (
+                          <p className="text-xs text-slate-600">{rule.description}</p>
+                        )}
+                        {req && (
+                          <div className="mt-1 rounded bg-slate-50 p-2 text-xs text-slate-700">
+                            <span className="font-semibold text-slate-900">Enforcement: </span>
+                            {req.type === 'EVIDENCE_REQUIRED' && trigger
+                              ? `Requires approved evidence before transition to "${trigger.transitionTo || 'Completed'}"`
+                              : rule.name}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 2: Active Violations */}
+          {complianceTab === 'violations' && (
+            <div>
+              {activeProjectViolations.length === 0 ? (
+                <p className="text-sm text-slate-600 py-4 text-center">
+                  This project has no active compliance violations. All rules are satisfied.
+                </p>
+              ) : (
+                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                  {activeProjectViolations.map((violation) => (
+                    <div key={violation.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                      <div>
+                        <p className="font-semibold text-slate-900">{violation.rule?.name || 'Compliance violation'}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {violation.entityType === 'Task' ? violation.entityName || 'Task' : project.name}
+                          {' · '}{String(violation.status).replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                      {violation.entityType === 'Task' && (
+                        <Link
+                          to={PATHS.PM.TASK_DETAIL.replace(':id', violation.entityId)}
+                          className="shrink-0 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                          onClick={() => setComplianceOpen(false)}
+                        >
+                          View task →
+                        </Link>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </Modal>
 
       <Modal

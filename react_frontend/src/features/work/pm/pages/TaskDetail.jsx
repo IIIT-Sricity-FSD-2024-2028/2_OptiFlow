@@ -12,6 +12,7 @@ import { Modal } from '../../../../shared/components/Modal';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
+import * as evidenceApi from '../../../../services/api/evidence';
 
 const normalize = (response) => response?.data || response;
 const STATUSES = ['Draft', 'Active', 'In_Review', 'Blocked', 'Completed', 'Cancelled'];
@@ -22,6 +23,8 @@ export default function PmTaskDetail() {
   const [task, setTask] = useState(null);
   const [users, setUsers] = useState([]);
   const [violations, setViolations] = useState([]);
+  const [bindings, setBindings] = useState([]);
+  const [evidenceList, setEvidenceList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [extensionOpen, setExtensionOpen] = useState(false);
@@ -36,24 +39,26 @@ export default function PmTaskDetail() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([tasksApi.get(id), usersApi.list()])
-      .then(([taskResponse, usersResponse]) => {
+    Promise.all([
+      tasksApi.get(id),
+      usersApi.list(),
+      complianceApi.getViolations().catch(() => []),
+      complianceApi.getBindings().catch(() => []),
+      evidenceApi.getEvidenceList().catch(() => []),
+    ])
+      .then(([taskResponse, usersResponse, violationsRes, bindingsRes, evidenceRes]) => {
         if (!active) return;
         setTask(normalize(taskResponse));
         setUsers(Array.isArray(usersResponse) ? usersResponse : usersResponse?.data || []);
+        setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
+        setBindings(Array.isArray(bindingsRes) ? bindingsRes : bindingsRes?.data || []);
+        setEvidenceList(Array.isArray(evidenceRes) ? evidenceRes : evidenceRes?.data || []);
       })
       .catch((error) => {
         if (active) showToast('error', error.message || 'Failed to load task details.');
       })
       .finally(() => {
         if (active) setLoading(false);
-      });
-    complianceApi.getViolations()
-      .then((response) => {
-        if (active) setViolations(Array.isArray(response) ? response : response?.data || []);
-      })
-      .catch((error) => {
-        if (active) showToast('error', error.message || 'Failed to load compliance status.');
       });
     return () => { active = false; };
   }, [id]);
@@ -65,7 +70,11 @@ export default function PmTaskDetail() {
       setTask((current) => ({ ...current, ...normalize(response), ...patch }));
       showToast('success', 'Task updated.');
     } catch (error) {
-      showToast('error', error.message || 'Failed to update task.');
+      const msg = error.message || 'Failed to update task.';
+      showToast('error', msg.includes('COMPLIANCE_BLOCK') || msg.includes('blocked by active compliance')
+        ? 'Blocked by Compliance: Complete required evidence before marking Completed.'
+        : msg
+      );
     } finally {
       setSaving(false);
     }
@@ -84,12 +93,34 @@ export default function PmTaskDetail() {
   const projectLink = task.project?.id ? PATHS.PM.PROJECT_DETAIL.replace(':id', task.project.id) : null;
   const subtasks = task.subtasks || [];
   const escalations = task.escalations || [];
+
+  // Active violations attached to this task
   const activeTaskViolations = violations.filter((violation) => (
     violation.entityType === 'Task'
     && String(violation.entityId) === String(id)
     && ['Open', 'Under_Review'].includes(violation.status)
   ));
-  const complianceBlocked = activeTaskViolations.length > 0;
+
+  // Rules bound to Project/Task/Company requiring evidence for Completed status
+  const projectId = task.projectId || task.project?.id;
+  const relevantBindings = bindings.filter((binding) => (
+    binding.rule?.isActive !== false
+    && ((binding.scopeType === 'Project' && String(binding.scopeId) === String(projectId))
+      || (binding.scopeType === 'Task' && String(binding.scopeId) === String(id))
+      || (binding.scopeType === 'Company' && String(binding.scopeId) === String(task.companyId)))
+  ));
+
+  const evidenceRequiredRules = relevantBindings
+    .map((b) => b.rule)
+    .filter((r) => r?.criteria?.trigger?.field === 'status' && r?.criteria?.trigger?.transitionTo === 'Completed');
+
+  const taskApprovedEvidence = evidenceList.filter((e) =>
+    String(e.taskId || e.task_id || e.task?.id) === String(id) &&
+    String(e.status || '').toLowerCase() === 'approved'
+  );
+
+  const isMissingRequiredEvidence = evidenceRequiredRules.length > 0 && taskApprovedEvidence.length === 0;
+  const complianceBlocked = activeTaskViolations.length > 0 || isMissingRequiredEvidence;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Completed';
 
   const grantExtension = async () => {
@@ -132,6 +163,35 @@ export default function PmTaskDetail() {
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <Link to={PATHS.PM.TASKS} className="text-sm font-medium text-blue-600 hover:text-blue-700">← All Tasks</Link>
 
+      {/* Compliance Blocker Resolution Banner */}
+      {complianceBlocked && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-lg">
+              🛡️
+            </span>
+            <div>
+              <p className="text-sm font-bold text-rose-900">
+                Transition to "Completed" is blocked by Compliance
+              </p>
+              <p className="text-xs text-rose-700 mt-0.5">
+                {activeTaskViolations.length > 0
+                  ? `Active violations: ${activeTaskViolations.map((v) => v.rule?.name || 'Compliance Policy').join(', ')}`
+                  : 'Mandatory policy requires approved compliance evidence before completion.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              to={PATHS.COMPLIANCE.EVIDENCE}
+              className="rounded-lg bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow hover:bg-rose-700"
+            >
+              View Evidence Vault →
+            </Link>
+          </div>
+        </div>
+      )}
+
       <header className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
@@ -148,8 +208,19 @@ export default function PmTaskDetail() {
           </div>
           <div className="grid w-full gap-4 sm:w-auto sm:grid-cols-2">
             <FormField label="Task status">
-              <Select value={task.status || 'Draft'} onChange={(event) => updateTask({ status: event.target.value })} disabled={saving}>
-                {STATUSES.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
+              <Select
+                value={task.status || 'Draft'}
+                onChange={(event) => updateTask({ status: event.target.value })}
+                disabled={saving}
+              >
+                {STATUSES.map((status) => {
+                  const isBlockedOption = status === 'Completed' && complianceBlocked && task.status !== 'Completed';
+                  return (
+                    <option key={status} value={status} disabled={isBlockedOption}>
+                      {status.replace(/_/g, ' ')} {isBlockedOption ? '(Locked by Compliance)' : ''}
+                    </option>
+                  );
+                })}
               </Select>
             </FormField>
             <FormField label="Assignee">

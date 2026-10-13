@@ -3,8 +3,11 @@ import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
+import { Pagination } from "../../../shared/components/Pagination";
 import { CreateBindingModal } from "../components/CreateBindingModal";
 import { Plus, Loader2, Link2, Trash2 } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceBindings() {
   const [bindings, setBindings] = useState([]);
@@ -12,6 +15,7 @@ export default function ComplianceBindings() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchData = async () => {
     try {
@@ -115,6 +119,11 @@ export default function ComplianceBindings() {
     },
   ];
 
+  const paginatedBindings = bindings.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   return (
     <div className="p-8 max-w-7xl mx-auto bg-[#f0f4f8] min-h-screen text-[#1a2332]">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
@@ -148,9 +157,17 @@ export default function ComplianceBindings() {
         <div className="p-0">
           <Table
             columns={columns}
-            data={bindings}
+            data={paginatedBindings}
             loading={loading}
             emptyMessage="No active scope bindings configured yet. Add a binding to enforce rules on projects."
+          />
+        </div>
+        <div className="border-t border-slate-100 px-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={bindings.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
           />
         </div>
       </div>

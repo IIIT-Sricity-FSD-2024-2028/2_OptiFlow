@@ -28,7 +28,7 @@ export const createEvidence = (data) => {
 
 export const updateEvidence = (id, data) => {
   return apiClient(`${BASE_PATH}/${id}`, {
-    method: 'PUT',
+    method: 'PATCH',
     body: JSON.stringify(data),
   });
 };

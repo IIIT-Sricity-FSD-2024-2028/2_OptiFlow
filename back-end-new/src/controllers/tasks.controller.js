@@ -332,7 +332,7 @@ export async function updateTask(req, res, next) {
 
     // 🔴 THE INTERCEPTOR: Evaluate Compliance Before Saving
     if (updateData.status && updateData.status !== existing.status) {
-      const evaluation = await evaluateTaskTransition(id, existing.projectId, updateData);
+      const evaluation = await evaluateTaskTransition(id, existing, updateData);
 
       if (!evaluation.allowed) {
         // 1. Auto-generate Violations in the Database
@@ -364,9 +364,39 @@ export async function updateTask(req, res, next) {
           } else {
             violationObjects.push(existingViolation);
           }
+
+          // 2. Cross-Module Escalation: Ensure an active Escalation exists for PM visibility
+          const existingEscalation = await prisma.escalation.findFirst({
+            where: {
+              taskId: id,
+              companyId: req.user.companyId,
+              status: 'Open',
+              blockerType: 'Compliance Blocker'
+            }
+          });
+
+          if (!existingEscalation) {
+            try {
+              await prisma.escalation.create({
+                data: {
+                  companyId: req.user.companyId,
+                  taskId: id,
+                  projectId: existing.projectId || null,
+                  reportedById: req.user.id,
+                  title: `Compliance Blocker: ${existing.title} (${rule.name})`,
+                  description: `Task status transition to "${updateData.status}" was blocked by compliance rule "${rule.name}". Approved compliance evidence is required.`,
+                  blockerType: 'Compliance Blocker',
+                  priority: ['Critical', 'High'].includes(rule.severity) ? 'Critical' : 'High',
+                  status: 'Open'
+                }
+              });
+            } catch (escErr) {
+              console.warn('[Escalation] Notice: Auto-escalation for compliance block:', escErr.message);
+            }
+          }
         }
 
-        // 2. Block the transition and return 403 Forbidden to the Frontend
+        // 3. Block the transition and return 403 Forbidden to the Frontend
         return res.status(403).json({
           success: false,
           error: "COMPLIANCE_BLOCK",
