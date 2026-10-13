@@ -5,6 +5,7 @@ import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Toast } from '../../../../shared/components/Toast';
 import { Pagination } from '../../../../shared/components/Pagination';
+import { formatDate } from '../../../../shared/utils/formatDate';
 import * as evidenceApi from '../../../../services/api/evidence';
 
 const statusVariant = (s) => {
@@ -158,7 +159,7 @@ export default function TeamLeadReviews() {
                 <div className="grid grid-cols-2 gap-4">
                   {[
                     ['Task', selected.taskTitle || selected.task_id || '—'],
-                    ['Submitted', selected.createdAt || selected.created_at || '—'],
+                    ['Submitted', formatDate(selected.createdAt || selected.created_at)],
                     ['Type', selected.type || selected.evidenceType || '—'],
                     ['Status', String(selected.status || 'Pending').replace(/_/g, ' ')],
                   ].map(([label, value]) => (

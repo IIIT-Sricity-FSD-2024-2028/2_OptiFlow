@@ -25,6 +25,13 @@ export async function listTeams(req, res, next) {
       include: {
         branch: { select: { id: true, name: true, companyId: true } },
         projects: { select: { id: true, name: true, status: true } },
+        teamMembers: {
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+          },
+        },
       },
       orderBy: { name: 'asc' },
     });

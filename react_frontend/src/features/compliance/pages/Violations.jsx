@@ -1,37 +1,77 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
-import { AlertTriangle, Filter, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Filter, Loader2, ShieldCheck, FolderGit2 } from "lucide-react";
 
 const PAGE_SIZE = 10;
 
 export default function ComplianceViolations() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialProjectId = searchParams.get("projectId") || "All";
+
   const [violations, setViolations] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All");
   const [severityFilter, setSeverityFilter] = useState("All");
+  const [projectFilter, setProjectFilter] = useState(initialProjectId);
   const [selectedViolation, setSelectedViolation] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const fetchViolations = async () => {
     try {
       setLoading(true);
-      const [res, evidenceRes] = await Promise.all([
+      const [res, evidenceRes, projectsRes, tasksRes] = await Promise.all([
         apiClient("/compliance-violations").catch(() => []),
         apiClient("/evidence").catch(() => []),
+        apiClient("/projects").catch(() => []),
+        apiClient("/tasks").catch(() => []),
       ]);
 
       const list = Array.isArray(res) ? res : res?.data || [];
       const evidenceList = Array.isArray(evidenceRes) ? evidenceRes : evidenceRes?.data || [];
+      const projList = Array.isArray(projectsRes) ? projectsRes : projectsRes?.data || [];
+      const taskList = Array.isArray(tasksRes) ? tasksRes : tasksRes?.data || [];
 
-      const formatted = list.map((v) => ({
-        ...v,
-        evidenceCount: evidenceList.filter((e) => e.violationId === v.id || e.taskId === v.entityId).length,
-      }));
+      setProjects(projList);
+
+      // Maps for project resolution
+      const projMap = new Map();
+      projList.forEach((p) => projMap.set(String(p.id), p.name));
+
+      const taskProjMap = new Map();
+      taskList.forEach((t) => {
+        if (t.id && t.projectId) taskProjMap.set(String(t.id), String(t.projectId));
+      });
+
+      const resolveProject = (entityType, entityId) => {
+        if (!entityId) return { id: null, name: "Company / Global" };
+        if (entityType === "Project") {
+          return { id: String(entityId), name: projMap.get(String(entityId)) || `Project #${String(entityId).substring(0, 8)}` };
+        }
+        if (entityType === "Task") {
+          const pId = taskProjMap.get(String(entityId));
+          if (pId) {
+            return { id: pId, name: projMap.get(pId) || `Project #${pId.substring(0, 8)}` };
+          }
+        }
+        return { id: null, name: "Company / Global" };
+      };
+
+      const formatted = list.map((v) => {
+        const parentProj = resolveProject(v.entityType, v.entityId);
+        return {
+          ...v,
+          projectId: parentProj.id,
+          projectName: parentProj.name,
+          evidenceCount: evidenceList.filter((e) => e.violationId === v.id || e.taskId === v.entityId).length,
+        };
+      });
 
       setViolations(formatted);
     } catch (err) {
@@ -48,7 +88,9 @@ export default function ComplianceViolations() {
   const filteredViolations = violations.filter((v) => {
     const matchesStatus = statusFilter === "All" || v.status === statusFilter;
     const matchesSeverity = severityFilter === "All" || v.severity === severityFilter || v.rule?.severity === severityFilter;
-    return matchesStatus && matchesSeverity;
+    const matchesProject = projectFilter === "All" || 
+      (projectFilter === "global" ? v.projectId === null : String(v.projectId) === String(projectFilter));
+    return matchesStatus && matchesSeverity && matchesProject;
   });
 
   const paginatedViolations = filteredViolations.slice(
@@ -57,6 +99,18 @@ export default function ComplianceViolations() {
   );
 
   const columns = [
+    {
+      header: "PROJECT / SCOPE",
+      accessor: "projectName",
+      render: (row) => (
+        <div className="flex items-center gap-1.5 font-medium text-xs text-slate-700">
+          <FolderGit2 size={13} className="text-slate-400 shrink-0" />
+          <span className="truncate max-w-[170px]" title={row.projectName}>
+            {row.projectName || "Company / Global"}
+          </span>
+        </div>
+      ),
+    },
     {
       header: "VIOLATING ENTITY",
       accessor: "entityName",
@@ -152,29 +206,53 @@ export default function ComplianceViolations() {
   ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto bg-[#f0f4f8] min-h-screen text-[#1a2332]">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-[#1a2332] mb-1">Compliance Violations</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Compliance Violations</h1>
+          <p className="text-sm text-slate-500 mt-1">
             Track, audit, and force-resolve compliance flags generated across all projects, tasks, and users.
           </p>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <Filter size={16} className="text-slate-400" />
           <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Filters:</span>
           
+          {/* Project Scope Filter */}
+          <select
+            value={projectFilter}
+            onChange={(e) => {
+              const val = e.target.value;
+              setProjectFilter(val);
+              setCurrentPage(1);
+              if (val === "All") {
+                searchParams.delete("projectId");
+              } else {
+                searchParams.set("projectId", val);
+              }
+              setSearchParams(searchParams, { replace: true });
+            }}
+            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium"
+          >
+            <option value="All">All Projects & Global Scopes</option>
+            <option value="global">Company / Global Only</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          {/* Status Filter */}
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="text-xs border border-slate-200 rounded-md px-2.5 py-1.5 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 font-medium"
+            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium"
           >
             <option value="All">All Statuses</option>
             <option value="Open">Open</option>
@@ -183,13 +261,14 @@ export default function ComplianceViolations() {
             <option value="Ignored">Ignored</option>
           </select>
 
+          {/* Severity Filter */}
           <select
             value={severityFilter}
             onChange={(e) => {
               setSeverityFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="text-xs border border-slate-200 rounded-md px-2.5 py-1.5 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 font-medium"
+            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium"
           >
             <option value="All">All Severities</option>
             <option value="Critical">Critical</option>
@@ -204,11 +283,11 @@ export default function ComplianceViolations() {
         </span>
       </div>
 
-      <div className="bg-white rounded-[12px] border border-[#e2e8f0] shadow-sm overflow-hidden mb-8">
-        <div className="px-5 py-4 border-b border-[#e2e8f0] bg-white flex items-center justify-between">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertTriangle size={18} className="text-amber-500" />
-            <h2 className="text-[15px] font-bold text-[#1a2332]">All Audit Records</h2>
+            <h2 className="text-sm font-bold text-slate-900">Active Remediation Queue</h2>
           </div>
         </div>
         <div className="p-0">
@@ -219,7 +298,7 @@ export default function ComplianceViolations() {
             emptyMessage="No violations match the selected filters."
           />
         </div>
-        <div className="border-t border-slate-100 px-4">
+        <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/50">
           <Pagination
             currentPage={currentPage}
             totalItems={filteredViolations.length}

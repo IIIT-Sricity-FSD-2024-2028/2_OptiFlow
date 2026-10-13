@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { PATHS } from "../../../app/paths";
 import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
 import { Pagination } from "../../../shared/components/Pagination";
-import { Plus, Loader2, Edit2, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Loader2,
+  Edit2,
+  Trash2,
+  BookOpen,
+  Tags,
+  Link2,
+} from "lucide-react";
 
 const PAGE_SIZE = 10;
 
@@ -87,7 +96,10 @@ export default function ComplianceRules() {
   };
 
   const handleDeleteRule = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this compliance rule?")) return;
+    if (
+      !window.confirm("Are you sure you want to delete this compliance rule?")
+    )
+      return;
     try {
       await apiClient(`/compliance-rules/${id}`, { method: "DELETE" });
       fetchData();
@@ -166,12 +178,12 @@ export default function ComplianceRules() {
       : rules.filter(
           (r) =>
             r.categoryId === activeCategoryId ||
-            r.category?.id === activeCategoryId
+            r.category?.id === activeCategoryId,
         );
 
   const paginatedRules = filteredRules.slice(
     (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
+    currentPage * PAGE_SIZE,
   );
 
   const columns = [
@@ -194,7 +206,9 @@ export default function ComplianceRules() {
       render: (row) => {
         const catName = row.category?.name;
         if (!catName) {
-          return <span className="text-xs text-gray-400 italic">Unassigned</span>;
+          return (
+            <span className="text-xs text-gray-400 italic">Unassigned</span>
+          );
         }
         return (
           <button
@@ -221,8 +235,8 @@ export default function ComplianceRules() {
             row.severity === "High" || row.severity === "Critical"
               ? "danger"
               : row.severity === "Medium"
-              ? "warning"
-              : "info"
+                ? "warning"
+                : "info"
           }
         >
           {row.severity}
@@ -286,32 +300,59 @@ export default function ComplianceRules() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto bg-[#f0f4f8] min-h-screen text-[#1a2332]">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
+      {/* Top Header */}
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-[#1a2332] mb-1">
-            Compliance Policies
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Rules & Policy Governance
           </h1>
-          <p className="text-sm text-gray-500">
-            Manage the automated rules that scan your workspace across compliance categories.
+          <p className="mt-1 text-sm text-slate-500">
+            Configure automated policy criteria, regulatory categories, and
+            scope bindings.
           </p>
         </div>
 
-        <div className="mt-4 md:mt-0">
+        <div className="flex items-center gap-2">
           <Button
             variant="primary"
-            className="flex items-center gap-2"
+            className="inline-flex items-center gap-1.5 shadow-xs"
             onClick={handleOpenCreate}
           >
-            <Plus size={16} />
-            Create New Rule
+            <Plus size={15} />
+            <span>Create New Rule</span>
           </Button>
         </div>
+      </header>
+
+      {/* Policy Domain Sub-Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <Link
+          to={PATHS.COMPLIANCE.RULES}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow-xs"
+        >
+          <BookOpen size={14} />
+          <span>Active Rules ({rules.length})</span>
+        </Link>
+        <Link
+          to={PATHS.COMPLIANCE.CATEGORIES}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <Tags size={14} className="text-slate-400" />
+          <span>Regulatory Categories ({categories.length})</span>
+        </Link>
+        <Link
+          to={PATHS.COMPLIANCE.BINDINGS}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <Link2 size={14} className="text-slate-400" />
+          <span>Scope Bindings</span>
+        </Link>
       </div>
 
-      <div className="bg-white rounded-[12px] border border-[#e2e8f0] shadow-sm overflow-hidden mb-8">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         {/* Category Filter Toolbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-[#e2e8f0] bg-gray-50/60">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-slate-200 bg-slate-50/60">
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">
               Filter by Category:
@@ -360,8 +401,13 @@ export default function ComplianceRules() {
           </div>
 
           <div className="text-xs text-gray-500">
-            Showing <span className="font-semibold text-gray-700">{filteredRules.length}</span> of{" "}
-            <span className="font-semibold text-gray-700">{rules.length}</span> policies
+            Showing{" "}
+            <span className="font-semibold text-gray-700">
+              {filteredRules.length}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-gray-700">{rules.length}</span>{" "}
+            policies
           </div>
         </div>
 
@@ -389,7 +435,9 @@ export default function ComplianceRules() {
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        title={editingRuleId ? "Edit Compliance Rule" : "Create New Compliance Rule"}
+        title={
+          editingRuleId ? "Edit Compliance Rule" : "Create New Compliance Rule"
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsOpen(false)}>
@@ -411,7 +459,9 @@ export default function ComplianceRules() {
               required
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
             />
           </div>
 
@@ -424,7 +474,9 @@ export default function ComplianceRules() {
               rows={3}
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
             />
           </div>
 
@@ -436,7 +488,9 @@ export default function ComplianceRules() {
               <select
                 className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                 value={formData.categoryId || ""}
-                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, categoryId: e.target.value })
+                }
               >
                 <option value="">-- No Category (Unassigned) --</option>
                 {categories.map((cat) => (
@@ -454,7 +508,9 @@ export default function ComplianceRules() {
               <select
                 className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                 value={formData.severity}
-                onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, severity: e.target.value })
+                }
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -466,17 +522,24 @@ export default function ComplianceRules() {
 
           <div className="flex items-center justify-between mt-2 p-3 bg-gray-50 border border-gray-100 rounded-lg">
             <div className="flex flex-col">
-              <label htmlFor="isActive" className="text-sm font-semibold text-slate-700">
+              <label
+                htmlFor="isActive"
+                className="text-sm font-semibold text-slate-700"
+              >
                 Rule is Active
               </label>
-              <span className="text-xs text-gray-500">Enable or disable this rule</span>
+              <span className="text-xs text-gray-500">
+                Enable or disable this rule
+              </span>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 id="isActive"
                 checked={formData.isActive}
-                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({ ...formData, isActive: e.target.checked })
+                }
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>

@@ -19,8 +19,29 @@ import { env } from '../config/env.js';
 
 export async function listEvidence(req, res, next) {
   try {
+    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const where = { companyId: req.user.companyId };
+
+    // Role-based scope enforcement
+    if (role === 'team_member' || role === 'member') {
+      where.userId = req.user.id;
+    } else if (role === 'team_lead' || role === 'team_leader' || role === 'lead') {
+      // TL sees evidence submitted by themselves, their direct reports, or under tasks in their team's projects
+      where.OR = [
+        { userId: req.user.id },
+        { user: { managerUserId: req.user.id } },
+        { task: { project: { team: { teamMembers: { some: { userId: req.user.id } } } } } },
+      ];
+    } else if (role === 'project_manager' || role === 'pm') {
+      // PM sees evidence under their managed projects or submitted by them
+      where.OR = [
+        { userId: req.user.id },
+        { task: { project: { createdById: req.user.id } } },
+      ];
+    }
+
     const evidenceList = await prisma.complianceEvidence.findMany({
-      where: { companyId: req.user.companyId },
+      where,
       include: {
         user: { select: { id: true, fullName: true, email: true } },
         task: { select: { id: true, title: true } },

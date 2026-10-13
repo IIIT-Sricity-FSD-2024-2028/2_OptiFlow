@@ -33,6 +33,7 @@ export const PATHS = {
     BINDINGS: "/compliance/bindings",
     VIOLATIONS: "/compliance/violations",
     EVIDENCE: "/compliance/evidence",
+    REPORTS: "/compliance/reports",
     AUDIT_LOGS: "/compliance/audit-logs",
   },
   HR: {

@@ -1,4 +1,5 @@
 import { Badge } from '../../../shared/components/Badge';
+import { formatDate } from '../../../shared/utils/formatDate';
 
 export function TaskTable({
   tasks = [],
@@ -69,9 +70,12 @@ export function TaskTable({
         <tbody className="bg-white divide-y divide-gray-200">
           {tasks.map((task) => {
             const statusStr = String(task.status || 'Unknown');
-            const isCompleted = statusStr.toLowerCase().includes('complete') || statusStr.toLowerCase().includes('approved');
-            const isInProgress = statusStr.toLowerCase().includes('progress') || statusStr.toLowerCase().includes('review');
-            const badgeStatus = isCompleted ? 'success' : isInProgress ? 'info' : 'default';
+            const lowerStatus = statusStr.toLowerCase();
+            const isCompleted = lowerStatus.includes('complete') || lowerStatus.includes('approved');
+            const isActive = lowerStatus === 'active' || lowerStatus.includes('progress');
+            const isInReview = lowerStatus.includes('review') || lowerStatus.includes('pending');
+            const isBlocked = lowerStatus.includes('blocked') || lowerStatus.includes('failed') || lowerStatus.includes('rejected');
+            const badgeStatus = isCompleted ? 'success' : isActive ? 'active' : isInReview ? 'warning' : isBlocked ? 'danger' : 'default';
             
             return (
               <tr 
@@ -103,9 +107,23 @@ export function TaskTable({
                       : task.assignedTo) || task.assignee || 'Unassigned'}
                   </td>
                 )}
-                {visibleColumns.includes('dueDate') && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{task.dueDate || task.deadline || '—'}</td>
-                )}
+                {visibleColumns.includes('dueDate') && (() => {
+                  const rawDate = task.dueDate || task.deadline;
+                  const formatted = formatDate(rawDate);
+                  const isOverdue = rawDate && !isNaN(new Date(rawDate).getTime()) && new Date(rawDate) < new Date() && !['Completed', 'Cancelled'].includes(task.status);
+                  return (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      {isOverdue ? (
+                        <span className="inline-flex items-center gap-1.5 text-rose-600 font-semibold" title="Overdue task">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                          {formatted}
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">{formatted}</span>
+                      )}
+                    </td>
+                  );
+                })()}
               </tr>
             );
           })}

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { Button } from '../../../../shared/components/Button';
 import { Badge } from '../../../../shared/components/Badge';
+import { formatDate } from '../../../../shared/utils/formatDate';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
@@ -193,6 +194,10 @@ export default function TeamLeadDashboard() {
       value.includes('approved')
     ) {
       return 'success';
+    }
+
+    if (value === 'active') {
+      return 'active';
     }
 
     if (
@@ -644,9 +649,7 @@ export default function TeamLeadDashboard() {
                                 task.assignee ||
                                 'Unassigned'}{' '}
                               · Due{' '}
-                              {task.dueDate ||
-                                task.deadline ||
-                                '—'}
+                              {formatDate(task.dueDate || task.deadline)}
                             </p>
                           </div>
 
