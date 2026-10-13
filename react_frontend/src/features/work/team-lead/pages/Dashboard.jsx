@@ -33,6 +33,7 @@ export default function TeamLeadDashboard() {
   const [tasks, setTasks] = useState([]);
   const [escalations, setEscalations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [projects, setProjects] = useState([]);
 
   const [project, setProject] = useState({
     name: '—',
@@ -133,6 +134,7 @@ export default function TeamLeadDashboard() {
         setTasks(normalizedTasks);
         setEscalations(normalizedEscalations);
         setTeamMembers(myTeamMembers);
+        setProjects(normalizedProjects);
 
         if (normalizedProjects.length > 0) {
           setProject(normalizedProjects[0]);
@@ -706,12 +708,27 @@ export default function TeamLeadDashboard() {
           </div>
 
           <div className="p-5">
-
-            <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
-                <h3 className="font-semibold text-gray-900">
-                  {project.name || 'No project'}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">
+                    {project.name || 'No project'}
+                  </h3>
+                  {projects.length > 1 && (
+                    <select
+                      value={project?.id || ''}
+                      onChange={(e) => {
+                        const sel = projects.find((p) => p.id === e.target.value);
+                        if (sel) setProject(sel);
+                      }}
+                      className="text-xs border border-gray-200 rounded-lg px-2.5 py-1 bg-white text-gray-700 outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer"
+                    >
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
 
                 <p className="text-xs text-gray-500 mt-1">
                   Overall progress

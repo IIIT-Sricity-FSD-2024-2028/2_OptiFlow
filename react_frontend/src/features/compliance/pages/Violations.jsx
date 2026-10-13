@@ -217,10 +217,10 @@ export default function ComplianceViolations() {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white p-4.5 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
           <Filter size={16} className="text-slate-400" />
-          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Filters:</span>
+          <span className="text-sm font-semibold text-slate-700">Filters:</span>
           
           {/* Project Scope Filter */}
           <select
@@ -236,7 +236,7 @@ export default function ComplianceViolations() {
               }
               setSearchParams(searchParams, { replace: true });
             }}
-            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium"
+            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium cursor-pointer"
           >
             <option value="All">All Projects & Global Scopes</option>
             <option value="global">Company / Global Only</option>
@@ -252,7 +252,7 @@ export default function ComplianceViolations() {
               setStatusFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium"
+            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium cursor-pointer"
           >
             <option value="All">All Statuses</option>
             <option value="Open">Open</option>
@@ -268,7 +268,7 @@ export default function ComplianceViolations() {
               setSeverityFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium"
+            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-medium cursor-pointer"
           >
             <option value="All">All Severities</option>
             <option value="Critical">Critical</option>
@@ -278,8 +278,8 @@ export default function ComplianceViolations() {
           </select>
         </div>
 
-        <span className="text-xs font-medium text-slate-500">
-          Showing {filteredViolations.length} of {violations.length} total flags
+        <span className="text-sm font-medium text-slate-500">
+          Showing <span className="font-semibold text-slate-700">{filteredViolations.length}</span> of {violations.length} total flags
         </span>
       </div>
 

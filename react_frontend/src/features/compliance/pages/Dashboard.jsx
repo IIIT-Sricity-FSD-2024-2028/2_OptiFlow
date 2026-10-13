@@ -266,13 +266,13 @@ export default function ComplianceDashboard() {
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Project Filter Dropdown */}
-          <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg px-3 py-2 shadow-xs">
-            <Filter size={14} className="text-slate-400" />
-            <span className="text-xs font-semibold text-slate-600">Scope:</span>
+          <div className="flex items-center gap-2.5 bg-white border border-slate-300 rounded-lg px-3.5 py-2.5 shadow-xs">
+            <Filter size={15} className="text-slate-400" />
+            <span className="text-sm font-semibold text-slate-700">Scope:</span>
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="text-xs font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+              className="text-sm font-medium text-slate-800 bg-transparent focus:outline-none cursor-pointer"
             >
               <option value="all">Company-Wide (All Projects & Global)</option>
               <option value="global">Global / Non-Project Only</option>
@@ -286,16 +286,16 @@ export default function ComplianceDashboard() {
           <button 
             onClick={triggerScan} 
             disabled={isScanning}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors disabled:opacity-60 cursor-pointer"
           >
             {isScanning ? (
               <>
-                <Loader2 className="animate-spin" size={14} />
+                <Loader2 className="animate-spin" size={16} />
                 <span>Scanning Policies…</span>
               </>
             ) : (
               <>
-                <PlayCircle size={14} />
+                <PlayCircle size={16} />
                 <span>Run Automated Scan</span>
               </>
             )}
@@ -304,8 +304,8 @@ export default function ComplianceDashboard() {
       </header>
 
       {lastScanTime && (
-        <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5 -mt-4">
-          <Clock size={12} className="text-slate-400" />
+        <div className="text-sm text-slate-500 font-medium flex items-center gap-2 -mt-4">
+          <Clock size={14} className="text-slate-400" />
           <span>Last automated engine scan completed at: {lastScanTime}</span>
         </div>
       )}

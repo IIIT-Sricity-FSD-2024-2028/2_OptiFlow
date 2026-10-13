@@ -77,39 +77,32 @@ export function buildProjectListWhere({ companyId, branchId, user }) {
     };
   }
 
-  // 3. Project Manager: views projects they created OR where they are explicitly associated
-  if ((role === 'project_manager' || role === 'pm') && user?.id) {
-    return {
-      ...baseWhere,
-      createdById: user.id,
-    };
+  // 3. Project Manager: views all projects within their company tenant (or branch if scoped)
+  if (role === 'project_manager' || role === 'pm') {
+    return baseWhere;
   }
 
-  // 4. Team Lead: views projects assigned to teams they lead or belong to
+  // 4. Team Lead: views projects of teams they lead/belong to, projects where they or their direct reports have tasks, or company projects if company-scoped
   if ((role === 'team_lead' || role === 'team_leader' || role === 'lead') && user?.id) {
     return {
       ...baseWhere,
-      team: {
-        teamMembers: {
-          some: {
-            userId: user.id,
-          },
-        },
-      },
+      OR: [
+        { team: { teamMembers: { some: { userId: user.id } } } },
+        { tasks: { some: { OR: [{ assignedToId: user.id }, { assignedTo: { managerUserId: user.id } }] } } },
+        { createdById: user.id },
+        ...(user.scopeType === 'Company' || !effectiveBranchId ? [{ companyId: baseWhere.companyId }] : []),
+      ],
     };
   }
 
-  // 5. Team Member: views projects belonging to teams they are member of
+  // 5. Team Member: views projects belonging to teams they are member of OR where they have assigned tasks
   if ((role === 'team_member' || role === 'member') && user?.id) {
     return {
       ...baseWhere,
-      team: {
-        teamMembers: {
-          some: {
-            userId: user.id,
-          },
-        },
-      },
+      OR: [
+        { team: { teamMembers: { some: { userId: user.id } } } },
+        { tasks: { some: { assignedToId: user.id } } },
+      ],
     };
   }
 
@@ -147,16 +140,9 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
 
   const role = normalizeRole(user?.role || user?.roleLabel);
 
-  // 3. Project Manager: views tasks under their managed projects OR created by them
-  if ((role === 'project_manager' || role === 'pm') && user?.id) {
-    return {
-      ...where,
-      OR: [
-        { createdById: user.id },
-        { project: { createdById: user.id } },
-        { assignedToId: user.id },
-      ],
-    };
+  // 3. Project Manager: views all tasks under projects in their company/branch scope
+  if (role === 'project_manager' || role === 'pm') {
+    return where;
   }
 
   // 4. Team Lead: views tasks assigned to them, tasks under their team's projects, or assigned to their direct reports
@@ -168,6 +154,7 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
         { createdById: user.id },
         { assignedTo: { managerUserId: user.id } },
         { project: { team: { teamMembers: { some: { userId: user.id } } } } },
+        ...(user.scopeType === 'Company' || !effectiveBranchId ? [{ project: { companyId: where.companyId } }] : []),
       ],
     };
   }
