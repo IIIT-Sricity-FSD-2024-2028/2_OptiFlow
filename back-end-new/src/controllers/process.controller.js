@@ -552,12 +552,14 @@ export async function createInstance(req, res, next) {
       throw new NotFoundError(`Process template ${templateId} not found`);
     }
 
+    let project = null;
     if (projectId) {
-      const project = await prisma.project.findFirst({
+      project = await prisma.project.findFirst({
         where: {
           id: projectId,
           companyId: req.user.companyId,
         },
+        select: { id: true, targetDate: true },
       });
       if (!project) {
         throw new NotFoundError(`Project ${projectId} not found`);
@@ -591,6 +593,21 @@ export async function createInstance(req, res, next) {
             status: 'Pending',
           },
         });
+        if (project) {
+          await tx.task.create({
+            data: {
+              companyId: req.user.companyId,
+              projectId: project.id,
+              processInstanceStepId: instStep.id,
+              title: tStep.name,
+              description: `Generated from the "${template.name}" workflow.`,
+              status: 'Active',
+              priority: 'Medium',
+              createdById: req.user.id,
+              dueDate: project.targetDate,
+            },
+          });
+        }
         if (i === 0) {
           firstStepId = instStep.id;
         }
@@ -1065,4 +1082,3 @@ export async function actionStep(req, res, next) {
     next(err);
   }
 }
-

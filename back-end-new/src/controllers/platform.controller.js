@@ -226,7 +226,7 @@ export async function getPlatformMetrics(req, res, next) {
     const activeSubscriptions = await prisma.subscription.groupBy({
       by: ['planId'],
       _count: { planId: true },
-      where: { status: 'Active' },
+      where: { status: { in: ['Active', 'Trialing'] } },
     });
 
     const plans = await prisma.plan.findMany();
@@ -251,7 +251,8 @@ export async function getPlatformMetrics(req, res, next) {
       include: {
         subscriptions: {
           include: { plan: true },
-          where: { status: 'Active' },
+          where: { status: { in: ['Active', 'Trialing'] } },
+          orderBy: { currentPeriodEnd: 'desc' },
         },
         _count: {
           select: { users: true },
@@ -311,7 +312,8 @@ export async function listPlatformCompanies(req, res, next) {
         include: {
           subscriptions: {
             include: { plan: true },
-            where: { status: 'Active' },
+            where: { status: { in: ['Active', 'Trialing'] } },
+            orderBy: { currentPeriodEnd: 'desc' },
           },
           _count: {
             select: { users: true, branches: true },
@@ -827,7 +829,8 @@ export async function createSubscription(req, res, next) {
     const body = req.body || {};
     const companyId = body.companyId || body.company_id;
     const planId = body.planId || body.plan_id;
-    const billingCycle = body.billingCycle || body.billing_cycle || 'monthly';
+    const rawCycle = String(body.billingCycle || body.billing_cycle || 'Monthly').trim();
+    const billingCycle = rawCycle.toLowerCase() === 'annual' ? 'Annual' : 'Monthly';
     const status = body.status || 'Active';
 
     validateRequired({ companyId, planId }, ['companyId', 'planId']);
@@ -842,7 +845,7 @@ export async function createSubscription(req, res, next) {
     }
 
     const periodEnd = new Date();
-    periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === 'annual' ? 12 : 1));
+    periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === 'Annual' ? 12 : 1));
 
     const subscription = await prisma.subscription.create({
       data: {

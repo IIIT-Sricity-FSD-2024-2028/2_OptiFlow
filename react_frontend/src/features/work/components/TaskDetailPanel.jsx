@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '../../../shared/components/Button';
 import { Badge } from '../../../shared/components/Badge';
+import { formatDate } from '../../../shared/utils/formatDate';
 
 export function TaskDetailPanel({
   task,
@@ -78,7 +79,7 @@ export function TaskDetailPanel({
             </div>
             <div>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Due Date</h3>
-              <p className="text-sm text-gray-900">{task.dueDate || task.deadline || 'No deadline'}</p>
+              <p className="text-sm text-gray-900">{formatDate(task.dueDate || task.deadline)}</p>
             </div>
           </div>
         </section>

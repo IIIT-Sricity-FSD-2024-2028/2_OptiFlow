@@ -32,6 +32,13 @@ export async function listProjects(req, res, next) {
         team: {
           include: {
             branch: { select: { id: true, name: true, companyId: true } },
+            teamMembers: {
+              select: {
+                id: true,
+                userId: true,
+                role: true,
+              },
+            },
           },
         },
         tasks: {
@@ -78,6 +85,7 @@ export async function getProjectById(req, res, next) {
         team: {
           include: {
             branch: { select: { id: true, name: true, companyId: true } },
+            teamMembers: { select: { userId: true, role: true } },
           },
         },
         tasks: {

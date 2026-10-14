@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { PATHS } from "../../../app/paths";
 import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
-import { Plus, Loader2, Trash2, Edit2, ExternalLink } from "lucide-react";
+import { Pagination } from "../../../shared/components/Pagination";
+import { Plus, Loader2, Trash2, Edit2, ExternalLink, BookOpen, Tags, Link2 } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceCategories() {
   const navigate = useNavigate();
@@ -13,6 +17,7 @@ export default function ComplianceCategories() {
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: "", description: "" });
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchCategories = async () => {
     try {
@@ -151,36 +156,81 @@ export default function ComplianceCategories() {
     );
   }
 
+  const paginatedCategories = categories.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   return (
-    <div className="p-8 max-w-7xl mx-auto bg-[#f0f4f8] min-h-screen text-[#1a2332]">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
+      {/* Top Header */}
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-[#1a2332] mb-1">
-            Compliance Categories
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Rules & Policy Governance
           </h1>
-          <p className="text-sm text-gray-500">
-            Group compliance policies into operational domains (e.g., Security, Data Privacy, Operations). Click any category to view its associated policies.
+          <p className="mt-1 text-sm text-slate-500">
+            Organize rules into high-level compliance domains (e.g. InfoSec, GDPR, SOC 2, HR Policies).
           </p>
         </div>
 
-        <div className="mt-4 md:mt-0">
+        <div className="flex items-center gap-2">
           <Button
             variant="primary"
-            className="flex items-center gap-2"
+            className="inline-flex items-center gap-1.5 shadow-xs"
             onClick={handleOpenCreate}
           >
-            <Plus size={16} />
-            Create Category
+            <Plus size={15} />
+            <span>Create Category</span>
           </Button>
         </div>
+      </header>
+
+      {/* Policy Domain Sub-Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <Link
+          to={PATHS.COMPLIANCE.RULES}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <BookOpen size={14} className="text-slate-400" />
+          <span>Active Rules</span>
+        </Link>
+        <Link
+          to={PATHS.COMPLIANCE.CATEGORIES}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow-xs"
+        >
+          <Tags size={14} />
+          <span>Regulatory Categories ({categories.length})</span>
+        </Link>
+        <Link
+          to={PATHS.COMPLIANCE.BINDINGS}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <Link2 size={14} className="text-slate-400" />
+          <span>Scope Bindings</span>
+        </Link>
       </div>
 
-      <div className="bg-white rounded-[12px] border border-[#e2e8f0] shadow-sm overflow-hidden mb-8">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-900">Active Regulatory Domains ({categories.length})</h2>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+            {categories.length} Categories Configured
+          </span>
+        </div>
         <div className="p-0">
           <Table
             columns={columns}
-            data={categories}
-            emptyMessage="No categories found. Create one to organize your rules."
+            data={paginatedCategories}
+            emptyMessage="No compliance categories found. Click Create Category to define one."
+          />
+        </div>
+        <div className="border-t border-slate-100 px-4">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={categories.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
           />
         </div>
       </div>

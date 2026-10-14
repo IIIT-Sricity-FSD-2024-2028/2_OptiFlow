@@ -8,11 +8,15 @@ import { FormField, Input, Select, Textarea } from '../../../../shared/component
 import { Loader } from '../../../../shared/components/Loader';
 import { Modal } from '../../../../shared/components/Modal';
 import { Toast } from '../../../../shared/components/Toast';
+import { Pagination } from '../../../../shared/components/Pagination';
 import * as projectsApi from '../../../../services/api/projects';
 import * as teamsApi from '../../../../services/api/teams';
+import { createInstance, listTemplates } from '../../../../services/api/process';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const projectPath = (id) => PATHS.PM.PROJECT_DETAIL.replace(':id', id);
+const PAGE_SIZE = 9;
+
 const PROJECT_FILTERS = [
   { value: 'All', label: 'All' },
   { value: 'Active', label: 'Active' },
@@ -34,13 +38,24 @@ const formatDate = (date) => date
 
 export default function PmProjects() {
   const [projects, setProjects] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [teams, setTeams] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [templateError, setTemplateError] = useState('');
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ name: '', teamId: '', status: 'Active', startDate: '', endDate: '', description: '' });
+  const [form, setForm] = useState({
+    name: '',
+    teamId: '',
+    templateId: '',
+    status: 'Active',
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: '',
+    description: '',
+  });
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
@@ -62,6 +77,14 @@ export default function PmProjects() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    listTemplates()
+      .then((response) => {
+        if (!active) return;
+        setTemplates(normalize(response).filter((template) => template.isActive !== false));
+      })
+      .catch((error) => {
+        if (active) setTemplateError(error.message || 'Failed to load workflow templates.');
+      });
     return () => { active = false; };
   }, []);
 
@@ -81,11 +104,13 @@ export default function PmProjects() {
     Planning: projects.filter((project) => project.status === 'Planning').length,
     Completed: projects.filter((project) => project.status === 'Completed').length,
   };
+  const selectedTemplate = templates.find((template) => String(template.id) === String(form.templateId));
+  const templateSteps = selectedTemplate?.steps || selectedTemplate?.stages || [];
 
   const createProject = async (event) => {
     event.preventDefault();
-    if (!form.name.trim() || !form.teamId) {
-      showToast('error', 'Enter a project name and choose a team.');
+    if (form.name.trim().length < 3 || form.description.trim().length < 10 || !form.teamId || !form.endDate) {
+      showToast('error', 'Enter a project name (at least 3 characters), description (at least 10 characters), team, and end date.');
       return;
     }
     setSaving(true);
@@ -93,15 +118,37 @@ export default function PmProjects() {
       const response = await projectsApi.create({
         name: form.name.trim(),
         teamId: form.teamId,
+        targetDate: form.endDate,
         status: form.status,
         startDate: form.startDate || undefined,
-        endDate: form.endDate || undefined,
-        description: form.description.trim() || undefined,
+        description: form.description.trim(),
       });
-      setProjects((current) => [response?.data || response, ...current]);
-      setForm({ name: '', teamId: '', status: 'Active', startDate: '', endDate: '', description: '' });
+      const project = response?.data || response;
+      setProjects((current) => [project, ...current]);
+      setForm({
+        name: '',
+        teamId: '',
+        templateId: '',
+        status: 'Active',
+        startDate: new Date().toISOString().slice(0, 10),
+        endDate: '',
+        description: '',
+      });
       setIsOpen(false);
-      showToast('success', 'Project created.');
+      if (form.templateId) {
+        try {
+          await createInstance({
+            templateId: form.templateId,
+            projectId: project.id,
+            title: `${selectedTemplate?.name || 'Workflow'} - ${project.name}`,
+          });
+          showToast('success', 'Project created with its workflow.');
+        } catch (error) {
+          showToast('warning', `Project created, but its workflow could not be started: ${error.message || 'Request failed.'}`);
+        }
+      } else {
+        showToast('success', 'Project created.');
+      }
     } catch (error) {
       showToast('error', error.message || 'Failed to create project.');
     } finally {
@@ -153,95 +200,125 @@ export default function PmProjects() {
           action={projects.length === 0 ? <Button variant="primary" onClick={() => setIsOpen(true)}>Create Project</Button> : undefined}
         />
       ) : (
-        <section className="grid grid-cols-1 gap-5 pt-1 md:grid-cols-2 lg:grid-cols-3">
-          {filteredProjects.map((project) => {
-            const style = statusStyle(project.status);
-            const projectTasks = project.tasks || [];
-            const completed = projectTasks.filter((task) => task.status === 'Completed').length;
-            const progress = projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0;
-            const openEscalations = (project.escalations || []).filter(
-              (item) => !['Resolved', 'Closed'].includes(item.status)
-            ).length;
-            return (
-              <Link
-                key={project.id}
-                to={projectPath(project.id)}
-                className={`group flex min-h-64 flex-col gap-4 rounded-xl border border-slate-200 border-t-4 ${style.border} bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-bold leading-snug text-slate-900 group-hover:text-blue-700">{project.name}</h2>
-                  <Badge status={style.badge}>{project.status === 'OnHold' || project.status === 'On_Hold' ? 'On Hold' : project.status || 'Planning'}</Badge>
-                </div>
+        <div className="space-y-6">
+          <section className="grid grid-cols-1 gap-5 pt-1 md:grid-cols-2 lg:grid-cols-3">
+            {filteredProjects.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((project) => {
+              const style = statusStyle(project.status);
+              const projectTasks = project.tasks || [];
+              const completed = projectTasks.filter((task) => task.status === 'Completed').length;
+              const progress = projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0;
+              const openEscalations = (project.escalations || []).filter(
+                (item) => !['Resolved', 'Closed'].includes(item.status)
+              ).length;
+              return (
+                <Link
+                  key={project.id}
+                  to={projectPath(project.id)}
+                  className={`group flex min-h-64 flex-col gap-4 rounded-xl border border-slate-200 border-t-4 ${style.border} bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="text-base font-bold leading-snug text-slate-900 group-hover:text-blue-700">{project.name}</h2>
+                    <Badge status={style.badge}>{project.status === 'OnHold' || project.status === 'On_Hold' ? 'On Hold' : project.status || 'Planning'}</Badge>
+                  </div>
 
-                <p className="min-h-10 text-sm leading-relaxed text-slate-600 line-clamp-2">
-                  {project.description || 'No description provided.'}
-                </p>
+                  <p className="min-h-10 text-sm leading-relaxed text-slate-600 line-clamp-2">
+                    {project.description || 'No description provided.'}
+                  </p>
 
-                <div className="mt-auto space-y-3">
-                  <div>
-                    <div className="mb-1.5 flex justify-between text-xs text-slate-500">
-                      <span>Progress</span>
-                      <span className="font-semibold">{progress}%</span>
+                  <div className="mt-auto space-y-3">
+                    <div>
+                      <div className="mb-1.5 flex justify-between text-xs text-slate-500">
+                        <span>Progress</span>
+                        <span className="font-semibold">{progress}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${progress}%` }} />
+                      </div>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${progress}%` }} />
+
+                    <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                      <span className="truncate">{project.team?.name || 'No team assigned'}</span>
+                      <span className="shrink-0">Due {formatDate(project.targetDate)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
+                      <span className="text-slate-500">{projectTasks.length} task{projectTasks.length === 1 ? '' : 's'}</span>
+                      <span className={openEscalations ? 'font-semibold text-rose-600' : 'text-slate-400'}>
+                        {openEscalations} open escalation{openEscalations === 1 ? '' : 's'}
+                      </span>
+                      <span className="font-semibold text-blue-600">View details →</span>
                     </div>
                   </div>
+                </Link>
+              );
+            })}
+          </section>
 
-                  <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-                    <span className="truncate">{project.team?.name || 'No team assigned'}</span>
-                    <span className="shrink-0">Due {formatDate(project.targetDate)}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
-                    <span className="text-slate-500">{projectTasks.length} task{projectTasks.length === 1 ? '' : 's'}</span>
-                    <span className={openEscalations ? 'font-semibold text-rose-600' : 'text-slate-400'}>
-                      {openEscalations} open escalation{openEscalations === 1 ? '' : 's'}
-                    </span>
-                    <span className="font-semibold text-blue-600">View details →</span>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </section>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredProjects.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={(page) => setCurrentPage(page)}
+          />
+        </div>
       )}
 
       <Modal
         isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        title="Create Project"
+        onClose={() => !saving && setIsOpen(false)}
+        title="+ New Project"
+        className="max-w-2xl"
         footer={(
           <>
             <Button variant="outline" onClick={() => setIsOpen(false)} disabled={saving}>Cancel</Button>
-            <Button variant="primary" onClick={createProject} disabled={saving}>{saving ? 'Creating…' : 'Create project'}</Button>
+            <Button variant="primary" type="submit" form="create-project-form" disabled={saving}>{saving ? 'Creating…' : 'Create Project'}</Button>
           </>
         )}
       >
-        <form onSubmit={createProject} className="space-y-4">
-          <FormField label="Project name" required>
-            <Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} disabled={saving} />
+        <form id="create-project-form" onSubmit={createProject} className="space-y-4">
+          <FormField label="Project Name" required>
+            <Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Q1 Compliance Review" minLength={3} required disabled={saving} />
           </FormField>
-          <FormField label="Team" required>
-            <Select value={form.teamId} onChange={(event) => setForm((current) => ({ ...current, teamId: event.target.value }))} disabled={saving}>
-              <option value="">Select a team</option>
-              {teams.map((team) => <option key={team.id} value={team.id}>{team.name}{team.branch?.name ? ` · ${team.branch.name}` : ''}</option>)}
-            </Select>
+          <FormField label="Description" required>
+            <Textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Brief project description..." rows={3} minLength={10} required disabled={saving} />
           </FormField>
-          <FormField label="Description">
-            <Textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={3} disabled={saving} />
-          </FormField>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="Assigned Team" required>
+                <Select value={form.teamId} onChange={(event) => setForm((current) => ({ ...current, teamId: event.target.value }))} required disabled={saving}>
+                  <option value="">Select a team</option>
+                  {teams.map((team) => <option key={team.id} value={team.id}>{team.name}{team.branch?.name ? ` · ${team.branch.name}` : ''}</option>)}
+                </Select>
+              </FormField>
+              <FormField label="Workflow Template (Optional)">
+                <Select value={form.templateId} onChange={(event) => setForm((current) => ({ ...current, templateId: event.target.value }))} disabled={saving}>
+                  <option value="">No Template (Manual Tasks)</option>
+                  {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                </Select>
+                {templateError && <p className="mt-1 text-xs text-amber-700" role="status">{templateError}</p>}
+              </FormField>
+          </div>
+          {form.templateId && (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Auto-generated Stages</p>
+              {templateSteps.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {templateSteps.map((step, index) => (
+                    <span key={step.id || index} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
+                      {index + 1}. {step.name || step}
+                    </span>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-slate-500">This template has no stages yet.</p>}
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="End Date" required>
+              <Input type="date" value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} required disabled={saving} />
+            </FormField>
             <FormField label="Status">
               <Select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))} disabled={saving}>
-                {['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'].map((status) => <option key={status} value={status}>{status === 'OnHold' ? 'On hold' : status}</option>)}
+                {['Active', 'Planning', 'OnHold', 'Completed'].map((status) => <option key={status} value={status}>{status === 'OnHold' ? 'On Hold' : status}</option>)}
               </Select>
-            </FormField>
-            <FormField label="Start date">
-              <Input type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} disabled={saving} />
-            </FormField>
-            <FormField label="Target date">
-              <Input type="date" value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} disabled={saving} />
             </FormField>
           </div>
         </form>

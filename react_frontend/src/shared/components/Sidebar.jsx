@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import * as LucideIcons from 'lucide-react';
 import styles from './Sidebar.module.css';
 import logoImg from '../../assets/logo_light.png';
 
 /**
  * Reusable Sidebar component
- * @param {Array} navItems - Navigation links array [{ label, path, icon }]
+ * @param {Array} navItems - Navigation links array [{ label, path, icon, matchPaths }]
  * @param {string} title - Workspace or platform brand title
  */
 export const Sidebar = ({ navItems = [], title = 'OptiFlow' }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [hoveredItem, setHoveredItem] = useState(null);
+  const location = useLocation();
 
   const toggleSidebar = () => {
     setCollapsed((prev) => !prev);
@@ -46,6 +47,9 @@ export const Sidebar = ({ navItems = [], title = 'OptiFlow' }) => {
         <ul className={styles.navList}>
           {navItems.map((item) => {
             const IconComponent = LucideIcons[item.icon] || LucideIcons.Circle;
+            const isMatchActive = item.matchPaths?.some(
+              (p) => location.pathname === p || location.pathname.startsWith(`${p}/`)
+            );
 
             return (
               <li
@@ -57,7 +61,7 @@ export const Sidebar = ({ navItems = [], title = 'OptiFlow' }) => {
                 <NavLink
                   to={item.path}
                   className={({ isActive }) =>
-                    `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`
+                    `${styles.navLink} ${isActive || isMatchActive ? styles.navLinkActive : ''}`
                   }
                 >
                   <div className={styles.iconWrapper}>

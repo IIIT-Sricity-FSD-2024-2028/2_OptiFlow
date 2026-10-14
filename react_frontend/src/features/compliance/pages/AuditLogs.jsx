@@ -3,20 +3,26 @@ import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
-import { Loader2, ShieldCheck, Eye } from "lucide-react";
+import { Pagination } from "../../../shared/components/Pagination";
+import { Loader2, Eye, FileText } from "lucide-react";
 import { AuditLogDetailModal } from "../components/AuditLogDetailModal";
+import { GenerateReportModal } from "../components/GenerateReportModal";
+
+const PAGE_SIZE = 10;
 
 export default function ComplianceAuditLogs() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const fetchLogs = async () => {
       try {
         setLoading(true);
         const data = await apiClient("/audit-logs");
-        setLogs(data);
+        setLogs(Array.isArray(data) ? data : data?.data || []);
       } catch (error) {
         console.error("Failed to fetch audit logs", error);
       } finally {
@@ -65,14 +71,19 @@ export default function ComplianceAuditLogs() {
       render: (row) => (
         <button 
           onClick={() => setSelectedLog(row)}
-          className="text-slate-400 hover:text-blue-600 transition-colors p-1 rounded-md hover:bg-blue-50"
+          className="text-slate-400 hover:text-blue-600 transition-colors p-1.5 rounded-md hover:bg-blue-50"
           title="View Details"
         >
-          <Eye className="w-5 h-5" />
+          <Eye className="w-4 h-4" />
         </button>
       )
     }
   ];
+
+  const paginatedLogs = logs.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   if (loading) {
     return (
@@ -83,27 +94,50 @@ export default function ComplianceAuditLogs() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto bg-[#f0f4f8] min-h-screen text-[#1a2332]">
-      <div className="flex items-center gap-3 mb-6">
-        <ShieldCheck className="text-blue-600 w-8 h-8" />
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
+      {/* Header with Generate Report Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Compliance Audit Trail</h1>
-          <p className="text-gray-500 text-sm mt-1">Immutable ledger of all compliance-related system changes.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Compliance Audit Trail</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Immutable regulatory audit log tracking system modifications, rule evaluations, and governance events.
+          </p>
         </div>
+        <Button
+          onClick={() => setIsReportModalOpen(true)}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg shadow-xs transition-colors shrink-0"
+        >
+          <FileText size={16} />
+          <span>Generate Report</span>
+        </Button>
       </div>
 
-      <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden">
+      {/* Main Table Card */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <Table 
           columns={tableColumns} 
-          data={logs} 
+          data={paginatedLogs} 
           emptyMessage="No audit logs found."
         />
+        <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/50">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={logs.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
+          />
+        </div>
       </div>
 
       <AuditLogDetailModal 
         isOpen={!!selectedLog} 
         onClose={() => setSelectedLog(null)} 
         log={selectedLog} 
+      />
+
+      <GenerateReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
       />
     </div>
   );
