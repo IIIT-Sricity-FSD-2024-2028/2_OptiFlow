@@ -34,7 +34,36 @@ const USER_SELECT_FIELDS = {
     },
     orderBy: { grantedAt: 'desc' },
   },
+  teamMembers: {
+    include: {
+      team: {
+        select: {
+          id: true,
+          name: true,
+          branch: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { joinedAt: 'asc' },
+  },
 };
+
+function formatUserResponse(u) {
+  if (!u) return u;
+  const teams = (u.teamMembers || []).map((tm) => ({
+    teamId: tm.team?.id,
+    teamName: tm.team?.name,
+    role: tm.role || 'Member',
+    branchId: tm.team?.branch?.id,
+    branchName: tm.team?.branch?.name,
+    joinedAt: tm.joinedAt,
+  }));
+  return {
+    ...u,
+    teams,
+    primaryTeam: teams[0] || null,
+  };
+}
 
 /**
  * GET /users & GET /api/users
@@ -50,7 +79,7 @@ export async function listUsers(req, res, next) {
 
     res.status(200).json({
       success: true,
-      data: users,
+      data: users.map(formatUserResponse),
     });
   } catch (err) {
     next(err);
@@ -116,7 +145,7 @@ export async function getUserById(req, res, next) {
 
     res.status(200).json({
       success: true,
-      data: user,
+      data: formatUserResponse(user),
     });
   } catch (err) {
     next(err);

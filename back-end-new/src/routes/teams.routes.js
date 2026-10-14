@@ -7,7 +7,9 @@ import {
   getTeamById,
   createTeam,
   updateTeam,
-  deleteTeam
+  deleteTeam,
+  addTeamMember,
+  removeTeamMember
 } from '../controllers/teams.controller.js';
 
 const router = Router();
@@ -32,6 +34,20 @@ router.delete(
   authenticate,
   requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager'),
   deleteTeam
+);
+
+// Team Members Routes
+router.post(
+  ['/teams/:id/members', '/api/teams/:id/members'],
+  authenticate,
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'hr_manager', 'branch_manager', 'team_leader'),
+  addTeamMember
+);
+router.delete(
+  ['/teams/:id/members/:userId', '/api/teams/:id/members/:userId'],
+  authenticate,
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'hr_manager', 'branch_manager', 'team_leader'),
+  removeTeamMember
 );
 
 
