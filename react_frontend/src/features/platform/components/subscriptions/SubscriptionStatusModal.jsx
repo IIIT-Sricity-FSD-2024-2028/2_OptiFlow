@@ -16,13 +16,14 @@ export function SubscriptionStatusModal({
 }) {
   const [targetStatus, setTargetStatus] = useState('');
   const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   useEffect(() => {
     if (isOpen && subscription) {
       const allowed = ALLOWED_TRANSITIONS[subscription.status] || [];
       setTargetStatus(allowed[0] || '');
       setReason('');
+      setFormError(null);
     }
   }, [isOpen, subscription]);
 
@@ -34,8 +35,17 @@ export function SubscriptionStatusModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!targetStatus || !reason.trim()) {
-      alert('A reason is mandatory for subscription status changes.');
+    setFormError(null);
+    if (!targetStatus) {
+      setFormError('Please select a valid target status.');
+      return;
+    }
+    if (!reason.trim()) {
+      setFormError('A reason is mandatory for subscription status changes.');
+      return;
+    }
+    if (reason.trim().length < 5) {
+      setFormError('Reason must be at least 5 characters long for audit logging.');
       return;
     }
     try {
@@ -43,7 +53,7 @@ export function SubscriptionStatusModal({
       await onConfirm({ status: targetStatus, reason: reason.trim() });
       onClose();
     } catch (err) {
-      alert(err.message || 'Failed to update status');
+      setFormError(err.message || 'Failed to update status');
     } finally {
       setSubmitting(false);
     }
@@ -62,6 +72,12 @@ export function SubscriptionStatusModal({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {formError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+            {formError}
+          </div>
+        )}
 
         {isTerminal ? (
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 space-y-2">

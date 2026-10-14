@@ -1,4 +1,4 @@
-import { X, ExternalLink, Shield, History, Globe } from 'lucide-react';
+import { X, ExternalLink, Shield, History } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuditDiffViewer } from './AuditDiffViewer';
 
@@ -30,19 +30,10 @@ export function AuditDetailDrawer({ log, isOpen, onClose }) {
         <div className="p-5 space-y-5 flex-1 text-xs">
           {/* Metadata Grid */}
           <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <span className="text-slate-400 font-medium">Timestamp</span>
-                <p className="font-semibold text-slate-800 mt-0.5">{date.toLocaleString()}</p>
-                <span className="text-[10px] text-slate-400 font-mono">{date.toISOString()}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-medium">Source IP Address</span>
-                <p className="font-mono font-semibold text-slate-800 mt-0.5 flex items-center gap-1.5">
-                  <Globe className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{log.ip || 'Unknown'}</span>
-                </p>
-              </div>
+            <div>
+              <span className="text-slate-400 font-medium">Timestamp</span>
+              <p className="font-semibold text-slate-800 mt-0.5">{date.toLocaleString()}</p>
+              <span className="text-[10px] text-slate-400 font-mono">{date.toISOString()}</span>
             </div>
 
             <div className="pt-3 border-t border-slate-200/60 grid grid-cols-2 gap-3">

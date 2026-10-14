@@ -80,7 +80,6 @@ export default function CompanyDetail() {
                   {company.status}
                 </Badge>
               </div>
-              <code className="text-xs text-slate-400 font-mono select-all">Tenant ID: {company.id}</code>
             </div>
           </div>
 

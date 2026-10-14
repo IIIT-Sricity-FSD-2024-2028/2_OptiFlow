@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, Copy, Check, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Copy, Check, ExternalLink, LogIn, Key, User, ShieldCheck } from 'lucide-react';
 import { Modal } from '../../../shared/components/Modal';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../app/paths';
@@ -10,12 +10,19 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
 
   if (!result) return null;
 
-  const handleCopyLink = () => {
-    if (result.setPasswordUrl) {
-      navigator.clipboard.writeText(result.setPasswordUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }
+  const email = result.owner?.email || '';
+  const password = result.initialPassword || 'OptiFlow@2026!';
+
+  const handleCopyCredentials = () => {
+    const credText = `Email: ${email}\nPassword: ${password}\nRole: Executive (System Admin)\nPortal: Executive Dashboard`;
+    navigator.clipboard.writeText(credText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleGoToLogin = () => {
+    onClose();
+    navigate(PATHS.PUBLIC.LOGIN);
   };
 
   const handleGoToCompany = () => {
@@ -34,22 +41,32 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
       title="Company Provisioned Successfully"
       className="max-w-lg"
       footer={
-        <div className="flex items-center justify-end gap-3 w-full">
+        <div className="flex items-center justify-between w-full">
           <button
             type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+            onClick={handleGoToLogin}
+            className="px-4 py-2 text-xs font-semibold rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-1.5"
           >
-            Back to Companies
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Go to Login</span>
           </button>
-          <button
-            type="button"
-            onClick={handleGoToCompany}
-            className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5"
-          >
-            <span>View Company</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Back to Companies
+            </button>
+            <button
+              type="button"
+              onClick={handleGoToCompany}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+            >
+              <span>View Company</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       }
     >
@@ -62,28 +79,45 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
-            Owner One-Time Set Password Link
-          </label>
-          <p className="text-xs text-slate-500 mb-2">
-            Share this secure setup link with <strong>{result.owner?.email}</strong> to activate their account.
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={result.setPasswordUrl || ''}
-              className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg text-slate-700 select-all"
-            />
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+              <ShieldCheck className="w-4 h-4 text-indigo-600" />
+              <span>Executive Administrator Credentials</span>
+            </div>
             <button
               type="button"
-              onClick={handleCopyLink}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+              onClick={handleCopyCredentials}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copied' : 'Copy All'}</span>
             </button>
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                Login Email
+              </span>
+              <span className="font-mono font-semibold text-slate-900 select-all">{email}</span>
+            </div>
+
+            <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-slate-400" />
+                Password
+              </span>
+              <span className="font-mono font-semibold text-slate-900 select-all">{password}</span>
+            </div>
+
+            <div className="flex items-center justify-between py-1">
+              <span className="text-slate-500">Landing Portal</span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700">
+                Executive Dashboard
+              </span>
+            </div>
           </div>
         </div>
       </div>

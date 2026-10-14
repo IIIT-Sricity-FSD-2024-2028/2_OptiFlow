@@ -54,7 +54,6 @@ export function CompanyTable({ companies, loading, onRequestStatusChange }) {
             <span className="text-xs font-semibold text-slate-800">{planName}</span>
             {isTrial ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                <Sparkles className="w-2.5 h-2.5 text-amber-500" />
                 14d Trial
               </span>
             ) : (
@@ -63,15 +62,6 @@ export function CompanyTable({ companies, loading, onRequestStatusChange }) {
           </div>
         );
       },
-    },
-    {
-      header: 'Tenant ID',
-      accessor: 'id',
-      render: (row) => (
-        <code className="text-[11px] font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded-md border border-slate-200/70 select-all">
-          {row.id}
-        </code>
-      ),
     },
     {
       header: 'Status',

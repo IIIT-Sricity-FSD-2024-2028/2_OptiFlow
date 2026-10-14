@@ -12,9 +12,12 @@ export function SubscriptionAssignModal({ isOpen, onClose, onConfirm }) {
   const [loadingData, setLoadingData] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const [formError, setFormError] = useState(null);
+
   useEffect(() => {
     if (isOpen) {
       setLoadingData(true);
+      setFormError(null);
       Promise.all([
         apiClient('/api/platform/companies?pageSize=100'),
         apiClient('/api/platform/plans'),
@@ -34,7 +37,10 @@ export function SubscriptionAssignModal({ isOpen, onClose, onConfirm }) {
           setPlans(activePlans);
           if (activePlans[0]) setSelectedPlanId(activePlans[0].id);
         })
-        .catch((err) => console.error('Failed to load options:', err))
+        .catch((err) => {
+          console.error('Failed to load options:', err);
+          setFormError('Failed to load eligible companies or plans.');
+        })
         .finally(() => setLoadingData(false));
     }
   }, [isOpen]);
@@ -43,13 +49,21 @@ export function SubscriptionAssignModal({ isOpen, onClose, onConfirm }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedCompanyId || !selectedPlanId) return;
+    setFormError(null);
+    if (!selectedCompanyId) {
+      setFormError('Please select a target company.');
+      return;
+    }
+    if (!selectedPlanId) {
+      setFormError('Please select a subscription plan tier.');
+      return;
+    }
     try {
       setSubmitting(true);
       await onConfirm({ companyId: selectedCompanyId, planId: selectedPlanId, billingCycle: cycle, status });
       onClose();
     } catch (err) {
-      alert(err.message || 'Failed to assign subscription');
+      setFormError(err.message || 'Failed to assign subscription');
     } finally {
       setSubmitting(false);
     }
@@ -67,6 +81,12 @@ export function SubscriptionAssignModal({ isOpen, onClose, onConfirm }) {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {formError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+            {formError}
+          </div>
+        )}
 
         {loadingData ? (
           <div className="py-8 text-center text-slate-400">Loading companies & plans...</div>

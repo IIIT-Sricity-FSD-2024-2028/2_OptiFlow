@@ -9,35 +9,25 @@ const ACTION_GROUPS = [
   { label: 'Admin User Actions (create, update, reset)', value: 'admin.' },
 ];
 
-const ENTITY_TYPES = [
-  { label: 'All Entity Types', value: '' },
-  { label: 'Company', value: 'Company' },
-  { label: 'Plan', value: 'Plan' },
-  { label: 'Subscription', value: 'Subscription' },
-  { label: 'Support Access', value: 'SupportAccess' },
-  { label: 'Platform Admin', value: 'PlatformAdminUser' },
-];
-
 export function AuditFilterBar({
   q, onQChange,
   action, onActionChange,
-  entityType, onEntityTypeChange,
   datePreset, onDatePresetChange,
   startDate, onStartDateChange,
   endDate, onEndDateChange,
   onReset,
 }) {
-  const hasActive = q || action || entityType || datePreset !== 'all' || startDate || endDate;
+  const hasActive = q || action || datePreset !== 'all' || startDate || endDate;
 
   return (
     <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3 text-xs">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Search Input */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search entity ID, company, admin..."
+            placeholder="Search action, target company, operator..."
             value={q}
             onChange={(e) => onQChange(e.target.value)}
             className="w-full pl-9 pr-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
@@ -52,17 +42,6 @@ export function AuditFilterBar({
         >
           {ACTION_GROUPS.map((g) => (
             <option key={g.value} value={g.value}>{g.label}</option>
-          ))}
-        </select>
-
-        {/* Entity Type */}
-        <select
-          value={entityType}
-          onChange={(e) => onEntityTypeChange(e.target.value)}
-          className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium cursor-pointer"
-        >
-          {ENTITY_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
 

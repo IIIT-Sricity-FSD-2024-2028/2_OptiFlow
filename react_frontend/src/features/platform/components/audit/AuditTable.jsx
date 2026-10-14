@@ -41,7 +41,6 @@ export function AuditTable({ logs, loading, onSelectLog }) {
               <th className="py-3.5 px-4">Timestamp</th>
               <th className="py-3.5 px-4">Operator</th>
               <th className="py-3.5 px-4">Action</th>
-              <th className="py-3.5 px-4">Entity</th>
               <th className="py-3.5 px-4">Target Company</th>
               <th className="py-3.5 px-4 text-right">Details</th>
             </tr>
@@ -83,13 +82,6 @@ export function AuditTable({ logs, loading, onSelectLog }) {
                   <td className="py-3 px-4">
                     <span className={`px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold border ${getActionColor(log.action)}`}>
                       {log.action}
-                    </span>
-                  </td>
-
-                  <td className="py-3 px-4">
-                    <span className="font-semibold text-slate-700">{log.entityType}</span>
-                    <span className="block font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
-                      {log.entityId}
                     </span>
                   </td>
 

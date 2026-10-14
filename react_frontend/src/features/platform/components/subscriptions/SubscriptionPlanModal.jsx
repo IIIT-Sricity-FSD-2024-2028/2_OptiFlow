@@ -7,16 +7,20 @@ export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [cycle, setCycle] = useState('Monthly');
   const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   useEffect(() => {
     if (isOpen && subscription) {
       setSelectedPlanId(subscription.planId);
       setCycle(subscription.billingCycle || 'Monthly');
       setReason('');
+      setFormError(null);
       apiClient('/api/platform/plans')
         .then((res) => setPlans((res || []).filter((p) => p.isActive !== false)))
-        .catch((err) => console.error('Failed to load active plans:', err));
+        .catch((err) => {
+          console.error('Failed to load active plans:', err);
+          setFormError('Failed to load active plans.');
+        });
     }
   }, [isOpen, subscription]);
 
@@ -36,13 +40,21 @@ export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedPlanId) return;
+    setFormError(null);
+    if (!selectedPlanId) {
+      setFormError('Please select a target plan.');
+      return;
+    }
+    if (overLimits.length > 0) {
+      setFormError('Cannot switch to this plan: tenant currently exceeds one or more resource limits.');
+      return;
+    }
     try {
       setSubmitting(true);
-      await onConfirm({ planId: selectedPlanId, billingCycle: cycle, reason });
+      await onConfirm({ planId: selectedPlanId, billingCycle: cycle, reason: reason.trim() });
       onClose();
     } catch (err) {
-      alert(err.message || 'Failed to update plan');
+      setFormError(err.message || 'Failed to update plan');
     } finally {
       setSubmitting(false);
     }
@@ -60,6 +72,12 @@ export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {formError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+            {formError}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>

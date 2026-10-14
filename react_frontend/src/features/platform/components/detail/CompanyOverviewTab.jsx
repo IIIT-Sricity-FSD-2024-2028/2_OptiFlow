@@ -1,5 +1,4 @@
-import { Building2, Users, GitBranch, Calendar, ShieldCheck } from 'lucide-react';
-import { Badge } from '../../../../shared/components/Badge';
+import { Building2, Users, GitBranch, Calendar } from 'lucide-react';
 
 export function CompanyOverviewTab({ company }) {
   const users = company.users || [];
@@ -54,8 +53,8 @@ export function CompanyOverviewTab({ company }) {
             <dd className="font-semibold text-slate-800 mt-0.5">{company.legalName || '—'}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium text-slate-500">Tenant Identifier</dt>
-            <dd className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded w-fit mt-0.5 select-all">{company.id}</dd>
+            <dt className="text-xs font-medium text-slate-500">Status</dt>
+            <dd className="font-semibold text-slate-800 mt-0.5">{company.status || 'Active'}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium text-slate-500">Industry</dt>
@@ -67,31 +66,7 @@ export function CompanyOverviewTab({ company }) {
           </div>
         </dl>
       </div>
-
-      {/* Primary Users / Admins Card */}
-      <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
-        <h3 className="text-sm font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-blue-600" />
-          <span>Tenant Personnel ({users.length})</span>
-        </h3>
-        {users.length === 0 ? (
-          <p className="text-xs text-slate-500 italic py-2">No users registered yet.</p>
-        ) : (
-          <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-            {users.slice(0, 8).map((u) => (
-              <div key={u.id} className="py-2.5 flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-semibold text-slate-800">{u.fullName}</div>
-                  <div className="text-slate-500">{u.email}</div>
-                </div>
-                <Badge status={u.isActive ? 'success' : 'default'}>
-                  {u.isActive ? 'Active' : 'Inactive'}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
+

@@ -1,121 +1,69 @@
-# Office Domain
+# OptiFlow
+> Enterprise Multi-Tenant Workflow, Process Orchestration & Compliance Management Platform
 
-### Task, Process & Compliance Management Platform
+## 1. Overview & Problem Statement
+In enterprise environments, task management, standard operating procedures (SOPs), and compliance activities are often fragmented across disparate tools (spreadsheets, chat, wikis). This results in:
+- **No Compliance Enforcement**: Tasks are marked "Done" without mandatory evidence, validation, or reviews.
+- **Inflexible Access Control**: Global permissions lack multi-tier organizational scoping (Branches/Teams/Projects).
+- **Process & Blocker Delays**: Lack of formal escalation chains and automated approval/rejection workflows.
+- **Audit Gaps**: Missing immutable audit logs across administrative, identity, process, and compliance events.
 
----
-
-## 1. Problem Statement
-
-Modern organizations execute their operations through structured tasks, processes, and compliance-driven activities. However, in many environments, these activities are managed using fragmented tools such as emails, spreadsheets, or messaging platforms, leading to inefficiencies, delays, and accountability gaps.
-
-Common challenges include:
-
-- Lack of centralized task and process tracking
-- Unclear ownership and responsibility for tasks
-- Delays caused by undefined approval and escalation chains
-- Poor visibility into task progress and compliance status
-- Incomplete or missing audit trails
-- Difficulty generating accurate operational and compliance reports
-
-This project aims to develop a **centralized, web-based Office & Organisational Workflow Management System** that standardizes task execution, enforces predefined workflows, integrates compliance checks, and maintains complete audit logs. The system improves transparency, accountability, and operational control across departments.
+**OptiFlow** unifies SaaS tenant administration, multi-level organizational modeling, BPMN-style process execution, task management, compliance gating, and non-repudiable audit logging into one platform.
 
 ---
 
-## 2. Actors and Responsibilities
+## 2. System Actors & Features
 
-| Actor / Role                                   | Responsibilities                                                                                                                                            |
-| -----------------------------------------------| ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Compliance Officer**                | Defines compliance rules, audits task and process execution, identifies policy violations, and ensures regulatory adherence through audit logs and reports. |
-| **HR**                                         | Manages employee records, assigns roles and team structures, and maintains organizational hierarchy required for task and process execution.                |
-| **Process Admin**                              | Designs and maintains organizational processes and workflows, ensures processes align with policies, and optimizes process efficiency across projects.      |
-| **Project Manager**                            | Oversees project execution, assigns tasks, reviews task outcomes, handles escalations, and ensures project goals are met within defined processes.          |
-| **Team Leader**                                | Breaks tasks into subtasks, assigns work to team members, reviews subtask submissions, and escalates unresolved issues to the Project Manager.              |
-| **Team Member**                     | Executes assigned tasks, submits work and evidence, reports blockers or delays, and complies with defined processes and policies.                           |
+OptiFlow defines **8 specialized actors** across the SaaS Platform and Tenant layers:
 
----
-
-## 3. Planned Features for Each Actor
-
-### 3.1 Compliance Officer
-
-**Planned Features:**
-
-- Define and manage compliance rules and policies
-- Review task and process execution for compliance
-- Verify submitted documents and evidence
-- Approve or reject compliance status
-- Identify and flag policy violations
-- Generate audit and compliance reports
-- Access historical audit logs for review
+| Actor | Role Code | Scope | Key Features & Responsibilities |
+|---|---|---|---|
+| **Platform Admin** | `platform_admin` | Global SaaS | Provisions tenant companies with 1-time setup links, manages plan tiers & quotas, issues audited break-glass support access, views platform audit logs. |
+| **Company Owner / Exec** | `company_owner` | Company | Company-wide KPI dashboard, cross-project portfolio health, SLA oversight, organizational metrics, full system audit logs. |
+| **HR / Access Governance** | `hr_manager` | Company | Manages user directory, branch offices & teams, manager-report hierarchy, assigns scoped RBAC roles (`Company`, `Branch`, `Team`, `Project`). |
+| **Process Admin** | `process_admin` | Company | Designs and versions SOP process templates with step types (`Approval`, `Input_Required`, `Automated_Task`) and rejection rollback paths (`onRejectGotoStepId`). |
+| **Compliance Officer** | `compliance_officer` | Company | Configures compliance rule catalogs, binds rules to scopes, enforces `BLOCK_TRANSITION` criteria, audits violations, inspects/approves evidence. |
+| **Project Manager** | `project_manager` | Project | Creates projects, instantiates process templates into project instances, delegates tasks, schedules deadlines, resolves team escalations. |
+| **Team Lead** | `team_lead` | Team / Branch | Deconstructs tasks into subtasks, reviews task deliverables, approves process steps, triages team blockers and escalations. |
+| **Team Member** | `team_member` | User / Team | "My Tasks" workbench, logs actual vs. estimated hours, uploads required compliance evidence (files/notes), submits work, raises blockers. |
 
 ---
 
-### 3.2 HR
+## 3. Core App Features
 
-**Planned Features:**
-
-- Create and manage employee profiles
-- Assign roles and responsibilities
-- Define team structures and reporting hierarchy
-- Maintain organizational data required for workflows
-- Update role-based access permissions
-
----
-
-### 3.3 Process Admin
-
-**Planned Features:**
-
-- Design and configure workflow templates
-- Define process stages and approval sequences
-- Modify or optimize existing workflows
-- Ensure workflows align with organizational policies
-- Monitor overall process efficiency
+- **Multi-Tenant SaaS Isolation**: Strict tenant data separation with subscription plans and enforced quotas (`maxUsers`, `maxBranches`, `maxActiveTemplates`, `maxComplianceRules`).
+- **BPM Process Engine**: Sequential and branched workflows, multi-step approvals, conditional rollback routing, and live instance tracking.
+- **Automated Compliance Gating**: Real-time transition evaluator blocking (`BLOCK_TRANSITION`) or warning (`ALLOW_WITH_WARNING`) unauthorized status changes until verified evidence is approved.
+- **Hierarchical Scoped RBAC**: Permissions enforced across four distinct levels: `Company` → `Branch` → `Team` → `Project`.
+- **First-Class Escalation System**: Tracked blocker management linking stalled tasks to root cause categories, priority ratings, and target managers.
+- **Four-Tier Audit Trail**: Immutable logging across `PlatformAuditLog` (SaaS ops), `SystemAuditLog` (IAM & orgs), `ProcessAuditLog` (workflows & tasks), and `ComplianceAuditLog` (violations & evidence).
+- **Break-Glass Support Protocol**: Audited, time-bounded emergency tenant access for platform administrators with mandatory justification logging.
 
 ---
 
-### 3.4 Project Manager
+## 4. Tech Stack & Architecture
 
-**Planned Features:**
-
-- Create and assign tasks to Team Leaders
-- Set task priorities and deadlines
-- Monitor task and project progress
-- Review completed tasks
-- Approve or request rework
-- Escalate delayed or blocked tasks
-- View compliance status of assigned projects
+- **Frontend**: React 19, Tailwind CSS v4, Vite 8, React Router v7, Lucide Icons, Recharts.
+- **Backend**: Express.js 5, Node.js (ES Modules), Prisma ORM 6, PostgreSQL.
+- **Security**: JWT authentication (httpOnly cookies & Bearer tokens), Bcrypt hashing, token versioning for instant session revocation.
 
 ---
 
-### 3.5 Team Leader
+## 5. Quick Start
 
-**Planned Features:**
+### Backend (`/back-end-new`)
+```bash
+cd back-end-new && npm install
+# Setup .env with DATABASE_URL & JWT_SECRET, then push schema & seed:
+npx prisma db push && npm run db:seed
+npm run dev # Starts server on http://localhost:5500
+```
 
-- Break tasks into manageable subtasks
-- Assign subtasks to Team Members
-- Review submitted work and evidence
-- Approve or reject subtasks
-- Track team-level task progress
-- Escalate unresolved issues to the Project Manager
+### Frontend (`/react_frontend`)
+```bash
+cd react_frontend && npm install
+npm run dev # Starts client on http://localhost:5173
+```
 
----
-
-### 3.6 Team Member
-
-**Planned Features:**
-
-- View assigned tasks and deadlines
-- Update task status (Not Started, In Progress, Completed)
-- Submit work outputs and supporting documents
-- Add comments or notes on tasks
-- Report blockers or delays
-- Request deadline extensions when required
-
----
-
-## 4. Repository Scope
-
-At the current stage, this repository focuses on **requirements analysis and system design documentation** for the proposed workflow management system.
-
----
+> **Default Seed Password (All Roles)**: `password123`  
+> Platform Admin: `admin@platform.com` | Owner: `ceo@acme.com` | HR: `hr@acme.com` | PM: `pm@acme.com` | TL: `tl@acme.com` | Member: `employee@acme.com`

@@ -70,7 +70,7 @@ export function DashboardNeedsAttention({ needsAttention = {}, loading }) {
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-2.5">
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
-                No Active Subscription ({noSubscription.length})
+                Tenants with No Active Subscription ({noSubscription.length})
               </span>
             </div>
             {noSubscription.length === 0 ? (
@@ -90,7 +90,7 @@ export function DashboardNeedsAttention({ needsAttention = {}, loading }) {
             )}
           </div>
           <Link to={PATHS.PLATFORM.COMPANIES} className="mt-3 pt-2 border-t border-slate-100 text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center justify-between">
-            <span>Review tenant roster</span>
+            <span>Review tenant details</span>
             <ArrowRight className="w-3 h-3" />
           </Link>
         </div>

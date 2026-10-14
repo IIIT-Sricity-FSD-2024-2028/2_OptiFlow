@@ -66,24 +66,63 @@ export function PlanDrawer({
 
     if (!isOpen) return null;
 
-    const handleSubmit = async (e)=>{
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.name.trim()){
-            setFormError('Plan name is required');
+        const trimmedName = (formData.name || '').trim();
+        if (!trimmedName) {
+            setFormError('Plan name is required.');
+            return;
+        }
+        if (trimmedName.length < 2) {
+            setFormError('Plan name must be at least 2 characters long.');
             return;
         }
 
-        try{
+        const retention = Number(formData.auditLogRetentionDays);
+        if (isNaN(retention) || retention < 30) {
+            setFormError('Audit log retention must be at least 30 days.');
+            return;
+        }
+
+        // Validate non-unlimited numbers are positive integers
+        if (!formData.unlimitedUsers && formData.maxUsers !== '') {
+            const users = Number(formData.maxUsers);
+            if (isNaN(users) || users <= 0) {
+                setFormError('Max users must be a positive number greater than 0.');
+                return;
+            }
+        }
+        if (!formData.unlimitedBranches && formData.maxBranches !== '') {
+            const branches = Number(formData.maxBranches);
+            if (isNaN(branches) || branches <= 0) {
+                setFormError('Max branches must be a positive number greater than 0.');
+                return;
+            }
+        }
+        if (!formData.unlimitedTemplates && formData.maxActiveProcessTemplates !== '') {
+            const templates = Number(formData.maxActiveProcessTemplates);
+            if (isNaN(templates) || templates <= 0) {
+                setFormError('Max process templates must be a positive number greater than 0.');
+                return;
+            }
+        }
+        if (!formData.unlimitedRules && formData.maxComplianceRules !== '') {
+            const rules = Number(formData.maxComplianceRules);
+            if (isNaN(rules) || rules <= 0) {
+                setFormError('Max compliance rules must be a positive number greater than 0.');
+                return;
+            }
+        }
+
+        try {
             setSaving(true);
             setFormError(null);
-            await onSave(formData,editingPlan?.id || null);
+            await onSave(formData, editingPlan?.id || null);
             onClose();
-        }
-        catch(err){
+        } catch (err) {
             console.error('Failed to save plan:', err);
             setFormError(err.message || 'Failed to save plan changes');
-        }
-        finally{
+        } finally {
             setSaving(false);
         }
     };

@@ -9,13 +9,19 @@ export function SubscriptionCancelModal({
 }) {
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   if (!isOpen || !subscription) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError(null);
     if (!reason.trim()) {
-      alert('A cancellation reason is required.');
+      setFormError('A cancellation reason is required.');
+      return;
+    }
+    if (reason.trim().length < 5) {
+      setFormError('Cancellation reason must be at least 5 characters.');
       return;
     }
     try {
@@ -23,7 +29,7 @@ export function SubscriptionCancelModal({
       await onConfirm({ status: 'Cancelled', reason: reason.trim() });
       onClose();
     } catch (err) {
-      alert(err.message || 'Failed to cancel subscription');
+      setFormError(err.message || 'Failed to cancel subscription');
     } finally {
       setSubmitting(false);
     }
@@ -42,6 +48,12 @@ export function SubscriptionCancelModal({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {formError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+            {formError}
+          </div>
+        )}
 
         <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
           <p className="font-bold">Warning: Terminal Action</p>

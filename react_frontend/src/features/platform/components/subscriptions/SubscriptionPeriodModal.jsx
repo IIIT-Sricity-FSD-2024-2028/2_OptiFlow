@@ -11,11 +11,14 @@ export function SubscriptionPeriodModal({
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [formError, setFormError] = useState(null);
+
   useEffect(() => {
     if (isOpen && subscription?.currentPeriodEnd) {
       const current = new Date(subscription.currentPeriodEnd);
       setNewDate(current.toISOString().split('T')[0]);
       setReason('');
+      setFormError(null);
     }
   }, [isOpen, subscription]);
 
@@ -25,12 +28,22 @@ export function SubscriptionPeriodModal({
     const base = new Date(subscription.currentPeriodEnd || Date.now());
     base.setDate(base.getDate() + days);
     setNewDate(base.toISOString().split('T')[0]);
+    setFormError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!newDate || !reason.trim()) {
-      alert('New period end date and a reason are required.');
+    setFormError(null);
+    if (!newDate) {
+      setFormError('New period end date is required.');
+      return;
+    }
+    if (!reason.trim()) {
+      setFormError('A valid operational reason is required for period adjustments.');
+      return;
+    }
+    if (reason.trim().length < 5) {
+      setFormError('Reason must be at least 5 characters long for audit accountability.');
       return;
     }
     try {
@@ -41,7 +54,7 @@ export function SubscriptionPeriodModal({
       });
       onClose();
     } catch (err) {
-      alert(err.message || 'Failed to update period end');
+      setFormError(err.message || 'Failed to update period end');
     } finally {
       setSubmitting(false);
     }
@@ -60,6 +73,12 @@ export function SubscriptionPeriodModal({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {formError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+            {formError}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>

@@ -16,6 +16,7 @@ import {
   createPlan,
   updatePlan,
   listSubscriptions,
+  getSubscriptionById,
   createSubscription,
   updateSubscription,
   listPlatformAdminUsers,
@@ -26,7 +27,9 @@ import {
   listPlatformSupportAccesses,
   getPlatformSupportAccessById,
   createPlatformSupportAccess,
-  revokePlatformSupportAccess
+  revokePlatformSupportAccess,
+  listPlatformAuditLogs,
+  exportPlatformAuditLogs,
 } from '../controllers/platform.controller.js';
 
 const router = Router();
@@ -50,8 +53,11 @@ router.get(['/platform/plans/:id', '/api/platform/plans/:id'], authenticatePlatf
 router.post(['/platform/plans', '/api/platform/plans'], authenticatePlatformAdmin, createPlan);
 router.patch(['/platform/plans/:id', '/api/platform/plans/:id'], authenticatePlatformAdmin, updatePlan);
 router.get(['/platform/subscriptions', '/api/platform/subscriptions'], authenticatePlatformAdmin, listSubscriptions);
+router.get(['/platform/subscriptions/:id', '/api/platform/subscriptions/:id'], authenticatePlatformAdmin, getSubscriptionById);
 router.post(['/platform/subscriptions', '/api/platform/subscriptions'], authenticatePlatformAdmin, createSubscription);
 router.patch(['/platform/subscriptions/:id', '/api/platform/subscriptions/:id'], authenticatePlatformAdmin, updateSubscription);
+router.get(['/platform/audit-logs/export', '/api/platform/audit-logs/export'], authenticatePlatformAdmin, exportPlatformAuditLogs);
+router.get(['/platform/audit-logs', '/api/platform/audit-logs'], authenticatePlatformAdmin, listPlatformAuditLogs);
 router.get(['/platform/admin-users', '/api/platform/admin-users', '/api/platform-admin-users'], authenticatePlatformAdmin, listPlatformAdminUsers);
 router.get(['/platform/admin-users/:id', '/api/platform/admin-users/:id', '/api/platform-admin-users/:id'], authenticatePlatformAdmin, getPlatformAdminUserById);
 router.post(['/platform/admin-users', '/api/platform/admin-users', '/api/platform-admin-users'], authenticatePlatformAdmin, createPlatformAdminUser);

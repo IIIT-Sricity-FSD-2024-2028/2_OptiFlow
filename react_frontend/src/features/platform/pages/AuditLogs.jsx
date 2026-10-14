@@ -48,8 +48,6 @@ export default function PlatformAuditLogs() {
         onQChange={setQ}
         action={action}
         onActionChange={setAction}
-        entityType={entityType}
-        onEntityTypeChange={setEntityType}
         datePreset={datePreset}
         onDatePresetChange={setDatePreset}
         startDate={startDate}

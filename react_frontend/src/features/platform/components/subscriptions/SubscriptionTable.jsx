@@ -82,8 +82,7 @@ export function SubscriptionTable({
                   <td className="py-3.5 px-4">
                     {sub.status === 'Trialing' ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        Trialing
+                        Trial Period
                       </span>
                     ) : sub.status === 'PastDue' ? (
                       <Badge status="error">Past Due</Badge>

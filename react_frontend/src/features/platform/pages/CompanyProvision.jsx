@@ -19,9 +19,11 @@ export default function CompanyProvision() {
     size: '1-50',
     ownerFullName: '',
     ownerEmail: '',
+    password: 'OptiFlow@2026!',
     planId: '',
     billingCycle: 'Monthly',
   });
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     async function loadPlans() {
@@ -43,18 +45,56 @@ export default function CompanyProvision() {
     loadPlans();
   }, []);
 
+  const validate = () => {
+    const errors = {};
+    if (!form.legalName.trim()) {
+      errors.legalName = 'Company Legal Name is required';
+    } else if (form.legalName.trim().length < 2) {
+      errors.legalName = 'Company Legal Name must be at least 2 characters';
+    }
+
+    if (!form.ownerFullName.trim()) {
+      errors.ownerFullName = 'Primary owner full name is required';
+    } else if (form.ownerFullName.trim().length < 2) {
+      errors.ownerFullName = 'Full name must be at least 2 characters';
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!form.ownerEmail.trim()) {
+      errors.ownerEmail = 'Corporate email address is required';
+    } else if (!emailRegex.test(form.ownerEmail.trim())) {
+      errors.ownerEmail = 'Please provide a valid corporate email address';
+    }
+
+    if (!form.password || form.password.length < 8) {
+      errors.password = 'Initial password must be at least 8 characters long';
+    }
+
+    if (!form.planId) {
+      errors.planId = 'Please select a subscription plan tier';
+    }
+
+    return errors;
+  };
+
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: null }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError(null);
 
-    if (!form.legalName.trim() || !form.ownerFullName.trim() || !form.ownerEmail.trim() || !form.planId) {
-      setFormError('Please fill in all required fields.');
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setFormError('Please resolve the validation errors highlighted below.');
       return;
     }
+    setFieldErrors({});
 
     try {
       setSubmitting(true);
@@ -101,7 +141,19 @@ export default function CompanyProvision() {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Company Legal Name *</label>
-            <input type="text" required value={form.legalName} onChange={(e) => handleChange('legalName', e.target.value)} placeholder="e.g. Acme Corporation Ltd." className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none" />
+            <input
+              type="text"
+              required
+              value={form.legalName}
+              onChange={(e) => handleChange('legalName', e.target.value)}
+              placeholder="e.g. Acme Corporation Ltd."
+              className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none ${
+                fieldErrors.legalName ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+              }`}
+            />
+            {fieldErrors.legalName && (
+              <p className="text-xs text-red-600 mt-1">{fieldErrors.legalName}</p>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -129,12 +181,56 @@ export default function CompanyProvision() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
-              <input type="text" required value={form.ownerFullName} onChange={(e) => handleChange('ownerFullName', e.target.value)} placeholder="e.g. Jane Doe" className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none" />
+              <input
+                type="text"
+                required
+                value={form.ownerFullName}
+                onChange={(e) => handleChange('ownerFullName', e.target.value)}
+                placeholder="e.g. Jane Doe"
+                className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none ${
+                  fieldErrors.ownerFullName ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                }`}
+              />
+              {fieldErrors.ownerFullName && (
+                <p className="text-xs text-red-600 mt-1">{fieldErrors.ownerFullName}</p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Corporate Email Address *</label>
-              <input type="email" required value={form.ownerEmail} onChange={(e) => handleChange('ownerEmail', e.target.value)} placeholder="e.g. jane@acme.com" className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none" />
+              <input
+                type="email"
+                required
+                value={form.ownerEmail}
+                onChange={(e) => handleChange('ownerEmail', e.target.value)}
+                placeholder="e.g. jane@acme.com"
+                className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none ${
+                  fieldErrors.ownerEmail ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                }`}
+              />
+              {fieldErrors.ownerEmail && (
+                <p className="text-xs text-red-600 mt-1">{fieldErrors.ownerEmail}</p>
+              )}
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Login Password *</label>
+            <input
+              type="text"
+              required
+              value={form.password}
+              onChange={(e) => handleChange('password', e.target.value)}
+              placeholder="Minimum 8 characters"
+              className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none font-mono ${
+                fieldErrors.password ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+              }`}
+            />
+            {fieldErrors.password ? (
+              <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-1">
+                Direct credentials for the company administrator. Default: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">OptiFlow@2026!</code>
+              </p>
+            )}
           </div>
         </div>
 
