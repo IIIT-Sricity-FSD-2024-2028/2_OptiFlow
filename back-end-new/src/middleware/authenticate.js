@@ -84,14 +84,14 @@ export function resolveUserRole(user) {
 export async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
+    let token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : null;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedError('Authentication required: Bearer token is missing');
+    if (!token && req.query?.token) {
+      token = String(req.query.token).trim();
     }
 
-    const token = authHeader.substring(7).trim();
     if (!token) {
-      throw new UnauthorizedError('Authentication required: Bearer token is empty');
+      throw new UnauthorizedError('Authentication required: Bearer token is missing');
     }
 
     if (!env.JWT_SECRET) {
@@ -191,6 +191,7 @@ export async function authenticate(req, res, next) {
       email: user.email,
       fullName: user.fullName,
       jobTitle: user.jobTitle || null,
+      managerUserId: user.managerUserId || null,
       role: roleSlug,
       roleLabel,
       scopeType: matchedAssignment?.scopeType || null,

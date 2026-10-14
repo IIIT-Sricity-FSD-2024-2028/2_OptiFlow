@@ -136,10 +136,20 @@ export default function TeamLeadReviews() {
                   <svg className="w-12 h-12 text-blue-500 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
                   </svg>
-                  <p className="text-sm font-medium text-gray-700">{selected.file_url || selected.file || selected.fileName || 'document.pdf'}</p>
-                  {(selected.file_url || selected.file) && (
-                    <a href={selected.file_url || selected.file} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs text-blue-600 hover:underline">Open document →</a>
-                  )}
+                  <p className="text-sm font-medium text-gray-700">{selected.fileUrl || selected.file_url || selected.file || selected.fileName || 'document.pdf'}</p>
+                  {(selected.fileUrl || selected.file_url || selected.file) && (() => {
+                    const rawUrl = selected.fileUrl || selected.file_url || selected.file || '';
+                    const isExternal = rawUrl.startsWith('http://') || rawUrl.startsWith('https://');
+                    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
+                    const openDocUrl = isExternal
+                      ? rawUrl
+                      : `${apiBase}/api/evidence/${selected.id}/file?token=${encodeURIComponent(sessionStorage.getItem('authToken') || '')}`;
+                    return (
+                      <a href={openDocUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs font-semibold text-blue-600 hover:underline">
+                        Open document ↗
+                      </a>
+                    );
+                  })()}
                   {(selected.task?.title || selected.taskTitle || selected.violation?.rule?.name) && (
                     <p className="mt-3 text-sm text-gray-600">
                       {selected.task?.title || selected.taskTitle

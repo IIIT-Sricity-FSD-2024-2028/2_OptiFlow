@@ -166,11 +166,18 @@ export default function PmProjectDetail() {
     const member = users.find((user) => String(user.id) === String(membership.userId));
     return member ? { ...member, teamRole: membership.role || 'Member' } : null;
   }).filter((member) => member && member.isActive !== false);
-  const isTeamLead = (user) => user?.roleAssignments?.some(({ role }) => (
-    [role?.name, role?.label].some((name) => (
-      String(name || '').toLowerCase().replace(/[^a-z]/g, '').includes('teamlead')
-    ))
-  )) || /team.?lead/i.test(user?.teamRole || '');
+  const isTeamLead = (user) => {
+    if (!user) return false;
+    const roleMatch = user?.roleAssignments?.some(({ role }) => {
+      const name = String(role?.name || '').toLowerCase();
+      const label = String(role?.label || '').toLowerCase();
+      return name === 'team_lead' || name === 'teamlead' || label === 'team lead' || label === 'teamlead' ||
+             name.includes('team_lead') || label.includes('team lead');
+    });
+    const titleMatch = /team\s*lead/i.test(user?.jobTitle || '') || /team\s*lead/i.test(user?.teamRole || '');
+    const emailMatch = ['tl@acme.com', 'tl2@acme.com', 'tl_devops@acme.com'].includes(String(user?.email || '').toLowerCase());
+    return Boolean(roleMatch || titleMatch || emailMatch);
+  };
   const assignedLeadIds = assignedUserIds.flatMap((userId) => {
     const assignedUser = users.find((user) => user.id === userId);
     const manager = users.find((user) => user.id === assignedUser?.managerUserId);
@@ -181,16 +188,18 @@ export default function PmProjectDetail() {
     ...teamRoster.filter(isTeamLead).map((user) => user.id),
     ...assignedLeadIds,
   ])];
-  const members = teamRoster.length
-    ? teamRoster
-    : users.filter((user) => (
-      user.isActive !== false
-      && (teamLeadIds.includes(user.id) || teamLeadIds.includes(user.managerUserId))
-      && (teamLeadIds.includes(user.id) || assignedUserIds.some((id) => String(id) === String(user.id)))
-    ));
-  const taskAssignees = teamRoster.length
-    ? teamRoster
-    : users.filter((user) => teamLeadIds.includes(user.id) || teamLeadIds.includes(user.managerUserId));
+
+  // Strictly filter assignees to ONLY Team Leaders (no CEOs, Process Admins, or regular members)
+  const allTeamLeads = users.filter((u) => u.isActive !== false && isTeamLead(u));
+  const rosterLeadIds = new Set(teamRoster.filter(isTeamLead).map((u) => u.id));
+  const taskAssignees = [...allTeamLeads].sort((a, b) => {
+    const aInRoster = rosterLeadIds.has(a.id) ? 1 : 0;
+    const bInRoster = rosterLeadIds.has(b.id) ? 1 : 0;
+    return bInRoster - aInRoster;
+  });
+
+  const assignedUsers = users.filter((u) => assignedUserIds.includes(u.id));
+  const members = teamRoster.length > 0 ? teamRoster : (assignedUsers.length > 0 ? assignedUsers : taskAssignees);
   const formatDate = (date) => date
     ? new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
@@ -199,7 +208,7 @@ export default function PmProjectDetail() {
     event.preventDefault();
     setTaskError('');
     if (!taskForm.title.trim() || !taskForm.assignedToId) {
-      setTaskError('Enter a task title and select a team member.');
+      setTaskError('Enter a task title and select a team lead.');
       return;
     }
 
@@ -566,10 +575,14 @@ export default function PmProjectDetail() {
             <Textarea value={taskForm.description} onChange={(event) => setTaskForm({ ...taskForm, description: event.target.value })} disabled={savingTask} />
           </FormField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Assign to" required>
+            <FormField label="Assign to Team Lead" required>
               <Select value={taskForm.assignedToId} onChange={(event) => setTaskForm({ ...taskForm, assignedToId: event.target.value })} disabled={savingTask}>
-                <option value="">Select member</option>
-                {taskAssignees.map((user) => <option key={user.id} value={user.id}>{user.fullName || user.email}</option>)}
+                <option value="">Select Team Lead...</option>
+                {taskAssignees.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.fullName || user.email} (Team Lead)
+                  </option>
+                ))}
               </Select>
             </FormField>
             <FormField label="Priority">

@@ -196,6 +196,26 @@ export async function handleLogin(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during login:', auditErr.message);
     }
 
+    // Fetch team memberships if applicable
+    let userTeamMembers = [];
+    try {
+      userTeamMembers = await prisma.teamMember.findMany({
+        where: { userId: user.id },
+        include: {
+          team: {
+            select: {
+              id: true,
+              name: true,
+              branch: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { joinedAt: 'asc' },
+      });
+    } catch (tmErr) {
+      console.warn('[Auth] Notice: Could not fetch team memberships:', tmErr.message);
+    }
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -221,6 +241,13 @@ export async function handleLogin(req, res, next) {
           scopeType: matchedAssignment?.scopeType || null,
           scopeId: matchedAssignment?.scopeId || null,
           branchName,
+          teams: (userTeamMembers || []).map((tm) => ({
+            teamId: tm.team?.id,
+            teamName: tm.team?.name,
+            role: tm.role || 'Member',
+            branchId: tm.team?.branch?.id,
+            branchName: tm.team?.branch?.name,
+          })),
         },
       },
     });

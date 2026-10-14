@@ -1,12 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { Button } from '../../../shared/components/Button';
+import { FileText, ExternalLink, Trash2 } from 'lucide-react';
 
 export function EvidenceUploadCard({
   taskId,
   evidenceList = [],
   readOnly = false,
   onUpload,
-  onDelete
+  onRequestUpload,
+  onDelete,
 }) {
   const fileInputRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -26,27 +28,39 @@ export function EvidenceUploadCard({
     }
   };
 
+  const handleButtonClick = () => {
+    if (onRequestUpload) {
+      onRequestUpload();
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+    <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
         <div>
-          <h3 className="font-semibold text-gray-900">Evidence / Deliverables</h3>
-          <p className="text-xs text-gray-500 mt-1">Files related to this task</p>
+          <h3 className="font-bold text-slate-900 text-sm">Evidence & Deliverable Artifacts</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Files, audit records, or links verifying this deliverable</p>
         </div>
         {!readOnly && (
           <div>
-            <input 
-              type="file" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-            />
-            <Button 
-              variant="outline" 
-              onClick={() => fileInputRef.current?.click()}
+            {!onRequestUpload && (
+              <input
+                type="file"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+              />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleButtonClick}
               disabled={isUploading}
+              className="text-xs font-semibold"
             >
-              {isUploading ? 'Uploading...' : 'Upload File'}
+              {isUploading ? 'Uploading...' : 'Upload Evidence'}
             </Button>
           </div>
         )}
@@ -54,48 +68,67 @@ export function EvidenceUploadCard({
 
       <div className="p-5">
         {evidenceList.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">No evidence uploaded yet.</p>
+          <p className="text-xs text-slate-400 text-center py-4">No evidence deliverables submitted yet.</p>
         ) : (
-          <ul className="divide-y divide-gray-100">
-            {evidenceList.map((evidence) => (
-              <li key={evidence.id} className="py-3 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="h-10 w-10 shrink-0 bg-blue-50 text-blue-600 rounded flex items-center justify-center">
-                    <span className="text-xl">📄</span>
+          <ul className="divide-y divide-slate-100">
+            {evidenceList.map((evidence) => {
+              const title = evidence.title || evidence.name || 'Deliverable Artifact';
+              const fileUrl = evidence.fileUrl || evidence.url;
+              const evType = evidence.evidenceType || evidence.type || 'Document';
+              const date = evidence.createdAt || evidence.uploadedAt;
+
+              return (
+                <li key={evidence.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="h-9 w-9 shrink-0 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {title}
+                      </p>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                        <span className="font-semibold text-blue-600">{evType}</span>
+                        {date && <span>• {new Date(date).toLocaleDateString()}</span>}
+                        {evidence.notes && <span className="truncate max-w-xs">• {evidence.notes}</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {evidence.name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Uploaded {evidence.uploadedAt ? new Date(evidence.uploadedAt).toLocaleDateString() : ''} 
-                      {evidence.uploadedBy ? ` by ${evidence.uploadedBy}` : ''}
-                    </p>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {fileUrl && (() => {
+                      const token = sessionStorage.getItem('authToken') || '';
+                      const isExternalUrl = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
+                      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
+                      const viewUrl = isExternalUrl
+                        ? fileUrl
+                        : (evidence.id ? `${apiBase}/api/evidence/${evidence.id}/file?token=${encodeURIComponent(token)}` : fileUrl);
+                      return (
+                        <a
+                          href={viewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </a>
+                      );
+                    })()}
+                    {!readOnly && onDelete && (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(evidence.id)}
+                        className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
+                        title="Remove evidence"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {evidence.url && (
-                    <a 
-                      href={evidence.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      View
-                    </a>
-                  )}
-                  {!readOnly && onDelete && (
-                    <button 
-                      onClick={() => onDelete(evidence.id)}
-                      className="text-sm text-red-500 hover:text-red-700 ml-2"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
