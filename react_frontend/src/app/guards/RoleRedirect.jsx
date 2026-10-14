@@ -17,16 +17,10 @@ export const RoleRedirect = () => {
 
   // Map each role to their respective landing page
   switch (user.role) {
-    case 'platform_admin':
+    case ROLES.PLATFORM_ADMIN:
       return <Navigate to={PATHS.PLATFORM.DASHBOARD} replace />;
       
     case ROLES.SYSTEM_ADMIN:
-      // If they logged in via Platform Admin, send them there.
-      // If they are just the tenant owner (who is also a 'system_admin'), send to Executive Dashboard.
-      return user.isPlatform 
-        ? <Navigate to={PATHS.PLATFORM.DASHBOARD} replace />
-        : <Navigate to={PATHS.EXECUTIVE.DASHBOARD} replace />;
-      
     case ROLES.COMPANY_OWNER:
       return <Navigate to={PATHS.EXECUTIVE.DASHBOARD} replace />;
       
@@ -49,7 +43,10 @@ export const RoleRedirect = () => {
       return <Navigate to={PATHS.MEMBER.DASHBOARD} replace />;
       
     default:
-      // If the role isn't mapped yet, send to a default place or unauthorized
+      if (user.isPlatform) {
+        return <Navigate to={PATHS.PLATFORM.DASHBOARD} replace />;
+      }
+      // If the role isn't mapped yet, send to unauthorized
       return <Navigate to={PATHS.COMMON.UNAUTHORIZED} replace />;
   }
 };

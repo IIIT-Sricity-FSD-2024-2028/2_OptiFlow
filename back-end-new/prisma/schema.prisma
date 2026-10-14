@@ -23,6 +23,7 @@ model Plan {
   maxComplianceRules        Int?
   auditLogRetentionDays     Int
   allowsIntegrations        Boolean
+  isActive                  Boolean @default(true)
 
   subscriptions Subscription[]
 
@@ -46,6 +47,7 @@ model Subscription {
 
   @@index([companyId])
   @@index([planId])
+  @@index([status, currentPeriodEnd])
   @@map("subscriptions")
 }
 
@@ -68,9 +70,11 @@ model PlatformAdminUser {
   fullName     String
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime? @updatedAt
+  updatedAt         DateTime?              @updatedAt
+  passwordChangedAt DateTime?
 
-  supportAccesses PlatformSupportAccess[]
+  supportAccesses   PlatformSupportAccess[]
+  platformAuditLogs PlatformAuditLog[]
 
   @@map("platform_admin_users")
 }
@@ -119,10 +123,32 @@ model Company {
   complianceCategories ComplianceCategory[]
   escalations          Escalation[]
   complianceEvidence   ComplianceEvidence[]
+  platformAuditLogs    PlatformAuditLog[]
 
   updatedAt DateTime @updatedAt
 
+  @@index([status])
   @@map("companies")
+}
+
+model PlatformAuditLog {
+  id          String            @id @default(uuid())
+  adminUserId String
+  adminUser   PlatformAdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  action      String
+  entityType  String
+  entityId    String
+  companyId   String?
+  company     Company?          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  before      Json?
+  after       Json?
+  ip          String?
+  createdAt   DateTime          @default(now())
+
+  @@index([createdAt])
+  @@index([companyId])
+  @@index([adminUserId])
+  @@map("platform_audit_logs")
 }
 
 enum CompanyStatus {

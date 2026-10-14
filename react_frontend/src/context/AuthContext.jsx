@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { apiClient } from '../services/api/client';
 
 // 1. Create the Context
@@ -13,19 +13,21 @@ export const AuthProvider = ({ children }) => {
     const restoreSession = async () => {
       const token = sessionStorage.getItem('authToken');
       const isPlatform = sessionStorage.getItem('isPlatform') === 'true';
-      
+
       if (token) {
         try {
           // Use the correct backend route depending on user type
           const meRoute = isPlatform ? '/platform/auth/me' : '/auth/me';
-          const userData = await apiClient(meRoute); 
-          
-          // The backend wraps the identity in `userData.user`
+          const userData = await apiClient(meRoute);
+
+          // The backend wraps the identity in `userData.user` or directly in `userData`
           const restoredUser = userData.user || userData;
-          setUser({ ...restoredUser, isPlatform });
+          const role = isPlatform ? 'platform_admin' : (restoredUser.role || restoredUser.roleSlug);
+          setUser({ ...restoredUser, role, isPlatform });
         } catch (error) {
           sessionStorage.removeItem('authToken');
           sessionStorage.removeItem('isPlatform');
+          setUser(null);
         }
       }
       setLoading(false);
@@ -40,13 +42,14 @@ export const AuthProvider = ({ children }) => {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    
+
     const isPlatformAdmin = response.role === 'platform_admin';
-    
+
     sessionStorage.setItem('authToken', response.token);
     sessionStorage.setItem('isPlatform', isPlatformAdmin ? 'true' : 'false');
     // response.user and response.role are guaranteed by the backend's handleLogin
-    setUser({ ...response.user, role: response.role, isPlatform: isPlatformAdmin }); 
+    const loggedInUser = response.user || {};
+    setUser({ ...loggedInUser, role: response.role || loggedInUser.role, isPlatform: isPlatformAdmin });
     return response;
   };
 
@@ -56,16 +59,44 @@ export const AuthProvider = ({ children }) => {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    
+
     sessionStorage.setItem('authToken', response.token);
     sessionStorage.setItem('isPlatform', 'true');
-    
+
     const loggedInUser = response.adminUser || response.user || {};
-    setUser({ ...loggedInUser, role: 'system_admin', isPlatform: true }); 
+    setUser({ ...loggedInUser, role: 'platform_admin', isPlatform: true });
     return response;
   };
 
-  const logout = () => {
+  const platformLogout = async () => {
+    try {
+      await apiClient('/api/platform/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('Failed to logout from platform:', err);
+    } finally {
+      sessionStorage.removeItem('authToken');
+      sessionStorage.removeItem('isPlatform');
+      setUser(null);
+      window.location.href = '/login';
+    }
+  };
+
+  const logout = async () => {
+    const isPlatform =
+      user?.isPlatform ||
+      user?.role === 'platform_admin' ||
+      user?.role === 'system_admin' ||
+      sessionStorage.getItem('isPlatform') === 'true' ||
+      window.location.pathname.startsWith('/platform');
+
+    if (isPlatform) {
+      await platformLogout();
+      return;
+    }
+
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('isPlatform');
     setUser(null);
@@ -73,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, platformLogin, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, platformLogin, logout, platformLogout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

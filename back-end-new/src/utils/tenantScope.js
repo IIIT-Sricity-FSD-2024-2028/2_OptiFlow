@@ -50,17 +50,26 @@ export function resolveEffectiveBranchId({ user, branchId }) {
 }
 
 /**
- * Builds Prisma where filter for Project queries
+ * Builds Prisma where filter for Project queries with strict role-based scope
  */
 export function buildProjectListWhere({ companyId, branchId, user }) {
   const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
+  const role = normalizeRole(user?.role || user?.roleLabel);
 
+  const baseWhere = {
+    deletedAt: null,
+    ...(companyId ? { companyId } : {}),
+  };
+
+  // 1. Company Owner / Global Executive: views all company projects
   if (isCompanyOwner(user) && !effectiveBranchId) {
-    return companyId ? { team: { branch: { companyId } } } : {};
+    return baseWhere;
   }
 
+  // 2. Branch Manager: views all projects within their branch
   if (effectiveBranchId) {
     return {
+      ...baseWhere,
       team: {
         branchId: effectiveBranchId,
         ...(companyId ? { branch: { companyId } } : {}),
@@ -68,11 +77,40 @@ export function buildProjectListWhere({ companyId, branchId, user }) {
     };
   }
 
-  return companyId ? { team: { branch: { companyId } } } : {};
+  // 3. Project Manager: views all projects within their company tenant (or branch if scoped)
+  if (role === 'project_manager' || role === 'pm') {
+    return baseWhere;
+  }
+
+  // 4. Team Lead: views projects of teams they lead/belong to, projects where they or their direct reports have tasks, or company projects if company-scoped
+  if ((role === 'team_lead' || role === 'team_leader' || role === 'lead') && user?.id) {
+    return {
+      ...baseWhere,
+      OR: [
+        { team: { teamMembers: { some: { userId: user.id } } } },
+        { tasks: { some: { OR: [{ assignedToId: user.id }, { assignedTo: { managerUserId: user.id } }] } } },
+        { createdById: user.id },
+        ...(user.scopeType === 'Company' || !effectiveBranchId ? [{ companyId: baseWhere.companyId }] : []),
+      ],
+    };
+  }
+
+  // 5. Team Member: views projects belonging to teams they are member of OR where they have assigned tasks
+  if ((role === 'team_member' || role === 'member') && user?.id) {
+    return {
+      ...baseWhere,
+      OR: [
+        { team: { teamMembers: { some: { userId: user.id } } } },
+        { tasks: { some: { assignedToId: user.id } } },
+      ],
+    };
+  }
+
+  return baseWhere;
 }
 
 /**
- * Builds Prisma where filter for Task queries
+ * Builds Prisma where filter for Task queries with strict role-based scope
  */
 export function buildTaskListWhere({ companyId, branchId, user }) {
   const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
@@ -82,10 +120,12 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
     ...(companyId ? { companyId } : {}),
   };
 
+  // 1. Company Owner: views all tasks across company
   if (isCompanyOwner(user) && !effectiveBranchId) {
     return where;
   }
 
+  // 2. Branch Manager: views all tasks within their branch
   if (effectiveBranchId) {
     return {
       ...where,
@@ -99,8 +139,35 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
   }
 
   const role = normalizeRole(user?.role || user?.roleLabel);
+
+  // 3. Project Manager: views all tasks under projects in their company/branch scope
+  if (role === 'project_manager' || role === 'pm') {
+    return where;
+  }
+
+  // 4. Team Lead: views tasks assigned to them, tasks under their team's projects, or assigned to their direct reports
+  if ((role === 'team_lead' || role === 'team_leader' || role === 'lead') && user?.id) {
+    return {
+      ...where,
+      OR: [
+        { assignedToId: user.id },
+        { createdById: user.id },
+        { assignedTo: { managerUserId: user.id } },
+        { project: { team: { teamMembers: { some: { userId: user.id } } } } },
+        ...(user.scopeType === 'Company' || !effectiveBranchId ? [{ project: { companyId: where.companyId } }] : []),
+      ],
+    };
+  }
+
+  // 5. Team Member: strictly tasks assigned directly to them or where they created them
   if ((role === 'team_member' || role === 'member') && user?.id) {
-    where.assignedToId = user.id;
+    return {
+      ...where,
+      OR: [
+        { assignedToId: user.id },
+        { subtasks: { some: { assignedToId: user.id, deletedAt: null } } },
+      ],
+    };
   }
 
   return where;

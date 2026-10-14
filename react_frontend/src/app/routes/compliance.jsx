@@ -7,6 +7,7 @@ const ComplianceCategories = React.lazy(() => import('../../features/compliance/
 const ComplianceBindings = React.lazy(() => import('../../features/compliance/pages/Bindings'));
 const ComplianceViolations = React.lazy(() => import('../../features/compliance/pages/Violations'));
 const ComplianceEvidence = React.lazy(() => import('../../features/compliance/pages/Evidence'));
+const ComplianceReports = React.lazy(() => import('../../features/compliance/pages/Reports'));
 const ComplianceAuditLogs = React.lazy(() => import('../../features/compliance/pages/AuditLogs'));
 
 export const complianceRoutes = [
@@ -17,5 +18,6 @@ export const complianceRoutes = [
   { path: PATHS.COMPLIANCE.BINDINGS, element: <ComplianceBindings /> },
   { path: PATHS.COMPLIANCE.VIOLATIONS, element: <ComplianceViolations /> },
   { path: PATHS.COMPLIANCE.EVIDENCE, element: <ComplianceEvidence /> },
+  { path: PATHS.COMPLIANCE.REPORTS, element: <ComplianceReports /> },
   { path: PATHS.COMPLIANCE.AUDIT_LOGS, element: <ComplianceAuditLogs /> }
 ];

@@ -42,7 +42,7 @@ export const router = createBrowserRouter([
     ]
   },
   {
-    element: <ProtectedRoute allowedRoles={['system_admin', 'platform_admin']} isPlatform={true} />,
+    element: <ProtectedRoute allowedRoles={['platform_admin']} isPlatform={true} />,
     children: [
       {
         element: <PlatformLayout />,

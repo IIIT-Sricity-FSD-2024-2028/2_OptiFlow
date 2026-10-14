@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ValidationError,ConflictError } from '../utils/errors.js';
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';

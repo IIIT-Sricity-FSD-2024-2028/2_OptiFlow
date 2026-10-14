@@ -6,6 +6,7 @@ import { authenticate, resolveUserRole } from '../middleware/authenticate.js';
 import {
   BadRequestError,
   UnauthorizedError,
+  NotFoundError,
   ConflictError,
   ValidationError,
   AppError,
@@ -206,6 +207,26 @@ export async function handleLogin(req, res, next) {
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during login:', auditErr.message);
+    }
+
+    // Fetch team memberships if applicable
+    let userTeamMembers = [];
+    try {
+      userTeamMembers = await prisma.teamMember.findMany({
+        where: { userId: user.id },
+        include: {
+          team: {
+            select: {
+              id: true,
+              name: true,
+              branch: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { joinedAt: 'asc' },
+      });
+    } catch (tmErr) {
+      console.warn('[Auth] Notice: Could not fetch team memberships:', tmErr.message);
     }
 
     res.status(200).json({
@@ -478,6 +499,67 @@ export async function handleGetPublicPlans(req, res, next) {
     res.status(200).json({
       success: true,
       data: plans,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /auth/set-password & POST /api/auth/set-password
+ * Redeems a one-time set-password token to initialize first-owner credentials.
+ */
+export async function handleSetPassword(req, res, next) {
+  try {
+    const body = req.body || {};
+    const token = body.token;
+    const password = body.password;
+
+    validateRequired({ token, password }, ['token', 'password']);
+
+    if (typeof password !== 'string' || password.length < 8) {
+      throw new ValidationError('Password validation failed', [
+        { field: 'password', message: 'Password must be at least 8 characters long' },
+      ]);
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, env.JWT_SECRET);
+    } catch (err) {
+      throw new UnauthorizedError('Invalid or expired set-password token');
+    }
+
+    if (decoded.purpose !== 'set_password') {
+      throw new UnauthorizedError('Invalid token purpose');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.sub },
+    });
+
+    if (!user || user.companyId !== decoded.companyId) {
+      throw new NotFoundError('User not found');
+    }
+
+    if (user.tokenVersion !== decoded.tokenVersion) {
+      throw new BadRequestError('This set-password link has already been used or has expired');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        tokenVersion: { increment: 1 },
+        isActive: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password set successfully. You can now log in.',
     });
   } catch (err) {
     next(err);

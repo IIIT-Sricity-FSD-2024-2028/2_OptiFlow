@@ -1,40 +1,52 @@
 import { apiClient } from './client';
 
-// WHY: Separating API calls by resource keeps our code organized. 
-// Any page needing evidence data just imports these functions without worrying about fetch logic.
+// Centralized API calls for compliance evidence
 
-const BASE_PATH = '/evidence';
+const BASE_PATH = '/api/evidence';
 
-export const getEvidenceList = (params = {}) => {
-  // Convert params object to query string (e.g. ?violationId=123)
+export const list = (params = {}) => {
   const queryString = new URLSearchParams(params).toString();
   const url = queryString ? `${BASE_PATH}?${queryString}` : BASE_PATH;
   return apiClient(url);
 };
 
-export const getEvidence = (id) => {
+export const get = (id) => {
   return apiClient(`${BASE_PATH}/${id}`);
 };
 
-export const createEvidence = (data) => {
-  // NOTE: If data is a FormData object (for file uploads), 
-  // you might need to adjust the client.js headers to let the browser set the boundary,
-  // but for JSON payloads this works perfectly.
+export const create = (data) => {
   return apiClient(BASE_PATH, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: data,
   });
 };
 
-export const updateEvidence = (id, data) => {
+export const update = (id, data) => {
   return apiClient(`${BASE_PATH}/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
+    method: 'PATCH',
+    body: data,
   });
 };
 
-export const removeEvidence = (id) => {
+export const remove = (id) => {
   return apiClient(`${BASE_PATH}/${id}`, {
     method: 'DELETE',
   });
 };
+
+export const uploadFile = (id, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiClient(`${BASE_PATH}/${id}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+};
+
+// Aliases for compatibility
+export const getEvidenceList = list;
+export const getEvidence = get;
+export const createEvidence = create;
+export const updateEvidence = update;
+export const removeEvidence = remove;
+export const uploadEvidenceFile = uploadFile;

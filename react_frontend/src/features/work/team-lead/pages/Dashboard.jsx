@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { Button } from '../../../../shared/components/Button';
 import { Badge } from '../../../../shared/components/Badge';
+import { formatDate } from '../../../../shared/utils/formatDate';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
@@ -32,6 +33,7 @@ export default function TeamLeadDashboard() {
   const [tasks, setTasks] = useState([]);
   const [escalations, setEscalations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [projects, setProjects] = useState([]);
 
   const [project, setProject] = useState({
     name: '—',
@@ -138,6 +140,7 @@ export default function TeamLeadDashboard() {
         setTasks(normalizedTasks);
         setEscalations(normalizedEscalations);
         setTeamMembers(myTeamMembers);
+        setProjects(normalizedProjects);
 
         if (normalizedProjects.length > 0) {
           setProject(normalizedProjects[0]);
@@ -201,6 +204,10 @@ export default function TeamLeadDashboard() {
       return 'success';
     }
 
+    if (value === 'active') {
+      return 'active';
+    }
+
     if (
       value.includes('progress') ||
       value.includes('review')
@@ -258,11 +265,18 @@ export default function TeamLeadDashboard() {
       );
     } catch (error) {
       console.error('Approve task failed:', error);
-
-      showToast(
-        'error',
-        'Failed to approve task.'
-      );
+      const errMsg = error.message || '';
+      if (errMsg.includes('COMPLIANCE_BLOCK') || errMsg.includes('blocked by active compliance')) {
+        showToast(
+          'error',
+          'Approval blocked: Mandatory compliance evidence must be approved before completion.'
+        );
+      } else {
+        showToast(
+          'error',
+          errMsg || 'Failed to approve task.'
+        );
+      }
     } finally {
       setApproveConfirmOpen(false);
       setSelectedTask(null);
@@ -643,9 +657,7 @@ export default function TeamLeadDashboard() {
                                 task.assignee ||
                                 'Unassigned'}{' '}
                               · Due{' '}
-                              {task.dueDate ||
-                                task.deadline ||
-                                '—'}
+                              {formatDate(task.dueDate || task.deadline)}
                             </p>
                           </div>
 
@@ -702,12 +714,27 @@ export default function TeamLeadDashboard() {
           </div>
 
           <div className="p-5">
-
-            <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
-                <h3 className="font-semibold text-gray-900">
-                  {project.name || 'No project'}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">
+                    {project.name || 'No project'}
+                  </h3>
+                  {projects.length > 1 && (
+                    <select
+                      value={project?.id || ''}
+                      onChange={(e) => {
+                        const sel = projects.find((p) => p.id === e.target.value);
+                        if (sel) setProject(sel);
+                      }}
+                      className="text-xs border border-gray-200 rounded-lg px-2.5 py-1 bg-white text-gray-700 outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer"
+                    >
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
 
                 <p className="text-xs text-gray-500 mt-1">
                   Overall progress

@@ -86,10 +86,10 @@ export function createRateLimiter(options = {}) {
   return limiter;
 }
 
-// 1. General API Rate Limiter (e.g. 100 requests per 15 minutes)
+// 1. General API Rate Limiter (default: 1000 requests per 15 minutes)
 export const generalApiLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: process.env.RATE_LIMIT_MAX ? Number(process.env.RATE_LIMIT_MAX) : 100,
+  max: process.env.RATE_LIMIT_MAX ? Number(process.env.RATE_LIMIT_MAX) : 1000,
   message: 'Too many requests from this IP. Please try again after 15 minutes.',
 });
 

@@ -1,0 +1,17 @@
+services:
+  test-postgres:
+    image: postgres:16-alpine
+    container_name: optiflow_test_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: optiflow_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d optiflow_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

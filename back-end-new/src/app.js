@@ -1,3 +1,4 @@
+import path from 'path';
 import express from 'express';
 import helmet from 'helmet';
 import { env } from './config/env.js';
@@ -44,6 +45,9 @@ export function createApp() {
   app.use(['/auth/login', '/api/auth/login', '/auth/register-company', '/api/auth/register-company', '/platform/auth/login', '/api/platform/auth/login'], authLimiter);
   // General API rate limiter across all api endpoints
   app.use(['/api', '/users', '/projects', '/tasks', '/notifications', '/compliance-rules', '/compliance-violations', '/compliance-categories', '/compliance-bindings', '/evidence', '/platform', '/executive', '/attachments', '/bootstrap', '/permissions', '/role-templates', '/role-assignments'], generalApiLimiter);
+
+  // Static Uploads
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // 5. Routes
   app.use(healthRoutes);

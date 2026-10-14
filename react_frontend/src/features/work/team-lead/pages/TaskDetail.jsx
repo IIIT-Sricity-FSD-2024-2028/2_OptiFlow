@@ -12,6 +12,8 @@ import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as usersApi from '../../../../services/api/users';
+import * as evidenceApi from '../../../../services/api/evidence';
+import * as complianceApi from '../../../../services/api/compliance';
 
 const BLOCKER_TYPES = ['Missing Information / Data', 'System Issue / Bug', 'Dependency Delay', 'Access / permission', 'Other'];
 const STAGES = ['Data Collection', 'Work In Progress', 'Team Leader Review', 'Compliance Audit'];
@@ -28,6 +30,8 @@ export default function TeamLeadTaskDetail() {
   const { id: taskId } = useParams();
   const { user } = useAuth();
   const [task, setTask] = useState(null);
+  const [compliance, setCompliance] = useState({ hasRules: false, evidenceBlocked: false });
+  const [complianceLoading, setComplianceLoading] = useState(true);
   const [subtasks, setSubtasks] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,15 +73,83 @@ export default function TeamLeadTaskDetail() {
     return () => { active = false; };
   }, [taskId, user.id]);
 
+  useEffect(() => {
+    if (!task) return undefined;
+    let active = true;
+    Promise.all([
+      complianceApi.getBindings(),
+      complianceApi.getViolations(),
+      evidenceApi.getEvidenceList(),
+    ]).then(([bindingResponse, violationResponse, evidenceResponse]) => {
+      if (!active) return;
+      const bindings = Array.isArray(bindingResponse) ? bindingResponse : bindingResponse?.data || [];
+      const violations = Array.isArray(violationResponse) ? violationResponse : violationResponse?.data || [];
+      const evidence = Array.isArray(evidenceResponse) ? evidenceResponse : evidenceResponse?.data || [];
+      const projectId = task.projectId || task.project?.id;
+      const teamId = task.project?.teamId || task.project?.team?.id;
+      const branchId = task.project?.team?.branchId;
+      const companyId = task.companyId;
+
+      const relevantBindings = bindings.filter((binding) => {
+        if (binding.rule?.isActive === false) return false;
+        if (binding.scopeType === 'Task' && String(binding.scopeId) === String(taskId)) return true;
+        if (binding.scopeType === 'Project' && String(binding.scopeId) === String(projectId)) return true;
+        if (binding.scopeType === 'Team' && String(binding.scopeId) === String(teamId)) return true;
+        if (binding.scopeType === 'Branch' && String(binding.scopeId) === String(branchId)) return true;
+        if (binding.scopeType === 'Company' && String(binding.scopeId) === String(companyId)) return true;
+        return false;
+      });
+
+      const activeViolations = violations.filter((violation) => (
+        ['Open', 'Under_Review'].includes(violation.status)
+        && ((violation.entityType === 'Task' && String(violation.entityId) === String(taskId))
+          || (violation.entityType === 'Project' && String(violation.entityId) === String(projectId)))
+      ));
+
+      const evidenceRules = [
+        ...relevantBindings.map((binding) => binding.rule),
+        ...activeViolations.map((violation) => violation.rule),
+      ].filter((rule) => {
+        if (!rule?.criteria) return false;
+        const trigger = rule.criteria.trigger;
+        const req = rule.criteria.requirement;
+        return req?.type === 'EVIDENCE_REQUIRED' || (trigger?.field === 'status' && trigger?.transitionTo === 'Completed');
+      });
+
+      const hasApprovedEvidence = evidence.some((item) => (
+        String(item.taskId || item.task_id || item.task?.id) === String(taskId)
+        && String(item.status).toLowerCase() === 'approved'
+      ));
+
+      setCompliance({
+        hasRules: relevantBindings.length > 0 || activeViolations.length > 0,
+        evidenceBlocked: (evidenceRules.length > 0 || activeViolations.length > 0) && !hasApprovedEvidence,
+      });
+    }).catch((error) => {
+      if (active) showToast('error', error.message || 'Failed to load compliance status.');
+    }).finally(() => {
+      if (active) setComplianceLoading(false);
+    });
+    return () => { active = false; };
+  }, [task, taskId]);
+
   const patchTask = async (patch) => {
     try {
       await tasksApi.update(taskId, patch);
       setTask(prev => ({ ...prev, ...patch }));
-    } catch { showToast('error', 'Update failed.'); }
+      return true;
+    } catch (error) {
+      showToast('error', error.message || 'Update failed.');
+      return false;
+    }
   };
 
-  const handleApprove = () => patchTask({ status: 'Completed' }).then(() => showToast('success', 'Task approved.'));
-  const handleReject  = () => patchTask({ status: 'Active' }).then(() => showToast('success', 'Sent back for changes.'));
+  const handleApprove = async () => {
+    if (await patchTask({ status: 'Completed' })) showToast('success', 'Task approved.');
+  };
+  const handleReject = async () => {
+    if (await patchTask({ status: 'Active' })) showToast('success', 'Sent back for changes.');
+  };
 
   const handleReportBlocker = async () => {
     if (!blockerDesc.trim()) return showToast('error', 'Please describe the blocker.');
@@ -168,13 +240,36 @@ export default function TeamLeadTaskDetail() {
 
         {/* Left column */}
         <div className="space-y-5">
+          {compliance.hasRules && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" role="status">
+              <div>
+                <strong>🛡 Compliance rules apply to this task.</strong>
+                {compliance.evidenceBlocked && <p className="text-xs text-amber-800 mt-0.5">Mandatory evidence must be reviewed and approved in the vault before this task can be completed.</p>}
+              </div>
+              {compliance.evidenceBlocked && (
+                <Link
+                  to="/team-lead/reviews"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 shrink-0 shadow-sm"
+                >
+                  Review Evidence Vault →
+                </Link>
+              )}
+            </div>
+          )}
           <TaskDetailPanel
             task={task}
             onClose={() => window.history.back()}
             headerActions={isInReview ? (
               <div className="flex gap-2 shrink-0">
                 <Button variant="outline" onClick={handleReject}>Request Changes</Button>
-                <Button variant="primary" onClick={handleApprove}>Approve</Button>
+                <Button
+                  variant="primary"
+                  onClick={handleApprove}
+                  disabled={complianceLoading || compliance.evidenceBlocked}
+                  title={compliance.evidenceBlocked ? 'Evidence must be approved first.' : undefined}
+                >
+                  Approve
+                </Button>
               </div>
             ) : null}
           >

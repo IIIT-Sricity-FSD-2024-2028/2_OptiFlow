@@ -19,6 +19,7 @@ export const PATHS = {
     SUBSCRIPTIONS: "/platform/subscriptions",
     ADMIN_USERS: "/platform/admin-users",
     SUPPORT_ACCESS: "/platform/support-access",
+    PROFILE: "/platform/profile",
   },
   EXECUTIVE: {
     DASHBOARD: "/executive/dashboard",
@@ -33,6 +34,7 @@ export const PATHS = {
     BINDINGS: "/compliance/bindings",
     VIOLATIONS: "/compliance/violations",
     EVIDENCE: "/compliance/evidence",
+    REPORTS: "/compliance/reports",
     AUDIT_LOGS: "/compliance/audit-logs",
   },
   HR: {

@@ -306,6 +306,25 @@ export async function updateTask(req, res, next) {
       const d = body.dueDate !== undefined ? body.dueDate : body.due_date;
       updateData.dueDate = d ? new Date(d) : null;
     }
+    const deadlineExtensionReason = typeof body.deadlineExtensionReason === 'string'
+      ? body.deadlineExtensionReason.trim()
+      : '';
+    if (body.deadlineExtensionReason !== undefined) {
+      if (!hasRole(req.user.roleLabel || req.user.role, [ROLES.PROJECT_MANAGER])) {
+        throw new ForbiddenError('Only Project Managers can grant deadline extensions');
+      }
+      if (
+        !deadlineExtensionReason
+        || !updateData.dueDate
+        || Number.isNaN(updateData.dueDate.getTime())
+        || updateData.dueDate <= new Date()
+      ) {
+        throw new BadRequestError('A reason and a future deadline are required');
+      }
+      if (existing.dueDate && updateData.dueDate <= existing.dueDate) {
+        throw new BadRequestError('The new deadline must be later than the current deadline');
+      }
+    }
     if (body.actualHours !== undefined || body.actual_hours !== undefined) {
       const hours = body.actualHours !== undefined ? body.actualHours : body.actual_hours;
       updateData.actualHours = Number(hours);
@@ -313,7 +332,7 @@ export async function updateTask(req, res, next) {
 
     // 🔴 THE INTERCEPTOR: Evaluate Compliance Before Saving
     if (updateData.status && updateData.status !== existing.status) {
-      const evaluation = await evaluateTaskTransition(id, existing.projectId, updateData);
+      const evaluation = await evaluateTaskTransition(id, existing, updateData);
 
       if (!evaluation.allowed) {
         // 1. Auto-generate Violations in the Database
@@ -345,9 +364,39 @@ export async function updateTask(req, res, next) {
           } else {
             violationObjects.push(existingViolation);
           }
+
+          // 2. Cross-Module Escalation: Ensure an active Escalation exists for PM visibility
+          const existingEscalation = await prisma.escalation.findFirst({
+            where: {
+              taskId: id,
+              companyId: req.user.companyId,
+              status: 'Open',
+              blockerType: 'Compliance Blocker'
+            }
+          });
+
+          if (!existingEscalation) {
+            try {
+              await prisma.escalation.create({
+                data: {
+                  companyId: req.user.companyId,
+                  taskId: id,
+                  projectId: existing.projectId || null,
+                  reportedById: req.user.id,
+                  title: `Compliance Blocker: ${existing.title} (${rule.name})`,
+                  description: `Task status transition to "${updateData.status}" was blocked by compliance rule "${rule.name}". Approved compliance evidence is required.`,
+                  blockerType: 'Compliance Blocker',
+                  priority: ['Critical', 'High'].includes(rule.severity) ? 'Critical' : 'High',
+                  status: 'Open'
+                }
+              });
+            } catch (escErr) {
+              console.warn('[Escalation] Notice: Auto-escalation for compliance block:', escErr.message);
+            }
+          }
         }
 
-        // 2. Block the transition and return 403 Forbidden to the Frontend
+        // 3. Block the transition and return 403 Forbidden to the Frontend
         return res.status(403).json({
           success: false,
           error: "COMPLIANCE_BLOCK",
@@ -358,26 +407,72 @@ export async function updateTask(req, res, next) {
     }
 
     // 🟢 IF ALLOWED: Proceed with normal Prisma update
-    const updated = await prisma.task.update({
-      where: { id },
-      data: updateData,
-      include: {
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        project: true,
-      },
-    });
-
-    // Record audit log
-    try {
-      await createProcessAuditLog({companyId: req.user.companyId,
-        taskId: id,
-        action: body.status && body.status !== existing.status ? AUDIT_ACTIONS.STATUS_CHANGE : AUDIT_ACTIONS.UPDATE,
-        performedById: req.user.id,
-        oldValue: { status: existing.status, title: existing.title },
-        newValue: updateData,
+    const include = {
+      assignedTo: { select: { id: true, fullName: true, email: true } },
+      project: true,
+    };
+    let updated;
+    if (deadlineExtensionReason) {
+      updated = await prisma.$transaction(async (transaction) => {
+        const task = await transaction.task.update({ where: { id }, data: updateData, include });
+        const violations = await transaction.complianceViolation.findMany({
+          where: {
+            companyId: req.user.companyId,
+            entityType: 'Task',
+            entityId: id,
+            status: { in: ['Open', 'Under_Review'] },
+          },
+          include: { rule: true },
+        });
+        for (const violation of violations.filter((item) => item.rule?.name?.toLowerCase().includes('overdue'))) {
+          const resolutionRemarks = `Deadline extended to ${task.dueDate.toISOString().slice(0, 10)}. Reason: ${deadlineExtensionReason}`;
+          await transaction.complianceViolation.update({
+            where: { id: violation.id },
+            data: {
+              status: 'Resolved',
+              resolvedById: req.user.id,
+              resolvedAt: new Date(),
+              resolutionRemarks,
+            },
+          });
+          await transaction.complianceAuditLog.create({
+            data: {
+              companyId: req.user.companyId,
+              violationId: violation.id,
+              action: AUDIT_ACTIONS.STATUS_CHANGE,
+              performedById: req.user.id,
+              oldValue: { status: violation.status },
+              newValue: { status: 'Resolved', resolutionRemarks },
+            },
+          });
+        }
+        await transaction.processAuditLog.create({
+          data: {
+            companyId: req.user.companyId,
+            projectId: existing.projectId,
+            taskId: id,
+            action: AUDIT_ACTIONS.UPDATE,
+            performedById: req.user.id,
+            oldValue: { dueDate: existing.dueDate?.toISOString() || null },
+            newValue: { dueDate: task.dueDate?.toISOString() || null, deadlineExtensionReason },
+          },
+        });
+        return task;
       });
-    } catch (auditErr) {
-      console.warn('[AuditLog] Notice: Audit record logging during task update:', auditErr.message);
+    } else {
+      updated = await prisma.task.update({ where: { id }, data: updateData, include });
+      try {
+        await createProcessAuditLog({
+          companyId: req.user.companyId,
+          taskId: id,
+          action: body.status && body.status !== existing.status ? AUDIT_ACTIONS.STATUS_CHANGE : AUDIT_ACTIONS.UPDATE,
+          performedById: req.user.id,
+          oldValue: { status: existing.status, title: existing.title },
+          newValue: updateData,
+        });
+      } catch (auditErr) {
+        console.warn('[AuditLog] Notice: Audit record logging during task update:', auditErr.message);
+      }
     }
 
     res.status(200).json({
@@ -757,6 +852,17 @@ export async function createEscalation(req, res, next) {
       if (!project) throw new NotFoundError(`Project ${projectId} not found in this company`);
     }
 
+    const rawTargetManagerId = body.targetManagerId || body.target_manager_id || null;
+    let targetManagerId = null;
+    if (rawTargetManagerId) {
+      const targetUser = await prisma.user.findFirst({
+        where: { id: rawTargetManagerId, companyId: req.user.companyId },
+      });
+      if (targetUser) {
+        targetManagerId = targetUser.id;
+      }
+    }
+
     const escalation = await prisma.escalation.create({
       data: {
         companyId: req.user.companyId,
@@ -767,6 +873,7 @@ export async function createEscalation(req, res, next) {
         blockerType,
         priority,
         reportedById: req.user.id,
+        targetManagerId,
         status: 'Open',
       },
     });

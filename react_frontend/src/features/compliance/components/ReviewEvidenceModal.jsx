@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { apiClient } from "../../../services/api/client";
+import { useToast } from "../../../shared/components/Toast";
 
 export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
+  const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleUpdateStatus = async (newStatus) => {
@@ -15,10 +17,11 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus })
       });
+      toast.success(`Evidence marked as ${newStatus}.`);
       onReviewed(); // Refresh the list in the parent component
       onClose();    // Close modal
     } catch (err) {
-      alert("Failed to update status: " + err.message);
+      toast.error("Failed to update status: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -78,7 +81,7 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
               <span className="text-blue-700 text-xs mt-1">Review the provided proof before approving.</span>
             </div>
             <a 
-              href={`http://localhost:5500/api/evidence/${evidence.id}/file`}
+              href={`${import.meta.env.VITE_API_URL || 'http://localhost:5500'}/api/evidence/${evidence.id}/file?token=${encodeURIComponent(sessionStorage.getItem('authToken') || '')}`}
               target="_blank" 
               rel="noreferrer"
               className="flex items-center gap-2 bg-white px-4 py-2 rounded-md text-blue-700 font-semibold border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm"
