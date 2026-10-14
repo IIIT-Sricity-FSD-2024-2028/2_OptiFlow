@@ -118,7 +118,7 @@ export function PlansTable({
   return (
     <div>
       <div>
-        <h2 className={styles.sectionTitle}>Available Tiers and Quota COnfigurations</h2>
+        <h2 className={styles.sectionTitle}>Available Tiers and Quota Configurations</h2>
         <p className={styles.sectionSubtitle}>
           Keep Null for unlimited usage of that resource.
         </p>

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
@@ -6,6 +7,7 @@ import {
   BadRequestError,
   NotFoundError,
   UnauthorizedError,
+  ConflictError,
 } from '../utils/errors.js';
 import { validateRequired, validateEmail, validateNumber } from '../utils/validation.js';
 import { parseListParams, formatListResponse } from '../utils/pagination.js';
@@ -334,7 +336,180 @@ export async function listPlatformCompanies(req, res, next) {
 
 
 /**
+ * POST /platform/companies & POST /api/platform/companies
+ * Provision a new company: creates company + owner user + assigns system admin role + subscription in one transaction.
+ * Generates a one-time set-password token and link, and writes a PlatformAuditLog row.
+ */
+export async function createPlatformCompany(req, res, next) {
+  try {
+    const body = req.body || {};
+    const legalName = (body.legalName || body.companyLegalName || body.name || '').trim();
+    const ownerFullName = (body.ownerFullName || body.fullName || '').trim();
+    const ownerEmail = (body.ownerEmail || body.email || '').trim().toLowerCase();
+    const planId = body.planId || body.plan_id;
+    const billingCycle = body.billingCycle || body.billing_cycle || 'Monthly';
+    const size = body.size || body.companySize || null;
+    const industry = body.industry || null;
+
+    validateRequired(
+      { legalName, ownerFullName, ownerEmail, planId },
+      ['legalName', 'ownerFullName', 'ownerEmail', 'planId']
+    );
+    validateEmail(ownerEmail, 'ownerEmail');
+
+    const normalizedBillingCycle =
+      String(billingCycle).toLowerCase() === 'annual' ? 'Annual' : 'Monthly';
+
+    // Verify plan exists and is active
+    const plan = await prisma.plan.findUnique({ where: { id: planId } });
+    if (!plan) {
+      throw new NotFoundError(`Plan with ID ${planId} not found`);
+    }
+    if (plan.isActive === false) {
+      throw new BadRequestError('Cannot assign an archived plan to a new subscription');
+    }
+
+    // Check if user email already exists across the system
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: ownerEmail, mode: 'insensitive' } },
+    });
+    if (existingUser) {
+      throw new ConflictError('A user with this email address already exists');
+    }
+
+    const placeholderSecret = crypto.randomBytes(32).toString('hex');
+    const placeholderHash = await bcrypt.hash(placeholderSecret, 10);
+
+    const periodEnd = new Date();
+    periodEnd.setMonth(periodEnd.getMonth() + (normalizedBillingCycle === 'Annual' ? 12 : 1));
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create Company
+      const company = await tx.company.create({
+        data: {
+          legalName,
+          size,
+          industry,
+          status: 'Active',
+        },
+      });
+
+      // 2. Create Owner User
+      const owner = await tx.user.create({
+        data: {
+          companyId: company.id,
+          fullName: ownerFullName,
+          email: ownerEmail,
+          passwordHash: placeholderHash,
+          tokenVersion: 1,
+          isActive: true,
+        },
+      });
+
+      // 3. Ensure platform role template exists & assign System Admin role to owner
+      let sysTemplate = await tx.roleTemplate.findFirst({
+        where: { label: 'System Admin' },
+      });
+      if (!sysTemplate) {
+        sysTemplate = await tx.roleTemplate.create({
+          data: { origin: 'platform_predefined', label: 'System Admin' },
+        });
+      }
+
+      const sysAdminRole = await tx.role.create({
+        data: {
+          companyId: company.id,
+          roleTemplateId: sysTemplate.id,
+          label: 'System Admin',
+          name: 'system_admin',
+          isSystem: true,
+        },
+      });
+
+      await tx.roleAssignment.create({
+        data: {
+          companyId: company.id,
+          userId: owner.id,
+          roleId: sysAdminRole.id,
+          scopeType: 'Company',
+          scopeId: company.id,
+          grantedById: owner.id,
+        },
+      });
+
+      // 4. Create Subscription
+      const subscription = await tx.subscription.create({
+        data: {
+          companyId: company.id,
+          planId: plan.id,
+          billingCycle: normalizedBillingCycle,
+          status: 'Active',
+          currentPeriodEnd: periodEnd,
+        },
+        include: { plan: true },
+      });
+
+      // 5. Generate one-time set-password token and URL
+      const setPasswordToken = jwt.sign(
+        {
+          sub: owner.id,
+          email: owner.email,
+          companyId: company.id,
+          purpose: 'set_password',
+          tokenVersion: owner.tokenVersion,
+        },
+        env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      const frontendUrl = env.FRONTEND_URL || 'http://localhost:5173';
+      const setPasswordUrl = `${frontendUrl}/set-password?token=${setPasswordToken}`;
+
+      // 6. Write Audit Log
+      await writeAuditLog(
+        req,
+        'company.create',
+        { type: 'Company', id: company.id, companyId: company.id },
+        null,
+        {
+          id: company.id,
+          legalName: company.legalName,
+          status: company.status,
+          ownerId: owner.id,
+          ownerEmail: owner.email,
+          planId: plan.id,
+          planName: plan.name,
+          billingCycle: subscription.billingCycle,
+        },
+        tx
+      );
+
+      return {
+        company,
+        owner: {
+          id: owner.id,
+          fullName: owner.fullName,
+          email: owner.email,
+        },
+        subscription,
+        setPasswordToken,
+        setPasswordUrl,
+      };
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Company provisioned successfully',
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * GET /platform/companies/:id & GET /api/platform/companies/:id
+ * Returns company with subscription, user and branch counts, and recent support grants.
  */
 export async function getPlatformCompanyById(req, res, next) {
   try {
@@ -343,9 +518,31 @@ export async function getPlatformCompanyById(req, res, next) {
     const company = await prisma.company.findUnique({
       where: { id },
       include: {
-        subscriptions: { include: { plan: true } },
-        users: { select: { id: true, fullName: true, email: true, isActive: true, jobTitle: true } },
+        subscriptions: {
+          include: { plan: true },
+          orderBy: { currentPeriodEnd: 'desc' },
+        },
+        users: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            isActive: true,
+            jobTitle: true,
+            createdAt: true,
+          },
+        },
         branches: true,
+        supportAccesses: {
+          orderBy: { grantedAt: 'desc' },
+          take: 10,
+          include: {
+            adminUser: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+        _count: {
+          select: { users: true, branches: true },
+        },
       },
     });
 
@@ -353,9 +550,15 @@ export async function getPlatformCompanyById(req, res, next) {
       throw new NotFoundError(`Company with ID ${id} not found`);
     }
 
+    const data = {
+      ...company,
+      userCount: company._count?.users ?? company.users?.length ?? 0,
+      branchCount: company._count?.branches ?? company.branches?.length ?? 0,
+    };
+
     res.status(200).json({
       success: true,
-      data: company,
+      data,
     });
   } catch (err) {
     next(err);
@@ -364,6 +567,7 @@ export async function getPlatformCompanyById(req, res, next) {
 
 /**
  * PATCH /platform/companies/:id & PATCH /api/platform/companies/:id
+ * Updates legal name and status with validation and platform audit logging.
  */
 export async function updatePlatformCompany(req, res, next) {
   try {
@@ -376,12 +580,52 @@ export async function updatePlatformCompany(req, res, next) {
     }
 
     const updateData = {};
-    if (body.legalName) updateData.legalName = body.legalName.trim();
-    if (body.status) updateData.status = body.status;
+    if (body.legalName !== undefined) {
+      const trimmed = String(body.legalName || '').trim();
+      if (!trimmed) {
+        throw new BadRequestError('Legal name cannot be empty');
+      }
+      updateData.legalName = trimmed;
+    }
 
-    const updated = await prisma.company.update({
-      where: { id },
-      data: updateData,
+    if (body.status !== undefined) {
+      const allowedStatuses = ['Active', 'Suspended', 'Closed'];
+      if (!allowedStatuses.includes(body.status)) {
+        throw new BadRequestError(
+          `Invalid company status '${body.status}'. Allowed values are: ${allowedStatuses.join(', ')}`
+        );
+      }
+      updateData.status = body.status;
+    }
+
+    if (body.size !== undefined) updateData.size = body.size;
+    if (body.industry !== undefined) updateData.industry = body.industry;
+
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestError('No valid fields provided for update');
+    }
+
+    const action =
+      body.status && body.status !== company.status
+        ? `company.${body.status.toLowerCase()}`
+        : 'company.update';
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.company.update({
+        where: { id },
+        data: updateData,
+      });
+
+      await writeAuditLog(
+        req,
+        action,
+        { type: 'Company', id, companyId: id },
+        company,
+        result,
+        tx
+      );
+
+      return result;
     });
 
     res.status(200).json({

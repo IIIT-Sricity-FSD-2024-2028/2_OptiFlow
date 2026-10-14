@@ -9,6 +9,7 @@ import {
   getPlatformMetrics,
   listPlatformCompanies,
   getPlatformCompanyById,
+  createPlatformCompany,
   updatePlatformCompany,
   listPlans,
   getPlanById,
@@ -40,6 +41,7 @@ router.post(
 router.get(['/platform/auth/me', '/api/platform/auth/me'], authenticatePlatformAdmin, platformAuthMe);
 router.get(['/platform/metrics', '/api/platform/metrics'], authenticatePlatformAdmin, getPlatformMetrics);
 router.get(['/platform/companies', '/api/platform/companies'], authenticatePlatformAdmin, listPlatformCompanies);
+router.post(['/platform/companies', '/api/platform/companies'], authenticatePlatformAdmin, createPlatformCompany);
 router.get(['/platform/companies/:id', '/api/platform/companies/:id'], authenticatePlatformAdmin, getPlatformCompanyById);
 router.patch(['/platform/companies/:id', '/api/platform/companies/:id'], authenticatePlatformAdmin, updatePlatformCompany);
 router.get(['/platform/plans', '/api/platform/plans'], authenticatePlatformAdmin, listPlans);

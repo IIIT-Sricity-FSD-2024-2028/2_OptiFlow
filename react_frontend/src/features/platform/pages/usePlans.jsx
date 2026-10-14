@@ -29,6 +29,7 @@ export function usePlans(){
         }
         catch(err){
             console.error(err.message || 'Failed to fetch subscription plans');
+            setError(err.message || 'Failed to fetch subscription plans');
         }
         finally{
             setLoading(false);
