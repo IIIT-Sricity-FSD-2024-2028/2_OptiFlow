@@ -165,13 +165,16 @@ export async function updateEvidence(req, res, next) {
     }
 
     const updateData = {};
+    if (body.title) updateData.title = String(body.title).trim();
+    if (body.evidenceType) updateData.evidenceType = body.evidenceType;
+    if (body.fileUrl) updateData.fileUrl = body.fileUrl;
+    if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.status) {
       validateEnum(body.status, ALLOWED_EVIDENCE_STATUSES, 'status');
       updateData.status = body.status;
       updateData.reviewedById = req.user.id;
       updateData.reviewedAt = new Date();
     }
-    if (body.notes !== undefined) updateData.notes = body.notes;
 
     const updated = await prisma.complianceEvidence.update({
       where: { id },

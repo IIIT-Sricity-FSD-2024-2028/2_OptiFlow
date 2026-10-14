@@ -49,6 +49,13 @@ export async function listComplianceRules(req, res, next) {
         violations: {
           where: { companyId: req.user.companyId, status: "Open" },
         },
+        _count: {
+          select: {
+            violations: true,
+            bindings: true,
+            complianceAuditLogs: true,
+          },
+        },
       },
       orderBy: { name: "asc" },
     });
@@ -75,6 +82,13 @@ export async function getComplianceRuleById(req, res, next) {
         category: true,
         bindings: true,
         violations: { where: { companyId: req.user.companyId } },
+        _count: {
+          select: {
+            violations: true,
+            bindings: true,
+            complianceAuditLogs: true,
+          },
+        },
       },
     });
 
@@ -288,6 +302,15 @@ export async function deleteComplianceRule(req, res, next) {
 
     const existing = await prisma.complianceRule.findFirst({
       where: { id, companyId: req.user.companyId },
+      include: {
+        _count: {
+          select: {
+            violations: true,
+            complianceAuditLogs: true,
+            bindings: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
@@ -296,25 +319,25 @@ export async function deleteComplianceRule(req, res, next) {
       );
     }
 
+    const violationCount = existing._count?.violations || 0;
+    const auditCount = existing._count?.complianceAuditLogs || 0;
+
+    if (violationCount > 0 || auditCount > 0) {
+      throw new BadRequestError(
+        `This compliance rule cannot be permanently deleted because it has associated history (${violationCount} violation(s), ${auditCount} audit record(s)). In enterprise compliance systems, rules with audit history must be deactivated instead of deleted to preserve regulatory integrity.`,
+      );
+    }
+
+    // If it's a draft rule with bindings only, clean up bindings first
+    if ((existing._count?.bindings || 0) > 0) {
+      await prisma.complianceBinding.deleteMany({
+        where: { ruleId: id },
+      });
+    }
+
     await prisma.complianceRule.delete({
       where: { id },
     });
-
-    try {
-      await createComplianceAuditLog({
-        companyId: req.user.companyId,
-        
-        ruleId: id,
-        action: AUDIT_ACTIONS.DELETE,
-        performedById: req.user.id,
-        oldValue: { name: existing.name },
-      });
-    } catch (auditErr) {
-      console.warn(
-        "[AuditLog] Notice: Audit logging for compliance rule delete:",
-        auditErr.message,
-      );
-    }
 
     res.status(200).json({
       success: true,

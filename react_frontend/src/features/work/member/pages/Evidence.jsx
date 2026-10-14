@@ -46,43 +46,36 @@ export default function MemberEvidence() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [evRes, tasksRes] = await Promise.allSettled([
+        evidenceApi.list(),
+        tasksApi.list(),
+      ]);
 
-    async function loadData() {
-      setLoading(true);
-      try {
-        const [evRes, tasksRes] = await Promise.allSettled([
-          evidenceApi.list(),
-          tasksApi.list(),
-        ]);
+      const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
+      const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
 
-        if (!isMounted) return;
+      const currentUserId = String(user?.id || user?.userId || '');
 
-        const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
-        const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
+      const myEv = allEv.filter((e) => {
+        const uId = String(e.userId || e.user_id || (typeof e.user === 'object' ? e.user?.id : e.user) || '');
+        return !currentUserId || uId === currentUserId || !uId;
+      });
 
-        const currentUserId = String(user?.id || user?.userId || '');
-
-        const myEv = allEv.filter((e) => {
-          const uId = String(e.userId || e.user_id || (typeof e.user === 'object' ? e.user?.id : e.user) || '');
-          return !currentUserId || uId === currentUserId || !uId;
-        });
-
-        setEvidenceList(myEv);
-        setTasks(allTasks);
-      } catch (err) {
-        console.error('Error fetching evidence:', err);
-        if (isMounted) toast.error('Failed to load evidence records');
-      } finally {
-        if (isMounted) setLoading(false);
-      }
+      setEvidenceList(myEv);
+      setTasks(allTasks);
+    } catch (err) {
+      console.error('Error fetching evidence:', err);
+      toast.error('Failed to load evidence records');
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     loadData();
-    return () => {
-      isMounted = false;
-    };
   }, [user?.id]);
 
   const metrics = useMemo(() => {
@@ -297,17 +290,23 @@ export default function MemberEvidence() {
                         {ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : 'Recent'}
                       </td>
                       <td className="py-4 px-6 text-right whitespace-nowrap space-x-2">
-                        {fileUrl && (
-                          <a
-                            href={fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex p-1 text-slate-400 hover:text-blue-600 transition-colors"
-                            title="Open File"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        )}
+                        {fileUrl && (() => {
+                          const token = sessionStorage.getItem('authToken') || '';
+                          const isExternalUrl = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
+                          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
+                          const viewUrl = isExternalUrl ? fileUrl : `${apiBase}/api/evidence/${ev.id}/file?token=${encodeURIComponent(token)}`;
+                          return (
+                            <a
+                              href={viewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex p-1 text-slate-400 hover:text-blue-600 transition-colors"
+                              title="Open File"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          );
+                        })()}
                         <button
                           type="button"
                           onClick={() => {
@@ -349,11 +348,8 @@ export default function MemberEvidence() {
         }}
         tasks={tasks}
         initialData={editingItem}
-        onSuccess={(saved) => {
-          setEvidenceList((prev) => {
-            const exists = prev.some((e) => e.id === saved.id);
-            return exists ? prev.map((e) => (e.id === saved.id ? saved : e)) : [saved, ...prev];
-          });
+        onSuccess={() => {
+          loadData();
         }}
       />
 

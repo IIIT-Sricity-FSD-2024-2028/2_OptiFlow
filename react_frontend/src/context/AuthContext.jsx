@@ -20,12 +20,14 @@ export const AuthProvider = ({ children }) => {
           const meRoute = isPlatform ? '/platform/auth/me' : '/auth/me';
           const userData = await apiClient(meRoute); 
           
-          // The backend wraps the identity in `userData.user`
+          // The backend wraps the identity in `userData.user` or directly in `userData`
           const restoredUser = userData.user || userData;
-          setUser({ ...restoredUser, isPlatform });
+          const role = isPlatform ? 'platform_admin' : (restoredUser.role || restoredUser.roleSlug);
+          setUser({ ...restoredUser, role, isPlatform });
         } catch (error) {
           sessionStorage.removeItem('authToken');
           sessionStorage.removeItem('isPlatform');
+          setUser(null);
         }
       }
       setLoading(false);
@@ -46,7 +48,8 @@ export const AuthProvider = ({ children }) => {
     sessionStorage.setItem('authToken', response.token);
     sessionStorage.setItem('isPlatform', isPlatformAdmin ? 'true' : 'false');
     // response.user and response.role are guaranteed by the backend's handleLogin
-    setUser({ ...response.user, role: response.role, isPlatform: isPlatformAdmin }); 
+    const loggedInUser = response.user || {};
+    setUser({ ...loggedInUser, role: response.role || loggedInUser.role, isPlatform: isPlatformAdmin }); 
     return response;
   };
 
@@ -61,7 +64,7 @@ export const AuthProvider = ({ children }) => {
     sessionStorage.setItem('isPlatform', 'true');
     
     const loggedInUser = response.adminUser || response.user || {};
-    setUser({ ...loggedInUser, role: 'system_admin', isPlatform: true }); 
+    setUser({ ...loggedInUser, role: 'platform_admin', isPlatform: true }); 
     return response;
   };
 

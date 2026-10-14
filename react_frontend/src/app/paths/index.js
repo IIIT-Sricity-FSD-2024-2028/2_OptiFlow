@@ -19,6 +19,7 @@ export const PATHS = {
     SUBSCRIPTIONS: "/platform/subscriptions",
     ADMIN_USERS: "/platform/admin-users",
     SUPPORT_ACCESS: "/platform/support-access",
+    PROFILE: "/platform/profile",
   },
   EXECUTIVE: {
     DASHBOARD: "/executive/dashboard",

@@ -414,7 +414,7 @@ export default function MemberTaskDetail() {
         isOpen={isSubmitModalOpen}
         onClose={() => setIsSubmitModalOpen(false)}
         taskId={taskId}
-        onSuccess={() => setTask((prev) => ({ ...prev, status: 'Pending_TL_Review' }))}
+        onSuccess={() => setTask((prev) => ({ ...prev, status: 'In_Review' }))}
       />
 
       <ReportBlockerModal

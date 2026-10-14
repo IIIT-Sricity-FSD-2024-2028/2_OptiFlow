@@ -7,17 +7,22 @@ import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { CreateBindingModal } from "../components/CreateBindingModal";
-import { Plus, Loader2, Link2, Trash2, BookOpen, Tags } from "lucide-react";
+import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
+import { Plus, Loader2, Link2, Unlink, BookOpen, Tags } from "lucide-react";
+import { useToast } from "../../../shared/components/Toast";
 
 const PAGE_SIZE = 10;
 
 export default function ComplianceBindings() {
+  const toast = useToast();
   const [bindings, setBindings] = useState([]);
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [bindingToUnbind, setBindingToUnbind] = useState(null);
+  const [isUnbinding, setIsUnbinding] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -44,13 +49,23 @@ export default function ComplianceBindings() {
     fetchData();
   }, []);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to remove this scope binding?")) return;
+  const handleUnbind = (binding) => {
+    setBindingToUnbind(binding);
+  };
+
+  const handleConfirmUnbind = async () => {
+    if (!bindingToUnbind) return;
     try {
-      await apiClient(`/compliance-bindings/${id}`, { method: "DELETE" });
+      setIsUnbinding(true);
+      await apiClient(`/compliance-bindings/${bindingToUnbind.id}`, { method: "DELETE" });
+      const scopeLabel = bindingToUnbind.scopeName || (bindingToUnbind.scopeType === "Company" ? "All (Company-wide)" : bindingToUnbind.scopeId);
+      toast.success(`Unbound rule from ${scopeLabel}.`);
+      setBindingToUnbind(null);
       fetchData();
     } catch (err) {
-      alert("Failed to delete binding: " + err.message);
+      toast.error("Failed to unbind: " + err.message);
+    } finally {
+      setIsUnbinding(false);
     }
   };
 
@@ -111,11 +126,11 @@ export default function ComplianceBindings() {
         <Button
           variant="ghost"
           size="sm"
-          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-          onClick={() => handleDelete(row.id)}
+          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 inline-flex items-center gap-1.5 cursor-pointer"
+          onClick={() => handleUnbind(row)}
         >
-          <Trash2 size={15} className="mr-1 inline" />
-          Remove
+          <Unlink size={14} />
+          <span>Unbind Scope</span>
         </Button>
       ),
     },
@@ -210,6 +225,17 @@ export default function ComplianceBindings() {
           onBindingCreated={fetchData}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={Boolean(bindingToUnbind)}
+        title="Unbind Scope"
+        message={`Are you sure you want to unbind "${bindingToUnbind?.rule?.name || 'this rule'}" from "${bindingToUnbind?.scopeName || (bindingToUnbind?.scopeType === 'Company' ? 'All (Company-wide)' : bindingToUnbind?.scopeId)}"? Future events will stop being evaluated against this rule.`}
+        confirmText="Unbind Scope"
+        variant="danger"
+        loading={isUnbinding}
+        onConfirm={handleConfirmUnbind}
+        onCancel={() => setBindingToUnbind(null)}
+      />
     </div>
   );
 }

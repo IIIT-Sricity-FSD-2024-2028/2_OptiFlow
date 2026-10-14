@@ -3,11 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Power, PowerOff, Unlink } from "lucide-react";
 import Table from "../../../shared/components/Table";
 import { CreateBindingModal } from "../components/CreateBindingModal";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
 import { Modal } from "../../../shared/components/Modal";
+import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
+import { useToast } from "../../../shared/components/Toast";
 
 const formatActionString = (str) => {
   if (!str) return "Unknown Action";
@@ -60,6 +62,7 @@ const renderCriteria = (criteria) => {
 const RuleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const [rule, setRule] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
@@ -67,6 +70,9 @@ const RuleDetail = () => {
   const [selectedViolation, setSelectedViolation] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [bindingToUnbind, setBindingToUnbind] = useState(null);
+  const [isUnbinding, setIsUnbinding] = useState(false);
   const [editFormData, setEditFormData] = useState({
     name: "",
     description: "",
@@ -96,6 +102,50 @@ const RuleDetail = () => {
     }
   };
 
+  const handleToggleActive = async () => {
+    if (!rule) return;
+    const newStatus = !rule.isActive;
+    try {
+      setStatusLoading(true);
+      await apiClient(`/compliance-rules/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: newStatus }),
+      });
+      setRule((prev) => ({ ...prev, isActive: newStatus }));
+      toast.success(
+        newStatus
+          ? `Rule activated. Enforcing in compliance engine.`
+          : `Rule safely deactivated. Evaluation paused.`
+      );
+      fetchRule();
+    } catch (err) {
+      toast.error(`Failed to update status: ${err.message}`);
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleUnbind = (binding) => {
+    setBindingToUnbind(binding);
+  };
+
+  const handleConfirmUnbind = async () => {
+    if (!bindingToUnbind) return;
+    try {
+      setIsUnbinding(true);
+      await apiClient(`/compliance-bindings/${bindingToUnbind.id}`, {
+        method: "DELETE",
+      });
+      toast.success("Scope unbound successfully");
+      setBindingToUnbind(null);
+      fetchRule();
+    } catch (err) {
+      toast.error(`Failed to unbind scope: ${err.message}`);
+    } finally {
+      setIsUnbinding(false);
+    }
+  };
+
   const handleOpenEdit = () => {
     setEditFormData({
       name: rule.name,
@@ -121,10 +171,11 @@ const RuleDetail = () => {
         }),
       });
       setIsEditModalOpen(false);
+      toast.success("Rule configuration saved.");
       fetchRule();
     } catch (err) {
       console.error("Failed to update rule:", err);
-      alert("Failed to update rule: " + err.message);
+      toast.error("Failed to update rule: " + err.message);
     }
   };
 
@@ -152,6 +203,22 @@ const RuleDetail = () => {
       case "overview":
         return (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            {!rule.isActive && (
+              <div className="mb-6 p-3 px-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                  <span>This rule is paused. New checks won't run, but past violations remain saved.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleActive}
+                  disabled={statusLoading}
+                  className="font-medium text-blue-600 hover:text-blue-700 cursor-pointer"
+                >
+                  Turn back on
+                </button>
+              </div>
+            )}
             <h3 className="text-lg font-medium text-gray-900 mb-4">Rule Configuration</h3>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-8">
               <div>
@@ -174,7 +241,7 @@ const RuleDetail = () => {
                 <dt className="text-sm font-medium text-gray-500">Status</dt>
                 <dd className="mt-1">
                   <Badge variant={rule.isActive ? "success" : "neutral"}>
-                    {rule.isActive ? "Active" : "Inactive"}
+                    {rule.isActive ? "Active" : "Deactivated"}
                   </Badge>
                 </dd>
               </div>
@@ -209,7 +276,21 @@ const RuleDetail = () => {
                 columns={[
                   { header: "SCOPE TYPE", accessor: "scopeType" },
                   { header: "SCOPE NAME", accessor: "scopeName", render: (row) => row.scopeName || "All (Company-wide)" },
-                  { header: "ACTIONS", accessor: "actions", render: (row) => <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50">Remove</Button> }
+                  {
+                    header: "ACTIONS",
+                    accessor: "actions",
+                    render: (row) => (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 inline-flex items-center gap-1 cursor-pointer"
+                        onClick={() => handleUnbind(row)}
+                      >
+                        <Unlink size={13} />
+                        <span>Unbind</span>
+                      </Button>
+                    ),
+                  },
                 ]}
                 data={rule.bindings}
               />
@@ -279,15 +360,49 @@ const RuleDetail = () => {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-semibold text-gray-900">{rule.name}</h1>
-              <Badge variant={rule.isActive ? "success" : "neutral"}>
-                {rule.isActive ? "Active" : "Inactive"}
-              </Badge>
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  rule.isActive
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : "bg-slate-100 text-slate-600 border border-slate-200"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    rule.isActive ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                  }`}
+                />
+                {rule.isActive ? "Active" : "Deactivated"}
+              </span>
             </div>
             <p className="text-sm text-gray-500 mt-1">Manage rule configuration, scope bindings, and view violation history.</p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={handleOpenEdit}>Edit Rule</Button>
+        <div className="flex items-center gap-3">
+          {rule.isActive ? (
+            <Button
+              variant="outline"
+              className="border-amber-300 text-amber-700 hover:bg-amber-50 inline-flex items-center gap-1.5 cursor-pointer"
+              onClick={handleToggleActive}
+              disabled={statusLoading}
+            >
+              {statusLoading ? <Loader2 size={14} className="animate-spin" /> : <PowerOff size={14} />}
+              <span>Deactivate Rule</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 inline-flex items-center gap-1.5 cursor-pointer"
+              onClick={handleToggleActive}
+              disabled={statusLoading}
+            >
+              {statusLoading ? <Loader2 size={14} className="animate-spin" /> : <Power size={14} />}
+              <span>Activate Rule</span>
+            </Button>
+          )}
+          <Button variant="outline" onClick={handleOpenEdit}>
+            Edit Rule
+          </Button>
         </div>
       </div>
 
@@ -437,6 +552,17 @@ const RuleDetail = () => {
           </button>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(bindingToUnbind)}
+        title="Unbind Scope"
+        message={`Are you sure you want to unbind this rule from "${bindingToUnbind?.scopeName || bindingToUnbind?.scopeType}"? Future events will stop being evaluated against this rule.`}
+        confirmText="Unbind Scope"
+        variant="danger"
+        loading={isUnbinding}
+        onConfirm={handleConfirmUnbind}
+        onCancel={() => setBindingToUnbind(null)}
+      />
     </div>
   );
 };
