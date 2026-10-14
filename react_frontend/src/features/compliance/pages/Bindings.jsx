@@ -7,11 +7,13 @@ import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { CreateBindingModal } from "../components/CreateBindingModal";
-import { Plus, Loader2, Link2, Trash2, BookOpen, Tags } from "lucide-react";
+import { Plus, Loader2, Link2, Unlink, BookOpen, Tags, Info } from "lucide-react";
+import { useToast } from "../../../shared/components/Toast";
 
 const PAGE_SIZE = 10;
 
 export default function ComplianceBindings() {
+  const toast = useToast();
   const [bindings, setBindings] = useState([]);
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,13 +46,16 @@ export default function ComplianceBindings() {
     fetchData();
   }, []);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to remove this scope binding?")) return;
+  const handleUnbind = async (binding) => {
+    const scopeLabel = binding.scopeName || (binding.scopeType === "Company" ? "All (Company-wide)" : binding.scopeId);
+    const ruleLabel = binding.rule?.name || `Rule #${binding.ruleId}`;
+    if (!window.confirm(`Unbind "${ruleLabel}" from "${scopeLabel}"? Future events will no longer be evaluated against this rule. Past violations remain safely in audit history.`)) return;
     try {
-      await apiClient(`/compliance-bindings/${id}`, { method: "DELETE" });
+      await apiClient(`/compliance-bindings/${binding.id}`, { method: "DELETE" });
+      toast.success(`Unbound rule from ${scopeLabel}.`);
       fetchData();
     } catch (err) {
-      alert("Failed to delete binding: " + err.message);
+      toast.error("Failed to unbind: " + err.message);
     }
   };
 
@@ -111,11 +116,11 @@ export default function ComplianceBindings() {
         <Button
           variant="ghost"
           size="sm"
-          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-          onClick={() => handleDelete(row.id)}
+          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 inline-flex items-center gap-1.5 cursor-pointer"
+          onClick={() => handleUnbind(row)}
         >
-          <Trash2 size={15} className="mr-1 inline" />
-          Remove
+          <Unlink size={14} />
+          <span>Unbind Scope</span>
         </Button>
       ),
     },
@@ -175,6 +180,16 @@ export default function ComplianceBindings() {
           <Link2 size={14} />
           <span>Scope Bindings ({bindings.length})</span>
         </Link>
+      </div>
+
+      {/* Governance Guidance Banner */}
+      <div className="p-3.5 bg-blue-50/70 border border-blue-200/70 rounded-xl flex items-center justify-between text-xs text-blue-900">
+        <div className="flex items-center gap-2.5">
+          <Info size={16} className="text-blue-600 shrink-0" />
+          <span>
+            <strong>Scope Binding Governance:</strong> Unbinding a scope safely discontinues future rule evaluation for that target without deleting historical violation records or evidence files.
+          </span>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">

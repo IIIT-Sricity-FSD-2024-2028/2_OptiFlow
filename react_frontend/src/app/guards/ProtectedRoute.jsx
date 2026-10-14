@@ -1,11 +1,13 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { PATHS } from '../paths';
+import { ROLES } from '../../roles';
 
 // It uses <Outlet /> to render the nested child routes if the user is allowed in.
 export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   // If AuthContext is still checking sessionStorage, don't redirect yet
   if (loading) {
@@ -18,13 +20,18 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
     return <Navigate to={PATHS.PUBLIC.LOGIN} replace />;
   }
 
-  // 2. Is this a platform route but the user is a standard tenant? Kick to login page
-  if (isPlatform && !user.isPlatform) {
+  const isPlatformUser = Boolean(user.isPlatform || user.role === ROLES.PLATFORM_ADMIN);
+
+  // 2. Is this a platform route but the user is a standard tenant? Kick to unauthorized
+  if (isPlatform && !isPlatformUser) {
     return <Navigate to={PATHS.COMMON.UNAUTHORIZED} replace />;
   }
 
   // 3. Is this a standard tenant route, but the user is a platform admin? Kick them out.
-  if (!isPlatform && user.isPlatform) {
+  if (!isPlatform && isPlatformUser) {
+    if (location.pathname === PATHS.COMMON.PROFILE) {
+      return <Navigate to={PATHS.PLATFORM.PROFILE} replace />;
+    }
     return <Navigate to={PATHS.PLATFORM.DASHBOARD} replace />;
   }
 

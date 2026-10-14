@@ -36,7 +36,19 @@ export default function ComplianceAuditLogs() {
     { 
       header: "TIMESTAMP", 
       accessor: "performedAt",
-      render: (row) => new Date(row.performedAt).toLocaleString()
+      render: (row) => {
+        const d = new Date(row.performedAt);
+        return (
+          <div className="flex flex-col text-sm">
+            <span className="font-semibold text-slate-800">
+              {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+            <span className="text-xs text-slate-500">
+              {d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+            </span>
+          </div>
+        );
+      }
     },
     { 
       header: "ACTION", 
@@ -47,34 +59,60 @@ export default function ComplianceAuditLogs() {
           row.action === 'DELETE' ? 'danger' : 
           row.action === 'STATUS_CHANGE' ? 'warning' : 'info'
         }>
-          {row.action.replace('_', ' ')}
+          <span className="text-xs font-semibold">{row.action?.replace('_', ' ')}</span>
         </Badge>
       )
     },
     { 
       header: "PERFORMED BY", 
       accessor: "user",
-      render: (row) => <span className="font-medium text-slate-700">{row.performedBy?.fullName || row.performedBy?.email || 'System'}</span>
+      render: (row) => (
+        <div className="flex flex-col text-sm">
+          <span className="font-semibold text-slate-800">{row.performedBy?.fullName || 'System Automated'}</span>
+          {row.performedBy?.email && <span className="text-xs text-slate-500">{row.performedBy.email}</span>}
+        </div>
+      )
     },
     { 
       header: "ENTITY", 
       accessor: "entity",
-      render: (row) => (
-        <span className="font-medium text-slate-700">
-          {row.entityName || (row.entityId ? `${row.entityType} #${row.entityId.substring(0,8)}` : row.entityType || 'General')}
-        </span>
-      )
+      render: (row) => {
+        const formatEntityType = (type) => {
+          if (!type) return 'General Entity';
+          if (type === 'ComplianceRule') return 'Compliance Rule';
+          if (type === 'ComplianceViolation') return 'Compliance Violation';
+          if (type === 'ComplianceEvidence') return 'Compliance Evidence';
+          return type.replace(/([A-Z])/g, ' $1').trim();
+        };
+
+        const typeLabel = formatEntityType(row.entityType);
+
+        return (
+          <div className="flex flex-col gap-1.5 py-1.5">
+            <span className="font-semibold text-sm text-slate-800 leading-snug">
+              {row.entityName || (row.entityId ? `${typeLabel} #${row.entityId.substring(0, 8)}` : typeLabel)}
+            </span>
+            {row.entityType && (
+              <span className="text-xs font-medium text-slate-500">
+                {typeLabel}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     { 
-      header: "ACTIONS", 
+      header: "ACTION", 
       accessor: "actions",
       render: (row) => (
         <button 
+          type="button"
           onClick={() => setSelectedLog(row)}
-          className="text-slate-400 hover:text-blue-600 transition-colors p-1.5 rounded-md hover:bg-blue-50"
+          className="text-slate-400 hover:text-blue-600 transition-colors p-2 rounded-lg hover:bg-blue-50/80 cursor-pointer"
           title="View Details"
+          aria-label="View Details"
         >
-          <Eye className="w-4 h-4" />
+          <Eye size={18} />
         </button>
       )
     }

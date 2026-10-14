@@ -7,6 +7,7 @@ import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
 import { Pagination } from "../../../shared/components/Pagination";
+import { useToast } from "../../../shared/components/Toast";
 import {
   Plus,
   Loader2,
@@ -15,14 +16,22 @@ import {
   BookOpen,
   Tags,
   Link2,
+  Power,
+  PowerOff,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
 
 export default function ComplianceRules() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCategoryId = searchParams.get("categoryId") || "ALL";
+  const [activeStatus, setActiveStatus] = useState("ALL"); // "ALL" | "ACTIVE" | "INACTIVE"
 
   const [rules, setRules] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -39,6 +48,11 @@ export default function ComplianceRules() {
     isActive: true,
     scopeType: "Company",
   });
+
+  // Enterprise Rule Governance Action Modal
+  const [ruleToManage, setRuleToManage] = useState(null);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -95,16 +109,71 @@ export default function ComplianceRules() {
     setIsOpen(true);
   };
 
-  const handleDeleteRule = async (id) => {
-    if (
-      !window.confirm("Are you sure you want to delete this compliance rule?")
-    )
-      return;
+  const handleToggleActive = async (rule) => {
+    const newStatus = !rule.isActive;
+    const previousRules = [...rules];
+
+    // Optimistic UI update
+    setRules(
+      rules.map((r) => (r.id === rule.id ? { ...r, isActive: newStatus } : r))
+    );
+
     try {
-      await apiClient(`/compliance-rules/${id}`, { method: "DELETE" });
+      await apiClient(`/compliance-rules/${rule.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: newStatus }),
+      });
+      toast.success(
+        newStatus
+          ? `Rule "${rule.name}" activated and enforcing.`
+          : `Rule "${rule.name}" safely deactivated.`
+      );
       fetchData();
     } catch (err) {
-      alert("Failed to delete rule: " + err.message);
+      setRules(previousRules);
+      toast.error(`Failed to update rule status: ${err.message}`);
+    }
+  };
+
+  const handleOpenManageModal = (rule) => {
+    setRuleToManage(rule);
+    setIsManageModalOpen(true);
+  };
+
+  const handleConfirmDeactivate = async () => {
+    if (!ruleToManage) return;
+    try {
+      setActionLoading(true);
+      await apiClient(`/compliance-rules/${ruleToManage.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: false }),
+      });
+      toast.success(`Rule "${ruleToManage.name}" deactivated.`);
+      setIsManageModalOpen(false);
+      setRuleToManage(null);
+      fetchData();
+    } catch (err) {
+      toast.error(`Failed to deactivate rule: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!ruleToManage) return;
+    try {
+      setActionLoading(true);
+      await apiClient(`/compliance-rules/${ruleToManage.id}`, {
+        method: "DELETE",
+      });
+      toast.success(`Draft rule "${ruleToManage.name}" permanently deleted.`);
+      setIsManageModalOpen(false);
+      setRuleToManage(null);
+      fetchData();
+    } catch (err) {
+      toast.error(`Failed to delete rule: ${err.message}`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -172,14 +241,19 @@ export default function ComplianceRules() {
     }
   };
 
-  const filteredRules =
-    activeCategoryId === "ALL"
-      ? rules
-      : rules.filter(
-          (r) =>
-            r.categoryId === activeCategoryId ||
-            r.category?.id === activeCategoryId,
-        );
+  const filteredRules = rules.filter((r) => {
+    const matchesCategory =
+      activeCategoryId === "ALL" ||
+      r.categoryId === activeCategoryId ||
+      r.category?.id === activeCategoryId;
+
+    const matchesStatus =
+      activeStatus === "ALL" ||
+      (activeStatus === "ACTIVE" && r.isActive) ||
+      (activeStatus === "INACTIVE" && !r.isActive);
+
+    return matchesCategory && matchesStatus;
+  });
 
   const paginatedRules = filteredRules.slice(
     (currentPage - 1) * PAGE_SIZE,
@@ -262,29 +336,63 @@ export default function ComplianceRules() {
       header: "STATUS",
       accessor: "isActive",
       render: (row) => (
-        <Badge status={row.isActive ? "success" : "default"}>
-          {row.isActive ? "Active" : "Inactive"}
-        </Badge>
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+            row.isActive
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              : "bg-slate-100 text-slate-600 border border-slate-200"
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              row.isActive ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+            }`}
+          />
+          {row.isActive ? "Active" : "Deactivated"}
+        </span>
       ),
     },
     {
       header: "ACTIONS",
       accessor: "actions",
       render: (row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Quick Activate / Deactivate Toggle */}
           <button
+            type="button"
+            onClick={() => handleToggleActive(row)}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              row.isActive
+                ? "text-emerald-600 hover:text-amber-600 hover:bg-amber-50"
+                : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+            }`}
+            title={
+              row.isActive
+                ? "Deactivate Rule (Temporarily pause evaluation)"
+                : "Activate Rule (Resume compliance enforcement)"
+            }
+          >
+            {row.isActive ? <Power size={15} /> : <PowerOff size={15} />}
+          </button>
+
+          {/* Edit Rule */}
+          <button
+            type="button"
             onClick={() => handleOpenEdit(row)}
-            className="text-gray-500 hover:text-blue-600 p-1 transition-colors"
+            className="text-slate-500 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
             title="Edit Rule"
           >
-            <Edit2 size={16} />
+            <Edit2 size={15} />
           </button>
+
+          {/* Delete / Governance Protection Modal */}
           <button
-            onClick={() => handleDeleteRule(row.id)}
-            className="text-gray-500 hover:text-red-600 p-1 transition-colors"
-            title="Delete Rule"
+            type="button"
+            onClick={() => handleOpenManageModal(row)}
+            className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+            title="Delete or Deactivate Rule"
           >
-            <Trash2 size={16} />
+            <Trash2 size={15} />
           </button>
         </div>
       ),
@@ -298,6 +406,9 @@ export default function ComplianceRules() {
       </div>
     );
   }
+
+  const activeCount = rules.filter((r) => r.isActive).length;
+  const inactiveCount = rules.filter((r) => !r.isActive).length;
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
@@ -332,7 +443,7 @@ export default function ComplianceRules() {
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow-xs"
         >
           <BookOpen size={14} />
-          <span>Active Rules ({rules.length})</span>
+          <span>Rules ({rules.length})</span>
         </Link>
         <Link
           to={PATHS.COMPLIANCE.CATEGORIES}
@@ -351,53 +462,102 @@ export default function ComplianceRules() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Category Filter Toolbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-slate-200 bg-slate-50/60">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">
-              Filter by Category:
-            </span>
-            <select
-              value={activeCategoryId}
-              onChange={(e) => {
-                setCurrentPage(1);
-                if (e.target.value === "ALL") {
-                  const newParams = new URLSearchParams(searchParams);
-                  newParams.delete("categoryId");
-                  newParams.delete("categoryName");
-                  setSearchParams(newParams);
-                } else {
-                  const cat = categories.find((c) => c.id === e.target.value);
-                  setSearchParams({
-                    categoryId: e.target.value,
-                    categoryName: cat ? cat.name : "",
-                  });
-                }
-              }}
-              className="border border-slate-300 rounded-md px-3 py-1.5 text-xs bg-white text-gray-700 outline-none focus:border-blue-500 font-medium"
-            >
-              <option value="ALL">All Categories ({rules.length})</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-
-            {activeCategoryId !== "ALL" && (
-              <button
-                onClick={() => {
+        {/* Category & Status Filter Toolbar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-slate-200 bg-slate-50/60">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Category Select */}
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">
+                Category:
+              </span>
+              <select
+                value={activeCategoryId}
+                onChange={(e) => {
                   setCurrentPage(1);
-                  const newParams = new URLSearchParams(searchParams);
-                  newParams.delete("categoryId");
-                  newParams.delete("categoryName");
-                  setSearchParams(newParams);
+                  if (e.target.value === "ALL") {
+                    const newParams = new URLSearchParams(searchParams);
+                    newParams.delete("categoryId");
+                    newParams.delete("categoryName");
+                    setSearchParams(newParams);
+                  } else {
+                    const cat = categories.find((c) => c.id === e.target.value);
+                    setSearchParams({
+                      categoryId: e.target.value,
+                      categoryName: cat ? cat.name : "",
+                    });
+                  }
                 }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-xs bg-white text-gray-700 outline-none focus:border-blue-500 font-medium"
               >
-                Clear Filter
+                <option value="ALL">All Categories ({rules.length})</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+
+              {activeCategoryId !== "ALL" && (
+                <button
+                  onClick={() => {
+                    setCurrentPage(1);
+                    const newParams = new URLSearchParams(searchParams);
+                    newParams.delete("categoryId");
+                    newParams.delete("categoryName");
+                    setSearchParams(newParams);
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Status Filter Pills */}
+            <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStatus("ALL");
+                  setCurrentPage(1);
+                }}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  activeStatus === "ALL"
+                    ? "bg-white text-slate-800 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                All ({rules.length})
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStatus("ACTIVE");
+                  setCurrentPage(1);
+                }}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  activeStatus === "ACTIVE"
+                    ? "bg-white text-emerald-700 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Active ({activeCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStatus("INACTIVE");
+                  setCurrentPage(1);
+                }}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  activeStatus === "INACTIVE"
+                    ? "bg-white text-slate-800 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Deactivated ({inactiveCount})
+              </button>
+            </div>
           </div>
 
           <div className="text-xs text-gray-500">
@@ -416,8 +576,8 @@ export default function ComplianceRules() {
             columns={columns}
             data={paginatedRules}
             emptyMessage={
-              activeCategoryId !== "ALL"
-                ? "No compliance rules found for this category."
+              activeStatus !== "ALL" || activeCategoryId !== "ALL"
+                ? "No compliance rules found matching the selected filters."
                 : "No compliance rules found. Create one to start scanning."
             }
           />
@@ -551,6 +711,136 @@ export default function ComplianceRules() {
           </button>
         </form>
       </Modal>
+
+      {/* Enterprise Rule Governance & Audit Retention Modal */}
+      {ruleToManage && (
+        <Modal
+          isOpen={isManageModalOpen}
+          onClose={() => {
+            setIsManageModalOpen(false);
+            setRuleToManage(null);
+          }}
+          title={
+            (ruleToManage._count?.violations || (ruleToManage.violations?.length || 0)) > 0
+              ? "Enterprise Policy Retention"
+              : "Delete Compliance Rule"
+          }
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsManageModalOpen(false);
+                  setRuleToManage(null);
+                }}
+                disabled={actionLoading}
+              >
+                Cancel
+              </Button>
+              {(ruleToManage._count?.violations || (ruleToManage.violations?.length || 0)) > 0 ? (
+                ruleToManage.isActive ? (
+                  <Button
+                    variant="warning"
+                    onClick={handleConfirmDeactivate}
+                    disabled={actionLoading}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    {actionLoading && <Loader2 size={14} className="animate-spin" />}
+                    <span>Deactivate Rule</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setIsManageModalOpen(false);
+                      setRuleToManage(null);
+                    }}
+                  >
+                    Understood
+                  </Button>
+                )
+              ) : (
+                <Button
+                  variant="danger"
+                  onClick={handleConfirmDelete}
+                  disabled={actionLoading}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  {actionLoading && <Loader2 size={14} className="animate-spin" />}
+                  <span>Delete Permanently</span>
+                </Button>
+              )}
+            </>
+          }
+        >
+          <div className="space-y-4 text-sm text-slate-700">
+            {(ruleToManage._count?.violations || (ruleToManage.violations?.length || 0)) > 0 ? (
+              <div className="space-y-3">
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                  <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <h4 className="font-bold text-amber-900 text-sm">
+                      Compliance Audit Trail Protection
+                    </h4>
+                    <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                      This rule has{" "}
+                      <span className="font-bold underline">
+                        {ruleToManage._count?.violations || ruleToManage.violations?.length || 0} recorded violation(s)
+                      </span>
+                      . In enterprise governance frameworks (SOC 2, ISO 27001), rules with audit or violation history cannot be deleted to guarantee historical audit integrity and non-repudiation.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs text-slate-600">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-700">Rule Name:</span>
+                    <span className="font-medium text-slate-900">{ruleToManage.name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-700">Current Status:</span>
+                    <Badge status={ruleToManage.isActive ? "success" : "default"}>
+                      {ruleToManage.isActive ? "Active" : "Deactivated"}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-700">Enforcement Scope:</span>
+                    <span>{ruleToManage.bindings?.[0]?.scopeType || "All (Company)"}</span>
+                  </div>
+                </div>
+
+                {ruleToManage.isActive ? (
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Instead of hard-deleting, you can safely <strong>deactivate</strong> this rule. The automated compliance engine will immediately stop evaluating this rule on upcoming workflows, while past violations and evidence remain securely preserved.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    This rule is currently <strong>deactivated</strong>. It is retained strictly as an immutable record for past audits and will not evaluate new workflows.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
+                  <AlertTriangle className="text-rose-600 shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <h4 className="font-bold text-rose-900 text-sm">
+                      Delete Draft Rule
+                    </h4>
+                    <p className="text-xs text-rose-800 mt-1 leading-relaxed">
+                      This compliance rule has no recorded violations or audit history. It will be permanently removed from the system.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600">
+                  Are you sure you want to permanently delete <strong>{ruleToManage.name}</strong>? This action cannot be undone.
+                </p>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

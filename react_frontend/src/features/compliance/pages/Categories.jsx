@@ -6,12 +6,14 @@ import Table from "../../../shared/components/Table";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
 import { Pagination } from "../../../shared/components/Pagination";
-import { Plus, Loader2, Trash2, Edit2, ExternalLink, BookOpen, Tags, Link2 } from "lucide-react";
+import { useToast } from "../../../shared/components/Toast";
+import { Plus, Loader2, Trash2, Edit2, ExternalLink, BookOpen, Tags, Link2, Lock, Info } from "lucide-react";
 
 const PAGE_SIZE = 10;
 
 export default function ComplianceCategories() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -48,13 +50,21 @@ export default function ComplianceCategories() {
     setIsOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this category?")) return;
+  const handleDelete = async (category) => {
+    const rulesCount = category._count?.rules || 0;
+    if (rulesCount > 0) {
+      toast.error(
+        `Cannot delete category "${category.name}": it has ${rulesCount} associated rule(s). Reassign or delete those rules first.`
+      );
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete the empty category "${category.name}"?`)) return;
     try {
-      await apiClient(`/compliance-categories/${id}`, { method: "DELETE" });
+      await apiClient(`/compliance-categories/${category.id}`, { method: "DELETE" });
+      toast.success(`Category "${category.name}" deleted.`);
       fetchCategories();
     } catch (error) {
-      alert("Failed to delete category: " + error.message);
+      toast.error("Failed to delete category: " + error.message);
     }
   };
 
@@ -119,32 +129,44 @@ export default function ComplianceCategories() {
     {
       header: "ACTIONS",
       accessor: "actions",
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate(`/compliance/rules?categoryId=${row.id}&categoryName=${encodeURIComponent(row.name)}`)}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition-colors"
-            title="View Rules"
-          >
-            <ExternalLink size={13} />
-            <span>Rules</span>
-          </button>
-          <button 
-            onClick={() => handleOpenEdit(row)}
-            className="text-gray-500 hover:text-blue-600 p-1 transition-colors"
-            title="Edit Category"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button 
-            onClick={() => handleDelete(row.id)}
-            className="text-gray-500 hover:text-red-600 p-1 transition-colors"
-            title="Delete Category"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ),
+      render: (row) => {
+        const rulesCount = row._count?.rules || 0;
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/compliance/rules?categoryId=${row.id}&categoryName=${encodeURIComponent(row.name)}`)}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition-colors"
+              title="View Rules"
+            >
+              <ExternalLink size={13} />
+              <span>Rules</span>
+            </button>
+            <button 
+              onClick={() => handleOpenEdit(row)}
+              className="text-gray-500 hover:text-blue-600 p-1 transition-colors"
+              title="Edit Category"
+            >
+              <Edit2 size={16} />
+            </button>
+            {rulesCount > 0 ? (
+              <span 
+                className="text-slate-300 p-1 cursor-not-allowed inline-flex items-center"
+                title={`Protected from deletion: ${rulesCount} rule(s) assigned to this category. Reassign or delete those rules first.`}
+              >
+                <Lock size={15} />
+              </span>
+            ) : (
+              <button 
+                onClick={() => handleDelete(row)}
+                className="text-gray-500 hover:text-red-600 p-1 transition-colors cursor-pointer"
+                title="Delete Empty Category"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -193,7 +215,7 @@ export default function ComplianceCategories() {
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
         >
           <BookOpen size={14} className="text-slate-400" />
-          <span>Active Rules</span>
+          <span>Rules</span>
         </Link>
         <Link
           to={PATHS.COMPLIANCE.CATEGORIES}
@@ -209,6 +231,16 @@ export default function ComplianceCategories() {
           <Link2 size={14} className="text-slate-400" />
           <span>Scope Bindings</span>
         </Link>
+      </div>
+
+      {/* Governance Guidance Banner */}
+      <div className="p-3.5 bg-blue-50/70 border border-blue-200/70 rounded-xl flex items-center justify-between text-xs text-blue-900">
+        <div className="flex items-center gap-2.5">
+          <Info size={16} className="text-blue-600 shrink-0" />
+          <span>
+            <strong>Category Retention:</strong> Categories containing active or archived rules are protected from deletion to maintain compliance organizational structure.
+          </span>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
