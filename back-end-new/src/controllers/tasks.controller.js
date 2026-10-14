@@ -969,17 +969,6 @@ export async function createEscalation(req, res, next) {
       if (!targetUser) throw new NotFoundError(`Target manager ${targetManagerId} not found in this company`);
     }
 
-    const rawTargetManagerId = body.targetManagerId || body.target_manager_id || null;
-    let targetManagerId = null;
-    if (rawTargetManagerId) {
-      const targetUser = await prisma.user.findFirst({
-        where: { id: rawTargetManagerId, companyId: req.user.companyId },
-      });
-      if (targetUser) {
-        targetManagerId = targetUser.id;
-      }
-    }
-
     const escalation = await prisma.escalation.create({
       data: {
         companyId: req.user.companyId,
@@ -991,7 +980,6 @@ export async function createEscalation(req, res, next) {
         priority,
         reportedById: req.user.id,
         targetManagerId: targetManagerId || null,
-        targetManagerId,
         status: 'Open',
       },
     });

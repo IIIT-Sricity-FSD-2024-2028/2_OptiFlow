@@ -115,6 +115,10 @@ export default function PmTaskDetail() {
     String(e.status || '').toLowerCase() === 'approved'
   );
 
+  const currentTaskEvidence = evidenceList.filter((e) =>
+    String(e.taskId || e.task_id || e.task?.id) === String(id)
+  );
+
   const isMissingRequiredEvidence = evidenceRequiredRules.length > 0 && taskApprovedEvidence.length === 0;
   const complianceBlocked = activeTaskViolations.length > 0 || isMissingRequiredEvidence;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Completed';
@@ -274,6 +278,82 @@ export default function PmTaskDetail() {
             data={subtasks}
           />
         ) : <div className="p-5"><EmptyState title="No subtasks" description="This task has no subtasks yet." /></div>}
+      </section>
+
+      {/* Compliance & Deliverable Evidence */}
+      <section className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+        <div className="border-b border-gray-200 px-5 py-4 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900">Compliance & Deliverable Evidence</h2>
+          <span className="text-xs text-gray-500 font-medium">{currentTaskEvidence.length} item(s)</span>
+        </div>
+        {currentTaskEvidence.length ? (
+          <Table
+            columns={[
+              {
+                key: 'title',
+                header: 'Artifact Title',
+                render: (ev) => (
+                  <span className="font-medium text-gray-900">
+                    {ev.title || ev.notes || `Evidence #${ev.id}`}
+                  </span>
+                ),
+              },
+              {
+                key: 'type',
+                header: 'Type',
+                render: (ev) => (
+                  <span className="text-xs text-gray-600">{ev.evidenceType || 'Document'}</span>
+                ),
+              },
+              {
+                key: 'submittedBy',
+                header: 'Submitted By',
+                render: (ev) => ev.user?.fullName || ev.submittedBy?.fullName || ev.user?.email || ev.submittedBy?.email || '—',
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (ev) => {
+                  const st = String(ev.status || '').toLowerCase();
+                  const badgeStatus = st === 'approved' ? 'success' : st === 'rejected' ? 'danger' : 'warning';
+                  return <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>;
+                },
+              },
+              {
+                key: 'file',
+                header: 'Document',
+                render: (ev) => {
+                  const token = sessionStorage.getItem('authToken') || '';
+                  const fileUrl = ev.fileUrl || ev.url || ev.attachments?.[0]?.filePath || ev.attachment?.filePath;
+                  if (!fileUrl) return <span className="text-xs text-gray-400">No file</span>;
+                  const isExternal = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
+                  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
+                  const viewUrl = isExternal
+                    ? fileUrl
+                    : (ev.id ? `${apiBase}/api/evidence/${ev.id}/file?token=${encodeURIComponent(token)}` : `${apiBase}${fileUrl}`);
+                  return (
+                    <a
+                      href={viewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                    >
+                      View File ↗
+                    </a>
+                  );
+                },
+              },
+            ]}
+            data={currentTaskEvidence}
+          />
+        ) : (
+          <div className="p-5">
+            <EmptyState
+              title="No evidence submitted"
+              description="No compliance artifacts or deliverables have been uploaded for this task yet."
+            />
+          </div>
+        )}
       </section>
 
       <Modal

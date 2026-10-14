@@ -369,7 +369,7 @@ export async function uploadEvidenceFile(req, res, next) {
       attachment = await prisma.attachment.create({
         data: {
           companyId: req.user.companyId,
-          
+          entityType: 'ComplianceEvidence',
           entityId: evidence.id,
           fileName: file.originalname,
           fileType: file.mimetype,
