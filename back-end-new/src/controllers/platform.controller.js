@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
@@ -6,8 +7,11 @@ import {
   BadRequestError,
   NotFoundError,
   UnauthorizedError,
+  ConflictError,
 } from '../utils/errors.js';
 import { validateRequired, validateEmail, validateNumber } from '../utils/validation.js';
+import { parseListParams, formatListResponse } from '../utils/pagination.js';
+import { writeAuditLog } from '../utils/platformAudit.js';
 
 
 // ============================================================================
@@ -52,8 +56,17 @@ export async function platformLogin(req, res, next) {
         fullName: admin.fullName,
       },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN || '8h' }
+      { expiresIn: env.PLATFORM_JWT_EXPIRES_IN || '1h' }
     );
+
+    // Set httpOnly cookie scoped to /api/platform
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: 'Strict',
+      path: '/api/platform',
+      maxAge: 3600 * 1000,
+    });
 
     res.status(200).json({
       success: true,
@@ -68,6 +81,115 @@ export async function platformLogin(req, res, next) {
           isActive: admin.isActive,
           createdAt: admin.createdAt,
         },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /platform/auth/logout & POST /api/platform/auth/logout
+ * Clears the platform admin httpOnly cookie
+ */
+export async function platformLogout(req, res, next) {
+  try {
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: 'Strict',
+      path: '/api/platform',
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Platform administrator logged out successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /platform/auth/change-password & POST /api/platform/auth/change-password
+ * Authenticated platform admin password change with audit logging
+ */
+export async function changePlatformPassword(req, res, next) {
+  try {
+    const body = req.body || {};
+    const { currentPassword, newPassword } = body;
+
+    validateRequired({ currentPassword, newPassword }, ['currentPassword', 'newPassword']);
+
+    if (typeof newPassword !== 'string' || newPassword.length < 10) {
+      throw new BadRequestError('New password must be at least 10 characters long');
+    }
+
+    if (newPassword === currentPassword) {
+      throw new BadRequestError('New password must be different from current password');
+    }
+
+    const admin = await prisma.platformAdminUser.findUnique({
+      where: { id: req.platformAdmin.id },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedError('Platform administrator account not found');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, admin.passwordHash);
+    if (!isMatch) {
+      throw new UnauthorizedError('Invalid current password');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordChangedAt = new Date();
+
+    await prisma.$transaction(async (tx) => {
+      await tx.platformAdminUser.update({
+        where: { id: admin.id },
+        data: {
+          passwordHash,
+          passwordChangedAt,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'admin.password_change',
+        { type: 'PlatformAdminUser', id: admin.id },
+        null,
+        { changedAt: passwordChangedAt.toISOString() },
+        tx
+      );
+    });
+
+    // Issue fresh token and update cookie
+    const freshToken = jwt.sign(
+      {
+        sub: admin.id,
+        role: 'platform_admin',
+        type: 'platform_admin',
+        email: admin.email,
+        fullName: admin.fullName,
+      },
+      env.JWT_SECRET,
+      { expiresIn: env.PLATFORM_JWT_EXPIRES_IN || '1h' }
+    );
+
+    res.cookie('token', freshToken, {
+      httpOnly: true,
+      secure: env.isProduction,
+      sameSite: 'Strict',
+      path: '/api/platform',
+      maxAge: 3600 * 1000,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully',
+      data: {
+        token: freshToken,
       },
     });
   } catch (err) {
@@ -104,7 +226,7 @@ export async function getPlatformMetrics(req, res, next) {
     const activeSubscriptions = await prisma.subscription.groupBy({
       by: ['planId'],
       _count: { planId: true },
-      where: { status: 'Active' },
+      where: { status: { in: ['Active', 'Trialing'] } },
     });
 
     const plans = await prisma.plan.findMany();
@@ -129,7 +251,8 @@ export async function getPlatformMetrics(req, res, next) {
       include: {
         subscriptions: {
           include: { plan: true },
-          where: { status: 'Active' },
+          where: { status: { in: ['Active', 'Trialing'] } },
+          orderBy: { currentPeriodEnd: 'desc' },
         },
         _count: {
           select: { users: true },
@@ -160,24 +283,226 @@ export async function getPlatformMetrics(req, res, next) {
 /**
  * GET /platform/companies & GET /api/platform/companies
  */
+//Pagination Added
+
 export async function listPlatformCompanies(req, res, next) {
   try {
-    const companies = await prisma.company.findMany({
-      include: {
-        subscriptions: {
-          include: { plan: true },
-          where: { status: 'Active' },
-        },
-        _count: {
-          select: { users: true, branches: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    // 1. Parse params and enforce limits with allowedStatuses
+    const { page, pageSize, skip, take, q, status } = parseListParams(req.query, {
+      defaultPageSize: 20,
+      maxPageSize: 100,
+      allowedStatuses: ['Active', 'Suspended', 'Closed'],
     });
 
+    // 2. Build Prisma 'where' clause dynamically
+    const where = {};
+    if (status) {
+      where.status = status;
+    }
+    if (q) {
+      where.legalName = { contains: q, mode: 'insensitive' };
+    }
+
+    // 3. Query Prisma: data and total count concurrently with deterministic order
+    const [companies, total] = await Promise.all([
+      prisma.company.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          subscriptions: {
+            include: { plan: true },
+            where: { status: { in: ['Active', 'Trialing'] } },
+            orderBy: { currentPeriodEnd: 'desc' },
+          },
+          _count: {
+            select: { users: true, branches: true },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      }),
+      prisma.company.count({ where }),
+    ]);
+
+    // 4. Return standard list contract
     res.status(200).json({
       success: true,
-      data: companies,
+      data: formatListResponse(companies, total, page, pageSize),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+
+
+
+/**
+ * POST /platform/companies & POST /api/platform/companies
+ * Provision a new company: creates company + owner user + assigns system admin role + subscription in one transaction.
+ * Generates a one-time set-password token and link, and writes a PlatformAuditLog row.
+ */
+export async function createPlatformCompany(req, res, next) {
+  try {
+    const body = req.body || {};
+    const legalName = (body.legalName || body.companyLegalName || body.name || '').trim();
+    const ownerFullName = (body.ownerFullName || body.fullName || '').trim();
+    const ownerEmail = (body.ownerEmail || body.email || '').trim().toLowerCase();
+    const planId = body.planId || body.plan_id;
+    const billingCycle = body.billingCycle || body.billing_cycle || 'Monthly';
+    const size = body.size || body.companySize || null;
+    const industry = body.industry || null;
+
+    validateRequired(
+      { legalName, ownerFullName, ownerEmail, planId },
+      ['legalName', 'ownerFullName', 'ownerEmail', 'planId']
+    );
+    validateEmail(ownerEmail, 'ownerEmail');
+
+    const normalizedBillingCycle =
+      String(billingCycle).toLowerCase() === 'annual' ? 'Annual' : 'Monthly';
+
+    // Verify plan exists and is active
+    const plan = await prisma.plan.findUnique({ where: { id: planId } });
+    if (!plan) {
+      throw new NotFoundError(`Plan with ID ${planId} not found`);
+    }
+    if (plan.isActive === false) {
+      throw new BadRequestError('Cannot assign an archived plan to a new subscription');
+    }
+
+    // Check if user email already exists across the system
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: ownerEmail, mode: 'insensitive' } },
+    });
+    if (existingUser) {
+      throw new ConflictError('A user with this email address already exists');
+    }
+
+    const placeholderSecret = crypto.randomBytes(32).toString('hex');
+    const placeholderHash = await bcrypt.hash(placeholderSecret, 10);
+
+    const periodEnd = new Date();
+    periodEnd.setMonth(periodEnd.getMonth() + (normalizedBillingCycle === 'Annual' ? 12 : 1));
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create Company
+      const company = await tx.company.create({
+        data: {
+          legalName,
+          size,
+          industry,
+          status: 'Active',
+        },
+      });
+
+      // 2. Create Owner User
+      const owner = await tx.user.create({
+        data: {
+          companyId: company.id,
+          fullName: ownerFullName,
+          email: ownerEmail,
+          passwordHash: placeholderHash,
+          tokenVersion: 1,
+          isActive: true,
+        },
+      });
+
+      // 3. Ensure platform role template exists & assign System Admin role to owner
+      let sysTemplate = await tx.roleTemplate.findFirst({
+        where: { label: 'System Admin' },
+      });
+      if (!sysTemplate) {
+        sysTemplate = await tx.roleTemplate.create({
+          data: { origin: 'platform_predefined', label: 'System Admin' },
+        });
+      }
+
+      const sysAdminRole = await tx.role.create({
+        data: {
+          companyId: company.id,
+          roleTemplateId: sysTemplate.id,
+          label: 'System Admin',
+          name: 'system_admin',
+          isSystem: true,
+        },
+      });
+
+      await tx.roleAssignment.create({
+        data: {
+          companyId: company.id,
+          userId: owner.id,
+          roleId: sysAdminRole.id,
+          scopeType: 'Company',
+          scopeId: company.id,
+          grantedById: owner.id,
+        },
+      });
+
+      // 4. Create Subscription
+      const subscription = await tx.subscription.create({
+        data: {
+          companyId: company.id,
+          planId: plan.id,
+          billingCycle: normalizedBillingCycle,
+          status: 'Active',
+          currentPeriodEnd: periodEnd,
+        },
+        include: { plan: true },
+      });
+
+      // 5. Generate one-time set-password token and URL
+      const setPasswordToken = jwt.sign(
+        {
+          sub: owner.id,
+          email: owner.email,
+          companyId: company.id,
+          purpose: 'set_password',
+          tokenVersion: owner.tokenVersion,
+        },
+        env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      const frontendUrl = env.FRONTEND_URL || 'http://localhost:5173';
+      const setPasswordUrl = `${frontendUrl}/set-password?token=${setPasswordToken}`;
+
+      // 6. Write Audit Log
+      await writeAuditLog(
+        req,
+        'company.create',
+        { type: 'Company', id: company.id, companyId: company.id },
+        null,
+        {
+          id: company.id,
+          legalName: company.legalName,
+          status: company.status,
+          ownerId: owner.id,
+          ownerEmail: owner.email,
+          planId: plan.id,
+          planName: plan.name,
+          billingCycle: subscription.billingCycle,
+        },
+        tx
+      );
+
+      return {
+        company,
+        owner: {
+          id: owner.id,
+          fullName: owner.fullName,
+          email: owner.email,
+        },
+        subscription,
+        setPasswordToken,
+        setPasswordUrl,
+      };
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Company provisioned successfully',
+      data: result,
     });
   } catch (err) {
     next(err);
@@ -186,6 +511,7 @@ export async function listPlatformCompanies(req, res, next) {
 
 /**
  * GET /platform/companies/:id & GET /api/platform/companies/:id
+ * Returns company with subscription, user and branch counts, and recent support grants.
  */
 export async function getPlatformCompanyById(req, res, next) {
   try {
@@ -194,9 +520,31 @@ export async function getPlatformCompanyById(req, res, next) {
     const company = await prisma.company.findUnique({
       where: { id },
       include: {
-        subscriptions: { include: { plan: true } },
-        users: { select: { id: true, fullName: true, email: true, status: true, jobTitle: true } },
+        subscriptions: {
+          include: { plan: true },
+          orderBy: { currentPeriodEnd: 'desc' },
+        },
+        users: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            isActive: true,
+            jobTitle: true,
+            createdAt: true,
+          },
+        },
         branches: true,
+        supportAccesses: {
+          orderBy: { grantedAt: 'desc' },
+          take: 10,
+          include: {
+            adminUser: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+        _count: {
+          select: { users: true, branches: true },
+        },
       },
     });
 
@@ -204,9 +552,15 @@ export async function getPlatformCompanyById(req, res, next) {
       throw new NotFoundError(`Company with ID ${id} not found`);
     }
 
+    const data = {
+      ...company,
+      userCount: company._count?.users ?? company.users?.length ?? 0,
+      branchCount: company._count?.branches ?? company.branches?.length ?? 0,
+    };
+
     res.status(200).json({
       success: true,
-      data: company,
+      data,
     });
   } catch (err) {
     next(err);
@@ -215,6 +569,7 @@ export async function getPlatformCompanyById(req, res, next) {
 
 /**
  * PATCH /platform/companies/:id & PATCH /api/platform/companies/:id
+ * Updates legal name and status with validation and platform audit logging.
  */
 export async function updatePlatformCompany(req, res, next) {
   try {
@@ -227,12 +582,52 @@ export async function updatePlatformCompany(req, res, next) {
     }
 
     const updateData = {};
-    if (body.legalName) updateData.legalName = body.legalName.trim();
-    if (body.status) updateData.status = body.status;
+    if (body.legalName !== undefined) {
+      const trimmed = String(body.legalName || '').trim();
+      if (!trimmed) {
+        throw new BadRequestError('Legal name cannot be empty');
+      }
+      updateData.legalName = trimmed;
+    }
 
-    const updated = await prisma.company.update({
-      where: { id },
-      data: updateData,
+    if (body.status !== undefined) {
+      const allowedStatuses = ['Active', 'Suspended', 'Closed'];
+      if (!allowedStatuses.includes(body.status)) {
+        throw new BadRequestError(
+          `Invalid company status '${body.status}'. Allowed values are: ${allowedStatuses.join(', ')}`
+        );
+      }
+      updateData.status = body.status;
+    }
+
+    if (body.size !== undefined) updateData.size = body.size;
+    if (body.industry !== undefined) updateData.industry = body.industry;
+
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestError('No valid fields provided for update');
+    }
+
+    const action =
+      body.status && body.status !== company.status
+        ? `company.${body.status.toLowerCase()}`
+        : 'company.update';
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.company.update({
+        where: { id },
+        data: updateData,
+      });
+
+      await writeAuditLog(
+        req,
+        action,
+        { type: 'Company', id, companyId: id },
+        company,
+        result,
+        tx
+      );
+
+      return result;
     });
 
     res.status(200).json({
@@ -254,10 +649,17 @@ export async function updatePlatformCompany(req, res, next) {
  */
 export async function listPlans(req, res, next) {
   try {
+    const where = {};
+    if (req.query.isActive !== undefined) {
+      where.isActive = req.query.isActive === 'true' || req.query.isActive === true;
+    }
+
     const plans = await prisma.plan.findMany({
+      where,
       include: {
         _count: { select: { subscriptions: true } },
       },
+      orderBy: { name: 'asc' },
     });
 
     res.status(200).json({
@@ -294,19 +696,34 @@ export async function createPlan(req, res, next) {
     const name = (body.name || '').trim();
     const auditLogRetentionDays = Number(body.auditLogRetentionDays ?? 90);
     const allowsIntegrations = Boolean(body.allowsIntegrations ?? false);
+    const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
 
     validateRequired({ name }, ['name']);
 
-    const newPlan = await prisma.plan.create({
-      data: {
-        name,
-        maxBranches: body.maxBranches !== undefined ? Number(body.maxBranches) : null,
-        maxUsers: body.maxUsers !== undefined ? Number(body.maxUsers) : null,
-        maxActiveProcessTemplates: body.maxActiveProcessTemplates !== undefined ? Number(body.maxActiveProcessTemplates) : null,
-        maxComplianceRules: body.maxComplianceRules !== undefined ? Number(body.maxComplianceRules) : null,
-        auditLogRetentionDays,
-        allowsIntegrations,
-      },
+    const newPlan = await prisma.$transaction(async (tx) => {
+      const plan = await tx.plan.create({
+        data: {
+          name,
+          maxBranches: body.maxBranches !== undefined ? (body.maxBranches === null ? null : Number(body.maxBranches)) : null,
+          maxUsers: body.maxUsers !== undefined ? (body.maxUsers === null ? null : Number(body.maxUsers)) : null,
+          maxActiveProcessTemplates: body.maxActiveProcessTemplates !== undefined ? (body.maxActiveProcessTemplates === null ? null : Number(body.maxActiveProcessTemplates)) : null,
+          maxComplianceRules: body.maxComplianceRules !== undefined ? (body.maxComplianceRules === null ? null : Number(body.maxComplianceRules)) : null,
+          auditLogRetentionDays,
+          allowsIntegrations,
+          isActive,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'plan.create',
+        { type: 'Plan', id: plan.id },
+        null,
+        plan,
+        tx
+      );
+
+      return plan;
     });
 
     res.status(201).json({
@@ -332,13 +749,40 @@ export async function updatePlan(req, res, next) {
 
     const updateData = {};
     if (body.name) updateData.name = body.name.trim();
-    if (body.maxBranches !== undefined) updateData.maxBranches = Number(body.maxBranches);
-    if (body.maxUsers !== undefined) updateData.maxUsers = Number(body.maxUsers);
+    if (body.maxBranches !== undefined) updateData.maxBranches = body.maxBranches === null ? null : Number(body.maxBranches);
+    if (body.maxUsers !== undefined) updateData.maxUsers = body.maxUsers === null ? null : Number(body.maxUsers);
+    if (body.maxActiveProcessTemplates !== undefined)
+      updateData.maxActiveProcessTemplates = body.maxActiveProcessTemplates === null ? null : Number(body.maxActiveProcessTemplates);
+    if (body.maxComplianceRules !== undefined)
+      updateData.maxComplianceRules = body.maxComplianceRules === null ? null : Number(body.maxComplianceRules);
+    if (body.auditLogRetentionDays !== undefined)
+      updateData.auditLogRetentionDays = Number(body.auditLogRetentionDays);
     if (body.allowsIntegrations !== undefined) updateData.allowsIntegrations = Boolean(body.allowsIntegrations);
+    if (body.isActive !== undefined) updateData.isActive = Boolean(body.isActive);
 
-    const updated = await prisma.plan.update({
-      where: { id },
-      data: updateData,
+    const action =
+      body.isActive === false
+        ? 'plan.archive'
+        : body.isActive === true && plan.isActive === false
+        ? 'plan.unarchive'
+        : 'plan.update';
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.plan.update({
+        where: { id },
+        data: updateData,
+      });
+
+      await writeAuditLog(
+        req,
+        action,
+        { type: 'Plan', id },
+        plan,
+        result,
+        tx
+      );
+
+      return result;
     });
 
     res.status(200).json({
@@ -385,7 +829,8 @@ export async function createSubscription(req, res, next) {
     const body = req.body || {};
     const companyId = body.companyId || body.company_id;
     const planId = body.planId || body.plan_id;
-    const billingCycle = body.billingCycle || body.billing_cycle || 'monthly';
+    const rawCycle = String(body.billingCycle || body.billing_cycle || 'Monthly').trim();
+    const billingCycle = rawCycle.toLowerCase() === 'annual' ? 'Annual' : 'Monthly';
     const status = body.status || 'Active';
 
     validateRequired({ companyId, planId }, ['companyId', 'planId']);
@@ -395,9 +840,12 @@ export async function createSubscription(req, res, next) {
 
     const plan = await prisma.plan.findUnique({ where: { id: planId } });
     if (!plan) throw new NotFoundError(`Plan ${planId} not found`);
+    if (plan.isActive === false) {
+      throw new BadRequestError('Cannot assign an archived plan to a new subscription');
+    }
 
     const periodEnd = new Date();
-    periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === 'annual' ? 12 : 1));
+    periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === 'Annual' ? 12 : 1));
 
     const subscription = await prisma.subscription.create({
       data: {

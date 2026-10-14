@@ -493,6 +493,30 @@ async function main() {
     data: { companyId: acmeCorp.id, branchId: branch.id, name: "Acme Sales & Operations" }
   });
 
+  // Seed official team memberships
+  await prisma.teamMember.createMany({
+    data: [
+      // Acme Core Engineering
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userCharlie.id, role: "Lead" },
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userDavid.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userFrank.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userJulia.id, role: "Member" },
+
+      // Acme Sales & Operations
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userLucas.id, role: "Lead" },
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userEmma.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userGrace.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userKevin.id, role: "Member" },
+
+      // Admin Support Team
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userMarcus.id, role: "Lead" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userIan.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userSamuel.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userSophia.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userArjun.id, role: "Member" },
+    ],
+  });
+
   const projectQ3 = await prisma.project.create({ data: { companyId: acmeCorp.id, teamId: teamSales.id, name: "Q3 Marketing Campaign", status: ProjectStatus.Active, startDate: new Date(), targetDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), createdById: userAlice.id } });
   const projectMobile = await prisma.project.create({ data: { companyId: acmeCorp.id, teamId: teamSales.id, name: "Mobile App V2", status: ProjectStatus.Active, startDate: new Date(), targetDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), createdById: userAlice.id } });
   const projectSOC2 = await prisma.project.create({ data: { companyId: acmeCorp.id, teamId: teamSales.id, name: "SOC2 Compliance Audit", status: ProjectStatus.Active, startDate: new Date(), targetDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), createdById: userAlice.id } });

@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2,CreditCard,Users,ShieldAlert, Layers, KeyRound, UserCheck} from 'lucide-react';
+import { Building2, CreditCard, Users, ShieldAlert, Layers, KeyRound, UserCheck } from 'lucide-react';
 
 import { apiClient } from '../../../services/api/client';
 import { PATHS } from '../../../app/paths';
 
 //reusable components 
 import { StatCard } from '../../../shared/components/StatCard';
-import { ShortcutCard } from '../../../shared/components/ShortcutCard';
 import { Table } from '../../../shared/components/Table';
 
 //importing styles as separate file
@@ -69,8 +68,8 @@ export default function PlatformDashboard() {
           status === 'Active'
             ? styles.badgeSuccess
             : status === 'Suspended'
-            ? styles.badgeWarning
-            : styles.badgeNeutral;
+              ? styles.badgeWarning
+              : styles.badgeNeutral;
         return <span className={badgeClass}>{status}</span>;
       },
     },
@@ -139,68 +138,7 @@ export default function PlatformDashboard() {
         />
       </div>
 
-      {/* 2. Platform Management Shortcuts */}
-      <div className={styles.sectionCard}>
-        <div className={styles.sectionHeader}>
-          <div>
-            <h2 className={styles.sectionTitle}>Platform Management Shortcuts</h2>
-            {/* <p className={styles.sectionSubtitle}>Quick navigation to core platform operations</p> */}
-          </div>
-        </div>
 
-        <div className={styles.shortcutsGrid}>
-          <ShortcutCard
-            to={PATHS.PLATFORM.COMPANIES}
-            title="Tenants Directory"
-            description="Manage company accounts"
-            icon={<Building2 size={18} />}
-          />
-          <ShortcutCard
-            to={PATHS.PLATFORM.PLANS}
-            title="Subscription Plans"
-            description="Tier limits & feature rules"
-            icon={<Layers size={18} />}
-          />
-          <ShortcutCard
-            to={PATHS.PLATFORM.SUBSCRIPTIONS}
-            title="Subscriptions"
-            description="Active company tiers"
-            icon={<CreditCard size={18} />}
-          />
-          <ShortcutCard
-            to={PATHS.PLATFORM.SUPPORT_ACCESS}
-            title="Support Access"
-            description="Audit session logs"
-            icon={<KeyRound size={18} />}
-          />
-          <ShortcutCard
-            to={PATHS.PLATFORM.ADMIN_USERS}
-            title="Admin Staff"
-            description="Manage operator users"
-            icon={<UserCheck size={18} />}
-          />
-        </div>
-      </div>
-
-      {/* 3. Recent Registered Tenants Overview Table */}
-      <div className={styles.tableCard}>
-        <div className={styles.tableCardHeader}>
-          <div>
-            <h2 className={styles.sectionTitle}>Registered Tenant Organizations</h2>
-            {/* <p className={styles.sectionSubtitle}>Recently onboarded companies and their active plan statuses</p> */}
-          </div>
-          <Link to={PATHS.PLATFORM.COMPANIES} className={styles.viewAllLink}>
-            View All Tenants &rarr;
-          </Link>
-        </div>
-
-        <Table
-          columns={companyColumns}
-          data={metrics.recentCompanies || []}
-          loading={loading}
-          emptyMessage="No tenant organizations registered yet."
-        />
-      </div>
     </div>
   );
 }
