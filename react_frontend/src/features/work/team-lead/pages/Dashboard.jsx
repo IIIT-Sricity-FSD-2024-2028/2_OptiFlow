@@ -23,6 +23,7 @@ import { SubtaskList } from '../../components/SubtaskList';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
 import * as escalationsApi from '../../../../services/api/escalations';
+import * as notificationsApi from '../../../../services/api/notifications';
 import * as usersApi from '../../../../services/api/users';
 import * as projectsApi from '../../../../services/api/projects';
 import { useAuth } from '../../../../context/AuthContext';
@@ -55,6 +56,7 @@ export default function TeamLeadDashboard() {
   const [savingSubtask, setSavingSubtask] = useState(false);
   const [subtaskError, setSubtaskError] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [reviewTab, setReviewTab] = useState('tasks'); // 'tasks' | 'subtasks' | 'extensions'
 
 
   const [isApproveConfirmOpen, setApproveConfirmOpen] = useState(false);
@@ -170,6 +172,13 @@ export default function TeamLeadDashboard() {
     ['In_Review', 'Pending_TL_Review'].includes(task.status)
   );
 
+  // Subtasks submitted for review by team members
+  const reviewQueueSubtasks = tasks.flatMap((task) =>
+    (task.subtasks || []).filter(
+      (st) => st.status === 'In_Review'
+    ).map((st) => ({ ...st, _parentTask: task }))
+  );
+
   const inProgressCount = teamOverviewTasks.filter((task) =>
     [
       'Active',
@@ -185,6 +194,19 @@ export default function TeamLeadDashboard() {
   const blockedCount = teamOverviewTasks.filter(
     (task) => task.status === 'Blocked'
   ).length;
+
+  // Split escalations: extension requests vs regular blockers
+  const extensionRequests = escalations.filter(
+    (e) =>
+      String(e.blockerType || '').toLowerCase().includes('extension') ||
+      String(e.title || '').toLowerCase().includes('extension request')
+  );
+
+  const regularEscalations = escalations.filter(
+    (e) =>
+      !String(e.blockerType || '').toLowerCase().includes('extension') &&
+      !String(e.title || '').toLowerCase().includes('extension request')
+  );
 
   const getBadgeStatus = (status) => {
     if (!status) return 'default';
@@ -433,6 +455,106 @@ export default function TeamLeadDashboard() {
     }
   };
 
+  const handleApproveSubtask = async (subtask) => {
+    try {
+      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Completed' });
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === subtask._parentTask?.id
+            ? {
+                ...t,
+                subtasks: (t.subtasks || []).map((st) =>
+                  (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
+                    ? { ...st, status: 'Completed' }
+                    : st
+                ),
+              }
+            : t
+        )
+      );
+      // Notify the assignee
+      const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
+      if (assigneeId) {
+        try {
+          await notificationsApi.create({
+            userId: assigneeId,
+            title: 'Subtask Approved',
+            message: `Your subtask "${subtask.title}" has been approved by your Team Lead.`,
+            type: 'success',
+          });
+        } catch (_) { /* non-critical */ }
+      }
+      showToast('success', `Subtask "${subtask.title}" approved.`);
+    } catch (err) {
+      showToast('error', 'Failed to approve subtask.');
+    }
+  };
+
+  const handleRejectSubtask = async (subtask) => {
+    try {
+      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Active' });
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === subtask._parentTask?.id
+            ? {
+                ...t,
+                subtasks: (t.subtasks || []).map((st) =>
+                  (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
+                    ? { ...st, status: 'Active' }
+                    : st
+                ),
+              }
+            : t
+        )
+      );
+      // Notify the assignee
+      const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
+      if (assigneeId) {
+        try {
+          await notificationsApi.create({
+            userId: assigneeId,
+            title: 'Subtask Sent Back',
+            message: `Your subtask "${subtask.title}" was sent back for revision by your Team Lead. Please check and resubmit.`,
+            type: 'warning',
+          });
+        } catch (_) { /* non-critical */ }
+      }
+      showToast('success', 'Subtask sent back to In Progress.');
+    } catch (err) {
+      showToast('error', 'Failed to reject subtask.');
+    }
+  };
+
+  const handleExtensionDecision = async (ext, approved) => {
+    const newStatus = approved ? 'Resolved' : 'Closed';
+    try {
+      await escalationsApi.update(ext.id, { status: newStatus });
+      setEscalations((prev) =>
+        prev.map((e) => (e.id === ext.id ? { ...e, status: newStatus } : e))
+      );
+      // Notify the requesting team member
+      const reportedById = ext.reportedBy?.id || ext.reportedById;
+      if (reportedById) {
+        try {
+          await notificationsApi.create({
+            userId: reportedById,
+            title: approved ? 'Extension Request Approved' : 'Extension Request Rejected',
+            message: approved
+              ? `Your deadline extension request ("${ext.title}") has been approved by your Team Lead.`
+              : `Your deadline extension request ("${ext.title}") was not approved. Please discuss with your Team Lead.`,
+            type: approved ? 'success' : 'warning',
+          });
+        } catch (_) { /* non-critical */ }
+      }
+      showToast(
+        approved ? 'success' : 'info',
+        approved ? 'Extension approved & member notified.' : 'Extension rejected & member notified.'
+      );
+    } catch (err) {
+      showToast('error', 'Failed to update extension request.');
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Escalation
   // ---------------------------------------------------------------------------
@@ -547,7 +669,7 @@ export default function TeamLeadDashboard() {
 
           <StatCard
             title="Escalations"
-            value={escalations.length}
+            value={regularEscalations.length}
             trend="Filed blockers"
           />
 
@@ -817,95 +939,174 @@ export default function TeamLeadDashboard() {
 
       </section>
 
-      {/* Review queue */}
+      {/* Review queue — tabbed */}
 
       <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
 
-        <div className="px-5 py-4 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900">
-            Review queue
-          </h2>
-
-          <p className="text-xs text-gray-500 mt-1">
-            Pending TL Review or In Review — approve or send back
-          </p>
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Review Queue</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Approve, reject or respond to team submissions</p>
+          </div>
+          <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-blue-600 text-white text-xs font-bold">
+            {reviewQueueTasks.length + reviewQueueSubtasks.length + extensionRequests.filter(e => e.status !== 'Resolved' && e.status !== 'Closed').length}
+          </span>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 bg-gray-50/50">
+          {[
+            { key: 'tasks', label: 'Tasks', count: reviewQueueTasks.length },
+            { key: 'subtasks', label: 'Subtasks', count: reviewQueueSubtasks.length },
+            { key: 'extensions', label: 'Extensions', count: extensionRequests.filter(e => e.status !== 'Resolved' && e.status !== 'Closed').length },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setReviewTab(tab.key)}
+              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-colors ${
+                reviewTab === tab.key
+                  ? 'border-blue-600 text-blue-700 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+                  reviewTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
         <div className="p-5">
 
-          {reviewQueueTasks.length === 0 ? (
-            <EmptyState
-              title="Review queue is clear"
-              description="Nothing is waiting for your approval right now."
-            />
-          ) : (
-            <div className="divide-y divide-gray-100">
-
-              {reviewQueueTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="py-4 first:pt-0 last:pb-0 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
-                >
-
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {task.title}
-                    </p>
-
-                    <p className="text-xs text-gray-500 mt-1">
-                      By{' '}
-                      {task.assigneeName ||
-                        task.assignee ||
-                        'Unknown'}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-
-                    <Badge
-                      status={getBadgeStatus(
-                        task.status
+          {/* — Tasks tab — */}
+          {reviewTab === 'tasks' && (
+            reviewQueueTasks.length === 0 ? (
+              <EmptyState
+                title="No tasks in review"
+                description="When team members submit their work you'll see it here."
+              />
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {reviewQueueTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{task.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Submitted by <strong>{task.assigneeName || task.assignee || 'Unknown'}</strong>
+                      </p>
+                      {task.notes && (
+                        <p className="text-xs text-gray-400 mt-1 italic truncate max-w-md">&ldquo;{task.notes}&rdquo;</p>
                       )}
-                    >
-                      {formatStatus(task.status)}
-                    </Badge>
-
-                    <Button
-                      variant="primary"
-                      onClick={() =>
-                        openApproveConfirm(task)
-                      }
-                    >
-                      Approve
-                    </Button>
-
-                    <Button
-                      variant="danger"
-                      onClick={() =>
-                        openRejectConfirm(task)
-                      }
-                    >
-                      Reject
-                    </Button>
-
-                    {!task.isSubtask &&
-                      !task.parentId && (
-                        <Button
-                          variant="outline"
-                          onClick={() =>
-                            openSubtaskModal(task.id)
-                          }
-                        >
-                          Break down
-                        </Button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <Badge status={getBadgeStatus(task.status)}>{formatStatus(task.status)}</Badge>
+                      <Button variant="primary" onClick={() => openApproveConfirm(task)}>Approve</Button>
+                      <Button variant="danger" onClick={() => openRejectConfirm(task)}>Reject</Button>
+                      {!task.isSubtask && !task.parentId && (
+                        <Button variant="outline" onClick={() => openSubtaskModal(task.id)}>Break down</Button>
                       )}
-
+                    </div>
                   </div>
-                </div>
-              ))}
-
-            </div>
+                ))}
+              </div>
+            )
           )}
+
+          {/* — Subtasks tab — */}
+          {reviewTab === 'subtasks' && (
+            reviewQueueSubtasks.length === 0 ? (
+              <EmptyState
+                title="No subtasks in review"
+                description="Subtasks submitted by team members will appear here."
+              />
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {reviewQueueSubtasks.map((subtask) => {
+                  const subId = subtask.id || subtask.subtaskId;
+                  return (
+                    <div
+                      key={subId}
+                      className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 text-sm truncate">{subtask.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Under: <strong>{subtask._parentTask?.title || 'Parent task'}</strong>
+                          {subtask.assignedToName && <> · by {subtask.assignedToName}</>}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <Badge status="info">In Review</Badge>
+                        <Button variant="primary" onClick={() => handleApproveSubtask(subtask)}>Approve</Button>
+                        <Button variant="danger" onClick={() => handleRejectSubtask(subtask)}>Send Back</Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {/* — Extensions tab — */}
+          {reviewTab === 'extensions' && (() => {
+            const openExts = extensionRequests.filter(e => e.status !== 'Resolved' && e.status !== 'Closed');
+            return openExts.length === 0 ? (
+              <EmptyState
+                title="No pending extension requests"
+                description="Extension requests from team members will appear here."
+              />
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {openExts.map((ext) => (
+                  <div
+                    key={ext.id}
+                    className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 text-sm">{ext.title}</p>
+                      {ext.description && (
+                        <p className="text-xs text-gray-600 mt-1 bg-amber-50 border border-amber-100 rounded px-2 py-1 max-w-lg">
+                          {ext.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1.5">
+                        Requested by{' '}
+                        <strong>{ext.reportedBy?.fullName || ext.reportedBy?.email || 'Team member'}</strong>
+                        {ext.createdAt && (
+                          <> · {new Date(ext.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="primary"
+                        onClick={() => handleExtensionDecision(ext, true)}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        variant="danger"
+                        onClick={() => handleExtensionDecision(ext, false)}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
         </div>
       </section>
@@ -936,7 +1137,7 @@ export default function TeamLeadDashboard() {
 
           <div className="p-5 max-h-[380px] overflow-y-auto">
 
-            {escalations.length === 0 ? (
+            {regularEscalations.length === 0 ? (
               <EmptyState
                 title="No escalations"
                 description="When blockers are reported, they will appear here."
@@ -944,7 +1145,7 @@ export default function TeamLeadDashboard() {
             ) : (
               <div className="divide-y divide-gray-100">
 
-                {escalations.map((escalation) => (
+                {regularEscalations.map((escalation) => (
                   <div
                     key={escalation.id}
                     className="py-4 first:pt-0 last:pb-0 flex items-start justify-between gap-4"

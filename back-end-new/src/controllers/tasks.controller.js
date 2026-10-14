@@ -9,6 +9,7 @@ import { validateRequired, validateEnum, validateNumber } from '../utils/validat
 import { hasRole, ROLES } from '../utils/roles.js';
 import {
   buildTaskListWhere,
+  buildSubtaskListWhere,
   assertBranchManagerScope,
   isBranchManager,
 } from '../utils/tenantScope.js';
@@ -21,6 +22,52 @@ const ALLOWED_TASK_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 const ALLOWED_ESCALATION_STATUSES = ['Open', 'Reviewed', 'Resolved', 'Closed'];
 const ALLOWED_ESCALATION_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 
+async function resolveProjectTeamLead(project, companyId) {
+  const memberships = await prisma.teamMember.findMany({
+    where: { teamId: project.teamId },
+    select: { userId: true, role: true },
+  });
+  const memberIds = memberships.map(({ userId }) => userId);
+
+  const designatedLeadIds = memberships
+    .filter(({ role }) => /team.?lead|^lead$/i.test(role || ''))
+    .map(({ userId }) => userId);
+  const candidateIds = designatedLeadIds.length > 0 ? designatedLeadIds : memberIds;
+
+  const teamLeads = candidateIds.length === 0 ? [] : await prisma.user.findMany({
+    where: {
+      id: { in: candidateIds },
+      companyId,
+      isActive: true,
+      roleAssignments: {
+        some: {
+          revokedAt: null,
+          OR: [
+            { scopeType: 'Company', scopeId: companyId },
+            { scopeType: 'Branch', scopeId: project.team.branchId },
+            { scopeType: 'Team', scopeId: project.teamId },
+            { scopeType: 'Project', scopeId: project.id },
+          ],
+          role: {
+            OR: [
+              { label: ROLES.TEAM_LEAD },
+              { name: 'team_lead' },
+              { roleTemplate: { slug: 'team_lead' } },
+            ],
+          },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (teamLeads.length !== 1) {
+    throw new BadRequestError('The project team must have exactly one active Team Lead assigned before creating tasks');
+  }
+
+  return teamLeads[0];
+}
+
 // ============================================================================
 // 1. TASKS ENDPOINTS
 // ============================================================================
@@ -32,6 +79,11 @@ const ALLOWED_ESCALATION_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 export async function listTasks(req, res, next) {
   try {
     const where = buildTaskListWhere({
+      companyId: req.user.companyId,
+      branchId: req.query.branchId,
+      user: req.user,
+    });
+    const subtaskScope = buildSubtaskListWhere({
       companyId: req.user.companyId,
       branchId: req.query.branchId,
       user: req.user,
@@ -51,7 +103,7 @@ export async function listTasks(req, res, next) {
         },
         assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
         createdBy: { select: { id: true, fullName: true, email: true } },
-        subtasks: { where: { deletedAt: null } },
+        subtasks: { where: subtaskScope },
         escalations: { where: { status: 'Open' } },
       },
       orderBy: { createdAt: 'desc' },
@@ -73,11 +125,20 @@ export async function listTasks(req, res, next) {
 export async function listTasksByAssignee(req, res, next) {
   try {
     const { userId } = req.params;
+    const taskScope = buildTaskListWhere({
+      companyId: req.user.companyId,
+      user: req.user,
+    });
+    const subtaskScope = buildSubtaskListWhere({
+      companyId: req.user.companyId,
+      branchId: req.query.branchId,
+      user: req.user,
+    });
 
     const tasks = await prisma.task.findMany({
       where: {
+        AND: [taskScope, { assignedToId: userId }],
         companyId: req.user.companyId,
-        assignedToId: userId,
         deletedAt: null,
       },
       include: {
@@ -90,7 +151,7 @@ export async function listTasksByAssignee(req, res, next) {
             },
           },
         },
-        subtasks: { where: { deletedAt: null } },
+        subtasks: { where: subtaskScope },
         escalations: { where: { status: 'Open' } },
       },
       orderBy: { createdAt: 'desc' },
@@ -112,9 +173,19 @@ export async function listTasksByAssignee(req, res, next) {
 export async function getTaskById(req, res, next) {
   try {
     const { id } = req.params;
+    const taskScope = buildTaskListWhere({
+      companyId: req.user.companyId,
+      user: req.user,
+    });
+    const subtaskScope = buildSubtaskListWhere({
+      companyId: req.user.companyId,
+      branchId: req.query.branchId,
+      user: req.user,
+    });
 
     const task = await prisma.task.findFirst({
       where: {
+        ...taskScope,
         id,
         companyId: req.user.companyId,
         deletedAt: null,
@@ -131,7 +202,7 @@ export async function getTaskById(req, res, next) {
         },
         assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
         createdBy: { select: { id: true, fullName: true, email: true } },
-        subtasks: { where: { deletedAt: null } },
+        subtasks: { where: subtaskScope },
         escalations: true,
       },
     });
@@ -176,33 +247,31 @@ export async function createTask(req, res, next) {
     validateEnum(status, ALLOWED_TASK_STATUSES, 'status');
     validateEnum(priority, ALLOWED_TASK_PRIORITIES, 'priority');
 
-    if (projectId) {
-      const project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          team: { branch: { companyId: req.user.companyId } },
-        },
-        include: { team: { select: { branchId: true } } },
-      });
-
-      if (!project) {
-        throw new NotFoundError(`Project ${projectId} not found in this company`);
-      }
-
-      if (isBranchManager(req.user)) {
-        assertBranchManagerScope(req.user, project.team?.branchId, 'create tasks in');
-      }
-    }
-
     if (assignedToId) {
-      const assignee = await prisma.user.findFirst({
-        where: { id: assignedToId, companyId: req.user.companyId },
-      });
-      if (!assignee) {
-        throw new BadRequestError('Assigned user does not belong to this company');
-      }
+      throw new BadRequestError('Tasks are assigned to the project Team Lead automatically; do not choose an individual assignee');
     }
 
+    if (!projectId) {
+      throw new BadRequestError('A project must be selected so the task can be assigned to its Team Lead');
+    }
+
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        team: { branch: { companyId: req.user.companyId } },
+      },
+      include: { team: { select: { id: true, branchId: true } } },
+    });
+
+    if (!project) {
+      throw new NotFoundError(`Project ${projectId} not found in this company`);
+    }
+
+    if (isBranchManager(req.user)) {
+      assertBranchManagerScope(req.user, project.team?.branchId, 'create tasks in');
+    }
+
+    const teamLead = await resolveProjectTeamLead(project, req.user.companyId);
     const newTask = await prisma.task.create({
       data: {
         companyId: req.user.companyId,
@@ -211,7 +280,7 @@ export async function createTask(req, res, next) {
         description,
         status,
         priority,
-        assignedToId,
+        assignedToId: teamLead.id,
         createdById: req.user.id,
         dueDate: dueDate ? new Date(dueDate) : null,
         estimatedHours: estimatedHours ? Number(estimatedHours) : null,
@@ -254,7 +323,11 @@ export async function updateTask(req, res, next) {
     const body = req.body || {};
 
     const existing = await prisma.task.findFirst({
-      where: { id, companyId: req.user.companyId, deletedAt: null },
+      where: {
+        ...buildTaskListWhere({ companyId: req.user.companyId, user: req.user }),
+        id,
+        companyId: req.user.companyId,
+      },
       include: { project: { include: { team: true } } },
     });
 
@@ -270,11 +343,8 @@ export async function updateTask(req, res, next) {
     }
 
     const updateData = {};
-    if (
-      (body.assignedToId !== undefined || body.assigned_to_id !== undefined) &&
-      !hasRole(req.user.roleLabel || req.user.role, [ROLES.PROJECT_MANAGER])
-    ) {
-      throw new ForbiddenError('Only Project Managers can assign tasks');
+    if (body.assignedToId !== undefined || body.assigned_to_id !== undefined) {
+      throw new ForbiddenError('Parent tasks remain assigned to the project Team Lead; assign work through subtasks');
     }
 
     if (body.title) updateData.title = String(body.title).trim();
@@ -289,18 +359,6 @@ export async function updateTask(req, res, next) {
     if (body.priority) {
       validateEnum(body.priority, ALLOWED_TASK_PRIORITIES, 'priority');
       updateData.priority = body.priority;
-    }
-    if (body.assignedToId !== undefined || body.assigned_to_id !== undefined) {
-      const assigneeId = body.assignedToId !== undefined ? body.assignedToId : body.assigned_to_id;
-      if (assigneeId) {
-        const assignee = await prisma.user.findFirst({
-          where: { id: assigneeId, companyId: req.user.companyId },
-        });
-        if (!assignee) {
-          throw new BadRequestError('Target assignee does not belong to this company');
-        }
-      }
-      updateData.assignedToId = assigneeId || null;
     }
     if (body.dueDate !== undefined || body.due_date !== undefined) {
       const d = body.dueDate !== undefined ? body.dueDate : body.due_date;
@@ -494,7 +552,11 @@ export async function deleteTask(req, res, next) {
     const { id } = req.params;
 
     const existing = await prisma.task.findFirst({
-      where: { id, companyId: req.user.companyId, deletedAt: null },
+      where: {
+        ...buildTaskListWhere({ companyId: req.user.companyId, user: req.user }),
+        id,
+        companyId: req.user.companyId,
+      },
       include: { project: { include: { team: true } } },
     });
 
@@ -546,10 +608,11 @@ export async function deleteTask(req, res, next) {
 export async function listSubtasks(req, res, next) {
   try {
     const subtasks = await prisma.subtask.findMany({
-      where: {
+      where: buildSubtaskListWhere({
         companyId: req.user.companyId,
-        deletedAt: null,
-      },
+        branchId: req.query.branchId,
+        user: req.user,
+      }),
       include: { task: { select: { id: true, title: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -570,12 +633,28 @@ export async function listSubtasks(req, res, next) {
 export async function listSubtasksByTask(req, res, next) {
   try {
     const { taskId } = req.params;
+    const parentTask = await prisma.task.findFirst({
+      where: {
+        ...buildTaskListWhere({ companyId: req.user.companyId, user: req.user }),
+        id: taskId,
+        companyId: req.user.companyId,
+      },
+      select: { id: true },
+    });
+
+    if (!parentTask) {
+      throw new NotFoundError(`Task with ID ${taskId} not found in this company`);
+    }
 
     const subtasks = await prisma.subtask.findMany({
       where: {
+        ...buildSubtaskListWhere({
+          companyId: req.user.companyId,
+          branchId: req.query.branchId,
+          user: req.user,
+        }),
         taskId,
         companyId: req.user.companyId,
-        deletedAt: null,
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -598,7 +677,15 @@ export async function getSubtaskById(req, res, next) {
     const { id } = req.params;
 
     const subtask = await prisma.subtask.findFirst({
-      where: { id, companyId: req.user.companyId, deletedAt: null },
+      where: {
+        ...buildSubtaskListWhere({
+          companyId: req.user.companyId,
+          branchId: req.query.branchId,
+          user: req.user,
+        }),
+        id,
+        companyId: req.user.companyId,
+      },
       include: { task: true },
     });
 
@@ -633,7 +720,11 @@ export async function createSubtask(req, res, next) {
 
     // Verify parent task belongs to caller company
     const parentTask = await prisma.task.findFirst({
-      where: { id: taskId, companyId: req.user.companyId, deletedAt: null },
+      where: {
+        ...buildTaskListWhere({ companyId: req.user.companyId, user: req.user }),
+        id: taskId,
+        companyId: req.user.companyId,
+      },
     });
 
     if (!parentTask) {
@@ -699,7 +790,15 @@ export async function updateSubtask(req, res, next) {
     const body = req.body || {};
 
     const existing = await prisma.subtask.findFirst({
-      where: { id, companyId: req.user.companyId, deletedAt: null },
+      where: {
+        ...buildSubtaskListWhere({
+          companyId: req.user.companyId,
+          branchId: req.query.branchId,
+          user: req.user,
+        }),
+        id,
+        companyId: req.user.companyId,
+      },
     });
 
     if (!existing) {
@@ -738,7 +837,15 @@ export async function deleteSubtask(req, res, next) {
     const { id } = req.params;
 
     const existing = await prisma.subtask.findFirst({
-      where: { id, companyId: req.user.companyId, deletedAt: null },
+      where: {
+        ...buildSubtaskListWhere({
+          companyId: req.user.companyId,
+          branchId: req.query.branchId,
+          user: req.user,
+        }),
+        id,
+        companyId: req.user.companyId,
+      },
     });
 
     if (!existing) {
@@ -834,6 +941,7 @@ export async function createEscalation(req, res, next) {
     const blockerType = body.blockerType || body.blocker_type || null;
     const rawPriority = String(body.priority || 'High').trim().toLowerCase();
     const priority = rawPriority.charAt(0).toUpperCase() + rawPriority.slice(1);
+    const targetManagerId = body.targetManagerId || body.target_manager_id || null;
 
     validateRequired({ title }, ['title']);
     validateEnum(priority, ALLOWED_ESCALATION_PRIORITIES, 'priority');
@@ -852,6 +960,15 @@ export async function createEscalation(req, res, next) {
       if (!project) throw new NotFoundError(`Project ${projectId} not found in this company`);
     }
 
+    // Validate targetManagerId belongs to the same company
+    if (targetManagerId) {
+      const targetUser = await prisma.user.findFirst({
+        where: { id: targetManagerId, companyId: req.user.companyId },
+        select: { id: true },
+      });
+      if (!targetUser) throw new NotFoundError(`Target manager ${targetManagerId} not found in this company`);
+    }
+
     const escalation = await prisma.escalation.create({
       data: {
         companyId: req.user.companyId,
@@ -862,6 +979,7 @@ export async function createEscalation(req, res, next) {
         blockerType,
         priority,
         reportedById: req.user.id,
+        targetManagerId: targetManagerId || null,
         status: 'Open',
       },
     });
@@ -875,6 +993,7 @@ export async function createEscalation(req, res, next) {
     next(err);
   }
 }
+
 
 /**
  * PATCH /escalations/:id & PATCH /api/escalations/:id

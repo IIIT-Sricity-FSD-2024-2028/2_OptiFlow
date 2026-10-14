@@ -97,6 +97,7 @@ export async function createNotification(req, res, next) {
     const notification = await prisma.notification.create({
       data: {
         userId: String(userId),
+        companyId: recipient.companyId,
         title,
         message,
         type,

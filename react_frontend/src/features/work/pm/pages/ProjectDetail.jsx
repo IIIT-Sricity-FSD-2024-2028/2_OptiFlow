@@ -40,7 +40,6 @@ export default function PmProjectDetail() {
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
-    assignedToId: '',
     priority: 'Medium',
     estimatedHours: '',
     dueDate: '',
@@ -188,18 +187,13 @@ export default function PmProjectDetail() {
     ...teamRoster.filter(isTeamLead).map((user) => user.id),
     ...assignedLeadIds,
   ])];
-
-  // Strictly filter assignees to ONLY Team Leaders (no CEOs, Process Admins, or regular members)
-  const allTeamLeads = users.filter((u) => u.isActive !== false && isTeamLead(u));
-  const rosterLeadIds = new Set(teamRoster.filter(isTeamLead).map((u) => u.id));
-  const taskAssignees = [...allTeamLeads].sort((a, b) => {
-    const aInRoster = rosterLeadIds.has(a.id) ? 1 : 0;
-    const bInRoster = rosterLeadIds.has(b.id) ? 1 : 0;
-    return bInRoster - aInRoster;
-  });
-
-  const assignedUsers = users.filter((u) => assignedUserIds.includes(u.id));
-  const members = teamRoster.length > 0 ? teamRoster : (assignedUsers.length > 0 ? assignedUsers : taskAssignees);
+  const members = teamRoster.length
+    ? teamRoster
+    : users.filter((user) => (
+      user.isActive !== false
+      && (teamLeadIds.includes(user.id) || teamLeadIds.includes(user.managerUserId))
+      && (teamLeadIds.includes(user.id) || assignedUserIds.some((id) => String(id) === String(user.id)))
+    ));
   const formatDate = (date) => date
     ? new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
@@ -207,8 +201,8 @@ export default function PmProjectDetail() {
   const createTask = async (event) => {
     event.preventDefault();
     setTaskError('');
-    if (!taskForm.title.trim() || !taskForm.assignedToId) {
-      setTaskError('Enter a task title and select a team lead.');
+    if (!taskForm.title.trim()) {
+      setTaskError('Enter a task title.');
       return;
     }
 
@@ -224,7 +218,7 @@ export default function PmProjectDetail() {
       });
       const response = await projectsApi.get(id);
       setProject(normalize(response));
-      setTaskForm({ title: '', description: '', assignedToId: '', priority: 'Medium', estimatedHours: '', dueDate: '' });
+      setTaskForm({ title: '', description: '', priority: 'Medium', estimatedHours: '', dueDate: '' });
       setCreateTaskOpen(false);
     } catch (saveError) {
       setTaskError(saveError.message || 'Failed to create task.');
@@ -232,6 +226,40 @@ export default function PmProjectDetail() {
       setSavingTask(false);
     }
   };
+
+  const handleMarkTaskComplete = async (task) => {
+    try {
+      await tasksApi.update(task.id, { status: 'Completed' });
+      const response = await projectsApi.get(id);
+      setProject(normalize(response));
+      setSelectedTask((prev) => prev ? { ...prev, status: 'Completed' } : null);
+    } catch (err) {
+      setError(err.message || 'Failed to mark task as complete.');
+    }
+  };
+
+  const handleApproveTask = async (task) => {
+    try {
+      await tasksApi.update(task.id, { status: 'Completed' });
+      const response = await projectsApi.get(id);
+      setProject(normalize(response));
+      setSelectedTask(null);
+    } catch (err) {
+      setError(err.message || 'Failed to approve task.');
+    }
+  };
+
+  const handleCompleteProject = async () => {
+    try {
+      await projectsApi.update(id, { status: 'Completed' });
+      setProject((prev) => ({ ...prev, status: 'Completed' }));
+    } catch (err) {
+      setError(err.message || 'Failed to complete project.');
+    }
+  };
+
+  const allTasksCompleted = tasks.length > 0 && tasks.every((t) => t.status === 'Completed');
+  const reviewQueueTasks = tasks.filter((t) => ['In_Review', 'Pending_TL_Review'].includes(t.status));
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -275,6 +303,16 @@ export default function PmProjectDetail() {
             >
               + Create Task
             </Button>
+            <Button
+              type="button"
+              variant={allTasksCompleted ? 'primary' : 'secondary'}
+              disabled={!allTasksCompleted || project.status === 'Completed'}
+              onClick={handleCompleteProject}
+              title={!allTasksCompleted ? 'All tasks must be completed first' : ''}
+              className={`rounded-lg ${allTasksCompleted ? 'bg-emerald-600 hover:bg-emerald-700' : 'opacity-50 cursor-not-allowed'}`}
+            >
+              {project.status === 'Completed' ? '✓ Project Completed' : '✓ Complete Project'}
+            </Button>
             <div className="w-36">
               <FormField label="Change status">
                 <Select value={project.status || 'Planning'} onChange={(event) => updateStatus(event.target.value)} disabled={saving}>
@@ -311,7 +349,7 @@ export default function PmProjectDetail() {
       </header>
 
       <section className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:h-[820px]">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <h2 className="font-bold text-slate-900">Tasks <span className="ml-1 text-xs font-semibold text-amber-600">{tasks.length}</span></h2>
             <Button type="button" size="sm" onClick={() => setCreateTaskOpen(true)}>+ Task</Button>
@@ -555,6 +593,37 @@ export default function PmProjectDetail() {
         </div>
       </Modal>
 
+      {/* Review Queue */}
+      {reviewQueueTasks.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50 px-5 py-4">
+            <div>
+              <h2 className="font-bold text-blue-900">Review Queue</h2>
+              <p className="text-xs text-blue-600 mt-0.5">Tasks submitted by team members awaiting your approval</p>
+            </div>
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">{reviewQueueTasks.length}</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {reviewQueueTasks.map((task) => (
+              <div key={task.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900 truncate">{task.title}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {task.assignedTo?.fullName || 'Unassigned'}
+                    {task.dueDate && <> · Due {formatDate(task.dueDate)}</>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge status="info">{(task.status || '').replace(/_/g, ' ')}</Badge>
+                  <Button variant="primary" onClick={() => handleApproveTask(task)}>Approve ✓</Button>
+                  <Button variant="outline" onClick={() => setSelectedTask(task)}>View</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <Modal
         isOpen={createTaskOpen}
         onClose={() => setCreateTaskOpen(false)}
@@ -575,16 +644,9 @@ export default function PmProjectDetail() {
             <Textarea value={taskForm.description} onChange={(event) => setTaskForm({ ...taskForm, description: event.target.value })} disabled={savingTask} />
           </FormField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Assign to Team Lead" required>
-              <Select value={taskForm.assignedToId} onChange={(event) => setTaskForm({ ...taskForm, assignedToId: event.target.value })} disabled={savingTask}>
-                <option value="">Select Team Lead...</option>
-                {taskAssignees.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.fullName || user.email} (Team Lead)
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+            <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 sm:col-span-2">
+              This task will be assigned to the project Team Lead automatically.
+            </div>
             <FormField label="Priority">
               <Select value={taskForm.priority} onChange={(event) => setTaskForm({ ...taskForm, priority: event.target.value })} disabled={savingTask}>
                 {['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
@@ -624,7 +686,7 @@ export default function PmProjectDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg bg-slate-100 p-4">
                   <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</p>
-                  <Badge>{(selectedTask.status || 'Draft').replace(/_/g, ' ')}</Badge>
+                  <Badge status={selectedTask.status === 'Completed' ? 'success' : selectedTask.status === 'In_Review' ? 'info' : 'default'}>{(selectedTask.status || 'Draft').replace(/_/g, ' ')}</Badge>
                 </div>
                 <div className="rounded-lg bg-slate-100 p-4">
                   <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Priority</p>
@@ -649,7 +711,31 @@ export default function PmProjectDetail() {
                 )) : <p className="text-sm text-slate-500">No subtasks found for this task.</p>}
               </section>
             </div>
-            <footer className="flex justify-end border-t border-slate-200 p-4">
+            <footer className="flex justify-between border-t border-slate-200 p-4 gap-2">
+              {selectedTask.status !== 'Completed' && (
+                <>
+                  {selectedTask.status === 'In_Review' || selectedTask.status === 'Pending_TL_Review' ? (
+                    <Button
+                      variant="primary"
+                      onClick={() => handleApproveTask(selectedTask)}
+                      className="flex-1"
+                    >
+                      ✓ Approve & Mark Complete
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleMarkTaskComplete(selectedTask)}
+                      className="flex-1"
+                    >
+                      Mark as Complete
+                    </Button>
+                  )}
+                </>
+              )}
+              {selectedTask.status === 'Completed' && (
+                <span className="flex-1 text-center text-sm font-semibold text-emerald-600">✓ Task Completed</span>
+              )}
               <Button variant="secondary" onClick={() => setSelectedTask(null)}>Close</Button>
             </footer>
           </aside>
