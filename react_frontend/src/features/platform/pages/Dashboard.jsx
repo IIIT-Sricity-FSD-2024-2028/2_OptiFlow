@@ -1,144 +1,82 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Building2, CreditCard, Users, ShieldAlert, Layers, KeyRound, UserCheck } from 'lucide-react';
-
+import { useState, useEffect, useCallback } from 'react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../../services/api/client';
-import { PATHS } from '../../../app/paths';
-
-//reusable components 
-import { StatCard } from '../../../shared/components/StatCard';
-import { Table } from '../../../shared/components/Table';
-
-//importing styles as separate file
-import styles from './Dashboard.module.css';
+import { DashboardStatCards } from '../components/dashboard/DashboardStatCards';
+import { DashboardNeedsAttention } from '../components/dashboard/DashboardNeedsAttention';
+import { DashboardPlanDistribution } from '../components/dashboard/DashboardPlanDistribution';
+import { DashboardRecentActivity } from '../components/dashboard/DashboardRecentActivity';
+import { DashboardRecentCompanies } from '../components/dashboard/DashboardRecentCompanies';
 
 export default function PlatformDashboard() {
-  const [metrics, setMetrics] = useState({
-    totalCompanies: 0,
-    totalAdmins: 0,
-    subscriptionsByPlan: [],
-    recentSupportLogs: [],
-    recentCompanies: [],
-  });
+  const [metrics, setMetrics] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function fetchDashboardMetrics() {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await apiClient('/platform/metrics');
-        setMetrics(data || {});
-      } catch (err) {
-        console.error('Failed to load platform metrics:', err);
-        setError(err.message || 'Failed to fetch platform metrics');
-      } finally {
-        setLoading(false);
-      }
+  const fetchMetrics = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await apiClient('/api/platform/metrics');
+      setMetrics(res || {});
+    } catch (err) {
+      console.error('Failed to load platform dashboard metrics:', err);
+      setError(err.message || 'Failed to load platform metrics');
+    } finally {
+      setLoading(false);
     }
-
-    fetchDashboardMetrics();
   }, []);
 
-  // Compute total active subscriptions across plans
-  const totalActiveSubscriptions = (metrics.subscriptionsByPlan || []).reduce(
-    (acc, item) => acc + (item.count || 0),
-    0
-  );
-
-  // Table column definition for recent tenant organizations
-  const companyColumns = [
-    {
-      header: 'Company Name',
-      accessor: 'legalName',
-      render: (row) => (
-        <div className={styles.companyInfo}>
-          <span className={styles.companyName}>{row.legalName || row.name || 'Unnamed Tenant'}</span>
-          <span className={styles.companyId}>ID: {row.id}</span>
-        </div>
-      ),
-    },
-    {
-      header: 'Status',
-      accessor: 'status',
-      render: (row) => {
-        const status = row.status || 'Active';
-        const badgeClass =
-          status === 'Active'
-            ? styles.badgeSuccess
-            : status === 'Suspended'
-              ? styles.badgeWarning
-              : styles.badgeNeutral;
-        return <span className={badgeClass}>{status}</span>;
-      },
-    },
-    {
-      header: 'Active Plan',
-      render: (row) => {
-        const activeSub = (row.subscriptions || []).find((s) => s.status === 'Active') || (row.subscriptions || [])[0];
-        const planName = activeSub?.plan?.name || (activeSub ? 'Subscribed' : 'None');
-        return <span className={styles.badgePlan}>{planName}</span>;
-      },
-    },
-    {
-      header: 'Total Users',
-      render: (row) => row._count?.users ?? (row.users ? row.users.length : '—'),
-    },
-    {
-      header: 'Registered',
-      render: (row) => (row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'),
-    },
-  ];
+  useEffect(() => {
+    fetchMetrics();
+  }, [fetchMetrics]);
 
   return (
-    <div className={styles.container}>
+    <div className="space-y-6 pb-12">
       {/* Top Header */}
-      <div className={styles.headerSection}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
-          <h1 className={styles.title}>Platform Dashboard</h1>
-          <p className={styles.subtitle}>System-wide tenant statistics, subscription status, and operator controls</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Platform Health & Governance</h1>
+          <p className="text-xs text-slate-500 mt-1">
+            System overview of tenant onboarding, subscription lifecycle, and audit logs.
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={fetchMetrics}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-all cursor-pointer self-start sm:self-auto disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Metrics</span>
+        </button>
       </div>
 
-      {error && <div className={styles.errorBanner}>{error}</div>}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between text-xs text-red-800">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button type="button" onClick={fetchMetrics} className="font-bold underline cursor-pointer">
+            Retry
+          </button>
+        </div>
+      )}
 
-      {/* Shortcut cards displaying code using props */}
-      <div className={styles.statsGrid}>
-        <StatCard
-          title="Total Tenants"
-          value={metrics.totalCompanies || 0}
-          subtitle="Registered tenant organizations"
-          icon={<Building2 size={20} />}
-          loading={loading}
-        />
+      {/* 1. Stat Cards (Top Row) */}
+      <DashboardStatCards metrics={metrics} loading={loading} />
 
-        <StatCard
-          title="Active Subscriptions"
-          value={totalActiveSubscriptions}
-          subtitle="Tenants with active tier plan"
-          icon={<CreditCard size={20} />}
-          loading={loading}
-        />
+      {/* 2. Needs Attention Panel */}
+      <DashboardNeedsAttention needsAttention={metrics.needsAttention} loading={loading} />
 
-        <StatCard
-          title="Active Support Grants"
-          value={metrics.recentSupportLogs ? metrics.recentSupportLogs.length : 0}
-          subtitle="Recent delegated access audits"
-          icon={<ShieldAlert size={20} />}
-          loading={loading}
-        />
-
-        <StatCard
-          title="Platform Admins"
-          value={metrics.totalAdmins || 0}
-          subtitle="Global staff operators"
-          icon={<Users size={20} />}
-          loading={loading}
-        />
+      {/* 3. Operational Breakdown Grid: Plan Distribution & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <DashboardPlanDistribution plans={metrics.planDistribution || []} loading={loading} />
+        <DashboardRecentCompanies companies={metrics.recentCompanies || []} loading={loading} />
       </div>
 
-
+      {/* 4. Recent Platform Audit Activity */}
+      <DashboardRecentActivity activity={metrics.recentActivity || []} loading={loading} />
     </div>
   );
 }

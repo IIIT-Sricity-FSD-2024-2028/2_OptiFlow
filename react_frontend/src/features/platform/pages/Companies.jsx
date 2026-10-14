@@ -55,29 +55,13 @@ export default function PlatformCompanies() {
   const getDialogConfig = () => {
     const { company, targetStatus } = confirmModal;
     if (!company || !targetStatus) return { title: '', message: '', variant: 'primary', confirmText: 'Confirm' };
-
     if (targetStatus === 'Suspended') {
-      return {
-        title: `Suspend Company: ${company.legalName}`,
-        message: 'Are you sure you want to suspend this company? Users belonging to this tenant will be blocked from logging in or using OptiFlow until reactivated.',
-        variant: 'danger',
-        confirmText: 'Suspend Company',
-      };
+      return { title: `Suspend: ${company.legalName}`, message: 'Users will be blocked from logging in until reactivated.', variant: 'danger', confirmText: 'Suspend Company' };
     }
     if (targetStatus === 'Closed') {
-      return {
-        title: `Close Company: ${company.legalName}`,
-        message: 'Are you sure you want to permanently close this company? This terminates all active tenant sessions and marks the tenant as Closed.',
-        variant: 'danger',
-        confirmText: 'Close Account Permanently',
-      };
+      return { title: `Close: ${company.legalName}`, message: 'Permanently close this company and terminate all sessions.', variant: 'danger', confirmText: 'Close Permanently' };
     }
-    return {
-      title: `Reactivate Company: ${company.legalName}`,
-      message: 'Are you sure you want to reactivate this company? Users will regain immediate access to their workspaces.',
-      variant: 'primary',
-      confirmText: 'Reactivate Company',
-    };
+    return { title: `Reactivate: ${company.legalName}`, message: 'Users will regain immediate access to workspaces.', variant: 'primary', confirmText: 'Reactivate Company' };
   };
 
   const dialogConfig = getDialogConfig();

@@ -118,8 +118,8 @@ Why this order inside Phase 2: provisioning a company needs a plan to assign, so
 - [x] Backend: enforce allowed status transitions (include `Trialing`)
 - [x] Backend: list filters: status, past due, expiring within N days
 - [x] Backend: audit calls
-- [ ] Frontend: ops list page (links to company)
-- [ ] Frontend: change plan/status/cycle action, also reachable from the company Subscription tab
+- [x] Frontend: ops list page (links to company)
+- [x] Frontend: change plan/status/cycle action, also reachable from the company Subscription tab
 
 ### 2.4 Support access
 - [x] Backend: add `revokedAt`, `revokedBy` (migration)
@@ -128,24 +128,24 @@ Why this order inside Phase 2: provisioning a company needs a plan to assign, so
 - [x] Backend: list filter for active, expired, revoked
 - [x] Backend: audit calls on grant and revoke
 - [x] Backend: **verify** that a grant is actually enforced on the tenant side (the audit does not show this)
-- [ ] Frontend: list page with status filter
-- [ ] Frontend: grant modal from the company page (reason, duration)
-- [ ] Frontend: revoke with `ConfirmDialog`
-- [ ] Frontend: action-log viewer
+- [x] Frontend: list page with status filter
+- [x] Frontend: grant modal from the company page (reason, duration)
+- [x] Frontend: revoke with `ConfirmDialog`
+- [x] Frontend: action-log viewer
 
 ### 2.5 Admin users
 - [x] Backend: remove `DELETE /admin-users/:id`
 - [x] Backend: keep deactivate and the last-active-admin guard
 - [x] Backend: reset-password endpoint
 - [x] Backend: audit calls
-- [ ] Frontend: list page
-- [ ] Frontend: create/edit drawer
-- [ ] Frontend: deactivate and reset password actions
+- [x] Frontend: list page
+- [x] Frontend: create/edit drawer
+- [x] Frontend: deactivate and reset password actions
 
 ### 2.6 Audit log
-- [ ] Backend: `GET /platform/audit-logs` with filters: admin, company, entity, action, date range
-- [ ] Frontend: `/platform/audit-log` read-only filterable page
-- [ ] Frontend: company Activity tab reuses the same query filtered by company
+- [x] Backend: `GET /platform/audit-logs` with filters: admin, company, entity, action, date range
+- [x] Frontend: `/platform/audit-log` read-only filterable page
+- [x] Frontend: company Activity tab reuses the same query filtered by company
 
 **Exit check (each page):** loading, empty, error and unauthorized states render; mutations are confirmed where destructive; every mutation writes an audit row; backend tests cover the endpoints.
 

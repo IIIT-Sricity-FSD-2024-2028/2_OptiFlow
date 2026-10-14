@@ -7,10 +7,9 @@ import { Badge } from '../../../shared/components/Badge';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { CompanyOverviewTab } from '../components/detail/CompanyOverviewTab';
 import { CompanySubscriptionTab } from '../components/detail/CompanySubscriptionTab';
-import { CompanySupportAccessTab } from '../components/detail/CompanySupportAccessTab';
 import { CompanyActivityTab } from '../components/detail/CompanyActivityTab';
 
-const TABS = ['Overview', 'Subscription', 'Support Access', 'Activity'];
+const TABS = ['Overview', 'Subscription', 'Activity'];
 
 export default function CompanyDetail() {
   const { id } = useParams();
@@ -123,7 +122,6 @@ export default function CompanyDetail() {
       {/* Tab Panels */}
       {activeTab === 'Overview' && <CompanyOverviewTab company={company} />}
       {activeTab === 'Subscription' && <CompanySubscriptionTab company={company} />}
-      {activeTab === 'Support Access' && <CompanySupportAccessTab company={company} />}
       {activeTab === 'Activity' && <CompanyActivityTab company={company} />}
 
       {/* Status Transition ConfirmDialog */}
