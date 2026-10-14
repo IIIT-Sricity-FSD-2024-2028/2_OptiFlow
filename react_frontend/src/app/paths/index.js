@@ -15,6 +15,8 @@ export const PATHS = {
   PLATFORM: {
     DASHBOARD: "/platform/dashboard",
     COMPANIES: "/platform/companies",
+    COMPANY_NEW: "/platform/companies/new",
+    COMPANY_DETAIL: "/platform/companies/:id",
     PLANS: "/platform/plans",
     SUBSCRIPTIONS: "/platform/subscriptions",
     ADMIN_USERS: "/platform/admin-users",

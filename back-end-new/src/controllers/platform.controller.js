@@ -798,19 +798,76 @@ export async function updatePlan(req, res, next) {
 // ============================================================================
 // 5. SUBSCRIPTIONS (PLATFORM CRUD)
 // ============================================================================
+// 5. SUBSCRIPTIONS (PLATFORM CRUD)
+// ============================================================================
+
+const ALLOWED_SUBSCRIPTION_TRANSITIONS = {
+  Trialing: ['Active', 'PastDue', 'Cancelled'],
+  Active: ['PastDue', 'Cancelled'],
+  PastDue: ['Active', 'Cancelled'],
+  Cancelled: [],
+};
 
 /**
  * GET /platform/subscriptions & GET /api/platform/subscriptions
  */
 export async function listSubscriptions(req, res, next) {
   try {
-    const subscriptions = await prisma.subscription.findMany({
-      include: {
-        company: { select: { id: true, legalName: true } },
-        plan: true,
-      },
-      orderBy: { currentPeriodEnd: 'desc' },
+    const { status, pastDue, expiringWithin, companyId } = req.query;
+    const where = {};
+
+    if (companyId) {
+      where.companyId = String(companyId);
+    }
+
+    if (status) {
+      const allowed = ['Active', 'PastDue', 'Cancelled', 'Trialing'];
+      if (!allowed.includes(status)) {
+        throw new BadRequestError(`Invalid status filter: ${status}. Must be one of ${allowed.join(', ')}`);
+      }
+      where.status = status;
+    } else if (pastDue === 'true' || pastDue === true) {
+      where.status = 'PastDue';
+    }
+
+    if (expiringWithin) {
+      const days = parseInt(expiringWithin, 10);
+      if (isNaN(days) || days < 0) {
+        throw new BadRequestError('expiringWithin must be a non-negative integer number of days');
+      }
+      const now = new Date();
+      const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+      where.currentPeriodEnd = { gte: now, lte: future };
+      if (!where.status) {
+        where.status = { in: ['Active', 'Trialing'] };
+      }
+    }
+
+    const { page, pageSize, skip, take } = parseListParams(req.query, {
+      defaultPageSize: 20,
+      maxPageSize: 100,
     });
+
+    const [subscriptions, total] = await Promise.all([
+      prisma.subscription.findMany({
+        where,
+        skip: req.query.page ? skip : undefined,
+        take: req.query.page ? take : undefined,
+        include: {
+          company: { select: { id: true, legalName: true } },
+          plan: true,
+        },
+        orderBy: { currentPeriodEnd: 'desc' },
+      }),
+      prisma.subscription.count({ where }),
+    ]);
+
+    if (req.query.page) {
+      return res.status(200).json({
+        success: true,
+        data: formatListResponse(subscriptions, total, page, pageSize),
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -847,21 +904,126 @@ export async function createSubscription(req, res, next) {
     const periodEnd = new Date();
     periodEnd.setMonth(periodEnd.getMonth() + (billingCycle === 'Annual' ? 12 : 1));
 
-    const subscription = await prisma.subscription.create({
-      data: {
-        companyId,
-        planId,
-        billingCycle,
-        status,
-        currentPeriodEnd: periodEnd,
-      },
-      include: { company: true, plan: true },
+    const subscription = await prisma.$transaction(async (tx) => {
+      const created = await tx.subscription.create({
+        data: {
+          companyId,
+          planId,
+          billingCycle,
+          status,
+          currentPeriodEnd: periodEnd,
+        },
+        include: { company: true, plan: true },
+      });
+
+      await writeAuditLog(
+        req,
+        'subscription.create',
+        { type: 'Subscription', id: created.id, companyId: created.companyId },
+        null,
+        created,
+        tx
+      );
+
+      return created;
     });
 
     res.status(201).json({
       success: true,
       message: 'Subscription created successfully',
       data: subscription,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /platform/subscriptions/:id & PATCH /api/platform/subscriptions/:id
+ */
+export async function updateSubscription(req, res, next) {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+
+    const existing = await prisma.subscription.findUnique({
+      where: { id },
+      include: { plan: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundError(`Subscription with ID ${id} not found`);
+    }
+
+    const updateData = {};
+
+    // 1. Plan change
+    if (body.planId && body.planId !== existing.planId) {
+      const plan = await prisma.plan.findUnique({ where: { id: body.planId } });
+      if (!plan) {
+        throw new NotFoundError(`Plan with ID ${body.planId} not found`);
+      }
+      if (plan.isActive === false) {
+        throw new BadRequestError('Cannot assign an archived plan to a subscription');
+      }
+      updateData.planId = plan.id;
+    }
+
+    // 2. Billing cycle
+    if (body.billingCycle) {
+      const raw = String(body.billingCycle).trim().toLowerCase();
+      updateData.billingCycle = raw === 'annual' ? 'Annual' : 'Monthly';
+    }
+
+    // 3. Status transition enforcement (include Trialing)
+    if (body.status && body.status !== existing.status) {
+      const currentStatus = existing.status;
+      const targetStatus = body.status;
+      const allowed = ALLOWED_SUBSCRIPTION_TRANSITIONS[currentStatus] || [];
+
+      if (!allowed.includes(targetStatus)) {
+        throw new BadRequestError(
+          `Cannot transition subscription from ${currentStatus} to ${targetStatus}`
+        );
+      }
+      updateData.status = targetStatus;
+    }
+
+    // 4. Period end date
+    if (body.currentPeriodEnd) {
+      const parsedDate = new Date(body.currentPeriodEnd);
+      if (isNaN(parsedDate.getTime())) {
+        throw new BadRequestError('Invalid date format for currentPeriodEnd');
+      }
+      updateData.currentPeriodEnd = parsedDate;
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const sub = await tx.subscription.update({
+        where: { id },
+        data: updateData,
+        include: {
+          company: { select: { id: true, legalName: true } },
+          plan: true,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'subscription.update',
+        { type: 'Subscription', id, companyId: existing.companyId },
+        existing,
+        sub,
+        tx
+      );
+
+      return sub;
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Subscription updated successfully',
+      data: updated,
     });
   } catch (err) {
     next(err);
@@ -953,20 +1115,33 @@ export async function createPlatformAdminUser(req, res, next) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const newAdmin = await prisma.platformAdminUser.create({
-      data: {
-        email,
-        fullName,
-        passwordHash,
-        isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        isActive: true,
-        createdAt: true,
-      },
+    const newAdmin = await prisma.$transaction(async (tx) => {
+      const created = await tx.platformAdminUser.create({
+        data: {
+          email,
+          fullName,
+          passwordHash,
+          isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+        },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'admin.create',
+        { type: 'PlatformAdminUser', id: created.id },
+        null,
+        created,
+        tx
+      );
+
+      return created;
     });
 
     res.status(201).json({
@@ -1010,18 +1185,33 @@ export async function updatePlatformAdminUser(req, res, next) {
         throw new BadRequestError('Password must be at least 8 characters long');
       }
       updateData.passwordHash = await bcrypt.hash(body.password, 10);
+      updateData.passwordChangedAt = new Date();
     }
 
-    const updated = await prisma.platformAdminUser.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        isActive: true,
-        createdAt: true,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const resAdmin = await tx.platformAdminUser.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+          passwordChangedAt: true,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'admin.update',
+        { type: 'PlatformAdminUser', id },
+        { id: existing.id, email: existing.email, fullName: existing.fullName, isActive: existing.isActive },
+        resAdmin,
+        tx
+      );
+
+      return resAdmin;
     });
 
     res.status(200).json({
@@ -1035,33 +1225,81 @@ export async function updatePlatformAdminUser(req, res, next) {
 }
 
 /**
- * DELETE /platform/admin-users/:id & DELETE /api/platform-admin-users/:id
+ * POST /platform/admin-users/:id/reset-password
  */
-export async function deletePlatformAdminUser(req, res, next) {
+export async function resetPlatformAdminPassword(req, res, next) {
   try {
     const { id } = req.params;
+    const body = req.body || {};
 
     const existing = await prisma.platformAdminUser.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundError(`Platform admin user with ID ${id} not found`);
     }
 
-    const activeCount = await prisma.platformAdminUser.count({
-      where: { isActive: true },
-    });
-    if (activeCount <= 1) {
-      throw new BadRequestError('Cannot delete the last active platform administrator');
+    let newPassword = body.password;
+    let isGenerated = false;
+
+    if (!newPassword) {
+      newPassword = crypto.randomBytes(9).toString('base64').slice(0, 12) + '!1Aa';
+      isGenerated = true;
+    } else if (newPassword.length < 8) {
+      throw new BadRequestError('Password must be at least 8 characters long');
     }
 
-    await prisma.platformAdminUser.delete({ where: { id } });
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const admin = await tx.platformAdminUser.update({
+        where: { id },
+        data: {
+          passwordHash,
+          passwordChangedAt: new Date(),
+        },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          isActive: true,
+          createdAt: true,
+          passwordChangedAt: true,
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'admin.reset_password',
+        { type: 'PlatformAdminUser', id },
+        { id: existing.id, email: existing.email },
+        { id: admin.id, email: admin.email, passwordChangedAt: admin.passwordChangedAt },
+        tx
+      );
+
+      return admin;
+    });
 
     res.status(200).json({
       success: true,
-      message: 'Platform admin user deleted successfully',
+      message: 'Platform admin password reset successfully',
+      data: {
+        ...updated,
+        temporaryPassword: isGenerated ? newPassword : undefined,
+      },
     });
   } catch (err) {
     next(err);
   }
+}
+
+/**
+ * DELETE /platform/admin-users/:id - Direct delete disabled in favor of deactivation
+ */
+export async function deletePlatformAdminUser(req, res, next) {
+  return next(
+    new BadRequestError(
+      'Direct deletion of platform administrator accounts is disabled. Deactivate the account via PATCH /api/platform/admin-users/:id instead.'
+    )
+  );
 }
 
 // ============================================================================
@@ -1095,12 +1333,27 @@ export async function deletePlatformAdminUser(req, res, next) {
  */
 export async function listPlatformSupportAccesses(req, res, next) {
   try {
-    const { companyId, adminUserId } = req.query;
-
+    const { companyId, adminUserId, status } = req.query;
     const where = {
       ...(companyId ? { companyId: String(companyId) } : {}),
       ...(adminUserId ? { adminUserId: String(adminUserId) } : {}),
     };
+
+    if (status) {
+      const now = new Date();
+      const s = String(status).toLowerCase();
+      if (s === 'active') {
+        where.revokedAt = null;
+        where.expiresAt = { gt: now };
+      } else if (s === 'expired') {
+        where.revokedAt = null;
+        where.expiresAt = { lte: now };
+      } else if (s === 'revoked') {
+        where.revokedAt = { not: null };
+      } else {
+        throw new BadRequestError('Invalid status filter for support access: must be active, expired, or revoked');
+      }
+    }
 
     const accesses = await prisma.platformSupportAccess.findMany({
       where,
@@ -1160,31 +1413,54 @@ export async function createPlatformSupportAccess(req, res, next) {
 
     validateRequired({ companyId, reason }, ['companyId', 'reason']);
 
+    // Enforce minimum reason length
+    if (reason.length < 10) {
+      throw new BadRequestError('Reason must be at least 10 characters long describing the purpose');
+    }
+
     const company = await prisma.company.findUnique({ where: { id: String(companyId) } });
     if (!company) {
       throw new NotFoundError(`Target company ${companyId} not found`);
     }
 
+    // Reject grants for closed companies
+    if (company.status === 'Closed') {
+      throw new BadRequestError('Cannot grant support access to a closed company');
+    }
+
     const expiresAt = new Date(Date.now() + Math.max(1, durationHours) * 60 * 60 * 1000);
 
-    const access = await prisma.platformSupportAccess.create({
-      data: {
-        companyId: String(companyId),
-        adminUserId: req.platformAdmin.id,
-        reason,
-        expiresAt,
-        actionLog: [
-          {
-            action: 'GRANTED',
-            adminId: req.platformAdmin.id,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      },
-      include: {
-        company: { select: { id: true, legalName: true } },
-        adminUser: { select: { id: true, fullName: true, email: true } },
-      },
+    const access = await prisma.$transaction(async (tx) => {
+      const grant = await tx.platformSupportAccess.create({
+        data: {
+          companyId: String(companyId),
+          adminUserId: req.platformAdmin.id,
+          reason,
+          expiresAt,
+          actionLog: [
+            {
+              action: 'GRANTED',
+              adminId: req.platformAdmin.id,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        },
+        include: {
+          company: { select: { id: true, legalName: true } },
+          adminUser: { select: { id: true, fullName: true, email: true } },
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'support_access.grant',
+        { type: 'PlatformSupportAccess', id: grant.id, companyId: grant.companyId },
+        null,
+        grant,
+        tx
+      );
+
+      return grant;
     });
 
     res.status(201).json({
@@ -1198,7 +1474,7 @@ export async function createPlatformSupportAccess(req, res, next) {
 }
 
 /**
- * DELETE /platform/support-access/:id & DELETE /api/platform/support-access/:id
+ * POST /platform/support-access/:id/revoke & DELETE /platform/support-access/:id
  */
 export async function revokePlatformSupportAccess(req, res, next) {
   try {
@@ -1209,11 +1485,47 @@ export async function revokePlatformSupportAccess(req, res, next) {
       throw new NotFoundError(`Platform support access with ID ${id} not found`);
     }
 
-    await prisma.platformSupportAccess.delete({ where: { id } });
+    if (access.revokedAt) {
+      throw new BadRequestError('Support access grant has already been revoked');
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const revoked = await tx.platformSupportAccess.update({
+        where: { id },
+        data: {
+          revokedAt: new Date(),
+          revokedBy: req.platformAdmin.id,
+          actionLog: [
+            ...(Array.isArray(access.actionLog) ? access.actionLog : []),
+            {
+              action: 'REVOKED',
+              adminId: req.platformAdmin.id,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        },
+        include: {
+          company: { select: { id: true, legalName: true } },
+          adminUser: { select: { id: true, fullName: true, email: true } },
+        },
+      });
+
+      await writeAuditLog(
+        req,
+        'support_access.revoke',
+        { type: 'PlatformSupportAccess', id, companyId: access.companyId },
+        access,
+        revoked,
+        tx
+      );
+
+      return revoked;
+    });
 
     res.status(200).json({
       success: true,
       message: 'Support access revoked successfully',
+      data: updated,
     });
   } catch (err) {
     next(err);

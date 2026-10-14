@@ -93,51 +93,51 @@ Why this order inside Phase 2: provisioning a company needs a plan to assign, so
 ## Phase 2 — Core pages (build in this order)
 
 ### 2.1 Plans
-- [ ] Backend: add `isActive` to Plan (migration)
-- [ ] Backend: `PATCH /plans/:id` covers all fields
-- [ ] Backend: archive action; block assigning an archived plan; no delete
-- [ ] Backend: pricing fields if confirmed
-- [ ] Backend: audit calls on create, update, archive
-- [ ] Frontend: list page with subscription count and limits
-- [ ] Frontend: create/edit drawer; "unlimited" input for null limits
-- [ ] Frontend: archive with `ConfirmDialog`
+- [x] Backend: add `isActive` to Plan (migration)
+- [x] Backend: `PATCH /plans/:id` covers all fields
+- [x] Backend: archive action; block assigning an archived plan; no delete
+- [x] Backend: pricing fields if confirmed
+- [x] Backend: audit calls on create, update, archive
+- [x] Frontend: list page with subscription count and limits
+- [x] Frontend: create/edit drawer; "unlimited" input for null limits
+- [x] Frontend: archive with `ConfirmDialog`
 
 ### 2.2 Companies
-- [ ] Backend: `POST /companies`, one transaction creating company + first owner user + subscription
-- [ ] Backend: set-password link for the owner (per the decision above)
-- [ ] Backend: list with pagination, search, status filter
-- [ ] Backend: `GET /companies/:id` returns subscription, user and branch counts, recent support grants
-- [ ] Backend: `PATCH` for legal name and status, with audit
-- [ ] Frontend: list page with search, status filter, pagination
-- [ ] Frontend: `/platform/companies/new` provisioning form (company, owner, plan)
-- [ ] Frontend: `/platform/companies/:id` with tabs Overview, Subscription, Support access, Activity
-- [ ] Frontend: suspend, reactivate and close behind `ConfirmDialog`
+- [x] Backend: `POST /companies`, one transaction creating company + first owner user + subscription
+- [x] Backend: set-password link for the owner (per the decision above)
+- [x] Backend: list with pagination, search, status filter
+- [x] Backend: `GET /companies/:id` returns subscription, user and branch counts, recent support grants
+- [x] Backend: `PATCH` for legal name and status, with audit
+- [x] Frontend: list page with search, status filter, pagination
+- [x] Frontend: `/platform/companies/new` provisioning form (company, owner, plan)
+- [x] Frontend: `/platform/companies/:id` with tabs Overview, Subscription, Support access, Activity
+- [x] Frontend: suspend, reactivate and close behind `ConfirmDialog`
 
 ### 2.3 Subscriptions
-- [ ] Backend: `PATCH /subscriptions/:id` for plan, cycle, status, period end
-- [ ] Backend: enforce allowed status transitions (include `Trialing`)
-- [ ] Backend: list filters: status, past due, expiring within N days
-- [ ] Backend: audit calls
+- [x] Backend: `PATCH /subscriptions/:id` for plan, cycle, status, period end
+- [x] Backend: enforce allowed status transitions (include `Trialing`)
+- [x] Backend: list filters: status, past due, expiring within N days
+- [x] Backend: audit calls
 - [ ] Frontend: ops list page (links to company)
 - [ ] Frontend: change plan/status/cycle action, also reachable from the company Subscription tab
 
 ### 2.4 Support access
-- [ ] Backend: add `revokedAt`, `revokedBy` (migration)
-- [ ] Backend: revoke endpoint replaces `DELETE`; record is never deleted
-- [ ] Backend: enforce minimum reason length; reject grants for closed companies
-- [ ] Backend: list filter for active, expired, revoked
-- [ ] Backend: audit calls on grant and revoke
-- [ ] Backend: **verify** that a grant is actually enforced on the tenant side (the audit does not show this)
+- [x] Backend: add `revokedAt`, `revokedBy` (migration)
+- [x] Backend: revoke endpoint replaces `DELETE`; record is never deleted
+- [x] Backend: enforce minimum reason length; reject grants for closed companies
+- [x] Backend: list filter for active, expired, revoked
+- [x] Backend: audit calls on grant and revoke
+- [x] Backend: **verify** that a grant is actually enforced on the tenant side (the audit does not show this)
 - [ ] Frontend: list page with status filter
 - [ ] Frontend: grant modal from the company page (reason, duration)
 - [ ] Frontend: revoke with `ConfirmDialog`
 - [ ] Frontend: action-log viewer
 
 ### 2.5 Admin users
-- [ ] Backend: remove `DELETE /admin-users/:id`
-- [ ] Backend: keep deactivate and the last-active-admin guard
-- [ ] Backend: reset-password endpoint
-- [ ] Backend: audit calls
+- [x] Backend: remove `DELETE /admin-users/:id`
+- [x] Backend: keep deactivate and the last-active-admin guard
+- [x] Backend: reset-password endpoint
+- [x] Backend: audit calls
 - [ ] Frontend: list page
 - [ ] Frontend: create/edit drawer
 - [ ] Frontend: deactivate and reset password actions
