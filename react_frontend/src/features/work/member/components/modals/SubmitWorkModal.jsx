@@ -20,8 +20,7 @@ export function SubmitWorkModal({ isOpen, onClose, taskId, onSuccess }) {
     setSubmitting(true);
     try {
       await tasksApi.update(taskId, {
-        status: 'Pending_TL_Review',
-        notes: submitNotes.trim(),
+        status: 'In_Review',
       });
       toast.success('Work submitted to your team leader for review!');
       setSubmitNotes('');

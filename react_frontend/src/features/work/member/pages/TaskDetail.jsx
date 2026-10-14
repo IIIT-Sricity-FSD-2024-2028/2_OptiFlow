@@ -101,10 +101,8 @@ export default function MemberTaskDetail() {
 
   const handleSubtaskToggle = async (subId, completed) => {
     try {
-      const nextStatus = completed ? 'Completed' : 'Pending';
-      try {
-        await subtasksApi.update(subId, { status: nextStatus });
-      } catch (_) {}
+      const nextStatus = completed ? 'Completed' : 'Active';
+      await subtasksApi.update(subId, { status: nextStatus });
 
       setSubtasks((prev) =>
         prev.map((st) => ((st.id || st.subtaskId) === subId ? { ...st, status: nextStatus } : st))
@@ -397,7 +395,7 @@ export default function MemberTaskDetail() {
         isOpen={isSubmitModalOpen}
         onClose={() => setIsSubmitModalOpen(false)}
         taskId={taskId}
-        onSuccess={() => setTask((prev) => ({ ...prev, status: 'Pending_TL_Review' }))}
+        onSuccess={() => setTask((prev) => ({ ...prev, status: 'In_Review' }))}
       />
 
       <ReportBlockerModal

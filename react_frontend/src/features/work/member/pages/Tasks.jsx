@@ -57,7 +57,7 @@ export default function MemberTasks() {
         const memberTasks = rawTasks
           .filter((t) => {
             const assigneeId = String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '');
-            return !currentUserId || assigneeId === currentUserId || !assigneeId;
+            return Boolean(currentUserId && assigneeId === currentUserId);
           })
           .map((t) => ({ ...t, isSubtask: false }));
 
