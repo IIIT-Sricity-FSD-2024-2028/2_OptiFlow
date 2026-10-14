@@ -5,9 +5,10 @@ import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
+import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { Pagination } from "../../../shared/components/Pagination";
 import { useToast } from "../../../shared/components/Toast";
-import { Plus, Loader2, Trash2, Edit2, ExternalLink, BookOpen, Tags, Link2, Lock, Info } from "lucide-react";
+import { Plus, Loader2, Trash2, Edit2, ExternalLink, BookOpen, Tags, Link2, Lock } from "lucide-react";
 
 const PAGE_SIZE = 10;
 
@@ -20,6 +21,8 @@ export default function ComplianceCategories() {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: "", description: "" });
   const [currentPage, setCurrentPage] = useState(1);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchCategories = async () => {
     try {
@@ -50,7 +53,7 @@ export default function ComplianceCategories() {
     setIsOpen(true);
   };
 
-  const handleDelete = async (category) => {
+  const handleDelete = (category) => {
     const rulesCount = category._count?.rules || 0;
     if (rulesCount > 0) {
       toast.error(
@@ -58,13 +61,21 @@ export default function ComplianceCategories() {
       );
       return;
     }
-    if (!window.confirm(`Are you sure you want to delete the empty category "${category.name}"?`)) return;
+    setCategoryToDelete(category);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!categoryToDelete) return;
     try {
-      await apiClient(`/compliance-categories/${category.id}`, { method: "DELETE" });
-      toast.success(`Category "${category.name}" deleted.`);
+      setIsDeleting(true);
+      await apiClient(`/compliance-categories/${categoryToDelete.id}`, { method: "DELETE" });
+      toast.success(`Category "${categoryToDelete.name}" deleted.`);
+      setCategoryToDelete(null);
       fetchCategories();
     } catch (error) {
       toast.error("Failed to delete category: " + error.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -85,7 +96,7 @@ export default function ComplianceCategories() {
       setIsOpen(false);
       fetchCategories();
     } catch (error) {
-      alert("Failed to save category: " + error.message);
+      toast.error("Failed to save category: " + error.message);
     }
   };
 
@@ -151,7 +162,7 @@ export default function ComplianceCategories() {
             {rulesCount > 0 ? (
               <span 
                 className="text-slate-300 p-1 cursor-not-allowed inline-flex items-center"
-                title={`Protected from deletion: ${rulesCount} rule(s) assigned to this category. Reassign or delete those rules first.`}
+                title="Cannot delete: has active rules"
               >
                 <Lock size={15} />
               </span>
@@ -233,16 +244,6 @@ export default function ComplianceCategories() {
         </Link>
       </div>
 
-      {/* Governance Guidance Banner */}
-      <div className="p-3.5 bg-blue-50/70 border border-blue-200/70 rounded-xl flex items-center justify-between text-xs text-blue-900">
-        <div className="flex items-center gap-2.5">
-          <Info size={16} className="text-blue-600 shrink-0" />
-          <span>
-            <strong>Category Retention:</strong> Categories containing active or archived rules are protected from deletion to maintain compliance organizational structure.
-          </span>
-        </div>
-      </div>
-
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-900">Active Regulatory Domains ({categories.length})</h2>
@@ -313,6 +314,17 @@ export default function ComplianceCategories() {
           </button>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(categoryToDelete)}
+        title="Delete Category"
+        message={`Are you sure you want to delete the category "${categoryToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete Category"
+        variant="danger"
+        loading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setCategoryToDelete(null)}
+      />
     </div>
   );
 }

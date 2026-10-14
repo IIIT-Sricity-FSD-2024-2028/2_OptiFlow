@@ -3,11 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
-import { ArrowLeft, Loader2, Power, PowerOff, ShieldAlert, ShieldCheck, Unlink, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, Power, PowerOff, Unlink } from "lucide-react";
 import Table from "../../../shared/components/Table";
 import { CreateBindingModal } from "../components/CreateBindingModal";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
 import { Modal } from "../../../shared/components/Modal";
+import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { useToast } from "../../../shared/components/Toast";
 
 const formatActionString = (str) => {
@@ -70,6 +71,8 @@ const RuleDetail = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [bindingToUnbind, setBindingToUnbind] = useState(null);
+  const [isUnbinding, setIsUnbinding] = useState(false);
   const [editFormData, setEditFormData] = useState({
     name: "",
     description: "",
@@ -122,21 +125,24 @@ const RuleDetail = () => {
     }
   };
 
-  const handleUnbind = async (bindingId, scopeName) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to unbind this rule from ${scopeName}? The compliance engine will stop evaluating this rule for this target.`
-      )
-    )
-      return;
+  const handleUnbind = (binding) => {
+    setBindingToUnbind(binding);
+  };
+
+  const handleConfirmUnbind = async () => {
+    if (!bindingToUnbind) return;
     try {
-      await apiClient(`/compliance-bindings/${bindingId}`, {
+      setIsUnbinding(true);
+      await apiClient(`/compliance-bindings/${bindingToUnbind.id}`, {
         method: "DELETE",
       });
-      toast.success(`Scope unbound successfully`);
+      toast.success("Scope unbound successfully");
+      setBindingToUnbind(null);
       fetchRule();
     } catch (err) {
       toast.error(`Failed to unbind scope: ${err.message}`);
+    } finally {
+      setIsUnbinding(false);
     }
   };
 
@@ -198,15 +204,19 @@ const RuleDetail = () => {
         return (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             {!rule.isActive && (
-              <div className="mb-6 p-4 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-start gap-3">
-                <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={20} />
-                <div className="text-xs text-amber-900 leading-relaxed">
-                  <p className="font-bold text-sm text-amber-950">Rule Currently Deactivated</p>
-                  <p className="mt-1">
-                    The automated compliance evaluation engine will not enforce or evaluate transitions against this rule.
-                    All historical violations, evidence submissions, and audit logs are securely preserved for enterprise audit inspection.
-                  </p>
+              <div className="mb-6 p-3 px-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                  <span>This rule is paused. New checks won't run, but past violations remain saved.</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleToggleActive}
+                  disabled={statusLoading}
+                  className="font-medium text-blue-600 hover:text-blue-700 cursor-pointer"
+                >
+                  Turn back on
+                </button>
               </div>
             )}
             <h3 className="text-lg font-medium text-gray-900 mb-4">Rule Configuration</h3>
@@ -274,7 +284,7 @@ const RuleDetail = () => {
                         variant="ghost"
                         size="sm"
                         className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 inline-flex items-center gap-1 cursor-pointer"
-                        onClick={() => handleUnbind(row.id, row.scopeName || row.scopeType)}
+                        onClick={() => handleUnbind(row)}
                       >
                         <Unlink size={13} />
                         <span>Unbind</span>
@@ -542,6 +552,17 @@ const RuleDetail = () => {
           </button>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(bindingToUnbind)}
+        title="Unbind Scope"
+        message={`Are you sure you want to unbind this rule from "${bindingToUnbind?.scopeName || bindingToUnbind?.scopeType}"? Future events will stop being evaluated against this rule.`}
+        confirmText="Unbind Scope"
+        variant="danger"
+        loading={isUnbinding}
+        onConfirm={handleConfirmUnbind}
+        onCancel={() => setBindingToUnbind(null)}
+      />
     </div>
   );
 };

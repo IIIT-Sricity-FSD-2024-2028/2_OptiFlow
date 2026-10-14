@@ -12,16 +12,11 @@ import {
   Plus,
   Loader2,
   Edit2,
-  Trash2,
   BookOpen,
   Tags,
   Link2,
   Power,
   PowerOff,
-  ShieldAlert,
-  ShieldCheck,
-  AlertTriangle,
-  Info,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -48,11 +43,6 @@ export default function ComplianceRules() {
     isActive: true,
     scopeType: "Company",
   });
-
-  // Enterprise Rule Governance Action Modal
-  const [ruleToManage, setRuleToManage] = useState(null);
-  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -135,48 +125,6 @@ export default function ComplianceRules() {
     }
   };
 
-  const handleOpenManageModal = (rule) => {
-    setRuleToManage(rule);
-    setIsManageModalOpen(true);
-  };
-
-  const handleConfirmDeactivate = async () => {
-    if (!ruleToManage) return;
-    try {
-      setActionLoading(true);
-      await apiClient(`/compliance-rules/${ruleToManage.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: false }),
-      });
-      toast.success(`Rule "${ruleToManage.name}" deactivated.`);
-      setIsManageModalOpen(false);
-      setRuleToManage(null);
-      fetchData();
-    } catch (err) {
-      toast.error(`Failed to deactivate rule: ${err.message}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!ruleToManage) return;
-    try {
-      setActionLoading(true);
-      await apiClient(`/compliance-rules/${ruleToManage.id}`, {
-        method: "DELETE",
-      });
-      toast.success(`Draft rule "${ruleToManage.name}" permanently deleted.`);
-      setIsManageModalOpen(false);
-      setRuleToManage(null);
-      fetchData();
-    } catch (err) {
-      toast.error(`Failed to delete rule: ${err.message}`);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handleSaveRule = async (e) => {
     e.preventDefault();
 
@@ -237,7 +185,7 @@ export default function ComplianceRules() {
     } catch (error) {
       setRules(previousRules);
       console.error("Failed to save rule:", error);
-      alert("Failed to save rule: " + error.message);
+      toast.error("Failed to save rule: " + error.message);
     }
   };
 
@@ -383,16 +331,6 @@ export default function ComplianceRules() {
             title="Edit Rule"
           >
             <Edit2 size={15} />
-          </button>
-
-          {/* Delete / Governance Protection Modal */}
-          <button
-            type="button"
-            onClick={() => handleOpenManageModal(row)}
-            className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-            title="Delete or Deactivate Rule"
-          >
-            <Trash2 size={15} />
           </button>
         </div>
       ),
@@ -711,136 +649,6 @@ export default function ComplianceRules() {
           </button>
         </form>
       </Modal>
-
-      {/* Enterprise Rule Governance & Audit Retention Modal */}
-      {ruleToManage && (
-        <Modal
-          isOpen={isManageModalOpen}
-          onClose={() => {
-            setIsManageModalOpen(false);
-            setRuleToManage(null);
-          }}
-          title={
-            (ruleToManage._count?.violations || (ruleToManage.violations?.length || 0)) > 0
-              ? "Enterprise Policy Retention"
-              : "Delete Compliance Rule"
-          }
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIsManageModalOpen(false);
-                  setRuleToManage(null);
-                }}
-                disabled={actionLoading}
-              >
-                Cancel
-              </Button>
-              {(ruleToManage._count?.violations || (ruleToManage.violations?.length || 0)) > 0 ? (
-                ruleToManage.isActive ? (
-                  <Button
-                    variant="warning"
-                    onClick={handleConfirmDeactivate}
-                    disabled={actionLoading}
-                    className="inline-flex items-center gap-1.5"
-                  >
-                    {actionLoading && <Loader2 size={14} className="animate-spin" />}
-                    <span>Deactivate Rule</span>
-                  </Button>
-                ) : (
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setIsManageModalOpen(false);
-                      setRuleToManage(null);
-                    }}
-                  >
-                    Understood
-                  </Button>
-                )
-              ) : (
-                <Button
-                  variant="danger"
-                  onClick={handleConfirmDelete}
-                  disabled={actionLoading}
-                  className="inline-flex items-center gap-1.5"
-                >
-                  {actionLoading && <Loader2 size={14} className="animate-spin" />}
-                  <span>Delete Permanently</span>
-                </Button>
-              )}
-            </>
-          }
-        >
-          <div className="space-y-4 text-sm text-slate-700">
-            {(ruleToManage._count?.violations || (ruleToManage.violations?.length || 0)) > 0 ? (
-              <div className="space-y-3">
-                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-                  <ShieldAlert className="text-amber-600 shrink-0 mt-0.5" size={20} />
-                  <div>
-                    <h4 className="font-bold text-amber-900 text-sm">
-                      Compliance Audit Trail Protection
-                    </h4>
-                    <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                      This rule has{" "}
-                      <span className="font-bold underline">
-                        {ruleToManage._count?.violations || ruleToManage.violations?.length || 0} recorded violation(s)
-                      </span>
-                      . In enterprise governance frameworks (SOC 2, ISO 27001), rules with audit or violation history cannot be deleted to guarantee historical audit integrity and non-repudiation.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs text-slate-600">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-slate-700">Rule Name:</span>
-                    <span className="font-medium text-slate-900">{ruleToManage.name}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-slate-700">Current Status:</span>
-                    <Badge status={ruleToManage.isActive ? "success" : "default"}>
-                      {ruleToManage.isActive ? "Active" : "Deactivated"}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-slate-700">Enforcement Scope:</span>
-                    <span>{ruleToManage.bindings?.[0]?.scopeType || "All (Company)"}</span>
-                  </div>
-                </div>
-
-                {ruleToManage.isActive ? (
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Instead of hard-deleting, you can safely <strong>deactivate</strong> this rule. The automated compliance engine will immediately stop evaluating this rule on upcoming workflows, while past violations and evidence remain securely preserved.
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    This rule is currently <strong>deactivated</strong>. It is retained strictly as an immutable record for past audits and will not evaluate new workflows.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
-                  <AlertTriangle className="text-rose-600 shrink-0 mt-0.5" size={20} />
-                  <div>
-                    <h4 className="font-bold text-rose-900 text-sm">
-                      Delete Draft Rule
-                    </h4>
-                    <p className="text-xs text-rose-800 mt-1 leading-relaxed">
-                      This compliance rule has no recorded violations or audit history. It will be permanently removed from the system.
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-slate-600">
-                  Are you sure you want to permanently delete <strong>{ruleToManage.name}</strong>? This action cannot be undone.
-                </p>
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

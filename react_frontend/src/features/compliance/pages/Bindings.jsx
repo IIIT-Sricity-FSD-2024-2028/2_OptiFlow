@@ -7,7 +7,8 @@ import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { CreateBindingModal } from "../components/CreateBindingModal";
-import { Plus, Loader2, Link2, Unlink, BookOpen, Tags, Info } from "lucide-react";
+import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
+import { Plus, Loader2, Link2, Unlink, BookOpen, Tags } from "lucide-react";
 import { useToast } from "../../../shared/components/Toast";
 
 const PAGE_SIZE = 10;
@@ -20,6 +21,8 @@ export default function ComplianceBindings() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [bindingToUnbind, setBindingToUnbind] = useState(null);
+  const [isUnbinding, setIsUnbinding] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -46,16 +49,23 @@ export default function ComplianceBindings() {
     fetchData();
   }, []);
 
-  const handleUnbind = async (binding) => {
-    const scopeLabel = binding.scopeName || (binding.scopeType === "Company" ? "All (Company-wide)" : binding.scopeId);
-    const ruleLabel = binding.rule?.name || `Rule #${binding.ruleId}`;
-    if (!window.confirm(`Unbind "${ruleLabel}" from "${scopeLabel}"? Future events will no longer be evaluated against this rule. Past violations remain safely in audit history.`)) return;
+  const handleUnbind = (binding) => {
+    setBindingToUnbind(binding);
+  };
+
+  const handleConfirmUnbind = async () => {
+    if (!bindingToUnbind) return;
     try {
-      await apiClient(`/compliance-bindings/${binding.id}`, { method: "DELETE" });
+      setIsUnbinding(true);
+      await apiClient(`/compliance-bindings/${bindingToUnbind.id}`, { method: "DELETE" });
+      const scopeLabel = bindingToUnbind.scopeName || (bindingToUnbind.scopeType === "Company" ? "All (Company-wide)" : bindingToUnbind.scopeId);
       toast.success(`Unbound rule from ${scopeLabel}.`);
+      setBindingToUnbind(null);
       fetchData();
     } catch (err) {
       toast.error("Failed to unbind: " + err.message);
+    } finally {
+      setIsUnbinding(false);
     }
   };
 
@@ -182,16 +192,6 @@ export default function ComplianceBindings() {
         </Link>
       </div>
 
-      {/* Governance Guidance Banner */}
-      <div className="p-3.5 bg-blue-50/70 border border-blue-200/70 rounded-xl flex items-center justify-between text-xs text-blue-900">
-        <div className="flex items-center gap-2.5">
-          <Info size={16} className="text-blue-600 shrink-0" />
-          <span>
-            <strong>Scope Binding Governance:</strong> Unbinding a scope safely discontinues future rule evaluation for that target without deleting historical violation records or evidence files.
-          </span>
-        </div>
-      </div>
-
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-900">Active Enforced Bindings ({bindings.length})</h2>
@@ -225,6 +225,17 @@ export default function ComplianceBindings() {
           onBindingCreated={fetchData}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={Boolean(bindingToUnbind)}
+        title="Unbind Scope"
+        message={`Are you sure you want to unbind "${bindingToUnbind?.rule?.name || 'this rule'}" from "${bindingToUnbind?.scopeName || (bindingToUnbind?.scopeType === 'Company' ? 'All (Company-wide)' : bindingToUnbind?.scopeId)}"? Future events will stop being evaluated against this rule.`}
+        confirmText="Unbind Scope"
+        variant="danger"
+        loading={isUnbinding}
+        onConfirm={handleConfirmUnbind}
+        onCancel={() => setBindingToUnbind(null)}
+      />
     </div>
   );
 }
