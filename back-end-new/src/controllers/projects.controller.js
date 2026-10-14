@@ -5,13 +5,47 @@ import {
   ForbiddenError,
 } from '../utils/errors.js';
 import { validateRequired } from '../utils/validation.js';
-import { ROLES } from '../utils/roles.js';
+import { normalizeRole, ROLES } from '../utils/roles.js';
 import {
   buildProjectListWhere,
+  buildTaskListWhere,
+  buildSubtaskListWhere,
   assertBranchManagerScope,
   isBranchManager,
 } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+
+async function getProjectListWhere(req, branchId) {
+  const role = normalizeRole(req.user.role || req.user.roleLabel);
+  let assignedProjectIds = [];
+
+  if (role === 'project_manager' || role === 'pm') {
+    const assignments = await prisma.roleAssignment.findMany({
+      where: {
+        userId: req.user.id,
+        companyId: req.user.companyId,
+        revokedAt: null,
+        scopeType: 'Project',
+        role: {
+          OR: [
+            { label: ROLES.PROJECT_MANAGER },
+            { name: 'project_manager' },
+            { roleTemplate: { slug: 'project_manager' } },
+          ],
+        },
+      },
+      select: { scopeId: true },
+    });
+    assignedProjectIds = assignments.map(({ scopeId }) => scopeId);
+  }
+
+  return buildProjectListWhere({
+    companyId: req.user.companyId,
+    branchId,
+    user: req.user,
+    assignedProjectIds,
+  });
+}
 
 
 /**
@@ -20,11 +54,7 @@ import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, 
  */
 export async function listProjects(req, res, next) {
   try {
-    const where = buildProjectListWhere({
-      companyId: req.user.companyId,
-      branchId: req.query.branchId,
-      user: req.user,
-    });
+    const where = await getProjectListWhere(req, req.query.branchId);
 
     const projects = await prisma.project.findMany({
       where,
@@ -42,7 +72,10 @@ export async function listProjects(req, res, next) {
           },
         },
         tasks: {
-          where: { deletedAt: null },
+          where: buildTaskListWhere({
+            companyId: req.user.companyId,
+            user: req.user,
+          }),
           select: {
             id: true,
             title: true,
@@ -78,8 +111,8 @@ export async function getProjectById(req, res, next) {
 
     const project = await prisma.project.findFirst({
       where: {
+        ...await getProjectListWhere(req),
         id,
-        team: { branch: { companyId: req.user.companyId } },
       },
       include: {
         team: {
@@ -89,9 +122,17 @@ export async function getProjectById(req, res, next) {
           },
         },
         tasks: {
-          where: { deletedAt: null },
+          where: buildTaskListWhere({
+            companyId: req.user.companyId,
+            user: req.user,
+          }),
           include: {
-            subtasks: { where: { deletedAt: null } },
+            subtasks: {
+              where: buildSubtaskListWhere({
+                companyId: req.user.companyId,
+                user: req.user,
+              }),
+            },
             assignedTo: { select: { id: true, fullName: true, email: true } },
             escalations: true,
           },

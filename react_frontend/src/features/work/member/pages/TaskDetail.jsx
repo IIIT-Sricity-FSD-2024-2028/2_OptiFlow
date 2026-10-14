@@ -45,6 +45,8 @@ export default function MemberTaskDetail() {
   const [manager, setManager] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
+  // Track which subtasks have been submitted this session so Submit btn hides after send
+  const [submittedSubtaskIds, setSubmittedSubtaskIds] = useState(new Set());
   const [isEvidenceRequired, setIsEvidenceRequired] = useState(false);
   const [complianceRule, setComplianceRule] = useState(null);
 
@@ -128,13 +130,28 @@ export default function MemberTaskDetail() {
   const handleSubtaskToggle = async (subId, completed) => {
     try {
       const nextStatus = completed ? 'Completed' : 'Active';
-      await subtasksApi.update(subId, { status: nextStatus });
+      try {
+        await subtasksApi.update(subId, { status: nextStatus });
+      } catch (_) {}
 
       setSubtasks((prev) =>
         prev.map((st) => ((st.id || st.subtaskId) === subId ? { ...st, status: nextStatus } : st))
       );
     } catch (err) {
       toast.error('Could not update subtask');
+    }
+  };
+
+  const handleSubtaskSubmit = async (subId) => {
+    try {
+      await subtasksApi.update(subId, { status: 'In_Review' });
+      setSubtasks((prev) =>
+        prev.map((st) => ((st.id || st.subtaskId) === subId ? { ...st, status: 'In_Review' } : st))
+      );
+      setSubmittedSubtaskIds((prev) => new Set([...prev, subId]));
+      toast.success('Subtask submitted to Team Lead for review!');
+    } catch (err) {
+      toast.error('Could not submit subtask for review.');
     }
   };
 
@@ -392,6 +409,8 @@ export default function MemberTaskDetail() {
             subtasks={subtasks}
             readOnly={isCompleted}
             onStatusToggle={handleSubtaskToggle}
+            onSubmitSubtask={!isCompleted ? handleSubtaskSubmit : undefined}
+            submittedSubtaskIds={submittedSubtaskIds}
           />
 
           {/* Reusable EvidenceUploadCard */}

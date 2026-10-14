@@ -6,7 +6,8 @@ import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Modal } from '../../../../shared/components/Modal';
 import { Toast } from '../../../../shared/components/Toast';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
-import { TaskDetailPanel, SubtaskList } from '../../components';
+import { TaskDetailPanel, SubtaskList, EvidenceUploadCard } from '../../components';
+import { UploadEvidenceModal } from '../../member/components/modals/UploadEvidenceModal';
 import { useAuth } from '../../../../context/AuthContext';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
@@ -16,6 +17,7 @@ import * as evidenceApi from '../../../../services/api/evidence';
 import * as complianceApi from '../../../../services/api/compliance';
 
 const BLOCKER_TYPES = ['Missing Information / Data', 'System Issue / Bug', 'Dependency Delay', 'Access / permission', 'Other'];
+const EVIDENCE_TYPES = ['Document', 'Screenshot', 'Image', 'Report', 'Archive', 'Other'];
 const STAGES = ['Data Collection', 'Work In Progress', 'Team Leader Review', 'Compliance Audit'];
 const STAGE_MAP = { Active: 1, In_Review: 2, Pending_TL_Review: 2, Completed: 3 };
 
@@ -32,15 +34,25 @@ export default function TeamLeadTaskDetail() {
   const [task, setTask] = useState(null);
   const [compliance, setCompliance] = useState({ hasRules: false, evidenceBlocked: false });
   const [complianceLoading, setComplianceLoading] = useState(true);
+  const [taskEvidence, setTaskEvidence] = useState([]);
+  const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
   const [subtasks, setSubtasks] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const [actionOpen, setActionOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('submit');
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitNotes, setSubmitNotes] = useState('');
+  const [submitFile, setSubmitFile] = useState(null);
+  const [submitFileTitle, setSubmitFileTitle] = useState('');
+  const [submitFileType, setSubmitFileType] = useState('Document');
+  const [submittingWork, setSubmittingWork] = useState(false);
+
+  const [blockerOpen, setBlockerOpen] = useState(false);
   const [blockerType, setBlockerType] = useState(BLOCKER_TYPES[0]);
   const [blockerDesc, setBlockerDesc] = useState('');
+
+  const [extensionOpen, setExtensionOpen] = useState(false);
   const [extDate, setExtDate] = useState('');
   const [extReason, setExtReason] = useState('');
 
@@ -121,6 +133,11 @@ export default function TeamLeadTaskDetail() {
         && String(item.status).toLowerCase() === 'approved'
       ));
 
+      const matchedEvidence = evidence.filter((item) => (
+        String(item.taskId || item.task_id || item.task?.id) === String(taskId)
+      ));
+      setTaskEvidence(matchedEvidence);
+
       setCompliance({
         hasRules: relevantBindings.length > 0 || activeViolations.length > 0,
         evidenceBlocked: (evidenceRules.length > 0 || activeViolations.length > 0) && !hasApprovedEvidence,
@@ -132,6 +149,16 @@ export default function TeamLeadTaskDetail() {
     });
     return () => { active = false; };
   }, [task, taskId]);
+
+  const handleDeleteEvidence = async (evId) => {
+    try {
+      await evidenceApi.remove(evId);
+      setTaskEvidence((prev) => prev.filter((e) => e.id !== evId));
+      showToast('success', 'Evidence removed.');
+    } catch {
+      showToast('error', 'Failed to delete evidence.');
+    }
+  };
 
   const patchTask = async (patch) => {
     try {
@@ -151,13 +178,72 @@ export default function TeamLeadTaskDetail() {
     if (await patchTask({ status: 'Active' })) showToast('success', 'Sent back for changes.');
   };
 
+  const handleSubmitWork = async (e) => {
+    e?.preventDefault();
+    if (!submitNotes.trim()) {
+      showToast('error', 'Please provide a completion summary or handover notes.');
+      return;
+    }
+
+    if (compliance.evidenceBlocked && taskEvidence.length === 0 && !submitFile) {
+      showToast('error', 'Compliance requires an evidence deliverable. Please attach a document.');
+      return;
+    }
+
+    setSubmittingWork(true);
+    try {
+      if (submitFile) {
+        const title = submitFileTitle.trim() || submitFile.name || 'Deliverable Artifact';
+        const res = await evidenceApi.create({
+          taskId: String(taskId),
+          title,
+          evidenceType: submitFileType,
+          notes: submitNotes.trim(),
+          fileUrl: submitFile.name,
+          userId: user?.id,
+        });
+        const createdId = res?.data?.id || res?.id;
+        if (createdId) {
+          await evidenceApi.uploadFile(createdId, submitFile);
+        }
+        const newEv = res?.data || res;
+        setTaskEvidence((prev) => [newEv, ...prev]);
+        setCompliance((prev) => ({ ...prev, evidenceBlocked: false }));
+      }
+
+      await tasksApi.update(taskId, {
+        status: 'In_Review',
+        notes: submitNotes.trim(),
+      });
+      setTask((prev) => ({ ...prev, status: 'In_Review', notes: submitNotes.trim() }));
+      showToast('success', 'Work and deliverables submitted to Project Manager for review!');
+      setSubmitOpen(false);
+      setSubmitNotes('');
+      setSubmitFile(null);
+      setSubmitFileTitle('');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to submit work.');
+    } finally {
+      setSubmittingWork(false);
+    }
+  };
+
   const handleReportBlocker = async () => {
     if (!blockerDesc.trim()) return showToast('error', 'Please describe the blocker.');
     try {
-      await escalationsApi.create({ taskId, title: `Blocker: ${blockerType}`, blockerType, description: blockerDesc.trim(), priority: 'High' });
-      showToast('success', 'Blocker reported.');
-      setActionOpen(false); setBlockerDesc('');
-    } catch { showToast('error', 'Failed to report blocker.'); }
+      await escalationsApi.create({
+        taskId,
+        title: `Blocker: ${blockerType}`,
+        blockerType,
+        description: blockerDesc.trim(),
+        priority: 'High',
+      });
+      showToast('success', 'Blocker reported and escalated to Project Manager.');
+      setBlockerOpen(false);
+      setBlockerDesc('');
+    } catch {
+      showToast('error', 'Failed to report blocker.');
+    }
   };
 
   const handleExtension = async () => {
@@ -170,9 +256,13 @@ export default function TeamLeadTaskDetail() {
         description: `Requested deadline: ${extDate}\nReason: ${extReason.trim()}`,
         priority: 'Medium',
       });
-      showToast('success', 'Extension requested.');
-      setActionOpen(false); setExtDate(''); setExtReason('');
-    } catch { showToast('error', 'Failed to submit request.'); }
+      showToast('success', 'Extension request submitted.');
+      setExtensionOpen(false);
+      setExtDate('');
+      setExtReason('');
+    } catch {
+      showToast('error', 'Failed to submit request.');
+    }
   };
 
   const handleSaveSubtask = async () => {
@@ -281,11 +371,54 @@ export default function TeamLeadTaskDetail() {
               readOnly={true}
             />
 
-            {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t border-gray-100">
-              <Button variant="primary" onClick={() => { setActiveTab('submit'); setActionOpen(true); }}>Submit Work</Button>
-              <Button variant="outline" onClick={() => { setActiveTab('blocker'); setActionOpen(true); }}>Report Blocker</Button>
-              <Button variant="outline" onClick={() => { setActiveTab('extension'); setActionOpen(true); }}>Request Extension</Button>
+            <EvidenceUploadCard
+              taskId={taskId}
+              evidenceList={taskEvidence}
+              readOnly={task.status === 'Completed'}
+              onRequestUpload={() => setIsEvidenceModalOpen(true)}
+              onDelete={handleDeleteEvidence}
+            />
+
+            {/* Action Bar */}
+            <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {task.status !== 'Completed' && task.status !== 'In_Review' && (
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setSubmitNotes(task.notes || '');
+                      setSubmitFile(null);
+                      setSubmitFileTitle('');
+                      setSubmitOpen(true);
+                    }}
+                  >
+                    Submit Work for Review →
+                  </Button>
+                )}
+                {task.status === 'In_Review' && (
+                  <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span>In Review — Submitted to Project Manager</span>
+                  </div>
+                )}
+                {task.status === 'Completed' && (
+                  <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-xs">
+                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                    <span>Task Completed & Approved</span>
+                  </div>
+                )}
+              </div>
+
+              {task.status !== 'Completed' && (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setBlockerOpen(true)}>
+                    Report Blocker
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setExtensionOpen(true)}>
+                    Request Extension
+                  </Button>
+                </div>
+              )}
             </div>
           </TaskDetailPanel>
         </div>
@@ -314,50 +447,150 @@ export default function TeamLeadTaskDetail() {
         </div>
       </div>
 
-      {/* Action modal */}
-      <Modal isOpen={actionOpen} onClose={() => setActionOpen(false)} title="Task Actions"
+      {/* Submit Work Modal */}
+      <Modal
+        isOpen={submitOpen}
+        onClose={() => setSubmitOpen(false)}
+        title="Submit Work for Review"
         footer={<>
-          <Button variant="outline" onClick={() => setActionOpen(false)}>Cancel</Button>
-          {activeTab === 'submit' && (
-            <Button variant="primary" onClick={async () => {
-              try { await tasksApi.update(taskId, { status: 'In_Review' }); setTask(p => ({ ...p, status: 'In_Review' })); showToast('success', 'Work submitted.'); setActionOpen(false); }
-              catch { showToast('error', 'Failed to submit.'); }
-            }}>Submit for Review</Button>
+          <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submittingWork}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmitWork}
+            disabled={submittingWork || !submitNotes.trim() || (compliance.evidenceBlocked && taskEvidence.length === 0 && !submitFile)}
+          >
+            {submittingWork ? 'Submitting…' : 'Confirm & Submit to PM'}
+          </Button>
+        </>}
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500">
+            Submit your completed deliverables and handover summary. The task will move into <strong>In Review</strong> for Project Manager audit and approval.
+          </p>
+
+          {/* Compliance & Deliverables Status Box */}
+          {taskEvidence.length > 0 ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs text-emerald-900 space-y-1.5">
+              <div className="font-bold flex items-center gap-1.5 text-emerald-800">
+                <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                <span>{taskEvidence.length} Deliverable Artifact(s) Attached</span>
+              </div>
+              <ul className="list-disc list-inside text-emerald-700 pl-1">
+                {taskEvidence.map((e) => (
+                  <li key={e.id} className="truncate">
+                    <strong>{e.title || 'Deliverable'}</strong> ({e.evidenceType || 'Document'})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-900 space-y-2">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                <span>📎 Attach Deliverable Evidence (Recommended)</span>
+              </div>
+              <p className="text-[11px] text-amber-800">
+                {compliance.hasRules
+                  ? 'This task is governed by compliance rules requiring deliverable verification.'
+                  : 'You can attach verification files, test reports, or documentation directly with your submission.'}
+              </p>
+              
+              <div className="space-y-2.5 pt-1">
+                <FormField label="Artifact Title">
+                  <Input
+                    placeholder="e.g. Implementation Report, Final Output PDF"
+                    value={submitFileTitle}
+                    onChange={(e) => setSubmitFileTitle(e.target.value)}
+                  />
+                </FormField>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Artifact Type">
+                    <Select value={submitFileType} onChange={(e) => setSubmitFileType(e.target.value)}>
+                      {EVIDENCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </Select>
+                  </FormField>
+                  <FormField label="File Attachment">
+                    <input
+                      type="file"
+                      className="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer pt-1"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setSubmitFile(f);
+                          if (!submitFileTitle) setSubmitFileTitle(f.name.replace(/\.[^/.]+$/, ''));
+                        }
+                      }}
+                    />
+                  </FormField>
+                </div>
+              </div>
+            </div>
           )}
-          {activeTab === 'blocker' && <Button variant="primary" onClick={handleReportBlocker}>Report Blocker</Button>}
-          {activeTab === 'extension' && <Button variant="primary" onClick={handleExtension}>Submit Request</Button>}
-        </>}>
-        <div className="-mx-6 -mt-4 mb-4 border-b border-slate-200 flex px-6 gap-6">
-          {[['submit','Submit Work'],['blocker','Report Blocker'],['extension','Request Extension']].map(([id,label]) => (
-            <button key={id} onClick={() => setActiveTab(id)}
-              className={`py-3 text-sm font-semibold transition-colors ${activeTab===id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-              {label}
-            </button>
-          ))}
+
+          {/* Completion Summary */}
+          <FormField label="Handover Summary & Completion Notes" required>
+            <Textarea
+              rows={4}
+              placeholder="Describe deliverables completed, links to documents, test results, or next steps..."
+              value={submitNotes}
+              onChange={(e) => setSubmitNotes(e.target.value)}
+              required
+            />
+          </FormField>
         </div>
-        {activeTab === 'submit' && <p className="text-sm text-gray-600">Current status: <strong>{fmt(task.status)}</strong>. Submitting will move it to the review queue.</p>}
-        {activeTab === 'blocker' && (
-          <div className="space-y-4">
-            <FormField label="Blocker Type">
-              <Select value={blockerType} onChange={e => setBlockerType(e.target.value)}>
-                {BLOCKER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </Select>
-            </FormField>
-            <FormField label="Description" required>
-              <Textarea value={blockerDesc} onChange={e => setBlockerDesc(e.target.value)} rows={4} placeholder="Describe the blocker in detail..." />
-            </FormField>
-          </div>
-        )}
-        {activeTab === 'extension' && (
-          <div className="space-y-4">
-            <FormField label="New Deadline" required>
-              <Input type="date" value={extDate} onChange={e => setExtDate(e.target.value)} />
-            </FormField>
-            <FormField label="Reason" required>
-              <Textarea value={extReason} onChange={e => setExtReason(e.target.value)} rows={4} placeholder="Explain why more time is needed..." />
-            </FormField>
-          </div>
-        )}
+      </Modal>
+
+      {/* Blocker Modal */}
+      <Modal
+        isOpen={blockerOpen}
+        onClose={() => setBlockerOpen(false)}
+        title="Report Blocker"
+        footer={<>
+          <Button variant="outline" onClick={() => setBlockerOpen(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleReportBlocker}>Report Blocker</Button>
+        </>}
+      >
+        <div className="space-y-4">
+          <FormField label="Blocker Type">
+            <Select value={blockerType} onChange={(e) => setBlockerType(e.target.value)}>
+              {BLOCKER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </Select>
+          </FormField>
+          <FormField label="Description" required>
+            <Textarea
+              value={blockerDesc}
+              onChange={(e) => setBlockerDesc(e.target.value)}
+              rows={4}
+              placeholder="Describe the blocker in detail..."
+            />
+          </FormField>
+        </div>
+      </Modal>
+
+      {/* Extension Modal */}
+      <Modal
+        isOpen={extensionOpen}
+        onClose={() => setExtensionOpen(false)}
+        title="Request Deadline Extension"
+        footer={<>
+          <Button variant="outline" onClick={() => setExtensionOpen(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleExtension}>Submit Request</Button>
+        </>}
+      >
+        <div className="space-y-4">
+          <FormField label="New Deadline" required>
+            <Input type="date" value={extDate} onChange={(e) => setExtDate(e.target.value)} />
+          </FormField>
+          <FormField label="Reason" required>
+            <Textarea
+              value={extReason}
+              onChange={(e) => setExtReason(e.target.value)}
+              rows={4}
+              placeholder="Explain why more time is needed..."
+            />
+          </FormField>
+        </div>
       </Modal>
 
       {/* Subtask modal */}
@@ -390,6 +623,16 @@ export default function TeamLeadTaskDetail() {
           </FormField>
         </div>
       </Modal>
+
+      <UploadEvidenceModal
+        isOpen={isEvidenceModalOpen}
+        onClose={() => setIsEvidenceModalOpen(false)}
+        taskId={taskId}
+        onSuccess={(newEv) => {
+          setTaskEvidence((prev) => [newEv, ...prev]);
+          setCompliance((prev) => ({ ...prev, evidenceBlocked: false }));
+        }}
+      />
 
       <Toast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast(t => ({ ...t, visible: false }))} />
     </div>

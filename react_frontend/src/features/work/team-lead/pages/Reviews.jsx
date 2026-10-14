@@ -4,9 +4,13 @@ import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Toast } from '../../../../shared/components/Toast';
+import { Modal } from '../../../../shared/components/Modal';
+import { FormField, Textarea } from '../../../../shared/components/FormField';
 import { Pagination } from '../../../../shared/components/Pagination';
 import { formatDate } from '../../../../shared/utils/formatDate';
 import * as evidenceApi from '../../../../services/api/evidence';
+import * as escalationsApi from '../../../../services/api/escalations';
+import * as tasksApi from '../../../../services/api/tasks';
 
 const statusVariant = (s) => {
   s = String(s || '').toLowerCase();
@@ -47,6 +51,9 @@ export default function TeamLeadReviews() {
   const [tab, setTab] = useState('pending');
   const [selected, setSelected] = useState(null);
   const [approving, setApproving] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
@@ -85,6 +92,54 @@ export default function TeamLeadReviews() {
       showToast('error', error.message || 'Failed to approve evidence.');
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleRejectAndEscalate = async () => {
+    if (!rejectionReason.trim()) {
+      showToast('error', 'Please provide revision feedback.');
+      return;
+    }
+    setRejecting(true);
+    try {
+      const taskId = selected?.taskId || selected?.task_id;
+      // 1. Update evidence to Rejected with rejection feedback
+      await evidenceApi.updateEvidence(selected.id, {
+        status: 'Rejected',
+        notes: rejectionReason.trim(),
+      });
+
+      // 2. Revert task status to Active so team member can revise deliverables
+      if (taskId) {
+        try {
+          await tasksApi.update(taskId, { status: 'Active' });
+        } catch (_) {}
+      }
+
+      // 3. Create Escalation to PM
+      if (taskId) {
+        try {
+          await escalationsApi.create({
+            taskId,
+            title: `Deliverable Rejected: ${selected.title}`,
+            blockerType: 'Compliance Blocker',
+            description: `Team Lead rejected evidence "${selected.title}". Feedback: ${rejectionReason.trim()}. Work reopened for revision.`,
+            priority: 'High',
+          });
+        } catch (_) {}
+      }
+
+      // 4. Update local state
+      const update = e => e.id === selected.id ? { ...e, status: 'Rejected', notes: rejectionReason.trim() } : e;
+      setList(l => l.map(update));
+      setSelected(s => s ? { ...s, status: 'Rejected', notes: rejectionReason.trim() } : null);
+      showToast('success', 'Evidence rejected, work reopened, and escalated to PM.');
+      setRejectModalOpen(false);
+      setRejectionReason('');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to reject evidence.');
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -217,7 +272,21 @@ export default function TeamLeadReviews() {
                 </div>
 
                 {String(selected.status || '').toLowerCase() !== 'approved'
-                  ? <Button variant="primary" onClick={() => handleApprove(selected)} disabled={approving}>{approving ? 'Approving…' : 'Approve Team Evidence'}</Button>
+                  ? (
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <Button variant="primary" onClick={() => handleApprove(selected)} disabled={approving || rejecting}>
+                        {approving ? 'Approving…' : 'Approve Team Evidence'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="text-rose-600 border-rose-300 hover:bg-rose-50"
+                        onClick={() => { setRejectionReason(''); setRejectModalOpen(true); }}
+                        disabled={approving || rejecting}
+                      >
+                        Reject & Escalate to PM
+                      </Button>
+                    </div>
+                  )
                   : <div className="flex items-center gap-2 py-3 px-4 bg-green-50 border border-green-200 rounded-lg">
                       <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                       <span className="text-sm font-semibold text-green-700">Evidence Approved</span>
@@ -227,6 +296,37 @@ export default function TeamLeadReviews() {
           }
         </div>
       </div>
+
+      {/* Reject & Escalate Modal */}
+      <Modal
+        isOpen={rejectModalOpen}
+        onClose={() => setRejectModalOpen(false)}
+        title="Reject Evidence & Escalate to Project Manager"
+        footer={(
+          <div className="flex justify-end gap-2 w-full">
+            <Button variant="outline" onClick={() => setRejectModalOpen(false)} disabled={rejecting}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleRejectAndEscalate} disabled={rejecting}>
+              {rejecting ? 'Rejecting…' : 'Confirm Rejection & Escalate'}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Rejecting this evidence deliverable will revert the task/subtask status back to <strong>In Progress (Active)</strong> for revision, and register an active <strong>Compliance Blocker Escalation</strong> on the Project Manager's board.
+          </p>
+          <FormField label="Reason for Rejection & Revision Instructions" required>
+            <Textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              rows={4}
+              placeholder="Explain why this deliverable is insufficient (e.g. Missing security signature, invalid format, incomplete test coverage)..."
+            />
+          </FormField>
+        </div>
+      </Modal>
 
       <Toast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast(t => ({ ...t, visible: false }))} />
     </div>

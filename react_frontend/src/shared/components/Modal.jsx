@@ -33,16 +33,18 @@ export const Modal = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
       role="dialog"
       aria-modal="true"
     >
+      {/* Backdrop — pointer-events-auto so clicking it closes the modal */}
       <div
-        className="fixed inset-0 bg-slate-900/55 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-slate-900/55 backdrop-blur-sm transition-opacity pointer-events-auto"
         onClick={onClose}
       />
+      {/* Modal panel — pointer-events-auto so inputs and buttons work */}
       <div
-        className={`relative w-full max-w-[520px] bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] z-10 overflow-hidden ${className}`}
+        className={`relative w-full max-w-[520px] bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden pointer-events-auto ${className}`}
       >
         {(title || onClose) && (
           <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-white">

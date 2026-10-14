@@ -10,7 +10,6 @@ import { Toast } from '../../../../shared/components/Toast';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import * as tasksApi from '../../../../services/api/tasks';
-import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
 import * as evidenceApi from '../../../../services/api/evidence';
 
@@ -21,7 +20,6 @@ const formatDate = (value) => value ? new Date(value).toLocaleDateString() : '�
 export default function PmTaskDetail() {
   const { id } = useParams();
   const [task, setTask] = useState(null);
-  const [users, setUsers] = useState([]);
   const [violations, setViolations] = useState([]);
   const [bindings, setBindings] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
@@ -41,15 +39,13 @@ export default function PmTaskDetail() {
     let active = true;
     Promise.all([
       tasksApi.get(id),
-      usersApi.list(),
       complianceApi.getViolations().catch(() => []),
       complianceApi.getBindings().catch(() => []),
       evidenceApi.getEvidenceList().catch(() => []),
     ])
-      .then(([taskResponse, usersResponse, violationsRes, bindingsRes, evidenceRes]) => {
+      .then(([taskResponse, violationsRes, bindingsRes, evidenceRes]) => {
         if (!active) return;
         setTask(normalize(taskResponse));
-        setUsers(Array.isArray(usersResponse) ? usersResponse : usersResponse?.data || []);
         setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
         setBindings(Array.isArray(bindingsRes) ? bindingsRes : bindingsRes?.data || []);
         setEvidenceList(Array.isArray(evidenceRes) ? evidenceRes : evidenceRes?.data || []);
@@ -117,6 +113,10 @@ export default function PmTaskDetail() {
   const taskApprovedEvidence = evidenceList.filter((e) =>
     String(e.taskId || e.task_id || e.task?.id) === String(id) &&
     String(e.status || '').toLowerCase() === 'approved'
+  );
+
+  const currentTaskEvidence = evidenceList.filter((e) =>
+    String(e.taskId || e.task_id || e.task?.id) === String(id)
   );
 
   const isMissingRequiredEvidence = evidenceRequiredRules.length > 0 && taskApprovedEvidence.length === 0;
@@ -223,12 +223,12 @@ export default function PmTaskDetail() {
                 })}
               </Select>
             </FormField>
-            <FormField label="Assignee">
-              <Select value={task.assignedToId || ''} onChange={(event) => updateTask({ assignedToId: event.target.value || null })} disabled={saving}>
-                <option value="">Unassigned</option>
-                {users.map((user) => <option key={user.id} value={user.id}>{user.fullName || user.email}</option>)}
-              </Select>
-            </FormField>
+            <div>
+              <p className="text-xs font-semibold uppercase text-gray-500">Assigned to</p>
+              <p className="mt-1 text-sm text-gray-900">
+                {task.assignedTo?.fullName || task.assignedTo?.email || 'Unassigned'}
+              </p>
+            </div>
           </div>
         </div>
         {saving && <p className="mt-3 text-xs text-gray-500">Saving changes…</p>}
@@ -278,6 +278,82 @@ export default function PmTaskDetail() {
             data={subtasks}
           />
         ) : <div className="p-5"><EmptyState title="No subtasks" description="This task has no subtasks yet." /></div>}
+      </section>
+
+      {/* Compliance & Deliverable Evidence */}
+      <section className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+        <div className="border-b border-gray-200 px-5 py-4 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900">Compliance & Deliverable Evidence</h2>
+          <span className="text-xs text-gray-500 font-medium">{currentTaskEvidence.length} item(s)</span>
+        </div>
+        {currentTaskEvidence.length ? (
+          <Table
+            columns={[
+              {
+                key: 'title',
+                header: 'Artifact Title',
+                render: (ev) => (
+                  <span className="font-medium text-gray-900">
+                    {ev.title || ev.notes || `Evidence #${ev.id}`}
+                  </span>
+                ),
+              },
+              {
+                key: 'type',
+                header: 'Type',
+                render: (ev) => (
+                  <span className="text-xs text-gray-600">{ev.evidenceType || 'Document'}</span>
+                ),
+              },
+              {
+                key: 'submittedBy',
+                header: 'Submitted By',
+                render: (ev) => ev.user?.fullName || ev.submittedBy?.fullName || ev.user?.email || ev.submittedBy?.email || '—',
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (ev) => {
+                  const st = String(ev.status || '').toLowerCase();
+                  const badgeStatus = st === 'approved' ? 'success' : st === 'rejected' ? 'danger' : 'warning';
+                  return <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>;
+                },
+              },
+              {
+                key: 'file',
+                header: 'Document',
+                render: (ev) => {
+                  const token = sessionStorage.getItem('authToken') || '';
+                  const fileUrl = ev.fileUrl || ev.url || ev.attachments?.[0]?.filePath || ev.attachment?.filePath;
+                  if (!fileUrl) return <span className="text-xs text-gray-400">No file</span>;
+                  const isExternal = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
+                  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
+                  const viewUrl = isExternal
+                    ? fileUrl
+                    : (ev.id ? `${apiBase}/api/evidence/${ev.id}/file?token=${encodeURIComponent(token)}` : `${apiBase}${fileUrl}`);
+                  return (
+                    <a
+                      href={viewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                    >
+                      View File ↗
+                    </a>
+                  );
+                },
+              },
+            ]}
+            data={currentTaskEvidence}
+          />
+        ) : (
+          <div className="p-5">
+            <EmptyState
+              title="No evidence submitted"
+              description="No compliance artifacts or deliverables have been uploaded for this task yet."
+            />
+          </div>
+        )}
       </section>
 
       <Modal

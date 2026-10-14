@@ -52,7 +52,7 @@ export function resolveEffectiveBranchId({ user, branchId }) {
 /**
  * Builds Prisma where filter for Project queries with strict role-based scope
  */
-export function buildProjectListWhere({ companyId, branchId, user }) {
+export function buildProjectListWhere({ companyId, branchId, user, assignedProjectIds = [] }) {
   const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
   const role = normalizeRole(user?.role || user?.roleLabel);
 
@@ -77,32 +77,38 @@ export function buildProjectListWhere({ companyId, branchId, user }) {
     };
   }
 
-  // 3. Project Manager: views all projects within their company tenant (or branch if scoped)
+  // PMs can access projects they created or were explicitly assigned.
   if (role === 'project_manager' || role === 'pm') {
-    return baseWhere;
-  }
-
-  // 4. Team Lead: views projects of teams they lead/belong to, projects where they or their direct reports have tasks, or company projects if company-scoped
-  if ((role === 'team_lead' || role === 'team_leader' || role === 'lead') && user?.id) {
     return {
       ...baseWhere,
       OR: [
-        { team: { teamMembers: { some: { userId: user.id } } } },
-        { tasks: { some: { OR: [{ assignedToId: user.id }, { assignedTo: { managerUserId: user.id } }] } } },
         { createdById: user.id },
-        ...(user.scopeType === 'Company' || !effectiveBranchId ? [{ companyId: baseWhere.companyId }] : []),
+        ...(assignedProjectIds.length > 0 ? [{ id: { in: assignedProjectIds } }] : []),
       ],
     };
   }
 
-  // 5. Team Member: views projects belonging to teams they are member of OR where they have assigned tasks
+  // Team Leads only see projects with parent tasks assigned directly to them.
+  if ((role === 'team_lead' || role === 'team_leader' || role === 'lead') && user?.id) {
+    return {
+      ...baseWhere,
+      tasks: {
+        some: {
+          ...buildTaskListWhere({ companyId, user }),
+        },
+      },
+    };
+  }
+
+  // Team Members only see projects containing subtasks assigned to them.
   if ((role === 'team_member' || role === 'member') && user?.id) {
     return {
       ...baseWhere,
-      OR: [
-        { team: { teamMembers: { some: { userId: user.id } } } },
-        { tasks: { some: { assignedToId: user.id } } },
-      ],
+      tasks: {
+        some: {
+          ...buildTaskListWhere({ companyId, user }),
+        },
+      },
     };
   }
 
@@ -140,34 +146,67 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
 
   const role = normalizeRole(user?.role || user?.roleLabel);
 
-  // 3. Project Manager: views all tasks under projects in their company/branch scope
+  // Project Managers only see parent tasks they created.
   if (role === 'project_manager' || role === 'pm') {
-    return where;
+    return { ...where, createdById: user.id };
   }
 
-  // 4. Team Lead: views tasks assigned to them, tasks under their team's projects, or assigned to their direct reports
+  // Team Leads only see parent tasks allocated directly to them.
   if ((role === 'team_lead' || role === 'team_leader' || role === 'lead') && user?.id) {
-    return {
-      ...where,
-      OR: [
-        { assignedToId: user.id },
-        { createdById: user.id },
-        { assignedTo: { managerUserId: user.id } },
-        { project: { team: { teamMembers: { some: { userId: user.id } } } } },
-        ...(user.scopeType === 'Company' || !effectiveBranchId ? [{ project: { companyId: where.companyId } }] : []),
-      ],
-    };
+    return { ...where, assignedToId: user.id };
   }
 
-  // 5. Team Member: strictly tasks assigned directly to them or where they created them
+  // Team Members can see parent-task context only when they have an assigned subtask.
   if ((role === 'team_member' || role === 'member') && user?.id) {
     return {
       ...where,
-      OR: [
-        { assignedToId: user.id },
-        { subtasks: { some: { assignedToId: user.id, deletedAt: null } } },
-      ],
+      subtasks: { some: { assignedToId: user.id, deletedAt: null } },
     };
+  }
+
+  return where;
+}
+
+/**
+ * Builds Prisma where filter for subtasks according to the caller's task role.
+ */
+export function buildSubtaskListWhere({ companyId, branchId, user }) {
+  const where = {
+    deletedAt: null,
+    ...(companyId ? { companyId } : {}),
+  };
+  const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
+  const role = normalizeRole(user?.role || user?.roleLabel);
+
+  if (effectiveBranchId) {
+    return {
+      ...where,
+      task: {
+        is: {
+          deletedAt: null,
+          project: {
+            is: {
+              team: {
+                branchId: effectiveBranchId,
+                ...(companyId ? { branch: { companyId } } : {}),
+              },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  if ((role === 'team_member' || role === 'member') && user?.id) {
+    return { ...where, assignedToId: user.id };
+  }
+
+  if ((role === 'team_lead' || role === 'team_leader' || role === 'lead') && user?.id) {
+    return { ...where, task: { is: { assignedToId: user.id, deletedAt: null } } };
+  }
+
+  if ((role === 'project_manager' || role === 'pm') && user?.id) {
+    return { ...where, task: { is: { createdById: user.id, deletedAt: null } } };
   }
 
   return where;
@@ -236,4 +275,3 @@ export function assertBranchManagerScope(user, branchId, action = 'access this r
     throw new ForbiddenError(`Branch Managers can only ${action} within their assigned branch.`);
   }
 }
-

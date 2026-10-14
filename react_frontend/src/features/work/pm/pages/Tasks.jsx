@@ -20,7 +20,6 @@ import {
 } from 'lucide-react';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
-import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
@@ -35,7 +34,6 @@ export default function PmTasks() {
   const [tasks, setTasks] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [projects, setProjects] = useState([]);
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -44,25 +42,24 @@ export default function PmTasks() {
   
   // Interactive filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(selectedProjectParam);
+  const selectedProjectId = selectedProjectParam;
   const [showAssignForm, setShowAssignForm] = useState(false);
 
-  const [form, setForm] = useState({ title: '', projectId: '', assignedToId: '', dueDate: '', priority: 'Medium' });
+  const [form, setForm] = useState({ title: '', projectId: '', dueDate: '', priority: 'Medium' });
 
   useEffect(() => {
     let active = true;
-    Promise.all([tasksApi.list(), projectsApi.list(), usersApi.list()])
-      .then(([taskResponse, projectResponse, userResponse]) => {
+    Promise.all([tasksApi.list(), projectsApi.list()])
+      .then(([taskResponse, projectResponse]) => {
         if (!active) return;
         setTasks(normalize(taskResponse).map((task) => ({
           ...task,
           assigneeName: task.assignedTo?.fullName || task.assignedTo?.email,
         })));
         setProjects(normalize(projectResponse));
-        setUsers(normalize(userResponse));
       })
       .catch((loadError) => {
-        if (active) setError(loadError.message || 'Failed to load task assignment data.');
+        if (active) setError(loadError.message || 'Failed to load task data.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -81,79 +78,16 @@ export default function PmTasks() {
     return () => { active = false; };
   }, []);
 
-  // Update selectedProjectId if query param changes
-  useEffect(() => {
-    setSelectedProjectId(selectedProjectParam);
-  }, [selectedProjectParam]);
-
   const selectedProjectForForm = useMemo(() => {
     if (!form.projectId) return null;
     return projects.find((p) => String(p.id) === String(form.projectId)) || null;
   }, [form.projectId, projects]);
 
-  const eligibleAssignees = useMemo(() => {
-    if (!selectedProjectForForm) {
-      return users.map((u) => ({
-        id: u.id,
-        name: u.fullName || u.email,
-        detail: u.jobTitle || 'Team Member',
-      }));
-    }
-
-    const team = selectedProjectForForm.team;
-    const teamMembers = team?.teamMembers || [];
-
-    if (teamMembers.length > 0) {
-      const memberRoleMap = new Map();
-      teamMembers.forEach((tm) => {
-        memberRoleMap.set(String(tm.userId), tm.role || 'Member');
-      });
-
-      const matched = users
-        .filter((u) => memberRoleMap.has(String(u.id)))
-        .map((u) => ({
-          id: u.id,
-          name: u.fullName || u.email,
-          detail: `${team.name ? `${team.name} · ` : ''}${memberRoleMap.get(String(u.id))}`,
-        }));
-
-      if (matched.length > 0) {
-        return matched;
-      }
-    }
-
-    // Fallback if no specific members assigned yet
-    return users.map((u) => ({
-      id: u.id,
-      name: u.fullName || u.email,
-      detail: u.jobTitle || 'Team Member',
-    }));
-  }, [selectedProjectForForm, users]);
-
-  const handleFormProjectChange = (e) => {
-    const nextProjectId = e.target.value;
-    setForm((current) => {
-      if (!nextProjectId) {
-        return { ...current, projectId: '' };
-      }
-      const targetProject = projects.find((p) => String(p.id) === String(nextProjectId));
-      const targetMembers = targetProject?.team?.teamMembers || [];
-      const targetMemberIds = new Set(targetMembers.map((tm) => String(tm.userId)));
-      
-      const shouldKeepAssignee = targetMemberIds.size === 0 || targetMemberIds.has(String(current.assignedToId));
-      return {
-        ...current,
-        projectId: nextProjectId,
-        assignedToId: shouldKeepAssignee ? current.assignedToId : '',
-      };
-    });
-  };
-
   const submitTask = async (event) => {
     event.preventDefault();
     setError('');
-    if (!form.title.trim() || !form.assignedToId) {
-      setError('Enter a task title and select an assignee.');
+    if (!form.title.trim() || !form.projectId) {
+      setError('Enter a task title and select a project.');
       return;
     }
 
@@ -161,8 +95,7 @@ export default function PmTasks() {
     try {
       const response = await tasksApi.create({
         title: form.title.trim(),
-        projectId: form.projectId || undefined,
-        assignedToId: form.assignedToId,
+        projectId: form.projectId,
         dueDate: form.dueDate || undefined,
         priority: form.priority,
         status: 'Active',
@@ -172,10 +105,10 @@ export default function PmTasks() {
         ...createdTask,
         assigneeName: createdTask.assignedTo?.fullName || createdTask.assignedTo?.email,
       }, ...current]);
-      setForm({ title: '', projectId: '', assignedToId: '', dueDate: '', priority: 'Medium' });
+      setForm({ title: '', projectId: '', dueDate: '', priority: 'Medium' });
       setShowAssignForm(false);
     } catch (saveError) {
-      setError(saveError.message || 'Failed to assign task.');
+      setError(saveError.message || 'Failed to create task.');
     } finally {
       setSaving(false);
     }
@@ -193,7 +126,6 @@ export default function PmTasks() {
   };
 
   const handleProjectFilterChange = (projectId) => {
-    setSelectedProjectId(projectId);
     const nextParams = new URLSearchParams(searchParams);
     if (projectId === 'all') {
       nextParams.delete('projectId');
@@ -271,7 +203,7 @@ export default function PmTasks() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Task Command Center</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Monitor delivery health, triage compliance blockers, and assign workload.
+            Monitor delivery health, triage compliance blockers, and create team tasks.
           </p>
         </div>
         <button
@@ -299,13 +231,13 @@ export default function PmTasks() {
           ) : (
             <>
               <Plus size={16} />
-              <span>Assign New Task</span>
+              <span>Create Team Task</span>
             </>
           )}
         </button>
       </div>
 
-      {/* Expandable Task Assignment Form */}
+      {/* New Team Task Form */}
       {showAssignForm && (
         <form onSubmit={submitTask} className="rounded-xl border border-blue-200/80 bg-blue-50/30 p-5 space-y-4 shadow-sm transition-all">
           <div className="flex items-center justify-between border-b border-blue-100 pb-3">
@@ -314,9 +246,9 @@ export default function PmTasks() {
                 +
               </span>
               <div>
-                <h2 className="font-semibold text-gray-900 text-sm">Assign a New Task</h2>
+                <h2 className="font-semibold text-gray-900 text-sm">Create a New Task</h2>
                 <p className="text-[11px] text-gray-500">
-                  Assign task to team members assigned to the selected project.
+                  The selected project’s Team Lead will receive the task automatically.
                 </p>
               </div>
             </div>
@@ -341,46 +273,23 @@ export default function PmTasks() {
               </FormField>
             </div>
             <FormField 
-              label="Project" 
+              label="Project"
+              required
               hint={
                 selectedProjectForForm?.team?.name
-                  ? `Assigned Team: ${selectedProjectForForm.team.name}`
-                  : 'Select a project to narrow assignees to its team members'
+                  ? `Assigned to ${selectedProjectForForm.team.name}'s Team Lead automatically`
+                  : 'Select the project whose Team Lead will receive this task'
               }
             >
               <Select
                 value={form.projectId}
-                onChange={handleFormProjectChange}
+                onChange={(event) => setForm((current) => ({ ...current, projectId: event.target.value }))}
+                required
               >
-                <option value="">No project (General / Unassigned)</option>
+                <option value="">Select a project...</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name} {project.team?.name ? `(${project.team.name})` : ''}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField 
-              label="Assignee" 
-              required
-              hint={
-                selectedProjectForForm?.team?.name
-                  ? `Showing ${eligibleAssignees.length} member(s) of ${selectedProjectForForm.team.name}`
-                  : 'No project selected: showing all available company users'
-              }
-            >
-              <Select
-                value={form.assignedToId}
-                onChange={(event) => setForm((current) => ({ ...current, assignedToId: event.target.value }))}
-              >
-                <option value="">
-                  {selectedProjectForForm?.team?.name
-                    ? `Select a member from ${selectedProjectForForm.team.name}…`
-                    : 'Select a team member…'}
-                </option>
-                {eligibleAssignees.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} ({user.detail})
                   </option>
                 ))}
               </Select>
@@ -412,7 +321,7 @@ export default function PmTasks() {
               Cancel
             </button>
             <Button type="submit" variant="primary" disabled={saving}>
-              {saving ? 'Assigning…' : 'Confirm & Assign Task'}
+              {saving ? 'Creating…' : 'Create Task'}
             </Button>
           </div>
         </form>

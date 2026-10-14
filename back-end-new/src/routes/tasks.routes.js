@@ -81,13 +81,13 @@ router.post(
 router.patch(
   ['/escalations/:id', '/api/escalations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, 'superuser', 'project_manager', 'pm'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'pm', 'team_leader', 'team_lead'),
   updateEscalation
 );
 router.delete(
   ['/escalations/:id', '/api/escalations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, 'superuser', 'project_manager', 'pm'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'pm', 'team_leader', 'team_lead'),
   deleteEscalation
 );
 
