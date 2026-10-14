@@ -9,6 +9,7 @@ export function EvidenceUploadCard({
   onUpload,
   onRequestUpload,
   onDelete,
+  onApprove,
 }) {
   const fileInputRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -37,11 +38,11 @@ export function EvidenceUploadCard({
   };
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
         <div>
-          <h3 className="font-bold text-slate-900 text-sm">Evidence & Deliverable Artifacts</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Files, audit records, or links verifying this deliverable</p>
+          <h3 className="font-bold text-gray-900 text-sm">Evidence & Deliverable Artifacts</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Files, audit records, or links verifying this deliverable</p>
         </div>
         {!readOnly && (
           <div>
@@ -115,6 +116,21 @@ export function EvidenceUploadCard({
                         </a>
                       );
                     })()}
+                    {onApprove && String(evidence.status || '').toLowerCase() !== 'approved' && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => onApprove(evidence.id)}
+                        className="text-[11px] py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                      >
+                        ✓ Approve
+                      </Button>
+                    )}
+                    {String(evidence.status || '').toLowerCase() === 'approved' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        Approved
+                      </span>
+                    )}
                     {!readOnly && onDelete && (
                       <button
                         type="button"

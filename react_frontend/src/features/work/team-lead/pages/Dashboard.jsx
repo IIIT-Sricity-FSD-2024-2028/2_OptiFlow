@@ -577,7 +577,7 @@ export default function TeamLeadDashboard() {
 
         {/* Team overview */}
 
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 
           <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
             <div>
@@ -701,7 +701,7 @@ export default function TeamLeadDashboard() {
 
         {/* Project pulse */}
 
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 
           <div className="px-5 py-4 border-b border-gray-200">
             <h2 className="font-semibold text-gray-900">
@@ -825,7 +825,7 @@ export default function TeamLeadDashboard() {
 
       {/* Review queue */}
 
-      <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <section className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 
         <div className="px-5 py-4 border-b border-gray-200">
           <h2 className="font-semibold text-gray-900">

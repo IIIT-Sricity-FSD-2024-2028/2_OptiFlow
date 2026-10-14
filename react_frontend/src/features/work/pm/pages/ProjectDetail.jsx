@@ -8,6 +8,7 @@ import { Loader } from '../../../../shared/components/Loader';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import { Pagination } from '../../../../shared/components/Pagination';
+import { Toast } from '../../../../shared/components/Toast';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
@@ -23,6 +24,8 @@ export default function PmProjectDetail() {
   const [currentTaskPage, setCurrentTaskPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [updatingTask, setUpdatingTask] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
   const [error, setError] = useState('');
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -45,6 +48,30 @@ export default function PmProjectDetail() {
     estimatedHours: '',
     dueDate: '',
   });
+
+  const showToast = (type, message) => {
+    setToast({ visible: true, type, message });
+    setTimeout(() => setToast((current) => ({ ...current, visible: false })), 3000);
+  };
+
+  const handleUpdateTaskField = async (taskId, updates) => {
+    try {
+      setUpdatingTask(true);
+      await tasksApi.update(taskId, updates);
+      const response = await projectsApi.get(id);
+      const updatedProject = normalize(response);
+      setProject(updatedProject);
+      if (selectedTask && selectedTask.id === taskId) {
+        const found = updatedProject.tasks?.find((t) => t.id === taskId);
+        setSelectedTask(found || null);
+      }
+      showToast('success', 'Task updated successfully.');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to update task.');
+    } finally {
+      setUpdatingTask(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -334,13 +361,39 @@ export default function PmProjectDetail() {
                   {tasks
                     .slice((currentTaskPage - 1) * TASK_PAGE_SIZE, currentTaskPage * TASK_PAGE_SIZE)
                     .map((task) => (
-                    <tr key={task.id} className="hover:bg-slate-50">
+                    <tr key={task.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-4">
                         <div className="font-semibold text-slate-900">{task.title}</div>
-                        <div className="mt-1 text-xs text-slate-500">{task.subtasks?.length || 0} subtasks</div>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                          <span>{task.subtasks?.length || 0} subtasks</span>
+                          {task.processInstanceStepId && (
+                            <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200">
+                              Workflow
+                            </span>
+                          )}
+                        </div>
                         {blockedTaskIds.has(String(task.id)) && <div className="mt-1 text-xs font-semibold text-rose-700">⚠ Blocked by Compliance</div>}
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{task.assignedTo?.fullName || task.assignedTo?.email || 'Unassigned'}</td>
+                      <td className="px-4 py-4 text-sm">
+                        <select
+                          value={task.assignedTo?.id || ''}
+                          onChange={(e) => handleUpdateTaskField(task.id, { assignedToId: e.target.value || null })}
+                          disabled={updatingTask}
+                          title="Click to assign or reassign this task to a Team Lead"
+                          className={`text-xs rounded-lg px-2.5 py-1.5 border font-medium transition-all cursor-pointer ${
+                            task.assignedTo
+                              ? 'bg-slate-50 border-slate-200 text-slate-800 hover:border-slate-300'
+                              : 'bg-amber-50 border-amber-300 text-amber-900 font-bold hover:bg-amber-100'
+                          }`}
+                        >
+                          <option value="">Unassigned (+ Assign Lead)</option>
+                          {taskAssignees.map((lead) => (
+                            <option key={lead.id} value={lead.id}>
+                              {lead.fullName || lead.email} (Team Lead)
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="px-4 py-4 text-sm text-slate-600">{task.priority || 'Medium'}</td>
                       <td className="px-4 py-4">
                         <Badge status={task.status === 'Completed' ? 'success' : ['Active', 'In_Review'].includes(task.status) ? 'info' : 'default'}>
@@ -349,7 +402,23 @@ export default function PmProjectDetail() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(task.dueDate)}</td>
                       <td className="px-4 py-4">
-                        <Button variant="outline" onClick={() => setSelectedTask(task)}>View</Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs font-semibold hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                            onClick={() => setSelectedTask(task)}
+                          >
+                            View
+                          </Button>
+                          <Link
+                            to={PATHS.PM.TASK_DETAIL.replace(':id', task.id)}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap hover:underline"
+                            title="Open full task view with audit logs & compliance"
+                          >
+                            Details →
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -604,41 +673,101 @@ export default function PmProjectDetail() {
         <>
           <button
             type="button"
-            className="fixed inset-0 z-40 bg-slate-900/40"
+            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-xs transition-opacity"
             aria-label="Close task details"
             onClick={() => setSelectedTask(null)}
           />
-          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col bg-white shadow-2xl">
+          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[500px] flex-col bg-white shadow-2xl transition-all duration-200">
             <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-5">
               <div>
-                <h2 className="text-lg font-extrabold text-slate-900">Task Review</h2>
+                <h2 className="text-lg font-extrabold text-slate-900">Task Details & Assignment</h2>
                 <p className="mt-1 text-xs font-semibold text-slate-500">ID: T-{selectedTask.id.slice(0, 8)}</p>
               </div>
-              <button type="button" onClick={() => setSelectedTask(null)} className="rounded-full bg-slate-200 px-2.5 py-1 text-lg text-slate-600" aria-label="Close">×</button>
+              <button
+                type="button"
+                onClick={() => setSelectedTask(null)}
+                className="rounded-full bg-slate-200 px-2.5 py-1 text-lg text-slate-600 hover:bg-slate-300 transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                ×
+              </button>
             </header>
             <div className="flex-1 space-y-6 overflow-y-auto p-6">
               <div>
-                <h3 className="text-xl font-extrabold text-slate-900">{selectedTask.title}</h3>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedTask.description || 'No task description provided.'}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-xl font-extrabold text-slate-900">{selectedTask.title}</h3>
+                  {selectedTask.processInstanceStepId && (
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Workflow Step
+                    </span>
+                  )}
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedTask.description || 'No task description provided.'}</p>
               </div>
+
+              {/* Actionable Assignment to Team Lead */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                  Assign to Team Lead
+                </label>
+                <Select
+                  value={selectedTask.assignedTo?.id || ''}
+                  onChange={(e) => handleUpdateTaskField(selectedTask.id, { assignedToId: e.target.value || null })}
+                  disabled={updatingTask}
+                  className="text-xs"
+                >
+                  <option value="">Unassigned (Select Team Lead...)</option>
+                  {taskAssignees.map((lead) => (
+                    <option key={lead.id} value={lead.id}>
+                      {lead.fullName || lead.email} (Team Lead)
+                    </option>
+                  ))}
+                </Select>
+                {selectedTask.assignedTo ? (
+                  <p className="text-xs text-emerald-700 font-medium">✓ Assigned to {selectedTask.assignedTo.fullName || selectedTask.assignedTo.email}</p>
+                ) : (
+                  <p className="text-xs text-amber-700 font-medium">⚠ Task is currently unassigned — choose a Team Lead above</p>
+                )}
+              </div>
+
+              {/* Quick Actions: Status & Priority */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</p>
-                  <Badge>{(selectedTask.status || 'Draft').replace(/_/g, ' ')}</Badge>
+                <div className="rounded-lg bg-slate-100 p-3 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</p>
+                  <select
+                    value={selectedTask.status || 'Active'}
+                    onChange={(e) => handleUpdateTaskField(selectedTask.id, { status: e.target.value })}
+                    disabled={updatingTask}
+                    className="w-full text-xs rounded border border-slate-300 bg-white px-2 py-1.5 font-semibold text-slate-800"
+                  >
+                    {['Draft', 'Active', 'In_Review', 'Blocked', 'Completed'].map((s) => (
+                      <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
                 </div>
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Priority</p>
-                  <p className="text-sm font-semibold text-slate-900">{selectedTask.priority || 'Medium'}</p>
+                <div className="rounded-lg bg-slate-100 p-3 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Priority</p>
+                  <select
+                    value={selectedTask.priority || 'Medium'}
+                    onChange={(e) => handleUpdateTaskField(selectedTask.id, { priority: e.target.value })}
+                    disabled={updatingTask}
+                    className="w-full text-xs rounded border border-slate-300 bg-white px-2 py-1.5 font-semibold text-slate-800"
+                  >
+                    {['Low', 'Medium', 'High', 'Urgent'].map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
                 </div>
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Assigned to</p>
-                  <p className="text-sm font-semibold text-slate-900">{selectedTask.assignedTo?.fullName || selectedTask.assignedTo?.email || 'Unassigned'}</p>
-                </div>
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Deadline</p>
+                <div className="rounded-lg bg-slate-100 p-3">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Deadline</p>
                   <p className="text-sm font-semibold text-slate-900">{formatDate(selectedTask.dueDate)}</p>
                 </div>
+                <div className="rounded-lg bg-slate-100 p-3">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Subtasks</p>
+                  <p className="text-sm font-semibold text-slate-900">{selectedTask.subtasks?.length || 0} items</p>
+                </div>
               </div>
+
               <section>
                 <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Checklist / Subtasks</h3>
                 {selectedTask.subtasks?.length ? selectedTask.subtasks.map((subtask) => (
@@ -649,12 +778,25 @@ export default function PmProjectDetail() {
                 )) : <p className="text-sm text-slate-500">No subtasks found for this task.</p>}
               </section>
             </div>
-            <footer className="flex justify-end border-t border-slate-200 p-4">
+            <footer className="flex items-center justify-between border-t border-slate-200 p-4 bg-slate-50">
+              <Link
+                to={PATHS.PM.TASK_DETAIL.replace(':id', selectedTask.id)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
+              >
+                Open Full Task Page →
+              </Link>
               <Button variant="secondary" onClick={() => setSelectedTask(null)}>Close</Button>
             </footer>
           </aside>
         </>
       )}
+
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onClose={() => setToast((current) => ({ ...current, visible: false }))}
+      />
     </div>
   );
 }

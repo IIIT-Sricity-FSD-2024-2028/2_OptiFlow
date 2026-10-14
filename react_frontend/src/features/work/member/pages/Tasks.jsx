@@ -7,11 +7,22 @@ import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { TaskTable } from '../../components/TaskTable';
+import { ReportBlockerModal } from '../components/modals/ReportBlockerModal';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
 import * as projectsApi from '../../../../services/api/projects';
 import * as usersApi from '../../../../services/api/users';
-import { Search, CheckSquare } from 'lucide-react';
+import {
+  Search,
+  CheckSquare,
+  ListFilter,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 
 export default function MemberTasks() {
   const { user } = useAuth();
@@ -28,6 +39,7 @@ export default function MemberTasks() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const [isBlockerModalOpen, setIsBlockerModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -146,117 +158,155 @@ export default function MemberTasks() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      <div>
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1">
-          <Link to={PATHS.MEMBER.DASHBOARD} className="hover:text-blue-600 transition-colors">
-            Dashboard
-          </Link>
-          <span>›</span>
-          <span className="text-slate-800 font-semibold">My Tasks</span>
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">My Deliverables</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Track, execute, and submit deliverables assigned to you across all processes.
+          </p>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Tasks</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Track, execute, and submit deliverables assigned to you across all processes.
-            </p>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(PATHS.MEMBER.EVIDENCE)}
-              className="text-xs font-semibold"
-            >
-              Evidence Submissions
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate(PATHS.MEMBER.ESCALATIONS)}
-              className="text-xs font-semibold"
-            >
-              Report Blocker
-            </Button>
-          </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(PATHS.MEMBER.EVIDENCE)}
+            className="text-xs font-semibold"
+          >
+            Evidence Submissions
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsBlockerModalOpen(true)}
+            className="text-xs font-semibold"
+          >
+            Report Blocker
+          </Button>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative min-w-[240px]">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search tasks or processes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-              />
-            </div>
+      {/* Triage Tabs with Enterprise SVGs & Clean Badges */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3">
+        {[
+          { key: 'all', label: 'All Tasks', icon: ListFilter, count: statusCounts.all, countBadge: 'bg-slate-100 text-slate-700' },
+          { key: 'in_progress', label: 'In Progress', icon: Clock, count: statusCounts.in_progress, countBadge: 'bg-blue-50 text-blue-700', iconColor: 'text-blue-600' },
+          { key: 'pending', label: 'Pending', icon: AlertCircle, count: statusCounts.pending, countBadge: 'bg-slate-100 text-slate-600', iconColor: 'text-gray-500' },
+          { key: 'completed', label: 'Completed', icon: CheckCircle2, count: statusCounts.completed, countBadge: 'bg-emerald-50 text-emerald-700', iconColor: 'text-emerald-600' },
+          { key: 'blocked', label: 'Blocked', icon: AlertTriangle, count: statusCounts.blocked, countBadge: statusCounts.blocked > 0 ? 'bg-rose-100 text-rose-800 font-bold' : 'bg-slate-100 text-slate-600', iconColor: 'text-rose-600' },
+        ].map((tab) => {
+          const isActive = statusFilter === tab.key;
+          const TabIcon = tab.icon;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
+                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <TabIcon size={14} className={isActive ? 'text-white' : tab.iconColor || 'text-gray-400'} />
+              <span>{tab.label}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium ${
+                  isActive ? 'bg-blue-700 text-white' : tab.countBadge
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-              {[
-                { key: 'all', label: 'All', count: statusCounts.all },
-                { key: 'in_progress', label: 'In Progress', count: statusCounts.in_progress },
-                { key: 'pending', label: 'Pending', count: statusCounts.pending },
-                { key: 'completed', label: 'Completed', count: statusCounts.completed },
-                { key: 'blocked', label: 'Blocked', count: statusCounts.blocked },
-              ].map((pill) => (
-                <button
-                  key={pill.key}
-                  type="button"
-                  onClick={() => setStatusFilter(pill.key)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all shrink-0 cursor-pointer ${
-                    statusFilter === pill.key
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
-                  }`}
-                >
-                  {pill.label} ({pill.count})
-                </button>
+      {/* Control Bar: Project Selector + Priority Selector + Instant Search */}
+      <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+          {/* Project Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Project:</span>
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 text-gray-800 font-medium outline-none focus:border-blue-500 focus:bg-white transition-colors"
+            >
+              <option value="">All Projects ({projects.length})</option>
+              {projects.map((proj) => (
+                <option key={proj.id || proj.projectId} value={proj.id || proj.projectId}>
+                  {proj.name}
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* Priority Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Priority:</span>
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 text-gray-800 font-medium outline-none focus:border-blue-500 focus:bg-white transition-colors"
             >
               <option value="">All Priorities</option>
               <option value="high">High Priority</option>
               <option value="medium">Medium Priority</option>
               <option value="low">Low Priority</option>
             </select>
-
-            <select
-              value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[180px] truncate"
-            >
-              <option value="">All Projects</option>
-              {projects.map((p) => (
-                <option key={p.id || p.projectId} value={p.id || p.projectId}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
           </div>
+
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-sm">
+            <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search deliverables…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full text-xs border border-gray-200 rounded-lg pl-8 pr-7 py-1.5 bg-gray-50 text-gray-800 placeholder-gray-400 outline-none focus:border-blue-500 focus:bg-white transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded"
+                title="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Summary & Reset */}
+        <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+          <span>Showing {filteredTasks.length} of {allTasks.length} tasks</span>
+          {(statusFilter !== 'all' || priorityFilter || projectFilter || searchQuery) && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('all');
+                setPriorityFilter('');
+                setProjectFilter('');
+              }}
+              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold ml-1 transition-colors"
+            >
+              <RotateCcw size={12} />
+              <span>Reset Filters</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Standard Reusable Task Table */}
       {filteredTasks.length === 0 ? (
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-12 shadow-xs">
+        <div className="bg-white border border-gray-200 rounded-xl p-12 shadow-sm">
           <EmptyState
-            icon={<CheckSquare className="w-10 h-10 text-slate-400" />}
-            title="No tasks found"
+            icon={<CheckSquare className="w-10 h-10 text-gray-400" />}
+            title="No deliverables found"
             description="Try clearing or modifying your filter criteria."
             action={
               <Button
@@ -284,6 +334,17 @@ export default function MemberTasks() {
           }}
         />
       )}
+
+      {/* Report Blocker Modal */}
+      <ReportBlockerModal
+        isOpen={isBlockerModalOpen}
+        onClose={() => setIsBlockerModalOpen(false)}
+        tasks={allTasks}
+        managerId={user?.managerId || user?.managerUserId}
+        onSuccess={() => {
+          toast.success('Blocker report submitted successfully.');
+        }}
+      />
     </div>
   );
 }

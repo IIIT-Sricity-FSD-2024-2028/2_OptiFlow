@@ -214,11 +214,10 @@ export default function ProcessAdminTemplateDetail() {
 
       {feedback && (
         <div
-          className={`p-4 rounded-lg text-sm border ${
-            feedback.type === 'success'
+          className={`p-4 rounded-lg text-sm border ${feedback.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-red-50 border-red-200 text-red-800'
-          }`}
+            }`}
         >
           {feedback.message}
         </div>

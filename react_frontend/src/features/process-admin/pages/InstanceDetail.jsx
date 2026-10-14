@@ -170,13 +170,12 @@ export default function ProcessAdminInstanceDetail() {
           </div>
           <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
             <div
-              className={`h-2 rounded-full ${
-                instance.status === 'Rejected'
+              className={`h-2 rounded-full ${instance.status === 'Rejected'
                   ? 'bg-red-500'
                   : instance.status === 'Completed'
-                  ? 'bg-emerald-500'
-                  : 'bg-blue-600'
-              }`}
+                    ? 'bg-emerald-500'
+                    : 'bg-blue-600'
+                }`}
               style={{ width: `${steps.length ? (completedCount / steps.length) * 100 : 0}%` }}
             />
           </div>
@@ -219,28 +218,26 @@ export default function ProcessAdminInstanceDetail() {
             return (
               <div
                 key={step.id || index}
-                className={`bg-white rounded-xl border p-5 transition-all shadow-xs ${
-                  isCurrent
+                className={`bg-white rounded-xl border p-5 transition-all shadow-xs ${isCurrent
                     ? 'border-blue-400 ring-2 ring-blue-500/10'
                     : isApproved
-                    ? 'border-emerald-200'
-                    : isRejected
-                    ? 'border-red-200'
-                    : 'border-slate-200'
-                }`}
+                      ? 'border-emerald-200'
+                      : isRejected
+                        ? 'border-red-200'
+                        : 'border-slate-200'
+                  }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold shrink-0 mt-0.5 ${
-                        isApproved
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold shrink-0 mt-0.5 ${isApproved
                           ? 'bg-emerald-100 text-emerald-800'
                           : isRejected
-                          ? 'bg-red-100 text-red-800'
-                          : isCurrent
-                          ? 'bg-blue-600 text-white animate-pulse'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
+                            ? 'bg-red-100 text-red-800'
+                            : isCurrent
+                              ? 'bg-blue-600 text-white animate-pulse'
+                              : 'bg-slate-100 text-slate-600'
+                        }`}
                     >
                       {isApproved ? '✓' : isRejected ? '✕' : index + 1}
                     </div>

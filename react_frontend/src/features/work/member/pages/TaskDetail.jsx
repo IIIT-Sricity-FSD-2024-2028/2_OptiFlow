@@ -154,33 +154,30 @@ export default function MemberTaskDetail() {
   const isOverdue = dueDate && new Date(dueDate) < new Date() && !isCompleted;
   const managerName = manager?.fullName || manager?.name || 'Team Lead';
 
-  const stages = [
-    { label: 'Assigned', done: true },
-    { label: 'In Progress', done: !isCompleted && !isPendingReview && task.status !== 'Draft' && task.status !== 'Pending' },
-    { label: 'Under Review', done: isPendingReview || isCompleted },
-    { label: 'Completed', done: isCompleted },
-  ];
+  const STAGES = ['Data Collection', 'Work In Progress', 'Team Leader Review', 'Compliance Audit'];
+  const STAGE_MAP = { Active: 1, In_Review: 2, Pending_TL_Review: 2, Under_Review: 2, Completed: 3 };
+  const currentStage = isCompleted ? 3 : (STAGE_MAP[task.status] ?? 1);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       {/* Breadcrumb & Navigation */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-          <Link to={PATHS.MEMBER.DASHBOARD} className="hover:text-blue-600 transition-colors">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Link to={PATHS.MEMBER.DASHBOARD} className="hover:text-gray-700">
             Dashboard
           </Link>
           <span>›</span>
-          <Link to={PATHS.MEMBER.TASKS} className="hover:text-blue-600 transition-colors">
+          <Link to={PATHS.MEMBER.TASKS} className="hover:text-gray-700">
             My Tasks
           </Link>
           <span>›</span>
-          <span className="text-slate-800 font-semibold truncate max-w-xs">{task.title}</span>
+          <span className="text-gray-900 font-semibold truncate max-w-xs">{task.title}</span>
         </div>
 
         <button
           type="button"
           onClick={() => navigate(PATHS.MEMBER.TASKS)}
-          className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="text-xs font-semibold text-gray-500 hover:text-gray-800 flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to tasks</span>
@@ -188,43 +185,43 @@ export default function MemberTaskDetail() {
       </div>
 
       {/* Main Task Header Card */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs">
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                 TASK-{String(task.id || taskId).slice(0, 8)}
               </span>
-              <span className="text-slate-300">•</span>
+              <span className="text-gray-300">•</span>
               <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
                 {project?.name || 'General Process'}
               </span>
-              <span className="text-slate-300">•</span>
-              <span className="text-xs text-slate-500 font-medium">
-                Assigned by <strong className="text-slate-800">{managerName}</strong>
+              <span className="text-gray-300">•</span>
+              <span className="text-xs text-gray-500 font-medium">
+                Assigned by <strong className="text-gray-900">{managerName}</strong>
               </span>
             </div>
 
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-snug">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-snug">
               {task.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-1">
               <div className="flex items-center gap-1.5 font-medium">
-                <Calendar className="w-4 h-4 text-slate-400" />
+                <Calendar className="w-4 h-4 text-gray-400" />
                 <span>
                   Due:{' '}
-                  <strong className={isOverdue ? 'text-rose-600' : 'text-slate-700'}>
+                  <strong className={isOverdue ? 'text-rose-600' : 'text-gray-700'}>
                     {dueDate ? new Date(dueDate).toLocaleDateString() : 'No deadline'}
                   </strong>
                 </span>
               </div>
 
               <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-4 h-4 text-slate-400" />
+                <Clock className="w-4 h-4 text-gray-400" />
                 <span>
                   Estimated:{' '}
-                  <strong className="text-slate-700">
+                  <strong className="text-gray-700">
                     {task.estimatedHours || task.estimated_hours || 0} hrs
                   </strong>
                 </span>
@@ -290,58 +287,32 @@ export default function MemberTaskDetail() {
             )}
           </div>
         </div>
-
-        {/* Stepper Progress Bar */}
-        <div className="mt-8 pt-6 border-t border-slate-100">
-          <div className="flex items-center justify-between max-w-xl mx-auto">
-            {stages.map((stg, i) => (
-              <React.Fragment key={stg.label}>
-                <div className="flex flex-col items-center text-center">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                      stg.done
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-400 border border-slate-200'
-                    }`}
-                  >
-                    {stg.done ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
-                  </div>
-                  <span
-                    className={`text-[11px] font-semibold mt-1.5 ${
-                      stg.done ? 'text-slate-900' : 'text-slate-400'
-                    }`}
-                  >
-                    {stg.label}
-                  </span>
-                </div>
-                {i < stages.length - 1 && (
-                  <div
-                    className={`flex-1 h-0.5 mx-2 -mt-4 transition-all ${
-                      stages[i + 1].done ? 'bg-blue-600' : 'bg-slate-200'
-                    }`}
-                  />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Main Content Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 space-y-6">
-          {/* Deliverable Scope */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
+        {/* Left / Main Column */}
+        <div className="space-y-6">
+          {/* Deliverable Requirements & Scope */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
+            <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <FileText className="w-4 h-4 text-blue-600" />
               <span>Deliverable Requirements & Scope</span>
             </h2>
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-normal">
+            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-normal">
               {task.description || 'No detailed instructions or acceptance criteria provided.'}
             </div>
             {task.notes && (
-              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/70 text-xs text-amber-900">
-                <span className="font-bold">Latest Submission Notes: </span>
+              <div className={`p-3.5 rounded-xl text-xs border ${
+                task.notes.includes('Feedback') || task.notes.includes('Revision')
+                  ? 'bg-rose-50/80 border-rose-200 text-rose-900'
+                  : 'bg-amber-50/70 border-amber-200/70 text-amber-900'
+              }`}>
+                <span className="font-bold">
+                  {task.notes.includes('Feedback') || task.notes.includes('Revision')
+                    ? '⚠️ Revisions Requested by Team Lead: '
+                    : 'Latest Submission Notes: '}
+                </span>
                 {task.notes}
               </div>
             )}
@@ -365,25 +336,71 @@ export default function MemberTaskDetail() {
         </div>
 
         {/* Right Info Sidebar */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4 text-xs">
-            <h3 className="font-bold text-slate-900 text-sm">Task Metadata</h3>
+        <div className="space-y-6 sticky top-6">
+          {/* Process Stages Stepper */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-gray-900 mb-6">Process Stages</h2>
+            {STAGES.map((name, i) => {
+              const done = isCompleted || i < currentStage;
+              const active = !isCompleted && i === currentStage;
+              return (
+                <div key={name} className="flex gap-4 relative pb-6 last:pb-0">
+                  {i < STAGES.length - 1 && (
+                    <div
+                      className={`absolute left-[13px] top-7 bottom-0 w-0.5 ${
+                        done ? 'bg-blue-600' : 'bg-gray-200'
+                      } z-0`}
+                    />
+                  )}
+                  <div
+                    className={`relative z-10 w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-semibold ${
+                      done
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : active
+                        ? 'border-2 border-amber-400 bg-amber-50 text-amber-600 font-bold'
+                        : 'border border-gray-300 bg-white text-gray-400'
+                    }`}
+                  >
+                    {done ? (
+                      <CheckCircle2 size={14} className="stroke-[2.5]" />
+                    ) : (
+                      i + 1
+                    )}
+                  </div>
+                  <div className="pt-0.5">
+                    <p className="text-sm font-semibold text-gray-900">{name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {done ? 'Completed' : active ? 'In progress' : 'Pending'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Task Metadata */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4 text-xs">
+            <h3 className="font-bold text-gray-900 text-sm">Task Metadata</h3>
             <div className="space-y-3">
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400">Process</span>
-                <span className="font-semibold text-slate-800">{project?.name || 'General'}</span>
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-400 font-medium">Process</span>
+                <span className="font-semibold text-gray-800">{project?.name || 'General'}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400">Status</span>
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-400 font-medium">Status</span>
                 <StatusBadge status={task.status} isOverdue={isOverdue} />
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400">Priority</span>
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-400 font-medium">Priority</span>
                 <PriorityBadge priority={task.priority} />
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-400">Lead</span>
-                <span className="font-semibold text-slate-800">{managerName}</span>
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-400 font-medium">Lead</span>
+                <span className="font-semibold text-gray-800">{managerName}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-400 font-medium">Due Date</span>
+                <span className="font-semibold text-gray-800">{dueDate ? new Date(dueDate).toLocaleDateString() : '—'}</span>
               </div>
             </div>
           </div>
@@ -395,7 +412,7 @@ export default function MemberTaskDetail() {
         isOpen={isSubmitModalOpen}
         onClose={() => setIsSubmitModalOpen(false)}
         taskId={taskId}
-        onSuccess={() => setTask((prev) => ({ ...prev, status: 'In_Review' }))}
+        onSuccess={(notes) => setTask((prev) => ({ ...prev, status: 'In_Review', notes: notes || prev?.notes }))}
       />
 
       <ReportBlockerModal

@@ -10,7 +10,6 @@ import { Toast } from '../../../../shared/components/Toast';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import * as tasksApi from '../../../../services/api/tasks';
-import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
 import * as evidenceApi from '../../../../services/api/evidence';
 
@@ -21,7 +20,6 @@ const formatDate = (value) => value ? new Date(value).toLocaleDateString() : 'â€
 export default function PmTaskDetail() {
   const { id } = useParams();
   const [task, setTask] = useState(null);
-  const [users, setUsers] = useState([]);
   const [violations, setViolations] = useState([]);
   const [bindings, setBindings] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
@@ -41,15 +39,13 @@ export default function PmTaskDetail() {
     let active = true;
     Promise.all([
       tasksApi.get(id),
-      usersApi.list(),
       complianceApi.getViolations().catch(() => []),
       complianceApi.getBindings().catch(() => []),
       evidenceApi.getEvidenceList().catch(() => []),
     ])
-      .then(([taskResponse, usersResponse, violationsRes, bindingsRes, evidenceRes]) => {
+      .then(([taskResponse, violationsRes, bindingsRes, evidenceRes]) => {
         if (!active) return;
         setTask(normalize(taskResponse));
-        setUsers(Array.isArray(usersResponse) ? usersResponse : usersResponse?.data || []);
         setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
         setBindings(Array.isArray(bindingsRes) ? bindingsRes : bindingsRes?.data || []);
         setEvidenceList(Array.isArray(evidenceRes) ? evidenceRes : evidenceRes?.data || []);
@@ -143,8 +139,8 @@ export default function PmTaskDetail() {
       setTask((current) => ({ ...current, ...normalize(response), dueDate: extensionDate }));
       setViolations((current) => current.map((violation) => (
         violation.entityType === 'Task'
-        && String(violation.entityId) === String(id)
-        && violation.rule?.name?.toLowerCase().includes('overdue')
+          && String(violation.entityId) === String(id)
+          && violation.rule?.name?.toLowerCase().includes('overdue')
           ? { ...violation, status: 'Resolved' }
           : violation
       )));
@@ -223,12 +219,12 @@ export default function PmTaskDetail() {
                 })}
               </Select>
             </FormField>
-            <FormField label="Assignee">
-              <Select value={task.assignedToId || ''} onChange={(event) => updateTask({ assignedToId: event.target.value || null })} disabled={saving}>
-                <option value="">Unassigned</option>
-                {users.map((user) => <option key={user.id} value={user.id}>{user.fullName || user.email}</option>)}
-              </Select>
-            </FormField>
+            <div>
+              <p className="text-xs font-semibold uppercase text-gray-500">Assigned to</p>
+              <p className="mt-1 text-sm text-gray-900">
+                {task.assignedTo?.fullName || task.assignedTo?.email || 'Unassigned'}
+              </p>
+            </div>
           </div>
         </div>
         {saving && <p className="mt-3 text-xs text-gray-500">Saving changesâ€¦</p>}

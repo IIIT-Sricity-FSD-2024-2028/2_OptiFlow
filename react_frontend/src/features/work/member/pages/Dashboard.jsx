@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
 import { useToast } from '../../../../shared/components/Toast';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Button } from '../../../../shared/components/Button';
+import { Badge } from '../../../../shared/components/Badge';
 import { Loader } from '../../../../shared/components/Loader';
+import { EmptyState } from '../../../../shared/components/EmptyState';
 import { TaskTable } from '../../components/TaskTable';
 import { ReportBlockerModal } from '../components/modals/ReportBlockerModal';
 import { resolveTeamLead } from '../../utils/userUtils';
@@ -142,113 +144,122 @@ export default function MemberDashboard() {
   const managerName = manager?.fullName || manager?.name || 'Lucas Scott';
 
   return (
-    <div className="space-y-6 max-w-[1240px] mx-auto pb-8">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Work</h1>
-          <p className="text-xs text-slate-500 mt-0.5 font-medium">
-            Execution · Tasks assigned to you · Submit work, evidence, and blockers
+          <h1 className="text-3xl font-bold text-gray-900">My Workspace</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Execution · Deliverables assigned to you · Evidence & blocker management
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/90 pl-1.5 pr-3.5 py-1 rounded-full text-xs text-slate-600 font-medium self-start sm:self-auto shadow-2xs">
-          <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[11px]">
-            {managerName.charAt(0).toUpperCase()}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full text-xs text-gray-600 font-medium shadow-sm">
+            <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px]">
+              {managerName.charAt(0).toUpperCase()}
+            </div>
+            <span>
+              Reporting to: <strong className="text-gray-900 font-semibold">{managerName}</strong>
+            </span>
           </div>
-          <span>
-            Reporting to: <strong className="text-slate-900 font-semibold">{managerName}</strong>
-          </span>
+          <Badge status="info">Team Member</Badge>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center gap-2.5 p-3 bg-white border border-slate-200/90 rounded-xl shadow-2xs">
+      <section className="flex flex-wrap items-center gap-3">
         <Button
           variant="primary"
-          size="sm"
           onClick={() => navigate(PATHS.MEMBER.TASKS)}
-          className="text-xs font-semibold px-4"
         >
-          My tasks
+          My Tasks
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={() => navigate(PATHS.MEMBER.EVIDENCE)}
-          className="text-xs font-semibold px-4"
         >
-          Upload evidence
+          Upload Evidence
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={() => setIsBlockerModalOpen(true)}
-          className="text-xs font-semibold px-4 text-rose-700 border-rose-200 hover:bg-rose-50"
+          className="text-rose-700 border-rose-200 hover:bg-rose-50"
         >
-          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 mr-1.5" />
-          Report blocker
+          <AlertTriangle className="w-4 h-4 text-rose-600 mr-1.5" />
+          Report Blocker
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={() => navigate(PATHS.MEMBER.ESCALATIONS)}
-          className="text-xs font-semibold px-4"
         >
-          View escalations
+          View Escalations
         </Button>
-      </div>
+      </section>
 
       {/* Stat Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Assigned Tasks"
-          value={totalAssigned}
-          subtitle={`${tasks.length} deliverables, ${subtasks.length} subtasks`}
-          icon={<CheckSquare className="w-5 h-5 text-blue-600" />}
-        />
-        <StatCard
-          title="In Progress"
-          value={inProgressTasks}
-          subtitle="Currently active deliverables"
-          icon={<Clock className="w-5 h-5 text-amber-600" />}
-        />
-        <StatCard
-          title="Completed"
-          value={completedTasks}
-          subtitle="Submitted & approved"
-          icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
-        />
-        <StatCard
-          title="Overdue"
-          value={overdueTasks}
-          subtitle={overdueTasks > 0 ? 'Requires immediate action' : 'All on track'}
-          icon={<AlertCircle className={`w-5 h-5 ${overdueTasks > 0 ? 'text-rose-600' : 'text-slate-400'}`} />}
-        />
-      </div>
+      <section>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Assigned Tasks"
+            value={totalAssigned}
+            trend={`${tasks.length} deliverables · ${subtasks.length} subtasks`}
+            icon={<CheckSquare className="w-5 h-5 text-blue-600" />}
+          />
+          <StatCard
+            title="In Progress"
+            value={inProgressTasks}
+            trend="Active deliverables"
+            icon={<Clock className="w-5 h-5 text-amber-600" />}
+          />
+          <StatCard
+            title="Completed"
+            value={completedTasks}
+            trend="Submitted & approved"
+            trendDirection="up"
+            icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+          />
+          <StatCard
+            title="Overdue"
+            value={overdueTasks}
+            trend={overdueTasks > 0 ? 'Requires attention' : 'All on track'}
+            trendDirection={overdueTasks > 0 ? 'down' : undefined}
+            icon={<AlertCircle className={`w-5 h-5 ${overdueTasks > 0 ? 'text-rose-600' : 'text-gray-400'}`} />}
+          />
+        </div>
+      </section>
 
       {/* Active Tasks Table Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Current Deliverables</h2>
-            <p className="text-xs text-slate-500">Tasks requiring your attention</p>
+            <h2 className="font-semibold text-gray-900">Current Deliverables</h2>
+            <p className="text-xs text-gray-500 mt-1">Tasks requiring your attention and execution</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(PATHS.MEMBER.TASKS)}
-            className="text-xs font-semibold"
+          <Link
+            to={PATHS.MEMBER.TASKS}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
           >
-            View all ({allDeliverables.length})
-          </Button>
+            Open task list ({allDeliverables.length}) →
+          </Link>
         </div>
 
-        <TaskTable
-          tasks={allDeliverables.slice(0, 6)}
-          visibleColumns={['title', 'project', 'priority', 'status', 'dueDate', 'actions']}
-          onRowClick={(t) => navigate(t.isSubtask ? `/member/tasks/${t.parentTaskId || t.taskId}` : `/member/tasks/${t.id || t.taskId}`)}
-        />
+        <div className="p-5">
+          {allDeliverables.length === 0 ? (
+            <EmptyState
+              title="No deliverables assigned"
+              description="No tasks have been allocated to you yet."
+            />
+          ) : (
+            <TaskTable
+              tasks={allDeliverables.slice(0, 6)}
+              visibleColumns={['title', 'project', 'priority', 'status', 'dueDate', 'actions']}
+              onRowClick={(t) =>
+                navigate(t.isSubtask ? `/member/tasks/${t.parentTaskId || t.taskId}` : `/member/tasks/${t.id || t.taskId}`)
+              }
+            />
+          )}
+        </div>
       </div>
 
       {/* Shared Blocker Modal */}

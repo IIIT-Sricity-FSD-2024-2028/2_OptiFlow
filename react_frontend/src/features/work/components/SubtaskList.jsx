@@ -28,11 +28,11 @@ export function SubtaskList({
   };
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
         <div>
-          <h3 className="font-bold text-slate-900 text-sm">Execution Subtasks</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{subtasks.length} subtask(s) defined</p>
+          <h3 className="font-bold text-gray-900 text-sm">Execution Subtasks</h3>
+          <p className="text-xs text-gray-500 mt-0.5">{subtasks.length} subtask(s) defined</p>
         </div>
       </div>
 
