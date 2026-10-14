@@ -18,6 +18,7 @@ import {
 import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
 import * as evidenceApi from '../../../../services/api/evidence';
+import * as complianceApi from '../../../../services/api/compliance';
 import * as usersApi from '../../../../services/api/users';
 import * as projectsApi from '../../../../services/api/projects';
 import {
@@ -28,6 +29,8 @@ import {
   FileText,
   ArrowLeft,
   Send,
+  ShieldAlert,
+  Check,
 } from 'lucide-react';
 
 export default function MemberTaskDetail() {
@@ -42,6 +45,8 @@ export default function MemberTaskDetail() {
   const [manager, setManager] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
+  const [isEvidenceRequired, setIsEvidenceRequired] = useState(false);
+  const [complianceRule, setComplianceRule] = useState(null);
 
   // Modals state
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -56,11 +61,12 @@ export default function MemberTaskDetail() {
       if (!taskId) return;
       setLoading(true);
       try {
-        const [taskRes, usersRes, projectsRes, evRes] = await Promise.allSettled([
+        const [taskRes, usersRes, projectsRes, evRes, bindingsRes] = await Promise.allSettled([
           tasksApi.get(taskId),
           usersApi.list(),
           projectsApi.list(),
           evidenceApi.list(),
+          complianceApi.getBindings(),
         ]);
 
         if (!isMounted) return;
@@ -76,15 +82,35 @@ export default function MemberTaskDetail() {
         const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
         const allProjects = projectsRes.status === 'fulfilled' && projectsRes.value ? (Array.isArray(projectsRes.value) ? projectsRes.value : projectsRes.value.data || []) : [];
         const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
+        const allBindings = bindingsRes.status === 'fulfilled' && bindingsRes.value ? (Array.isArray(bindingsRes.value) ? bindingsRes.value : bindingsRes.value.data || []) : [];
 
         setSubtasks(Array.isArray(rawTask.subtasks) ? rawTask.subtasks : []);
         setEvidenceList(allEv.filter((e) => String(e.taskId || e.task_id || e.task?.id) === String(taskId)));
 
         const projId = rawTask.projectId || rawTask.project?.id;
-        setProject(allProjects.find((p) => String(p.id) === String(projId)) || rawTask.project || null);
+        const projectObj = allProjects.find((p) => String(p.id) === String(projId)) || rawTask.project || null;
+        setProject(projectObj);
 
         const assignerId = rawTask.createdById || rawTask.createdBy?.id || user?.managerId;
         setManager(allUsers.find((u) => String(u.id) === String(assignerId)) || rawTask.createdBy || null);
+
+        // Check if any active compliance rule mandates evidence for this deliverable
+        const matchingRule = allBindings.find((b) => {
+          if (!b.rule || !b.rule.isActive) return false;
+          const reqType = b.rule.criteria?.requirement?.type;
+          if (reqType !== 'EVIDENCE_REQUIRED') return false;
+
+          const scopeType = b.scopeType;
+          const scopeId = String(b.scopeId);
+          if (scopeType === 'Company' && scopeId === String(rawTask.companyId || user?.companyId)) return true;
+          if (scopeType === 'Project' && scopeId === String(rawTask.projectId || projectObj?.id)) return true;
+          if (scopeType === 'Team' && scopeId === String(projectObj?.teamId || projectObj?.team?.id)) return true;
+          if (scopeType === 'Branch' && scopeId === String(projectObj?.team?.branchId)) return true;
+          return false;
+        });
+
+        setIsEvidenceRequired(Boolean(matchingRule));
+        setComplianceRule(matchingRule?.rule || null);
       } catch (err) {
         console.error('Error loading task details:', err);
         if (isMounted) toast.error('Failed to load task');
@@ -232,6 +258,20 @@ export default function MemberTaskDetail() {
 
               <PriorityBadge priority={task.priority} />
               <StatusBadge status={task.status} isOverdue={isOverdue} />
+              {isEvidenceRequired ? (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                  title={`Mandated by compliance rule: ${complianceRule?.name || 'Evidence Policy'}`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                  Evidence Required
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200/80">
+                  <Check className="w-3 h-3 text-slate-400" />
+                  Evidence Optional
+                </span>
+              )}
             </div>
           </div>
 
@@ -359,6 +399,7 @@ export default function MemberTaskDetail() {
             taskId={taskId}
             evidenceList={evidenceList}
             readOnly={isCompleted}
+            required={isEvidenceRequired}
             onRequestUpload={() => setIsEvidenceModalOpen(true)}
             onDelete={handleDeleteEvidence}
           />
@@ -395,7 +436,16 @@ export default function MemberTaskDetail() {
         isOpen={isSubmitModalOpen}
         onClose={() => setIsSubmitModalOpen(false)}
         taskId={taskId}
-        onSuccess={() => setTask((prev) => ({ ...prev, status: 'In_Review' }))}
+        taskTitle={task?.title}
+        isEvidenceRequired={isEvidenceRequired}
+        complianceRuleName={complianceRule?.name}
+        existingEvidenceCount={evidenceList.length}
+        onSuccess={(newEv) => {
+          setTask((prev) => ({ ...prev, status: 'In_Review' }));
+          if (newEv) {
+            setEvidenceList((prev) => [newEv, ...prev]);
+          }
+        }}
       />
 
       <ReportBlockerModal

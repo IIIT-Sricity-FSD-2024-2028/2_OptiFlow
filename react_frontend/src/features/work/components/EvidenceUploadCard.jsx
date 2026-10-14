@@ -6,6 +6,7 @@ export function EvidenceUploadCard({
   taskId,
   evidenceList = [],
   readOnly = false,
+  required = false,
   onUpload,
   onRequestUpload,
   onDelete,
@@ -40,7 +41,18 @@ export function EvidenceUploadCard({
     <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
       <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
         <div>
-          <h3 className="font-bold text-slate-900 text-sm">Evidence & Deliverable Artifacts</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-slate-900 text-sm">Evidence & Deliverable Artifacts</h3>
+            {required ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                Required by Policy
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                Optional
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">Files, audit records, or links verifying this deliverable</p>
         </div>
         {!readOnly && (

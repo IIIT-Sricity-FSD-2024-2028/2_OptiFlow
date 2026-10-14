@@ -8,6 +8,7 @@ import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from 
 import { validateRequired, validateEnum } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
 import { createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { uploadToStorage, getStorageSignedUrl, deleteFromStorage } from '../services/storage.service.js';
 
 const ALLOWED_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'text/csv', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
 const ALLOWED_SEVERITIES = ['Low', 'Medium', 'High', 'Critical'];
@@ -327,6 +328,10 @@ export async function deleteEvidence(req, res, next) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
+    if (existing.fileUrl) {
+      await deleteFromStorage(existing.fileUrl);
+    }
+
     await prisma.complianceEvidence.delete({
       where: { id },
     });
@@ -354,14 +359,19 @@ export async function uploadEvidenceFile(req, res, next) {
     });
 
     if (!evidence) {
-      // Remove uploaded file if evidence doesn't exist
-      try {
-        fs.unlinkSync(file.path);
-      } catch (_) {}
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
-    const fileUrl = `/uploads/${file.filename}`;
+    // Clean safe filename
+    const safeOriginalName = (file.originalname || 'artifact.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `${req.user.companyId}/${evidence.id}/${Date.now()}-${safeOriginalName}`;
+
+    // Upload to Supabase Cloud Storage (or fallback to local disk)
+    const { storageType, fileUrl } = await uploadToStorage({
+      buffer: file.buffer,
+      filePath: storagePath,
+      mimetype: file.mimetype,
+    });
 
     // Create Attachment record
     let attachment = null;
@@ -369,11 +379,12 @@ export async function uploadEvidenceFile(req, res, next) {
       attachment = await prisma.attachment.create({
         data: {
           companyId: req.user.companyId,
-          
+          entityType: 'ComplianceEvidence',
           entityId: evidence.id,
           fileName: file.originalname,
           fileType: file.mimetype,
           fileSizeBytes: file.size,
+          storageKey: storagePath || fileUrl,
           uploadedById: req.user.id,
         },
       });
@@ -393,22 +404,22 @@ export async function uploadEvidenceFile(req, res, next) {
 
     await createComplianceAuditLog({
       companyId: req.user.companyId,
-      
       evidenceId: id,
       action: AUDIT_ACTIONS.UPDATE,
       performedById: req.user.id,
-      newValue: { fileUrl, originalName: file.originalname, sizeBytes: file.size },
+      newValue: { fileUrl, originalName: file.originalname, sizeBytes: file.size, storageType },
     });
 
     res.status(201).json({
       success: true,
       message: 'File uploaded successfully',
       data: {
-        filename: file.filename,
+        filename: safeOriginalName,
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
         fileUrl,
+        storageType,
         evidence: updatedEvidence,
         attachment,
       },
@@ -430,6 +441,15 @@ export async function streamEvidenceFile(req, res, next) {
       throw new NotFoundError(`Evidence file for ID ${id} not found`);
     }
 
+    // 1. If stored in Supabase Cloud Storage, generate a signed URL and redirect
+    if (evidence.fileUrl.startsWith('supabase://')) {
+      const signedUrl = await getStorageSignedUrl(evidence.fileUrl, 3600);
+      if (signedUrl) {
+        return res.redirect(signedUrl);
+      }
+    }
+
+    // 2. Fallback for legacy files stored locally on disk
     const filename = path.basename(evidence.fileUrl);
     const safeFilePath = path.join(uploadDir, filename);
 

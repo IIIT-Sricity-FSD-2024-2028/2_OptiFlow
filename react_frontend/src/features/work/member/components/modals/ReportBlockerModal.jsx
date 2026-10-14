@@ -29,13 +29,13 @@ export function ReportBlockerModal({
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedTaskId(taskId || (tasks[0]?.id || ''));
+      setSelectedTaskId(taskId || (tasks?.[0]?.id || ''));
       setBlockerType(BLOCKER_TYPES[0]);
       setPriority('High');
       setTitle('');
       setDescription('');
     }
-  }, [isOpen, taskId, tasks]);
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
