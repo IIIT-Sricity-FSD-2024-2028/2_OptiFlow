@@ -37,11 +37,15 @@ export const Topbar = ({ title }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const formattedRole = user?.role
+  const formattedRole = user?.isPlatform
+    ? 'Platform Admin'
+    : user?.role
     ? user.role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : 'User';
 
-  const companyName = user?.company?.legalName || user?.company?.name || 'Acme Corporation';
+  const companyName = user?.isPlatform
+    ? 'OptiFlow Platform'
+    : user?.company?.legalName || user?.company?.name || user?.companyName || 'Acme Corporation';
 
   const getInitials = (name) => {
     if (!name) return 'U';
@@ -127,7 +131,7 @@ export const Topbar = ({ title }) => {
 
               {/* Status Indicator */}
               <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Workspace</span>
+                <span className="text-slate-500 font-medium">{user?.isPlatform ? 'Environment' : 'Workspace'}</span>
                 <span className="text-slate-800 font-semibold truncate max-w-[150px]">
                   {companyName}
                 </span>
@@ -137,7 +141,7 @@ export const Topbar = ({ title }) => {
             {/* Menu Links */}
             <div className="p-1.5">
               <Link
-                to={PATHS.COMMON.PROFILE}
+                to={user?.isPlatform ? PATHS.PLATFORM.PROFILE : PATHS.COMMON.PROFILE}
                 onClick={() => setIsOpen(false)}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors group"
               >

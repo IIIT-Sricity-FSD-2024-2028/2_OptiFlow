@@ -6,6 +6,7 @@ const PlatformPlans = React.lazy(() => import('../../features/platform/pages/Pla
 const PlatformSubscriptions = React.lazy(() => import('../../features/platform/pages/Subscriptions'));
 const PlatformAdminUsers = React.lazy(() => import('../../features/platform/pages/AdminUsers'));
 const PlatformSupportAccess = React.lazy(() => import('../../features/platform/pages/SupportAccess'));
+const Profile = React.lazy(() => import('../../features/common/pages/Profile'));
 
 export const platformRoutes = [
   { path: PATHS.PLATFORM.DASHBOARD, element: <PlatformDashboard /> },
@@ -13,5 +14,6 @@ export const platformRoutes = [
   { path: PATHS.PLATFORM.PLANS, element: <PlatformPlans /> },
   { path: PATHS.PLATFORM.SUBSCRIPTIONS, element: <PlatformSubscriptions /> },
   { path: PATHS.PLATFORM.ADMIN_USERS, element: <PlatformAdminUsers /> },
-  { path: PATHS.PLATFORM.SUPPORT_ACCESS, element: <PlatformSupportAccess /> }
+  { path: PATHS.PLATFORM.SUPPORT_ACCESS, element: <PlatformSupportAccess /> },
+  { path: PATHS.PLATFORM.PROFILE, element: <Profile /> },
 ];

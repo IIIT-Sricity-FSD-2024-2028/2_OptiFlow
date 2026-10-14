@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { apiClient } from "../../../services/api/client";
+import { useToast } from "../../../shared/components/Toast";
 
 export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
+  const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleUpdateStatus = async (newStatus) => {
@@ -15,10 +17,11 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus })
       });
+      toast.success(`Evidence marked as ${newStatus}.`);
       onReviewed(); // Refresh the list in the parent component
       onClose();    // Close modal
     } catch (err) {
-      alert("Failed to update status: " + err.message);
+      toast.error("Failed to update status: " + err.message);
     } finally {
       setIsSubmitting(false);
     }

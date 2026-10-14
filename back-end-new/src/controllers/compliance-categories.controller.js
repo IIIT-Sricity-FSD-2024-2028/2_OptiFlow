@@ -126,10 +126,22 @@ export async function deleteComplianceCategory(req, res, next) {
 
     const existing = await prisma.complianceCategory.findFirst({
       where: { id, companyId: req.user.companyId },
+      include: {
+        _count: {
+          select: { rules: true },
+        },
+      },
     });
 
     if (!existing) {
       throw new NotFoundError(`Compliance category ${id} not found in this company`);
+    }
+
+    const rulesCount = existing._count?.rules || 0;
+    if (rulesCount > 0) {
+      throw new BadRequestError(
+        `Cannot delete category "${existing.name}": it has ${rulesCount} associated compliance rule(s). Please reassign or delete those rules first.`
+      );
     }
 
     await prisma.complianceCategory.delete({

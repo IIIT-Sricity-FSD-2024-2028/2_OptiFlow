@@ -488,6 +488,11 @@ export default function ComplianceDashboard() {
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Violations by Severity</h3>
+            {chartData.severity && chartData.severity.length > 0 && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                {chartData.severity.reduce((sum, item) => sum + item.value, 0)} Active
+              </span>
+            )}
           </div>
           {chartData.severity && chartData.severity.length > 0 ? (
             <div className="h-[240px] w-full">
@@ -501,21 +506,38 @@ export default function ComplianceDashboard() {
                     outerRadius={85}
                     paddingAngle={4}
                     dataKey="value"
+                    stroke="#ffffff"
+                    strokeWidth={2}
                   >
                     {chartData.severity.map((entry, index) => {
                       const colors = {
-                        Critical: '#ef4444',
+                        Critical: '#e11d48',
                         High: '#f97316',
-                        Medium: '#eab308',
-                        Low: '#3b82f6'
+                        Medium: '#f59e0b',
+                        Low: '#10b981',
                       };
                       return <Cell key={`cell-${index}`} fill={colors[entry.name] || '#94a3b8'} />;
                     })}
                   </Pie>
                   <RechartsTooltip 
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: '#1e293b'
+                    }}
+                    itemStyle={{ color: '#334155', fontSize: '12px' }}
                   />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: '12px', fontWeight: '500', color: '#475569', paddingTop: '8px' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -529,6 +551,11 @@ export default function ComplianceDashboard() {
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Violation Status Distribution</h3>
+            {chartData.status && chartData.status.length > 0 && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                {chartData.status.reduce((sum, item) => sum + item.value, 0)} Total
+              </span>
+            )}
           </div>
           {chartData.status && chartData.status.length > 0 ? (
             <div className="h-[240px] w-full">
@@ -538,18 +565,26 @@ export default function ComplianceDashboard() {
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={8} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                   <RechartsTooltip 
-                    cursor={{ fill: '#f8fafc' }}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                    cursor={{ fill: 'rgba(241, 245, 249, 0.6)' }}
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: '#1e293b'
+                    }}
                   />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={36}>
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={34}>
                     {chartData.status.map((entry, index) => {
                       const colors = {
-                        'Open': '#ef4444',
+                        'Open': '#e11d48',
                         'Under Review': '#f59e0b',
                         'Resolved': '#10b981',
                         'Ignored': '#94a3b8'
                       };
-                      return <Cell key={`cell-${index}`} fill={colors[entry.name] || '#3b82f6'} />;
+                      return <Cell key={`cell-${index}`} fill={colors[entry.name] || '#64748b'} />;
                     })}
                   </Bar>
                 </BarChart>

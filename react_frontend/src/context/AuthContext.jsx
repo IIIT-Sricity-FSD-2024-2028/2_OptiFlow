@@ -13,19 +13,21 @@ export const AuthProvider = ({ children }) => {
     const restoreSession = async () => {
       const token = sessionStorage.getItem('authToken');
       const isPlatform = sessionStorage.getItem('isPlatform') === 'true';
-      
+
       if (token) {
         try {
           // Use the correct backend route depending on user type
           const meRoute = isPlatform ? '/platform/auth/me' : '/auth/me';
-          const userData = await apiClient(meRoute); 
-          
-          // The backend wraps the identity in `userData.user`
+          const userData = await apiClient(meRoute);
+
+          // The backend wraps the identity in `userData.user` or directly in `userData`
           const restoredUser = userData.user || userData;
-          setUser({ ...restoredUser, isPlatform });
-        } catch {
+          const role = isPlatform ? 'platform_admin' : (restoredUser.role || restoredUser.roleSlug);
+          setUser({ ...restoredUser, role, isPlatform });
+        } catch (error) {
           sessionStorage.removeItem('authToken');
           sessionStorage.removeItem('isPlatform');
+          setUser(null);
         }
       }
       setLoading(false);
@@ -40,13 +42,14 @@ export const AuthProvider = ({ children }) => {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    
+
     const isPlatformAdmin = response.role === 'platform_admin';
-    
+
     sessionStorage.setItem('authToken', response.token);
     sessionStorage.setItem('isPlatform', isPlatformAdmin ? 'true' : 'false');
     // response.user and response.role are guaranteed by the backend's handleLogin
-    setUser({ ...response.user, role: response.role, isPlatform: isPlatformAdmin }); 
+    const loggedInUser = response.user || {};
+    setUser({ ...loggedInUser, role: response.role || loggedInUser.role, isPlatform: isPlatformAdmin });
     return response;
   };
 
@@ -56,12 +59,12 @@ export const AuthProvider = ({ children }) => {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    
+
     sessionStorage.setItem('authToken', response.token);
     sessionStorage.setItem('isPlatform', 'true');
-    
+
     const loggedInUser = response.adminUser || response.user || {};
-    setUser({ ...loggedInUser, role: 'system_admin', isPlatform: true }); 
+    setUser({ ...loggedInUser, role: 'platform_admin', isPlatform: true });
     return response;
   };
 

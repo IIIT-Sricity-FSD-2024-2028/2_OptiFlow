@@ -52,12 +52,13 @@ export function ReportBlockerModal({
 
     setSubmitting(true);
     try {
-      const selectedTask = tasks.find((t) => String(t.id || t.taskId) === String(finalTaskId));
+      const isSubtask = Boolean(selectedTask?.isSubtask || selectedTask?.parentTaskId);
+      const actualTaskId = isSubtask ? (selectedTask.parentTaskId || selectedTask.taskId) : finalTaskId;
       const finalProjId = projectId || selectedTask?.projectId || selectedTask?.project?.id;
       const finalTitle = title.trim() || `Blocked: ${selectedTask?.title || 'Task'}`;
 
       await escalationsApi.create({
-        taskId: String(finalTaskId),
+        taskId: actualTaskId ? String(actualTaskId) : undefined,
         projectId: finalProjId,
         title: finalTitle,
         description: finalDesc,
@@ -69,7 +70,9 @@ export function ReportBlockerModal({
 
       // Update task status to Blocked
       try {
-        await tasksApi.update(finalTaskId, { status: 'Blocked' });
+        if (actualTaskId) {
+          await tasksApi.update(actualTaskId, { status: 'Blocked' });
+        }
       } catch (_) {}
 
       toast.success('Blocker logged and leadership alerted.');

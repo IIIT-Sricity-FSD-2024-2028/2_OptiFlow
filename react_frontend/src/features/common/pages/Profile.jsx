@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { PATHS } from "../../../app/paths";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import {
@@ -30,12 +31,15 @@ export default function Profile() {
     setCurrentPalette(getUserAvatarPalette(user));
   }, [user]);
 
-  const formattedRole = user?.role
+  const formattedRole = user?.isPlatform
+    ? "Platform Admin"
+    : user?.role
     ? user.role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
     : "User";
 
-  const companyName =
-    user?.company?.legalName || user?.company?.name || "Acme Corporation";
+  const companyName = user?.isPlatform
+    ? "OptiFlow Platform"
+    : user?.company?.legalName || user?.company?.name || user?.companyName || "Acme Corporation";
 
   const getInitials = (name) => {
     if (!name) return "U";
@@ -63,7 +67,7 @@ export default function Profile() {
       <div>
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(user?.isPlatform ? PATHS.PLATFORM.DASHBOARD : -1)}
           className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 mb-3 transition-colors cursor-pointer"
         >
           <ArrowLeft size={16} />
@@ -73,8 +77,9 @@ export default function Profile() {
           My Profile
         </h1>
         <p className="text-sm text-slate-500 mt-1.5">
-          Manage your enterprise governance credentials, organization identity,
-          and system access.
+          {user?.isPlatform
+            ? "Manage your platform administrator credentials, security identity, and global system access."
+            : "Manage your enterprise governance credentials, organization identity, and system access."}
         </p>
       </div>
 
@@ -194,12 +199,14 @@ export default function Profile() {
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4">
             <Briefcase size={18} className="text-slate-700" />
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-              Organization & Scope
+              {user?.isPlatform ? "Platform Authority & Scope" : "Organization & Scope"}
             </h3>
           </div>
           <dl className="space-y-3.5 text-sm">
             <div className="flex justify-between items-center py-2">
-              <dt className="text-slate-500 font-medium">Organization</dt>
+              <dt className="text-slate-500 font-medium">
+                {user?.isPlatform ? "Environment" : "Organization"}
+              </dt>
               <dd className="font-semibold text-slate-900 text-sm">
                 {companyName}
               </dd>
@@ -210,30 +217,39 @@ export default function Profile() {
                 {formattedRole}
               </dd>
             </div>
-            <div className="flex justify-between items-center py-2 border-t border-slate-100">
-              <dt className="text-slate-500 font-medium">Tenant Identifier</dt>
-              <dd className="flex items-center gap-2">
-                <span className="font-mono text-xs text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-                  {user?.companyId
-                    ? `${user.companyId.substring(0, 16)}…`
-                    : "—"}
-                </span>
-                {user?.companyId && (
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(user.companyId, "tenantId")}
-                    className="text-slate-400 hover:text-slate-700 p-1.5 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
-                    title="Copy full Tenant ID"
-                  >
-                    {copiedKey === "tenantId" ? (
-                      <Check size={14} className="text-emerald-600" />
-                    ) : (
-                      <Copy size={14} />
-                    )}
-                  </button>
-                )}
-              </dd>
-            </div>
+            {user?.isPlatform ? (
+              <div className="flex justify-between items-center py-2 border-t border-slate-100">
+                <dt className="text-slate-500 font-medium">Access Scope</dt>
+                <dd className="font-semibold text-slate-900 text-sm">
+                  Global (Cross-Tenant Admin)
+                </dd>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center py-2 border-t border-slate-100">
+                <dt className="text-slate-500 font-medium">Tenant Identifier</dt>
+                <dd className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                    {user?.companyId
+                      ? `${user.companyId.substring(0, 16)}…`
+                      : "—"}
+                  </span>
+                  {user?.companyId && (
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(user.companyId, "tenantId")}
+                      className="text-slate-400 hover:text-slate-700 p-1.5 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Copy full Tenant ID"
+                    >
+                      {copiedKey === "tenantId" ? (
+                        <Check size={14} className="text-emerald-600" />
+                      ) : (
+                        <Copy size={14} />
+                      )}
+                    </button>
+                  )}
+                </dd>
+              </div>
+            )}
           </dl>
         </div>
       </div>

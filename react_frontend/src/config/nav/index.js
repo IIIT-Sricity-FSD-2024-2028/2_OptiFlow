@@ -12,8 +12,9 @@ import { memberNav } from './member.nav';
 // Prevents hardcoded link lists inside Layout components.
 export function getNavForRole(roleSlug) {
     switch (roleSlug) {
-        case ROLES.SYSTEM_ADMIN:
+        case ROLES.PLATFORM_ADMIN:
             return platformNav;
+        case ROLES.SYSTEM_ADMIN:
         case ROLES.COMPANY_OWNER:
             return executiveNav;
         case ROLES.COMPLIANCE_OFFICER:

@@ -10,8 +10,10 @@ import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Modal } from '../../../../shared/components/Modal';
 import { StatusBadge, PriorityBadge } from '../../components/StatusBadge';
 import { ReportBlockerModal } from '../components/modals/ReportBlockerModal';
+import { resolveTeamLead } from '../../utils/userUtils';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as tasksApi from '../../../../services/api/tasks';
+import * as subtasksApi from '../../../../services/api/subtasks';
 import * as usersApi from '../../../../services/api/users';
 import {
   AlertTriangle,
@@ -33,6 +35,7 @@ export default function MemberEscalations() {
   const [escalations, setEscalations] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
+  const [manager, setManager] = useState(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,54 +46,74 @@ export default function MemberEscalations() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingItem, setViewingItem] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadEscalationsData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [escRes, tasksRes, subtasksRes, usersRes] = await Promise.allSettled([
+        escalationsApi.list(),
+        tasksApi.list(),
+        subtasksApi.list(),
+        usersApi.list(),
+      ]);
 
-    async function loadEscalationsData() {
-      setLoading(true);
-      try {
-        const [escRes, tasksRes, usersRes] = await Promise.allSettled([
-          escalationsApi.list(),
-          tasksApi.list(),
-          usersApi.list(),
-        ]);
+      const allEsc = escRes.status === 'fulfilled' && escRes.value ? (Array.isArray(escRes.value) ? escRes.value : escRes.value.data || []) : [];
+      const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
+      const allSubtasks = subtasksRes.status === 'fulfilled' && subtasksRes.value ? (Array.isArray(subtasksRes.value) ? subtasksRes.value : subtasksRes.value.data || []) : [];
+      const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
 
-        if (!isMounted) return;
+      setUsers(allUsers);
+      const myLeader = resolveTeamLead(user, allUsers);
+      setManager(myLeader);
 
-        const allEsc = escRes.status === 'fulfilled' && escRes.value ? (Array.isArray(escRes.value) ? escRes.value : escRes.value.data || []) : [];
-        const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
-        const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
+      const currentUserId = String(user?.id || user?.userId || '');
 
-        setTasks(allTasks);
-        setUsers(allUsers);
+      const myTasks = allTasks.filter((t) => {
+        const assigneeId = String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '');
+        return Boolean(currentUserId && assigneeId === currentUserId);
+      });
 
-        const currentUserId = String(user?.id || user?.userId || '');
-        const myTaskIds = new Set(
-          allTasks
-            .filter((t) => String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '') === currentUserId)
-            .map((t) => String(t.id || t.taskId))
-        );
-
-        const myEsc = allEsc.filter((e) => {
-          const reporterId = String(e.reportedBy || e.reportedById || (typeof e.reporter === 'object' ? e.reporter?.id : e.reporter) || '');
-          const escTaskId = String(e.taskId || e.task_id || (typeof e.task === 'object' ? e.task?.id : e.task) || '');
-          return !currentUserId || reporterId === currentUserId || myTaskIds.has(escTaskId);
+      const mySubtasks = allSubtasks
+        .filter((st) => String(st.assignedTo || st.assignedToId || '') === currentUserId)
+        .map((st) => {
+          const parent = allTasks.find((pt) => String(pt.id || pt.taskId) === String(st.taskId));
+          return {
+            ...st,
+            id: st.id || st.subtaskId,
+            title: st.title || 'Subtask',
+            projectId: parent?.projectId || parent?.project?.id,
+            project: parent?.project,
+            isSubtask: true,
+            parentTaskId: st.taskId,
+            dueDate: st.dueDate || st.due_date || parent?.dueDate,
+            priority: st.priority || parent?.priority || 'Medium',
+          };
         });
 
-        setEscalations(myEsc);
-      } catch (err) {
-        console.error('Error fetching escalations:', err);
-        if (isMounted) toast.error('Could not load escalations');
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }
+      const myDeliverables = [...myTasks.map((t) => ({ ...t, isSubtask: false })), ...mySubtasks];
+      setTasks(myDeliverables);
 
+      const myTaskIds = new Set(
+        myDeliverables.map((t) => String(t.isSubtask ? (t.parentTaskId || t.taskId) : (t.id || t.taskId)))
+      );
+
+      const myEsc = allEsc.filter((e) => {
+        const reporterId = String(e.reportedBy || e.reportedById || (typeof e.reporter === 'object' ? e.reporter?.id : e.reporter) || '');
+        const escTaskId = String(e.taskId || e.task_id || (typeof e.task === 'object' ? e.task?.id : e.task) || '');
+        return Boolean(currentUserId && (reporterId === currentUserId || (escTaskId && myTaskIds.has(escTaskId))));
+      });
+
+      setEscalations(myEsc);
+    } catch (err) {
+      console.error('Error fetching escalations:', err);
+      toast.error('Could not load escalations');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
     loadEscalationsData();
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.id]);
+  }, [loadEscalationsData]);
 
   const metrics = useMemo(() => {
     const total = escalations.length;
@@ -310,11 +333,9 @@ export default function MemberEscalations() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         tasks={tasks}
+        managerId={manager?.id || manager?.userId}
         onSuccess={() => {
-          escalationsApi.list().then((res) => {
-            const data = Array.isArray(res) ? res : res?.data || [];
-            setEscalations(data);
-          });
+          loadEscalationsData();
         }}
       />
 

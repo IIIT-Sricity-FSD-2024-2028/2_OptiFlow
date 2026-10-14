@@ -39,80 +39,92 @@ export default function MemberDashboard() {
   // Blocker Modal state
   const [isBlockerModalOpen, setIsBlockerModalOpen] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadDashboardData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [tasksRes, subtasksRes, escRes, evRes, usersRes, projRes] = await Promise.allSettled([
+        tasksApi.list(),
+        subtasksApi.list(),
+        escalationsApi.list(),
+        evidenceApi.list(),
+        usersApi.list(),
+        projectsApi.list(),
+      ]);
 
-    async function loadDashboardData() {
-      setLoading(true);
-      try {
-        const [tasksRes, subtasksRes, escRes, evRes, usersRes, projRes] = await Promise.allSettled([
-          tasksApi.list(),
-          subtasksApi.list(),
-          escalationsApi.list(),
-          evidenceApi.list(),
-          usersApi.list(),
-          projectsApi.list(),
-        ]);
+      const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
+      const allSubtasks = subtasksRes.status === 'fulfilled' && subtasksRes.value ? (Array.isArray(subtasksRes.value) ? subtasksRes.value : subtasksRes.value.data || []) : [];
+      const allEsc = escRes.status === 'fulfilled' && escRes.value ? (Array.isArray(escRes.value) ? escRes.value : escRes.value.data || []) : [];
+      const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
+      const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
+      const allProjects = projRes.status === 'fulfilled' && projRes.value ? (Array.isArray(projRes.value) ? projRes.value : projRes.value.data || []) : [];
 
-        if (!isMounted) return;
+      const currentUserId = String(user?.id || user?.userId || '');
 
-        const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
-        const allSubtasks = subtasksRes.status === 'fulfilled' && subtasksRes.value ? (Array.isArray(subtasksRes.value) ? subtasksRes.value : subtasksRes.value.data || []) : [];
-        const allEsc = escRes.status === 'fulfilled' && escRes.value ? (Array.isArray(escRes.value) ? escRes.value : escRes.value.data || []) : [];
-        const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
-        const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
-        const allProjects = projRes.status === 'fulfilled' && projRes.value ? (Array.isArray(projRes.value) ? projRes.value : projRes.value.data || []) : [];
+      // Resolve Team Leader using reusable helper
+      const myLeader = resolveTeamLead(user, allUsers);
+      setManager(myLeader);
 
-        const currentUserId = String(user?.id || user?.userId || '');
+      // Filter tasks assigned strictly to current user
+      const myTasks = allTasks.filter((t) => {
+        const assigneeId = String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '');
+        return Boolean(currentUserId && assigneeId === currentUserId);
+      });
 
-        // Resolve Team Leader using reusable helper
-        const myLeader = resolveTeamLead(user, allUsers);
-        setManager(myLeader);
-
-        // Filter tasks assigned to current user
-        const myTasks = allTasks.filter((t) => {
-          const assigneeId = String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '');
-          return !currentUserId || assigneeId === currentUserId || !assigneeId;
+      const mySubtasks = allSubtasks
+        .filter((st) => String(st.assignedTo || st.assignedToId || '') === currentUserId)
+        .map((st) => {
+          const parent = allTasks.find((pt) => String(pt.id || pt.taskId) === String(st.taskId));
+          return {
+            ...st,
+            id: st.id || st.subtaskId,
+            title: st.title || 'Subtask',
+            projectId: parent?.projectId || parent?.project?.id,
+            project: parent?.project,
+            isSubtask: true,
+            parentTaskId: st.taskId,
+            dueDate: st.dueDate || st.due_date || parent?.dueDate,
+            priority: st.priority || parent?.priority || 'Medium',
+          };
         });
 
-        const mySubtasks = allSubtasks.filter((st) => {
-          const assigneeId = String(st.assignedTo || st.assignedToId || '');
-          return assigneeId === currentUserId;
-        });
+      setTasks(myTasks);
+      setSubtasks(mySubtasks);
+      setEscalations(allEsc);
+      setEvidenceList(allEv);
 
-        setTasks(myTasks);
-        setSubtasks(mySubtasks);
-        setEscalations(allEsc);
-        setEvidenceList(allEv);
-
-        if (myTasks.length > 0) {
-          const firstTaskProjId = myTasks[0]?.projectId || (typeof myTasks[0]?.project === 'object' ? myTasks[0]?.project?.id : null);
-          const foundProj = allProjects.find((p) => String(p.id || p.projectId) === String(firstTaskProjId)) || myTasks[0]?.project;
-          setActiveProject(foundProj || allProjects[0] || null);
-        } else if (allProjects.length > 0) {
-          setActiveProject(allProjects[0]);
-        }
-      } catch (err) {
-        console.error('Error loading member dashboard:', err);
-        if (isMounted) toast.error('Failed to load workspace data');
-      } finally {
-        if (isMounted) setLoading(false);
+      if (myTasks.length > 0) {
+        const firstTaskProjId = myTasks[0]?.projectId || (typeof myTasks[0]?.project === 'object' ? myTasks[0]?.project?.id : null);
+        const foundProj = allProjects.find((p) => String(p.id || p.projectId) === String(firstTaskProjId)) || myTasks[0]?.project;
+        setActiveProject(foundProj || allProjects[0] || null);
+      } else if (allProjects.length > 0) {
+        setActiveProject(allProjects[0]);
       }
+    } catch (err) {
+      console.error('Error loading member dashboard:', err);
+      toast.error('Failed to load workspace data');
+    } finally {
+      setLoading(false);
     }
+  }, [user]);
 
+  useEffect(() => {
     loadDashboardData();
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.id, user?.email]);
+  }, [loadDashboardData]);
 
-  const totalAssigned = tasks.length + subtasks.length;
-  const completedTasks = tasks.filter((t) => String(t.status || '').toLowerCase().includes('complete')).length;
-  const inProgressTasks = tasks.filter((t) => {
+  const allDeliverables = React.useMemo(() => {
+    return [
+      ...tasks.map((t) => ({ ...t, isSubtask: false })),
+      ...subtasks,
+    ];
+  }, [tasks, subtasks]);
+
+  const totalAssigned = allDeliverables.length;
+  const completedTasks = allDeliverables.filter((t) => String(t.status || '').toLowerCase().includes('complete')).length;
+  const inProgressTasks = allDeliverables.filter((t) => {
     const s = String(t.status || '').toLowerCase();
     return s.includes('progress') || s.includes('review') || s.includes('active');
   }).length;
-  const overdueTasks = tasks.filter((t) => {
+  const overdueTasks = allDeliverables.filter((t) => {
     const isDone = String(t.status || '').toLowerCase().includes('complete');
     if (isDone || (!t.dueDate && !t.deadline)) return false;
     return new Date(t.dueDate || t.deadline) < new Date();
@@ -228,14 +240,14 @@ export default function MemberDashboard() {
             onClick={() => navigate(PATHS.MEMBER.TASKS)}
             className="text-xs font-semibold"
           >
-            View all ({tasks.length})
+            View all ({allDeliverables.length})
           </Button>
         </div>
 
         <TaskTable
-          tasks={tasks.slice(0, 6)}
+          tasks={allDeliverables.slice(0, 6)}
           visibleColumns={['title', 'project', 'priority', 'status', 'dueDate', 'actions']}
-          onRowClick={(t) => navigate(`/member/tasks/${t.id || t.taskId}`)}
+          onRowClick={(t) => navigate(t.isSubtask ? `/member/tasks/${t.parentTaskId || t.taskId}` : `/member/tasks/${t.id || t.taskId}`)}
         />
       </div>
 
@@ -243,13 +255,10 @@ export default function MemberDashboard() {
       <ReportBlockerModal
         isOpen={isBlockerModalOpen}
         onClose={() => setIsBlockerModalOpen(false)}
-        tasks={tasks}
+        tasks={allDeliverables}
         managerId={manager?.id || manager?.userId}
         onSuccess={() => {
-          tasksApi.list().then((res) => {
-            const data = Array.isArray(res) ? res : res?.data || [];
-            setTasks(data);
-          });
+          loadDashboardData();
         }}
       />
     </div>
