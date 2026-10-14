@@ -7,6 +7,5 @@ export const platformNav = [
     { label: 'Companies', path: PATHS.PLATFORM.COMPANIES, icon: 'Building2' },
     { label: 'Plans', path: PATHS.PLATFORM.PLANS, icon: 'CreditCard' },
     { label: 'Subscriptions', path: PATHS.PLATFORM.SUBSCRIPTIONS, icon: 'Receipt' },
-    { label: 'Admin Users', path: PATHS.PLATFORM.ADMIN_USERS, icon: 'ShieldCheck' },
-    { label: 'Support Access', path: PATHS.PLATFORM.SUPPORT_ACCESS, icon: 'LifeBuoy' },
+    { label: 'Audit Log', path: PATHS.PLATFORM.AUDIT_LOGS, icon: 'FileText' },
 ];

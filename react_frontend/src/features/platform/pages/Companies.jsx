@@ -1,268 +1,174 @@
-import { useState } from 'react';
-import { apiClient } from '../../../services/api/client';
-import { Table } from '../../../shared/components/Table';
-import { Modal } from '../../../shared/components/Modal';
-import styles from './Companies.module.css';
-import { Badge } from '../../../shared/components/Badge';
-import { useApi } from '../../../hooks/useApi';
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Plus, Building2, AlertTriangle } from "lucide-react";
+import { PATHS } from "../../../app/paths";
+import { Pagination } from "../../../shared/components/Pagination";
+import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
+import { useCompanies } from "../hooks/useCompanies";
+import { CompanyFilterBar } from "../components/CompanyFilterBar";
+import { CompanyTable } from "../components/CompanyTable";
 
+export default function PlatformCompanies() {
+  const {
+    companies,
+    total,
+    page,
+    setPage,
+    pageSize,
+    search,
+    setSearch,
+    statusFilter,
+    setStatusFilter,
+    loading,
+    error,
+    updateCompanyStatus,
+  } = useCompanies(10);
 
-const fetchCompaniesApi = () => {
-  return apiClient('/api/platform/companies');
-};
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    company: null,
+    targetStatus: null,
+    loading: false,
+  });
 
-const getBadgeStatus = (status) => {
-  if (status === 'Active') return 'success';
-  if (status === 'Suspended') return 'warning';
-  if (status === 'Closed') return 'danger';
-  return 'default';
-};
+  const handleRequestStatusChange = (company, targetStatus) => {
+    setConfirmModal({
+      isOpen: true,
+      company,
+      targetStatus,
+      loading: false,
+    });
+  };
 
-
-function PlatformCompanies() {
-  const [selectedCompany, setSelectedCompany] = useState(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [isDetailsOpen,setIsDetailsOpen] = useState(false);
-
-  
-
-  const { data: companiesList, loading, error } = 
-  useApi(fetchCompaniesApi);
-
-  //fetching details for a single company on button click
-  const handleOpenDetails = async (companyId)=>{
-    try{
-      setIsDetailsOpen(true);
-      setDetailsLoading(true);
-      setSelectedCompany(null);
-      const res = await apiClient(`/api/platform/companies/${companyId}`);
-      setSelectedCompany(res);
-    }
-    catch(err){
-      console.error('Failed to load company details:',err);
-    }
-    finally{
-      setDetailsLoading(false);
+  const handleConfirmStatusChange = async () => {
+    if (!confirmModal.company || !confirmModal.targetStatus) return;
+    try {
+      setConfirmModal((prev) => ({ ...prev, loading: true }));
+      await updateCompanyStatus(
+        confirmModal.company.id,
+        confirmModal.targetStatus,
+      );
+      setConfirmModal({
+        isOpen: false,
+        company: null,
+        targetStatus: null,
+        loading: false,
+      });
+    } catch (err) {
+      alert(err.message || "Failed to update company status");
+      setConfirmModal((prev) => ({ ...prev, loading: false }));
     }
   };
 
-  //this function is still incomplete. I need to add the edit modal and navigation once it is ready.
-  const handleEdit = (companyId)=>{
-    console.log('Edit company clicked for ID:',companyId);
-  }
+  const getDialogConfig = () => {
+    const { company, targetStatus } = confirmModal;
+    if (!company || !targetStatus)
+      return {
+        title: "",
+        message: "",
+        variant: "primary",
+        confirmText: "Confirm",
+      };
+    if (targetStatus === "Suspended") {
+      return {
+        title: `Suspend: ${company.legalName}`,
+        message: "Users will be blocked from logging in until reactivated.",
+        variant: "danger",
+        confirmText: "Suspend Company",
+      };
+    }
+    if (targetStatus === "Closed") {
+      return {
+        title: `Close: ${company.legalName}`,
+        message: "Permanently close this company and terminate all sessions.",
+        variant: "danger",
+        confirmText: "Close Permanently",
+      };
+    }
+    return {
+      title: `Reactivate: ${company.legalName}`,
+      message: "Users will regain immediate access to workspaces.",
+      variant: "primary",
+      confirmText: "Reactivate Company",
+    };
+  };
 
-  const handleCloseDetails =()=>{
-    setIsDetailsOpen(false);
-    setSelectedCompany(null);
-  }
-
-
-  
-  const columns = [
-    {
-      header:'Company',
-      accessor: 'legalName',
-      render: (row) =>{
-        const users = row.userCount ?? row._count?.users ?? 0;
-        const branches = row.branchCount ?? row._count?.branches??0;
-
-
-
-        return (
-            <div className={styles.companyInfo}>
-              <span className={styles.companyName}>
-                {row.legalName || 'Unnamed Company'}
-              </span>
-              <span className={styles.companyMeta}>
-                {users} users - {branches} branches
-              </span>
-            </div>
-        );
-      },
-    },
-    {
-      header: 'Tenant ID',
-      accessor: 'id',
-      render:(row)=> <code className={styles.tenantIdCode}>{row.id}</code>
-    },
-    {
-      header:'Status',
-      accessor:'status',
-      render:(row)=>(
-        <Badge status={getBadgeStatus(row.status)}>
-          {row.status || '---'}
-        </Badge>
-      )
-    },
-    {
-      header:'Registered',
-      accessor:'createdAt',
-      render:(row)=>(
-        row.createdAt ? new Date(row.createdAt).toLocaleDateString():'--'
-      )
-    },
-    {
-      header:'Actions',
-      render:(row)=>(
-        <div className={styles.actionsWrapper} >
-          <button type="button" className={styles.actionBtn} onClick={()=>handleOpenDetails(row.id)}>
-            Details
-          </button>
-          <button type="button" className={styles.actionBtn} onClick={()=>handleEdit(row.id)}>
-            Edit
-          </button>
-
-        </div>
-      ),
-    },
-  ];
+  const dialogConfig = getDialogConfig();
 
   return (
-    <div className={styles.container}>
-      <div className={styles.headerSection}>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
-          <h1 className={styles.title}>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Building2 className="w-6 h-6 text-slate-700" />
             Tenant Companies
           </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Manage provisioned organizations, accounts, subscription tiers, and
+            lifecycle statuses.
+          </p>
         </div>
-      </div>
-
-      {/* API Error State*/}
-      {error && <div className={styles.errorBanner}>{error}</div>}
-
-      {/* table */}
-      <div className={styles.tableCard}>
-        <div className={styles.tableCardHeader}>
-            <h2 className={styles.sectionTitle}>Registered Organisations Overview</h2>
-            
-        </div>
-
-          <Table
-            columns={columns}
-            data={companiesList?.items || []}
-            loading={loading}
-            emptyMessage="No Companies Registered"
-          />
-      </div>
-
-      {/*Modal for displaying all the details */}
-      <Modal
-        isOpen={isDetailsOpen}
-        onClose={handleCloseDetails}
-        title={selectedCompany?.legalName || 'Un-Named Corp'}
-        footer={
-          <button
-            type="button"
-            className={styles.actionBtn}
-            onClick={handleCloseDetails}
-            >
-            Close
-          </button>
-        }
+        <Link
+          to={PATHS.PLATFORM.COMPANY_NEW}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all duration-150 self-start sm:self-auto"
         >
+          <Plus className="w-4 h-4" />
+          <span>Provision Company</span>
+        </Link>
+      </div>
 
-        {detailsLoading ? (
-          <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-            Loading Company Details...
-          </div>
-        ) : selectedCompany ? (
-          <div className={styles.detailsGrid}>
-            <div className={styles.detailsRow}>
-              <span className={styles.detailsLabel}>Tenant ID:</span>
-              <code className={styles.tenantIdCode}>{selectedCompany.id}</code>
-            </div>
+      {/* Global Error Banner */}
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm">
+          <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-            <div className={styles.detailsRow}>
-              <span className={styles.detailsLabel}>Legal Name:</span>
-              <span className={styles.detailsValue}>{selectedCompany.legalName || '--'}</span>
-            </div>
+      {/* Search & Filter Bar */}
+      <CompanyFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+      />
 
-            <div className={styles.detailsRow}>
-              <span className={styles.detailsLabel}>Account Status:</span>
-              <Badge status={getBadgeStatus(selectedCompany.status)}>
-                {selectedCompany.status || 'Active'}
-              </Badge>
-            </div>
+      {/* Main Companies Table */}
+      <CompanyTable
+        companies={companies}
+        loading={loading}
+        onRequestStatusChange={handleRequestStatusChange}
+      />
 
-            <div className={styles.detailsRow}>
-              <span className={styles.detailsLabel}>Registered Date:</span>
-              <span className={styles.detailsValue}>
-                {selectedCompany.createdAt
-                  ? new Date(selectedCompany.createdAt).toLocaleDateString()
-                  : '--'}
-              </span>
-            </div>
+      {/* Shared Pagination Controls */}
+      <Pagination
+        currentPage={page}
+        totalItems={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+      />
 
-            {/* Subscriptions */}
-            <div className={styles.detailsSection}>
-              <div className={styles.detailsSectionTitle}>Subscriptions</div>
-              {selectedCompany.subscriptions && selectedCompany.subscriptions.length > 0 ? (
-                <ul className={styles.subscriptionList}>
-                  {selectedCompany.subscriptions.map((s) => (
-                    <li key={s.id || s.planId} className={styles.subscriptionItem}>
-                      <div>
-                        <strong>{s.plan?.name || '--'}</strong>
-                        {s.currentPeriodEnd && (
-                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                            Renews at: {new Date(s.currentPeriodEnd).toLocaleDateString()}
-                          </div>
-                        )}
-                      </div>
-                      <Badge status={getBadgeStatus(s.status)}>
-                        {s.status}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
-                  No active subscriptions found.
-                </p>
-              )}
-            </div>
-
-            {/* Branches */}
-            <div className={styles.detailsSection}>
-              <div className={styles.detailsSectionTitle}>
-                Branches ({selectedCompany.branches?.length || 0})
-              </div>
-              {selectedCompany.branches && selectedCompany.branches.length > 0 ? (
-                <ul className={styles.subscriptionList}>
-                  {selectedCompany.branches.map((b) => (
-                    <li key={b.id} className={styles.subscriptionItem}>
-                      <div>
-                        <strong>{b.name || b.branchName || 'Branch'}</strong>
-                        {b.isHeadquarters && (
-                          <span style={{ fontSize: '11px', color: '#6366f1', marginLeft: '6px' }}>
-                            (HQ)
-                          </span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: '12px', color: '#64748b' }}>
-                        {b.city || b.location || ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
-                  No branches configured.
-                </p>
-              )}
-            </div>
-          </div>
-        ) : null}
-      
-
-      </Modal>
-
-      
-
+      {/* ConfirmDialog for Suspend, Reactivate, and Close */}
+      <ConfirmDialog
+        isOpen={confirmModal.isOpen}
+        onCancel={() =>
+          !confirmModal.loading &&
+          setConfirmModal({
+            isOpen: false,
+            company: null,
+            targetStatus: null,
+            loading: false,
+          })
+        }
+        onConfirm={handleConfirmStatusChange}
+        title={dialogConfig.title}
+        message={dialogConfig.message}
+        confirmText={dialogConfig.confirmText}
+        cancelText="Cancel"
+        variant={dialogConfig.variant}
+        loading={confirmModal.loading}
+      />
     </div>
-  )
-
-
+  );
 }
-
-export default PlatformCompanies;
-

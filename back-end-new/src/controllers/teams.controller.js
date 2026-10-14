@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError,ConflictError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
@@ -135,7 +135,8 @@ export async function createTeam(req, res, next) {
 
     // Record audit log
     try {
-      await createSystemAuditLog({companyId: req.user.companyId,
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
         teamId: team.id,
         action: AUDIT_ACTIONS.CREATE,
         performedById: req.user.id,
@@ -203,7 +204,8 @@ export async function updateTeam(req, res, next) {
 
     // Record audit log
     try {
-      await createSystemAuditLog({companyId: req.user.companyId,
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
         teamId: id,
         action: AUDIT_ACTIONS.UPDATE,
         performedById: req.user.id,
@@ -254,7 +256,8 @@ export async function deleteTeam(req, res, next) {
 
     // Record audit log
     try {
-      await createSystemAuditLog({companyId: req.user.companyId,
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
         teamId: id,
         action: AUDIT_ACTIONS.DELETE,
         performedById: req.user.id,

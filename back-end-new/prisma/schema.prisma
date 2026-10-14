@@ -88,6 +88,8 @@ model PlatformSupportAccess {
   reason      String
   grantedAt   DateTime          @default(now())
   expiresAt   DateTime
+  revokedAt   DateTime?
+  revokedBy   String?
   actionLog   Json              @default("[]") // Append-only JSON array of admin actions
   revokedAt   DateTime?
   revokedBy   String?
