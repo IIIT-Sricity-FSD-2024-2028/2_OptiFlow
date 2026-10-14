@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
@@ -13,7 +13,19 @@ import { Table } from "../../../shared/components/Table";
 import { Modal } from "../../../shared/components/Modal";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { FormField, Input, Select } from "../../../shared/components/FormField";
+import { Pagination } from "../../../shared/components/Pagination";
 import { formatDate } from "../../../shared/utils/formatDate";
+import {
+  ShieldCheck,
+  Building2,
+  KeyRound,
+  ShieldAlert,
+  Plus,
+  RotateCw,
+  ExternalLink,
+} from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 // WHY: HrRoleAssignments provides the scoped access administration console.
 // It allows HR Administrators and Platform Admins to bind users to specific operational roles
@@ -22,7 +34,7 @@ export default function HrRoleAssignments() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const { toast } = useToast();
+  const toast = useToast();
 
   // Core state
   const [assignments, setAssignments] = useState([]);
@@ -31,6 +43,7 @@ export default function HrRoleAssignments() {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,7 +53,7 @@ export default function HrRoleAssignments() {
   const [prevUrlUser, setPrevUrlUser] = useState(urlUserParam);
   const [userFilter, setUserFilter] = useState(urlUserParam || "all");
 
-  // Adjust state during render when URL query parameter changes (React recommended pattern)
+  // Adjust state during render when URL query parameter changes
   if (urlUserParam !== prevUrlUser) {
     setPrevUrlUser(urlUserParam);
     if (urlUserParam) {
@@ -71,8 +84,6 @@ export default function HrRoleAssignments() {
   ].includes(currentUser?.role);
 
   // 1. DATA HYDRATION
-  // WHY: Parallel fetching of assignments, users, roles, and branches avoids waterfalls
-  // and populates all selection menus required for role grant workflows.
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -97,47 +108,25 @@ export default function HrRoleAssignments() {
     }
   }, []);
 
-  // Initial load without synchronous setState in effect body
   useEffect(() => {
-    let isMounted = true;
-    async function loadInitial() {
-      try {
-        const [assignmentsData, usersData, rolesData, branchesData] = await Promise.all([
-          apiClient("/role-assignments"),
-          apiClient("/users").catch(() => []),
-          apiClient("/roles").catch(() => []),
-          apiClient("/branches").catch(() => []),
-        ]);
-        if (isMounted) {
-          setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
-          setUsers(Array.isArray(usersData) ? usersData : []);
-          setRoles(Array.isArray(rolesData) ? rolesData : []);
-          setBranches(Array.isArray(branchesData) ? branchesData : []);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error("[HrRoleAssignments] Failed to load assignments telemetry:", err);
-          setError(err.message || "Failed to load role assignments from server.");
-          setLoading(false);
-        }
-      }
-    }
-    loadInitial();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    fetchData();
+  }, [fetchData]);
+
+  // Reset pagination on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, roleFilter, scopeFilter, userFilter]);
 
   // Derived Filtered Role Assignments
   const filteredAssignments = useMemo(() => {
     return assignments.filter((item) => {
-      const query = searchQuery.toLowerCase();
+      const query = searchQuery.toLowerCase().trim();
       const userName = item.user?.fullName?.toLowerCase() || "";
       const userEmail = item.user?.email?.toLowerCase() || "";
       const roleLabel = item.role?.label?.toLowerCase() || "";
 
       const matchesSearch =
+        !query ||
         userName.includes(query) ||
         userEmail.includes(query) ||
         roleLabel.includes(query);
@@ -149,6 +138,11 @@ export default function HrRoleAssignments() {
       return matchesSearch && matchesRole && matchesScope && matchesUser;
     });
   }, [assignments, searchQuery, roleFilter, scopeFilter, userFilter]);
+
+  const paginatedAssignments = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredAssignments.slice(start, start + PAGE_SIZE);
+  }, [filteredAssignments, currentPage]);
 
   // Derived KPI Telemetry
   const metrics = useMemo(() => {
@@ -259,9 +253,13 @@ export default function HrRoleAssignments() {
               {initials}
             </div>
             <div>
-              <span className="font-semibold text-slate-900 block leading-tight">
+              <Link
+                to={PATHS.HR.USER_DETAIL.replace(":id", row.userId)}
+                className="font-semibold text-slate-900 hover:text-blue-600 transition-colors block leading-tight"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {row.user?.fullName || "Unknown User"}
-              </span>
+              </Link>
               <span className="text-xs text-slate-400">{row.user?.email}</span>
             </div>
           </div>
@@ -284,7 +282,7 @@ export default function HrRoleAssignments() {
       render: (row) => {
         const branchMatch =
           row.scopeType === "Branch"
-            ? branches.find((b) => b.id === row.scopeId)?.name || `Branch (${row.scopeId.substring(0, 8)}...)`
+            ? branches.find((b) => b.id === row.scopeId)?.name || `Branch (${row.scopeId?.substring(0, 8)}...)`
             : null;
 
         return (
@@ -296,6 +294,14 @@ export default function HrRoleAssignments() {
             {branchMatch && (
               <span className="text-xs text-slate-500 font-medium">({branchMatch})</span>
             )}
+            <Link
+              to={row.scopeType === "Branch" ? `/compliance/bindings?scopeType=Branch&scopeId=${row.scopeId}` : PATHS.COMPLIANCE.BINDINGS}
+              className="inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800"
+              title="View compliance rules for this scope"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="w-3 h-3 ml-0.5 text-indigo-400" />
+            </Link>
           </div>
         );
       },
@@ -350,26 +356,34 @@ export default function HrRoleAssignments() {
             Scoped Role Assignments
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Authorize operational roles, govern scope boundaries, and review access privileges
+            Authorize operational roles, govern scope boundaries, and review access privileges across projects and compliance
           </p>
         </div>
 
-        {/* Zero-Clutter Gating: Completely unrendered from React DOM if ungranted */}
-        {canManageAssignments && (
-          <Button
-            variant="primary"
-            onClick={() => {
-              setSelectedUserId(users[0]?.id || "");
-              setSelectedRoleId(roles[0]?.id || "");
-              setSelectedScopeType("Company");
-              setSelectedBranchId(branches[0]?.id || "");
-              setModalError("");
-              setIsAssignModalOpen(true);
-            }}
-          >
-            + Assign Role
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={fetchData}>
+            <RotateCw className="w-4 h-4 mr-1.5" />
+            Refresh
           </Button>
-        )}
+
+          {/* Zero-Clutter Gating: Completely unrendered from React DOM if ungranted */}
+          {canManageAssignments && (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setSelectedUserId(users[0]?.id || "");
+                setSelectedRoleId(roles[0]?.id || "");
+                setSelectedScopeType("Company");
+                setSelectedBranchId(branches[0]?.id || "");
+                setModalError("");
+                setIsAssignModalOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Assign Role
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Global Error Notice */}
@@ -388,21 +402,25 @@ export default function HrRoleAssignments() {
           label="Total Grants"
           value={metrics.total}
           hint="Active role bindings"
+          icon={KeyRound}
         />
         <StatCard
           label="Company-Scoped"
           value={metrics.companyScoped}
           hint="Organization-wide access"
+          icon={Building2}
         />
         <StatCard
           label="Branch-Scoped"
           value={metrics.branchScoped}
           hint="Office-specific boundary"
+          icon={ShieldCheck}
         />
         <StatCard
           label="Elevated Privileges"
           value={metrics.elevated}
           hint="Admin & governance roles"
+          icon={ShieldAlert}
         />
       </div>
 
@@ -515,13 +533,25 @@ export default function HrRoleAssignments() {
             }
           />
         ) : (
-          <Table
-            columns={columns}
-            data={filteredAssignments}
-            onRowClick={(row) =>
-              row.userId && navigate(PATHS.HR.USER_DETAIL.replace(":id", row.userId))
-            }
-          />
+          <>
+            <Table
+              columns={columns}
+              data={paginatedAssignments}
+              onRowClick={(row) =>
+                row.userId && navigate(PATHS.HR.USER_DETAIL.replace(":id", row.userId))
+              }
+            />
+            {filteredAssignments.length > PAGE_SIZE && (
+              <div className="border-t border-slate-200/80 px-4 py-3 bg-slate-50/50">
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={filteredAssignments.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -619,8 +649,10 @@ export default function HrRoleAssignments() {
         isOpen={Boolean(revokeTarget)}
         title="Confirm Role Revocation"
         message={`Are you sure you want to revoke the "${revokeTarget?.role?.label}" role from ${revokeTarget?.user?.fullName}? Their authority for this role scope will be immediately terminated.`}
-        confirmLabel={isRevoking ? "Revoking..." : "Revoke Role"}
-        confirmVariant="danger"
+        confirmText="Revoke Role"
+        cancelText="Cancel"
+        variant="danger"
+        loading={isRevoking}
         onConfirm={handleRevokeRole}
         onCancel={() => !isRevoking && setRevokeTarget(null)}
       />

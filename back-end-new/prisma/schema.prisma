@@ -23,6 +23,7 @@ model Plan {
   maxComplianceRules        Int?
   auditLogRetentionDays     Int
   allowsIntegrations        Boolean
+  isActive                  Boolean @default(true)
 
   subscriptions Subscription[]
 
@@ -46,6 +47,7 @@ model Subscription {
 
   @@index([companyId])
   @@index([planId])
+  @@index([status, currentPeriodEnd])
   @@map("subscriptions")
 }
 
@@ -68,9 +70,11 @@ model PlatformAdminUser {
   fullName     String
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime? @updatedAt
+  updatedAt         DateTime?              @updatedAt
+  passwordChangedAt DateTime?
 
-  supportAccesses PlatformSupportAccess[]
+  supportAccesses   PlatformSupportAccess[]
+  platformAuditLogs PlatformAuditLog[]
 
   @@map("platform_admin_users")
 }
@@ -85,6 +89,8 @@ model PlatformSupportAccess {
   grantedAt   DateTime          @default(now())
   expiresAt   DateTime
   actionLog   Json              @default("[]") // Append-only JSON array of admin actions
+  revokedAt   DateTime?
+  revokedBy   String?
 
   @@index([adminUserId])
   @@index([companyId])
@@ -119,10 +125,32 @@ model Company {
   complianceCategories ComplianceCategory[]
   escalations          Escalation[]
   complianceEvidence   ComplianceEvidence[]
+  platformAuditLogs    PlatformAuditLog[]
 
   updatedAt DateTime @updatedAt
 
+  @@index([status])
   @@map("companies")
+}
+
+model PlatformAuditLog {
+  id          String            @id @default(uuid())
+  adminUserId String
+  adminUser   PlatformAdminUser @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  action      String
+  entityType  String
+  entityId    String
+  companyId   String?
+  company     Company?          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  before      Json?
+  after       Json?
+  ip          String?
+  createdAt   DateTime          @default(now())
+
+  @@index([createdAt])
+  @@index([companyId])
+  @@index([adminUserId])
+  @@map("platform_audit_logs")
 }
 
 enum CompanyStatus {
@@ -168,6 +196,7 @@ model User {
   ownedComplianceCategories ComplianceCategory[]  @relation("ComplianceCategoryOwner")
   notifications             Notification[]
   complianceAuditLogs       ComplianceAuditLog[]
+  teamMembers               TeamMember[]
 
   systemAuditLogsTargeted   SystemAuditLog[]  @relation("SystemAuditTargetUser")
   systemAuditLogsPerformed  SystemAuditLog[]  @relation("SystemPerformedBy")
@@ -180,7 +209,7 @@ model User {
 
 model Permission {
   id          String @id @default(uuid())
-  slug        String
+  slug        String @unique
   module      String
   description String
 
@@ -192,7 +221,7 @@ model Permission {
 
 model RoleTemplate {
   id          String             @id @default(uuid())
-  slug        String?
+  slug        String?            @unique
   origin      RoleTemplateOrigin @default(platform_predefined)
   label       String
   description String?
@@ -324,13 +353,15 @@ model TeamMember {
   id        String   @id @default(uuid())
   companyId String
   teamId    String
-  team      Team     @relation(fields: [teamId], references: [id])
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   role      String?  @default("Member")
   joinedAt  DateTime @default(now())
 
   @@unique([teamId, userId])
   @@index([teamId])
+  @@index([userId])
   @@map("team_members")
 }
 

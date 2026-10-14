@@ -7,14 +7,22 @@ export const Table = ({
   emptyMessage = 'No records found',
   onRowClick,
   rowClassName,
+  borderless = false,
+  noSlider = false,
+  className = '',
 }) => {
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${borderless ? styles.borderless : ''} ${noSlider ? styles.noSlider : ''} ${className}`}>
       <table className={styles.table}>
         <thead className={styles.thead}>
           <tr>
             {columns.map((col, index) => (
-              <th key={col.key || col.accessor || index} className={styles.th}>
+              <th
+                key={col.key || col.accessor || index}
+                className={`${styles.th} ${
+                  col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
+                } ${col.headerClassName || col.className || ''}`}
+              >
                 {col.header}
               </th>
             ))}
@@ -39,7 +47,7 @@ export const Table = ({
               <tr
                 key={row.id || rowIndex}
                 onClick={() => onRowClick && onRowClick(row)}
-                className={`${onRowClick ? styles.clickableRow : ''} ${rowClassName?.(row) || ''}`}
+                className={`group ${onRowClick ? styles.clickableRow : ''} ${rowClassName?.(row) || ''}`}
               >
                 {columns.map((col, colIndex) => {
                   let cellContent;
@@ -52,7 +60,12 @@ export const Table = ({
                   }
 
                   return (
-                    <td key={col.key || col.accessor || colIndex} className={styles.td}>
+                    <td
+                      key={col.key || col.accessor || colIndex}
+                      className={`${styles.td} ${
+                        col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
+                      } ${col.className || ''}`}
+                    >
                       {cellContent !== undefined && cellContent !== null ? cellContent : '—'}
                     </td>
                   );

@@ -34,7 +34,36 @@ const USER_SELECT_FIELDS = {
     },
     orderBy: { grantedAt: 'desc' },
   },
+  teamMembers: {
+    include: {
+      team: {
+        select: {
+          id: true,
+          name: true,
+          branch: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { joinedAt: 'asc' },
+  },
 };
+
+function formatUserResponse(u) {
+  if (!u) return u;
+  const teams = (u.teamMembers || []).map((tm) => ({
+    teamId: tm.team?.id,
+    teamName: tm.team?.name,
+    role: tm.role || 'Member',
+    branchId: tm.team?.branch?.id,
+    branchName: tm.team?.branch?.name,
+    joinedAt: tm.joinedAt,
+  }));
+  return {
+    ...u,
+    teams,
+    primaryTeam: teams[0] || null,
+  };
+}
 
 /**
  * GET /users & GET /api/users
@@ -50,7 +79,7 @@ export async function listUsers(req, res, next) {
 
     res.status(200).json({
       success: true,
-      data: users,
+      data: users.map(formatUserResponse),
     });
   } catch (err) {
     next(err);
@@ -116,7 +145,7 @@ export async function getUserById(req, res, next) {
 
     res.status(200).json({
       success: true,
-      data: user,
+      data: formatUserResponse(user),
     });
   } catch (err) {
     next(err);
@@ -300,6 +329,10 @@ export async function updateUser(req, res, next) {
       ROLES.COMPANY_OWNER,
       ROLES.SYSTEM_ADMIN,
       ROLES.ACCESS_GOVERNANCE,
+      ROLES.HR_MANAGER,
+      'hr_manager',
+      ROLES.SUPERUSER,
+      'superuser',
     ]);
 
     if (!isSelf && !isAdmin) {
@@ -483,5 +516,55 @@ export async function deactivateUser(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * PATCH /users/:id/reactivate & POST /users/:id/reactivate
+ * Reactivates an employee account (resets isActive to true, clears deactivatedAt).
+ */
+export async function reactivateUser(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const targetUser = await prisma.user.findFirst({
+      where: { id, companyId: req.user.companyId },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundError(`User with ID ${id} not found in this company`);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        isActive: true,
+        deactivatedAt: null,
+      },
+      select: USER_SELECT_FIELDS,
+    });
+
+    // Record audit log
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        targetUserId: id,
+        action: AUDIT_ACTIONS.STATUS_CHANGE,
+        performedById: req.user.id,
+        oldValue: { isActive: false, deactivatedAt: targetUser.deactivatedAt },
+        newValue: { isActive: true, deactivatedAt: null },
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: Audit record logging during user reactivation:', auditErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `User "${updatedUser.fullName}" reactivated successfully`,
+      data: updatedUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 
 

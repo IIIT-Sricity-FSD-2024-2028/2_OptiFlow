@@ -70,14 +70,19 @@ export function toCanonicalRole(roleString) {
  * Strict comparison - no substring/fuzzy matching to prevent accidental privilege escalation.
  */
 export function hasRole(userRoleLabelOrSlug, allowedRoles = []) {
-  if (!userRoleLabelOrSlug || !allowedRoles || !Array.isArray(allowedRoles) || allowedRoles.length === 0) {
+  if (!userRoleLabelOrSlug || !allowedRoles) {
+    return false;
+  }
+
+  const flatAllowed = (Array.isArray(allowedRoles) ? allowedRoles.flat(Infinity) : [allowedRoles]).filter(Boolean);
+  if (flatAllowed.length === 0) {
     return false;
   }
 
   const userCanonical = toCanonicalRole(userRoleLabelOrSlug);
   const userNorm = normalizeRole(userRoleLabelOrSlug);
 
-  return allowedRoles.some((allowed) => {
+  return flatAllowed.some((allowed) => {
     if (!allowed) return false;
     const allowedCanonical = toCanonicalRole(allowed);
     const allowedNorm = normalizeRole(allowed);

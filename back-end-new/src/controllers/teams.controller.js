@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ValidationError,ConflictError } from '../utils/errors.js';
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
@@ -26,11 +26,18 @@ export async function listTeams(req, res, next) {
         branch: { select: { id: true, name: true, companyId: true } },
         projects: { select: { id: true, name: true, status: true } },
         teamMembers: {
-          select: {
-            id: true,
-            userId: true,
-            role: true,
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                jobTitle: true,
+                isActive: true,
+              },
+            },
           },
+          orderBy: { joinedAt: 'asc' },
         },
       },
       orderBy: { name: 'asc' },
@@ -56,6 +63,20 @@ export async function getTeamById(req, res, next) {
       },
       include: {
         branch: { select: { id: true, name: true, companyId: true } },
+        teamMembers: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                jobTitle: true,
+                isActive: true,
+              },
+            },
+          },
+          orderBy: { joinedAt: 'asc' },
+        },
         projects: {
           include: {
             tasks: { where: { deletedAt: null }, select: { id: true, title: true, status: true } },
@@ -246,6 +267,84 @@ export async function deleteTeam(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Team deleted successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function addTeamMember(req, res, next) {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const userId = (body.userId || body.user_id || '').trim();
+    const role = (body.role || 'Member').trim();
+
+    validateRequired({ userId }, ['userId']);
+
+    const team = await prisma.team.findFirst({
+      where: { id, branch: { companyId: req.user.companyId } },
+    });
+
+    if (!team) {
+      throw new NotFoundError(`Team with ID ${id} not found in this company`);
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { id: userId, companyId: req.user.companyId },
+    });
+
+    if (!user) {
+      throw new NotFoundError(`User with ID ${userId} not found in this company`);
+    }
+
+    const membership = await prisma.teamMember.upsert({
+      where: {
+        teamId_userId: { teamId: id, userId },
+      },
+      create: {
+        companyId: req.user.companyId,
+        teamId: id,
+        userId,
+        role,
+      },
+      update: {
+        role,
+      },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Team member added successfully',
+      data: membership,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeTeamMember(req, res, next) {
+  try {
+    const { id, userId } = req.params;
+
+    const team = await prisma.team.findFirst({
+      where: { id, branch: { companyId: req.user.companyId } },
+    });
+
+    if (!team) {
+      throw new NotFoundError(`Team with ID ${id} not found in this company`);
+    }
+
+    await prisma.teamMember.deleteMany({
+      where: { teamId: id, userId },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Team member removed successfully',
     });
   } catch (err) {
     next(err);

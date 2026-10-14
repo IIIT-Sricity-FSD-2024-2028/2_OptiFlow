@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2,CreditCard,Users,ShieldAlert, Layers, KeyRound, UserCheck} from 'lucide-react';
+import { Building2, CreditCard, Users, ShieldAlert, Layers, KeyRound, UserCheck } from 'lucide-react';
 
 import { apiClient } from '../../../services/api/client';
 import { PATHS } from '../../../app/paths';
 
-//reusable components 
+// Reusable components 
 import { StatCard } from '../../../shared/components/StatCard';
 import { ShortcutCard } from '../../../shared/components/ShortcutCard';
 import { Table } from '../../../shared/components/Table';
 
-//importing styles as separate file
+// Styles
 import styles from './Dashboard.module.css';
 
 export default function PlatformDashboard() {
@@ -69,8 +69,8 @@ export default function PlatformDashboard() {
           status === 'Active'
             ? styles.badgeSuccess
             : status === 'Suspended'
-            ? styles.badgeWarning
-            : styles.badgeNeutral;
+              ? styles.badgeWarning
+              : styles.badgeNeutral;
         return <span className={badgeClass}>{status}</span>;
       },
     },
@@ -104,7 +104,7 @@ export default function PlatformDashboard() {
 
       {error && <div className={styles.errorBanner}>{error}</div>}
 
-      {/* Shortcut cards displaying code using props */}
+      {/* 1. Stat cards */}
       <div className={styles.statsGrid}>
         <StatCard
           title="Total Tenants"
@@ -144,7 +144,6 @@ export default function PlatformDashboard() {
         <div className={styles.sectionHeader}>
           <div>
             <h2 className={styles.sectionTitle}>Platform Management Shortcuts</h2>
-            {/* <p className={styles.sectionSubtitle}>Quick navigation to core platform operations</p> */}
           </div>
         </div>
 
@@ -187,7 +186,6 @@ export default function PlatformDashboard() {
         <div className={styles.tableCardHeader}>
           <div>
             <h2 className={styles.sectionTitle}>Registered Tenant Organizations</h2>
-            {/* <p className={styles.sectionSubtitle}>Recently onboarded companies and their active plan statuses</p> */}
           </div>
           <Link to={PATHS.PLATFORM.COMPANIES} className={styles.viewAllLink}>
             View All Tenants &rarr;

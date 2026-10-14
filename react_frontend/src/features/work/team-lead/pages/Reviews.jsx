@@ -19,6 +19,32 @@ const statusVariant = (s) => {
   return 'warning';
 };
 
+const getDocumentName = (evidence) => {
+  if (!evidence) return 'Deliverable Artifact';
+  if (evidence.fileName) return evidence.fileName;
+
+  const rawUrl = evidence.fileUrl || evidence.file_url || evidence.file || '';
+  if (!rawUrl) return evidence.title || 'Attached Document';
+
+  let name = rawUrl;
+  if (name.includes('/')) {
+    name = name.split('/').pop() || name;
+  }
+
+  // Strip timestamp prefix if any (e.g. 1739123456789-file.pdf -> file.pdf)
+  name = name.replace(/^\d+[-_]/, '');
+
+  try {
+    name = decodeURIComponent(name);
+  } catch (_) {}
+
+  if (!name || name.startsWith('http') || name.startsWith('supabase')) {
+    return evidence.title || 'Attached Deliverable';
+  }
+
+  return name;
+};
+
 export default function TeamLeadReviews() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -187,11 +213,15 @@ export default function TeamLeadReviews() {
                   <Badge status={statusVariant(selected.status)}>{String(selected.status || 'Pending').replace(/_/g, ' ')}</Badge>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-10 text-center">
-                  <svg className="w-12 h-12 text-blue-500 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  <p className="text-sm font-medium text-gray-700">{selected.fileUrl || selected.file_url || selected.file || selected.fileName || 'document.pdf'}</p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 max-w-md mx-auto truncate">
+                    {getDocumentName(selected)}
+                  </p>
                   {(selected.fileUrl || selected.file_url || selected.file) && (() => {
                     const rawUrl = selected.fileUrl || selected.file_url || selected.file || '';
                     const isExternal = rawUrl.startsWith('http://') || rawUrl.startsWith('https://');
@@ -200,16 +230,22 @@ export default function TeamLeadReviews() {
                       ? rawUrl
                       : `${apiBase}/api/evidence/${selected.id}/file?token=${encodeURIComponent(sessionStorage.getItem('authToken') || '')}`;
                     return (
-                      <a href={openDocUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs font-semibold text-blue-600 hover:underline">
-                        Open document ↗
+                      <a
+                        href={openDocUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:bg-gray-50 rounded-md text-xs font-semibold shadow-xs transition-colors"
+                      >
+                        <span>Open Document</span>
+                        <span>↗</span>
                       </a>
                     );
                   })()}
                   {(selected.task?.title || selected.taskTitle || selected.violation?.rule?.name) && (
-                    <p className="mt-3 text-sm text-gray-600">
+                    <p className="mt-3 text-xs text-gray-500">
                       {selected.task?.title || selected.taskTitle
-                        ? <>Task: <span className="font-semibold text-gray-900">{selected.task?.title || selected.taskTitle}</span></>
-                        : <>Rule: <span className="font-semibold text-gray-900">{selected.violation.rule.name}</span></>}
+                        ? <>Related Task: <span className="font-semibold text-gray-700">{selected.task?.title || selected.taskTitle}</span></>
+                        : <>Compliance Rule: <span className="font-semibold text-gray-700">{selected.violation.rule.name}</span></>}
                     </p>
                   )}
                 </div>

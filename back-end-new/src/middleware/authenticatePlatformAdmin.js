@@ -4,22 +4,47 @@ import { prisma } from '../config/prisma.js';
 import { UnauthorizedError, ForbiddenError, AppError } from '../utils/errors.js';
 
 /**
+ * Extracts the JWT from cookies (httpOnly) or Authorization Bearer header.
+ */
+function extractToken(req) {
+  // 1. Try reading from httpOnly cookie first
+  if (req.cookies && req.cookies.token) {
+    return req.cookies.token.trim();
+  }
+
+  // Fallback: parse raw Cookie header if cookie-parser middleware is not used
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    const cookies = cookieHeader.split(';').map((c) => c.trim());
+    for (const cookie of cookies) {
+      if (cookie.startsWith('token=')) {
+        const val = cookie.substring(6).trim();
+        if (val) return decodeURIComponent(val);
+      }
+    }
+  }
+
+  // 2. Fallback to Authorization: Bearer <token> for backward compatibility
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7).trim();
+  }
+
+  return null;
+}
+
+/**
  * Authenticates Platform Administrators.
- * Ensures the token belongs specifically to a platform admin identity
- * and loads active PlatformAdminUser from database.
+ * Ensures the token belongs specifically to a platform admin identity,
+ * validates against passwordChangedAt, and loads active PlatformAdminUser from database.
  * Explicitly rejects regular tenant tokens.
  */
 export async function authenticatePlatformAdmin(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extractToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedError('Platform authentication required: Bearer token is missing');
-    }
-
-    const token = authHeader.substring(7).trim();
     if (!token) {
-      throw new UnauthorizedError('Platform authentication required: Bearer token is empty');
+      throw new UnauthorizedError('Platform authentication required: token is missing from cookie or Authorization header');
     }
 
     if (!env.JWT_SECRET) {
@@ -56,6 +81,15 @@ export async function authenticatePlatformAdmin(req, res, next) {
 
     if (!adminUser.isActive) {
       throw new UnauthorizedError('Platform authentication failed: Platform admin account is deactivated');
+    }
+
+    // Reject tokens issued prior to password change
+    if (adminUser.passwordChangedAt) {
+      const tokenIatMs = (decoded.iat || 0) * 1000;
+      // Allow 1 second tolerance for clock skew during token issuance
+      if (tokenIatMs < adminUser.passwordChangedAt.getTime() - 1000) {
+        throw new UnauthorizedError('Platform session expired due to password change. Please log in again.');
+      }
     }
 
     req.platformAdmin = {

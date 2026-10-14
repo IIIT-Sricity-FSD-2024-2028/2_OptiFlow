@@ -21,7 +21,16 @@ export const apiClient = async (endpoint, options = {}) => {
       ? JSON.stringify(options.body)
       : options.body;
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const requestUrl =
+    endpoint.startsWith('http://') || endpoint.startsWith('https://')
+      ? endpoint
+      : API_URL.endsWith('/api') && cleanEndpoint.startsWith('/api/')
+        ? `${API_URL}${cleanEndpoint.slice(4)}`
+        : `${API_URL}${cleanEndpoint}`;
+
+  const response = await fetch(requestUrl, {
+    credentials: 'include',
     ...options,
     method,
     headers,

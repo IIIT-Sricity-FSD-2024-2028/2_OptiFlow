@@ -1,0 +1,294 @@
+/* Roles.module.css
+   3-Panel Studio for System and Custom Roles Management
+   Respecting OptiFlow Dark Blue Brand Palette (#0f172a, #1e293b, #2563eb)
+*/
+
+.studioContainer {
+  display: flex;
+  height: calc(100vh - 175px);
+  min-height: 640px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+}
+
+/* ── LEFT PANEL: ROLES CATALOG ── */
+.leftPanel {
+  width: 270px;
+  flex-shrink: 0;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+.panelHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background-color: #ffffff;
+}
+
+.panelTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.leftListBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.roleListItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.roleListItem:hover {
+  background-color: #f8fafc;
+}
+
+.roleListItemActive {
+  background-color: #eff6ff !important;
+}
+
+.roleListItemActive::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3.5px;
+  background-color: #2563eb; /* Blue 600 */
+}
+
+.roleItemMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.roleItemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roleItemDesc {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roleCountBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background-color: #f1f5f9;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.roleCountBadgeActive {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* ── CENTER PANEL: PERMISSIONS STUDIO ── */
+.centerPanel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #fafbfc;
+  border-right: 1px solid #e2e8f0;
+}
+
+.centerHeader {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.centerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.permDomainCard {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+
+.permDomainHeader {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.permGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px 16px;
+}
+
+.permItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background-color 0.12s;
+  cursor: pointer;
+  user-select: none;
+}
+
+.permItem:hover {
+  background-color: #f1f5f9;
+}
+
+.permItemChecked {
+  background-color: #eff6ff/40;
+}
+
+.permCheckbox {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.permTextTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.permTextDesc {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* Save Bar */
+.saveBar {
+  padding: 12px 24px;
+  background-color: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.03);
+}
+
+/* ── RIGHT PANEL: ASSIGNED EMPLOYEES ── */
+.rightPanel {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+.rightBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+
+.empRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background-color 0.12s;
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+}
+
+.empRow:hover {
+  background-color: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.empAvatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.empDetails {
+  flex: 1;
+  min-width: 0;
+  margin-left: 10px;
+}
+
+.empName {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empSub {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import { authenticatePlatformAdmin } from '../middleware/authenticatePlatformAdmin.js';
+import { authLimiter } from '../middleware/rateLimit.js';
 import {
   platformLogin,
+  platformLogout,
+  changePlatformPassword,
   platformAuthMe,
   getPlatformMetrics,
   listPlatformCompanies,
   getPlatformCompanyById,
+  createPlatformCompany,
   updatePlatformCompany,
   listPlans,
   getPlanById,
@@ -27,9 +31,17 @@ import {
 const router = Router();
 
 router.post(['/platform/auth/login', '/api/platform/auth/login'], platformLogin);
+router.post(['/platform/auth/logout', '/api/platform/auth/logout'], platformLogout);
+router.post(
+  ['/platform/auth/change-password', '/api/platform/auth/change-password'],
+  authLimiter,
+  authenticatePlatformAdmin,
+  changePlatformPassword
+);
 router.get(['/platform/auth/me', '/api/platform/auth/me'], authenticatePlatformAdmin, platformAuthMe);
 router.get(['/platform/metrics', '/api/platform/metrics'], authenticatePlatformAdmin, getPlatformMetrics);
 router.get(['/platform/companies', '/api/platform/companies'], authenticatePlatformAdmin, listPlatformCompanies);
+router.post(['/platform/companies', '/api/platform/companies'], authenticatePlatformAdmin, createPlatformCompany);
 router.get(['/platform/companies/:id', '/api/platform/companies/:id'], authenticatePlatformAdmin, getPlatformCompanyById);
 router.patch(['/platform/companies/:id', '/api/platform/companies/:id'], authenticatePlatformAdmin, updatePlatformCompany);
 router.get(['/platform/plans', '/api/platform/plans'], authenticatePlatformAdmin, listPlans);

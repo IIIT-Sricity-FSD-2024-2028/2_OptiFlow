@@ -8,7 +8,8 @@ import {
   getUserById,
   createUser,
   updateUser,
-  deactivateUser
+  deactivateUser,
+  reactivateUser,
 } from '../controllers/users.controller.js';
 
 const router = Router();
@@ -20,14 +21,26 @@ router.get(['/users/:id', '/api/users/:id'], authenticate, getUserById);
 router.post(
   ['/users', '/api/users'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager'),
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
   createUser
 );
 router.patch(['/users/:id', '/api/users/:id'], authenticate, updateUser);
+router.patch(
+  ['/users/:id/reactivate', '/api/users/:id/reactivate'],
+  authenticate,
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  reactivateUser
+);
+router.post(
+  ['/users/:id/reactivate', '/api/users/:id/reactivate'],
+  authenticate,
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  reactivateUser
+);
 router.delete(
   ['/users/:id', '/api/users/:id'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager'),
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
   deactivateUser
 );
 

@@ -26,7 +26,15 @@ export const StatCard = ({ label, title, value, trend, trendDirection, hint, sub
     <div className={styles.card}>
       <div className={styles.header}>
         <div className={styles.title}>{displayTitle}</div>
-        {icon && <div className={styles.iconWrapper}>{icon}</div>}
+        {icon && (
+          <div className={styles.iconWrapper}>
+            {React.isValidElement(icon) ? (
+              icon
+            ) : typeof icon === 'function' || (typeof icon === 'object' && icon !== null && icon.$$typeof) ? (
+              React.createElement(icon, { className: 'w-5 h-5' })
+            ) : null}
+          </div>
+        )}
       </div>
       <div className={styles.body}>
         <div className={styles.value}>{value}</div>

@@ -126,8 +126,14 @@ export default function TeamLeadDashboard() {
           ? membersResponse
           : membersResponse?.data || [];
 
-        // Filter to only include users managed by the current Team Lead
-        const myTeamMembers = normalizedMembers.filter(member => member.managerUserId === user.id);
+        // Filter to include users belonging to the current Team Lead's team(s) or reporting to them
+        const myTeamIds = (user?.teams || []).map(t => t.id || t.teamId).filter(Boolean);
+        const myTeamMembers = normalizedMembers.filter(member => {
+          if (member.id === user?.id) return false;
+          const sharesTeam = myTeamIds.length > 0 && (member.teams || []).some(t => myTeamIds.includes(t.id || t.teamId));
+          const reportsToMe = member.managerUserId === user?.id;
+          return sharesTeam || reportsToMe;
+        });
 
         const normalizedProjects = Array.isArray(projectsResponse)
           ? projectsResponse

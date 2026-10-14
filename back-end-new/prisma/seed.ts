@@ -110,10 +110,40 @@ async function main() {
   // =====================================================================
   // 2. PERMISSIONS & SYSTEM ROLES
   // =====================================================================
-  const permUsers = await prisma.permission.create({ data: { slug: "users.manage", module: "HR", description: "Manage users and role assignments" } });
-  const permTasks = await prisma.permission.create({ data: { slug: "tasks.manage", module: "Tasks", description: "Create and update tasks" } });
-  const permProcess = await prisma.permission.create({ data: { slug: "process.manage", module: "Process", description: "Design process templates" } });
-  const permCompliance = await prisma.permission.create({ data: { slug: "compliance.manage", module: "Compliance", description: "Manage compliance rules" } });
+  const permissionsList = [
+    // Work Delivery & Tasks
+    { slug: "task:create", module: "Tasks", description: "Design and delegate parent project tasks" },
+    { slug: "task:subtask:create", module: "Tasks", description: "Decompose tasks into granular subtasks" },
+    { slug: "task:execute", module: "Tasks", description: "Update progress, submit deliverables and hours" },
+    { slug: "task:review", module: "Tasks", description: "First-line review and approval of deliverables" },
+    { slug: "task:change_request", module: "Tasks", description: "Petition upward baseline modifications" },
+
+    // Company Governance & HR
+    { slug: "hr:user:create", module: "HR", description: "Create user profiles and assign primary roles" },
+    { slug: "hr:user:manage", module: "HR", description: "Edit employee profiles, job titles, and status" },
+    { slug: "hr:branch:manage", module: "HR", description: "Create and administer regional branch hubs" },
+    { slug: "hr:team:manage", module: "HR", description: "Organize functional pods and assign members" },
+    { slug: "hr:role:architect", module: "HR", description: "Define dynamic custom roles & permissions" },
+
+    // Compliance & Auditing
+    { slug: "compliance:rule:manage", module: "Compliance", description: "Establish compliance policies and categories" },
+    { slug: "compliance:evidence:audit", module: "Compliance", description: "Inspect deliverables and cryptographic hashes" },
+    { slug: "compliance:violation:adjudicate", module: "Compliance", description: "Issue and resolve compliance penalties" },
+
+    // Workflow & Process
+    { slug: "process:template:design", module: "Process", description: "Author reusable multi-stage workflows" },
+    { slug: "executive:telemetry:view", module: "Executive", description: "Access cross-branch financial KPIs" },
+  ];
+
+  const permMap: Record<string, string> = {};
+  for (const p of permissionsList) {
+    const created = await prisma.permission.upsert({
+      where: { slug: p.slug },
+      update: { module: p.module, description: p.description },
+      create: p,
+    });
+    permMap[p.slug] = created.id;
+  }
 
   // Predefined Role Templates
   const tSystemAdmin = await prisma.roleTemplate.create({ data: { origin: RoleTemplateOrigin.platform_predefined, label: "System Admin", slug: "system_admin" } });
@@ -137,7 +167,95 @@ async function main() {
   const rTeamMember = await prisma.role.create({ data: { companyId: acmeCorp.id, roleTemplateId: tTeamMember.id, label: "Team Member", name: "team_member", isSystem: true } });
   const rBranchManager = await prisma.role.create({ data: { companyId: acmeCorp.id, roleTemplateId: tBranchManager.id, label: "Branch Manager", name: "branch_manager", isSystem: true } });
 
-  console.log("✓ System Roles created.");
+  // Map Default Permissions to Templates and Roles
+  const rolePermissionsMapping: Record<string, string[]> = {
+    system_admin: permissionsList.map((p) => p.slug),
+    company_owner: permissionsList.map((p) => p.slug),
+    access_governance: [
+      "hr:user:create",
+      "hr:user:manage",
+      "hr:branch:manage",
+      "hr:team:manage",
+      "hr:role:architect",
+      "task:create",
+      "task:execute",
+      "executive:telemetry:view",
+    ],
+    branch_manager: [
+      "hr:user:manage",
+      "hr:branch:manage",
+      "hr:team:manage",
+      "task:create",
+      "task:subtask:create",
+      "task:execute",
+      "task:review",
+      "executive:telemetry:view",
+    ],
+    project_manager: [
+      "task:create",
+      "task:subtask:create",
+      "task:execute",
+      "task:review",
+      "task:change_request",
+      "hr:team:manage",
+      "process:template:design",
+      "executive:telemetry:view",
+    ],
+    process_admin: [
+      "process:template:design",
+      "task:create",
+      "task:subtask:create",
+      "task:execute",
+      "task:review",
+      "executive:telemetry:view",
+    ],
+    compliance_officer: [
+      "compliance:rule:manage",
+      "compliance:evidence:audit",
+      "compliance:violation:adjudicate",
+      "executive:telemetry:view",
+    ],
+    team_lead: [
+      "task:subtask:create",
+      "task:execute",
+      "task:review",
+      "task:change_request",
+      "hr:team:manage",
+    ],
+    team_member: [
+      "task:execute",
+      "task:change_request",
+    ],
+  };
+
+  const templatesAndRoles = [
+    { template: tSystemAdmin, role: rSystemAdmin, slug: "system_admin" },
+    { template: tCompanyOwner, role: rCompanyOwner, slug: "company_owner" },
+    { template: tAccessGovernance, role: rAccessGovernance, slug: "access_governance" },
+    { template: tBranchManager, role: rBranchManager, slug: "branch_manager" },
+    { template: tProcessAdmin, role: rProcessAdmin, slug: "process_admin" },
+    { template: tComplianceOfficer, role: rComplianceOfficer, slug: "compliance_officer" },
+    { template: tProjectManager, role: rProjectManager, slug: "project_manager" },
+    { template: tTeamLead, role: rTeamLead, slug: "team_lead" },
+    { template: tTeamMember, role: rTeamMember, slug: "team_member" },
+  ];
+
+  for (const item of templatesAndRoles) {
+    const slugs = rolePermissionsMapping[item.slug] || [];
+    for (const s of slugs) {
+      const pId = permMap[s];
+      if (pId) {
+        await prisma.roleTemplatePermission.create({
+          data: { roleTemplateId: item.template.id, permissionId: pId },
+        });
+        await prisma.rolePermission.create({
+          data: { roleId: item.role.id, permissionId: pId },
+        });
+      }
+    }
+  }
+
+  console.log("✓ System Roles and Permissions configured with default capabilities.");
 
   // =====================================================================
   // 3. OFFICIAL TESTING MATRIX USER CREATION BLOCKS
@@ -491,6 +609,30 @@ async function main() {
 
   const teamSales = await prisma.team.create({
     data: { companyId: acmeCorp.id, branchId: branch.id, name: "Acme Sales & Operations" }
+  });
+
+  // Seed official team memberships
+  await prisma.teamMember.createMany({
+    data: [
+      // Acme Core Engineering
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userCharlie.id, role: "Lead" },
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userDavid.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userFrank.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamCore.id, userId: userJulia.id, role: "Member" },
+
+      // Acme Sales & Operations
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userLucas.id, role: "Lead" },
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userEmma.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userGrace.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: teamSales.id, userId: userKevin.id, role: "Member" },
+
+      // Admin Support Team
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userMarcus.id, role: "Lead" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userIan.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userSamuel.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userSophia.id, role: "Member" },
+      { companyId: acmeCorp.id, teamId: adminSupportTeam.id, userId: userArjun.id, role: "Member" },
+    ],
   });
 
   const projectQ3 = await prisma.project.create({ data: { companyId: acmeCorp.id, teamId: teamSales.id, name: "Q3 Marketing Campaign", status: ProjectStatus.Active, startDate: new Date(), targetDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), createdById: userAlice.id } });
