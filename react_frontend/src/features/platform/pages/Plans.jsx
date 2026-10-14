@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { usePlans } from './usePlans';
-import { PlansTable } from './PlansTable';
-import { PlanDrawer } from './PlanDrawer';
+import { useToast } from '../../../shared/components/Toast';
+import { usePlans } from '../hooks/usePlans';
+import { PlansTable } from '../components/PlansTable';
+import { PlanDrawer } from '../components/PlanDrawer';
 import styles from './Plans.module.css';
 
-
 export default function PlatformPlans() {
-  const { plans, loading, error, savePlan, setPlanActiveStatus} = usePlans();
+  const toast = useToast();
+  const { plans, loading, error, savePlan, setPlanActiveStatus } = usePlans();
 
   // Drawer state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
-  
 
   // Archive ConfirmDialog state
   const [archiveTarget, setArchiveTarget] = useState(null);
@@ -21,8 +21,6 @@ export default function PlatformPlans() {
   // Unarchive ConfirmDialog state
   const [unarchiveTarget, setUnarchiveTarget] = useState(null);
   const [unarchiving, setUnarchiving] = useState(false);
-
-  
 
   // 2. Open Create Drawer
   const handleOpenCreate = () => {
@@ -41,19 +39,18 @@ export default function PlatformPlans() {
     setEditingPlan(null);
   };
 
-
-
   // Confirm Archive Action
-   const handleConfirmArchive = async () => {
+  const handleConfirmArchive = async () => {
     if (!archiveTarget) return;
     try {
       setArchiving(true);
       await setPlanActiveStatus(archiveTarget.id, false);
+      toast.success(`Plan "${archiveTarget.name}" archived successfully.`);
       setArchiveTarget(null);
     } 
     catch (err) {
       console.error('Failed to archive plan:', err);
-      alert(err.message || 'Failed to archive plan');
+      toast.error(err.message || 'Failed to archive plan');
     } 
     finally {
       setArchiving(false);
@@ -66,10 +63,11 @@ export default function PlatformPlans() {
     try {
       setUnarchiving(true);
       await setPlanActiveStatus(unarchiveTarget.id, true);
+      toast.success(`Plan "${unarchiveTarget.name}" unarchived successfully.`);
       setUnarchiveTarget(null);
     } catch (err) {
       console.error('Failed to unarchive plan:', err);
-      alert(err.message || 'Failed to unarchive plan');
+      toast.error(err.message || 'Failed to unarchive plan');
     } finally {
       setUnarchiving(false);
     }

@@ -366,13 +366,14 @@ export async function handleRegisterCompany(req, res, next) {
       // 4. Ensure platform role templates exist
       let platformTemplates = await tx.roleTemplate.findMany({
         where: { origin: 'platform_predefined' },
+        include: { defaultPermissions: true },
       });
 
       if (platformTemplates.length === 0) {
         const sysTemplate = await tx.roleTemplate.create({
           data: { origin: 'platform_predefined', label: 'System Admin' },
         });
-        platformTemplates = [sysTemplate];
+        platformTemplates = [{ ...sysTemplate, defaultPermissions: [] }];
       }
 
       // 5. Clone roles for company
@@ -385,6 +386,11 @@ export async function handleRegisterCompany(req, res, next) {
             label: t.label,
             name: t.slug || t.label.toLowerCase().replace(/ /g, '_'),
             isSystem: true,
+            permissions: t.defaultPermissions?.length > 0 ? {
+              create: t.defaultPermissions.map((dp) => ({
+                permissionId: dp.permissionId,
+              })),
+            } : undefined,
           },
         });
         if (t.label === 'System Admin') {

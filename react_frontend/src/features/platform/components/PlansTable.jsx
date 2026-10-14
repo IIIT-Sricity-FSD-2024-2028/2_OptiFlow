@@ -1,6 +1,6 @@
 import React from 'react';
 import { Table } from '../../../shared/components/Table';
-import styles from './Plans.module.css';
+import styles from '../pages/Plans.module.css';
 
 /*
     Props:

@@ -89,6 +89,8 @@ model PlatformSupportAccess {
   grantedAt   DateTime          @default(now())
   expiresAt   DateTime
   actionLog   Json              @default("[]") // Append-only JSON array of admin actions
+  revokedAt   DateTime?
+  revokedBy   String?
 
   @@index([adminUserId])
   @@index([companyId])
@@ -207,7 +209,7 @@ model User {
 
 model Permission {
   id          String @id @default(uuid())
-  slug        String
+  slug        String @unique
   module      String
   description String
 
@@ -219,7 +221,7 @@ model Permission {
 
 model RoleTemplate {
   id          String             @id @default(uuid())
-  slug        String?
+  slug        String?            @unique
   origin      RoleTemplateOrigin @default(platform_predefined)
   label       String
   description String?

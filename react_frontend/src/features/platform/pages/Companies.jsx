@@ -162,105 +162,96 @@ function PlatformCompanies() {
         >
 
         {detailsLoading ? (
-          <div style={{textAlign:'center',padding:'30px',color: '#94a3b8'}}>
-            Loading Company Details
+          <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
+            Loading Company Details...
           </div>
-        ):selectedCompany?(
+        ) : selectedCompany ? (
           <div className={styles.detailsGrid}>
             <div className={styles.detailsRow}>
-              <div className={styles.detailsLabel}>
-                <span className={styles.detailsLabel}>Tenant ID:</span>
-                <code className={styles.tenantIdCode}>{selectedCompany.id}</code>
-              </div>
-
-              <div className={styles.detailsRow}>
-                <span className={styles.detailsLabel}>Legal Name:</span>
-                <span className={styles.detailsValue}>{selectedCompany.legalName || '--'}</span>
-              </div>
-
-              <div className={styles.detailsRow}>
-                <span className={styles.detailsLabel}>
-                  Account Status:
-                </span>
-                <Badge status=
-                {getBadgeStatus(selectedCompany.status)}
-                >
-                  {selectedCompany.status || 'Active'}
-                </Badge>
-              </div>
-
-              <div className={styles.detailsRow}>
-                <span className={styles.detailsLabel}>
-                  Registered Date:
-                </span>
-                <span className={styles.detailsValue}>
-                    {
-                      selectedCompany.createdAt
-                      ? new Date(selectedCompany.createdAt).toLocaleDateString()
-                      :'--'
-                    }
-                </span>
-              </div>
-              
-              {/* Subscriptions */}
-
-              <div className={styles.detailsSection}>
-                <div className={styles.detailsSectionTitle}>
-                    Subscriptions
-                </div>
-                {selectedCompany.subscriptions && selectedCompany.subscriptions.length>0 ? (
-                  <ul className={styles.subscriptionList}>
-                      {selectedCompany.subscriptions.map((s)=>(
-                        <li key={s.id || s.planId} className={styles.subscriptionItem}>
-                        <div>
-                          <strong>{s.plan?.name || '--'}</strong>
-                          {s.currentPeriodEnd && (
-                            <div style={{fontSize:'11px',color:'#94a3b8'}}>
-                              Renews at:{ new
-                              Date(s.currentPeriodEnd).toLocaleDateString()
-                              }
-                            </div>
-                          )
-                        }
-                        </div>
-                        <Badge status={getBadgeStatus(s.status)}>
-                            {s.status}
-                        </Badge>
-
-                        </li>
-                      ))}
-                  </ul>
-                ):(
-                  <p style={{fontSize:'12px',color:'#94a3b8',margin: 0}}>
-                    No Active Subscriptions found;
-                  </p>
-                )
-              }
-              </div>
-
-              {/* branches */}
-              <div className={styles.detailsSection}>
-                <div className={styles.detailsSectionTitle}>
-                  Branches
-                  ({selectedCompany.branches?.length || 0})
-                </div>
-                {
-                  selectedCompany.branches && 
-                  selectedCompany.branches.length >0 ? (
-                    <div>
-                      
-                    </div>
-                  ):(null)
-                }
-              </div>
+              <span className={styles.detailsLabel}>Tenant ID:</span>
+              <code className={styles.tenantIdCode}>{selectedCompany.id}</code>
             </div>
 
-          </div>
-        ):(
-          null
-        )
+            <div className={styles.detailsRow}>
+              <span className={styles.detailsLabel}>Legal Name:</span>
+              <span className={styles.detailsValue}>{selectedCompany.legalName || '--'}</span>
+            </div>
 
-        }
+            <div className={styles.detailsRow}>
+              <span className={styles.detailsLabel}>Account Status:</span>
+              <Badge status={getBadgeStatus(selectedCompany.status)}>
+                {selectedCompany.status || 'Active'}
+              </Badge>
+            </div>
+
+            <div className={styles.detailsRow}>
+              <span className={styles.detailsLabel}>Registered Date:</span>
+              <span className={styles.detailsValue}>
+                {selectedCompany.createdAt
+                  ? new Date(selectedCompany.createdAt).toLocaleDateString()
+                  : '--'}
+              </span>
+            </div>
+
+            {/* Subscriptions */}
+            <div className={styles.detailsSection}>
+              <div className={styles.detailsSectionTitle}>Subscriptions</div>
+              {selectedCompany.subscriptions && selectedCompany.subscriptions.length > 0 ? (
+                <ul className={styles.subscriptionList}>
+                  {selectedCompany.subscriptions.map((s) => (
+                    <li key={s.id || s.planId} className={styles.subscriptionItem}>
+                      <div>
+                        <strong>{s.plan?.name || '--'}</strong>
+                        {s.currentPeriodEnd && (
+                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                            Renews at: {new Date(s.currentPeriodEnd).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+                      <Badge status={getBadgeStatus(s.status)}>
+                        {s.status}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
+                  No active subscriptions found.
+                </p>
+              )}
+            </div>
+
+            {/* Branches */}
+            <div className={styles.detailsSection}>
+              <div className={styles.detailsSectionTitle}>
+                Branches ({selectedCompany.branches?.length || 0})
+              </div>
+              {selectedCompany.branches && selectedCompany.branches.length > 0 ? (
+                <ul className={styles.subscriptionList}>
+                  {selectedCompany.branches.map((b) => (
+                    <li key={b.id} className={styles.subscriptionItem}>
+                      <div>
+                        <strong>{b.name || b.branchName || 'Branch'}</strong>
+                        {b.isHeadquarters && (
+                          <span style={{ fontSize: '11px', color: '#6366f1', marginLeft: '6px' }}>
+                            (HQ)
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>
+                        {b.city || b.location || ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
+                  No branches configured.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
       
 
       </Modal>

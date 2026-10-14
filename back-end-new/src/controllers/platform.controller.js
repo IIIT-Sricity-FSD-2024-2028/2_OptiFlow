@@ -411,6 +411,7 @@ export async function createPlatformCompany(req, res, next) {
       // 3. Ensure platform role template exists & assign System Admin role to owner
       let sysTemplate = await tx.roleTemplate.findFirst({
         where: { label: 'System Admin' },
+        include: { defaultPermissions: true },
       });
       if (!sysTemplate) {
         sysTemplate = await tx.roleTemplate.create({
@@ -425,6 +426,11 @@ export async function createPlatformCompany(req, res, next) {
           label: 'System Admin',
           name: 'system_admin',
           isSystem: true,
+          permissions: sysTemplate.defaultPermissions?.length > 0 ? {
+            create: sysTemplate.defaultPermissions.map((dp) => ({
+              permissionId: dp.permissionId,
+            })),
+          } : undefined,
         },
       });
 

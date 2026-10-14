@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../../../shared/components/Toast';
 import { QuotaInput } from './QuotaInput';
-import styles from './Plans.module.css';
+import styles from '../pages/Plans.module.css';
 
 
 
@@ -25,6 +26,7 @@ export function PlanDrawer({
     onClose,
     onSave
 }){
+    const toast = useToast();
     const [formData,setFormData] = useState(INITIAL_FORM_STATE);
     const [saving,setSaving] = useState(false);
     const [formError, setFormError] = useState(null);
@@ -77,11 +79,14 @@ export function PlanDrawer({
             setSaving(true);
             setFormError(null);
             await onSave(formData,editingPlan?.id || null);
+            toast.success(editingPlan ? 'Subscription plan updated successfully.' : 'Subscription plan created successfully.');
             onClose();
         }
         catch(err){
             console.error('Failed to save plan:', err);
-            setFormError(err.message || 'Failed to save plan changes');
+            const msg = err.message || 'Failed to save plan changes';
+            setFormError(msg);
+            toast.error(msg);
         }
         finally{
             setSaving(false);

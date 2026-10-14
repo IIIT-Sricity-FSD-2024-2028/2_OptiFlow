@@ -1,19 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../../../services/api/client';
 
-export const INITIAL_FORM_STATE = {
-  name: '',
-  maxUsers: '',
-  unlimitedUsers: true,
-  maxBranches: '',
-  unlimitedBranches: false,
-  maxActiveProcessTemplates: '',
-  unlimitedTemplates: false,
-  maxComplianceRules: '',
-  unlimitedRules: false,
-  auditLogRetentionDays: 90,
-};
-
 export function usePlans(){
     const [plans,setPlans] = useState([]);
     const [loading,setLoading] = useState(true);

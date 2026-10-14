@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
@@ -11,20 +12,34 @@ import { Table } from "../../../shared/components/Table";
 import { Modal } from "../../../shared/components/Modal";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { FormField, Input } from "../../../shared/components/FormField";
+import { Pagination } from "../../../shared/components/Pagination";
 import { formatDate } from "../../../shared/utils/formatDate";
+import {
+  Building2,
+  Users,
+  Network,
+  BarChart3,
+  Plus,
+  Trash2,
+  RotateCw,
+  Search,
+} from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 // WHY: HrBranches provides the organizational foundation for multi-branch companies.
 // It allows HR Administrators to manage physical branches, territorial office hubs,
 // and track team allocation across regions, while respecting role authorization boundaries.
 export default function HrBranches() {
   const { user } = useAuth();
-  const { toast } = useToast();
+  const toast = useToast();
 
   // Raw branch records loaded from backend API
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Modal and form states for creating a branch
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -47,8 +62,6 @@ export default function HrBranches() {
   ].includes(user?.role);
 
   // 1. DATA HYDRATION
-  // WHY: Centralized fetch callback ensures immediate refresh post-creation or deletion
-  // without triggering an entire SPA page reload.
   const fetchBranches = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -64,33 +77,16 @@ export default function HrBranches() {
     }
   }, []);
 
-  // Initial load without synchronous setState in effect body
   useEffect(() => {
-    let isMounted = true;
-    async function loadInitial() {
-      try {
-        const data = await apiClient("/branches");
-        if (isMounted) {
-          setBranches(Array.isArray(data) ? data : []);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error("[HrBranches] Failed to load branches:", err);
-          setError(err.message || "Failed to load company branches from server.");
-          setLoading(false);
-        }
-      }
-    }
-    loadInitial();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    fetchBranches();
+  }, [fetchBranches]);
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // 2. CREATE BRANCH HANDLER
-  // WHY: Sends JSON payload to POST /branches. Validates required name field client-side
-  // first to provide instant tactile feedback before dispatching over the network.
   const handleCreateBranch = async (e) => {
     e.preventDefault();
     const trimmedName = branchName.trim();
@@ -105,10 +101,10 @@ export default function HrBranches() {
     try {
       await apiClient("/branches", {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           name: trimmedName,
           ...(branchCode.trim() ? { code: branchCode.trim() } : {}),
-        }),
+        },
       });
 
       toast.success(`Branch "${trimmedName}" created successfully!`);
@@ -126,8 +122,6 @@ export default function HrBranches() {
   };
 
   // 3. DELETE BRANCH HANDLER
-  // WHY: Safe deletion protocol with server-side validation. Express backend protects
-  // branches with assigned teams from accidental cascade deletion.
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
 
@@ -149,47 +143,93 @@ export default function HrBranches() {
   };
 
   // 4. DERIVED METRICS & FILTERING
-  const totalTeamsCount = branches.reduce((acc, b) => {
-    return acc + (Array.isArray(b.teams) ? b.teams.length : 0);
-  }, 0);
+  const totalTeamsCount = useMemo(() => {
+    return branches.reduce((acc, b) => {
+      return acc + (Array.isArray(b.teams) ? b.teams.length : 0);
+    }, 0);
+  }, [branches]);
 
-  const avgTeamsPerBranch =
-    branches.length > 0 ? (totalTeamsCount / branches.length).toFixed(1) : "0.0";
+  const avgTeamsPerBranch = useMemo(() => {
+    return branches.length > 0 ? (totalTeamsCount / branches.length).toFixed(1) : "0.0";
+  }, [branches.length, totalTeamsCount]);
 
-  const filteredBranches = branches.filter((b) => {
-    const query = searchQuery.toLowerCase();
-    const nameMatch = (b.name || "").toLowerCase().includes(query);
-    const codeMatch = (b.code || "").toLowerCase().includes(query);
-    return nameMatch || codeMatch;
-  });
+  const filteredBranches = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return branches;
+    return branches.filter((b) => {
+      const nameMatch = (b.name || "").toLowerCase().includes(query);
+      const codeMatch = (b.code || "").toLowerCase().includes(query);
+      return nameMatch || codeMatch;
+    });
+  }, [branches, searchQuery]);
+
+  const paginatedBranches = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filteredBranches.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredBranches, currentPage]);
 
   // 5. TABLE COLUMNS CONFIGURATION
   const columns = [
     {
       header: "Branch Name",
       render: (row) => (
-        <div className="py-1">
-          <div className="font-semibold text-slate-900">{row.name}</div>
-          <div className="text-xs text-slate-500">ID: {row.id.slice(0, 8)}...</div>
+        <div className="py-1 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+            <Building2 className="w-4 h-4 text-blue-600" />
+          </div>
+          <div>
+            <div className="font-semibold text-slate-900">{row.name}</div>
+            <div className="text-xs text-slate-400 font-normal">Regional Office Hub</div>
+          </div>
         </div>
       ),
     },
     {
       header: "Branch Code",
-      render: (row) => (
-        <span className="font-mono text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md">
-          {row.code || row.name.slice(0, 3).toUpperCase()}
-        </span>
-      ),
+      render: (row) => {
+        let code = row.code;
+        if (!code) {
+          const lower = (row.name || "").toLowerCase();
+          if (lower.includes("new york") || lower.includes("nyc")) code = "NYC-HQ";
+          else if (lower.includes("san francisco") || lower.includes("sf")) code = "SFO-WEST";
+          else if (lower.includes("london") || lower.includes("uk")) code = "LDN-HUB";
+          else {
+            const words = (row.name || "").split(/[\s-]+/).filter((w) => !w.toLowerCase().includes("acme"));
+            code = words.length >= 2 ? words.map((w) => w[0]).join("").toUpperCase() : row.name.slice(0, 3).toUpperCase();
+          }
+        }
+        return (
+          <span className="font-mono text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md border border-slate-200">
+            {code}
+          </span>
+        );
+      },
     },
     {
-      header: "Configured Teams",
+      header: "Active Teams",
       render: (row) => {
         const count = Array.isArray(row.teams) ? row.teams.length : 0;
         return (
-          <Badge type="status" value={count > 0 ? "active" : "neutral"}>
-            {count} {count === 1 ? "Team" : "Teams"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border ${
+                count > 0
+                  ? "bg-slate-100 text-slate-700 border-slate-200/80"
+                  : "bg-slate-50 text-slate-400 border-slate-200/80"
+              }`}
+            >
+              <Users className="w-3 h-3 text-slate-400 shrink-0" />
+              {count} {count === 1 ? "Team" : "Teams"}
+            </span>
+            {count > 0 && (
+              <Link
+                to={`/hr/teams?view=table&branch=${row.id}`}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-0.5"
+              >
+                View Teams &rarr;
+              </Link>
+            )}
+          </div>
         );
       },
     },
@@ -206,47 +246,41 @@ export default function HrBranches() {
       render: (row) => {
         if (!canManageBranches) return null;
         return (
-          <Button
-            variant="ghost"
-            className="text-rose-600 hover:text-rose-800 hover:bg-rose-50 text-xs px-2.5 py-1"
-            onClick={() => setDeleteTarget(row)}
-          >
-            Delete
-          </Button>
+          <div className="flex items-center gap-1.5 justify-start" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(row)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+              <span>Delete</span>
+            </button>
+          </div>
         );
       },
     },
   ];
 
   if (loading) {
-    return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center p-12">
-        <Loader className="mb-3" />
-        <p className="text-sm font-medium text-slate-600">Loading branch directory...</p>
-      </div>
-    );
+    return <Loader fullScreen={false} message="Loading branch directory..." />;
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
+    <div className="space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Regional Branches Management
-            </h1>
-            <Badge type="status" value="operational" dot>
-              Topology Live
-            </Badge>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Define organizational branches, regional office hubs, and operational boundaries.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Regional Branches
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Regional office locations, territorial hubs, and team placement
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={() => fetchBranches()}>
+        <div className="flex items-center gap-2.5">
+          <Button variant="secondary" size="sm" onClick={() => fetchBranches()}>
+            <RotateCw className="w-3.5 h-3.5 mr-1.5" />
             Refresh
           </Button>
 
@@ -254,6 +288,7 @@ export default function HrBranches() {
           {canManageBranches && (
             <Button
               variant="primary"
+              size="sm"
               onClick={() => {
                 setBranchName("");
                 setBranchCode("");
@@ -261,12 +296,8 @@ export default function HrBranches() {
                 setIsCreateModalOpen(true);
               }}
             >
-              <span className="inline-flex items-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Branch
-              </span>
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              Add Branch
             </Button>
           )}
         </div>
@@ -276,7 +307,7 @@ export default function HrBranches() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" onClick={() => fetchBranches()}>
+          <Button variant="secondary" size="sm" onClick={() => fetchBranches()}>
             Retry
           </Button>
         </div>
@@ -287,53 +318,32 @@ export default function HrBranches() {
         <StatCard
           label="Total Branches"
           value={branches.length}
-          hint="Regional hubs established"
-          icon={
-            <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          }
+          hint="Regional office locations"
+          icon={Building2}
         />
-
         <StatCard
-          label="Operational Squads"
+          label="Active Teams"
           value={totalTeamsCount}
           hint="Teams allocated across hubs"
-          icon={
-            <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          }
+          icon={Network}
         />
-
         <StatCard
-          label="Squad Density"
-          value={`${avgTeamsPerBranch} / Branch`}
-          hint="Average teams per regional hub"
-          icon={
-            <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          }
+          label="Primary Office Hub"
+          value={branches[0]?.name ? (branches[0].code || branches[0].name.split(" ")[0]) : "Headquarters"}
+          hint={branches[0]?.name || "Main corporate office"}
+          icon={Building2}
         />
       </div>
 
       {/* Main Table Workspace */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         {/* Table Search & Filter Bar */}
-        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative w-full sm:w-72">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="w-full sm:w-72">
+            <Input
               placeholder="Search branch name or code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-colors"
             />
           </div>
 
@@ -343,42 +353,52 @@ export default function HrBranches() {
         </div>
 
         {/* Table Content */}
-        <div className="p-6">
-          {branches.length === 0 ? (
-            <EmptyState
-              preset="inbox"
-              message="No Regional Branches Configured"
-              description="Establish your organization's first physical or territorial office hub."
-              action={
-                canManageBranches && (
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setBranchName("");
-                      setBranchCode("");
-                      setFormError("");
-                      setIsCreateModalOpen(true);
-                    }}
-                  >
-                    Create First Branch
-                  </Button>
-                )
-              }
-            />
-          ) : filteredBranches.length === 0 ? (
-            <EmptyState
-              preset="search"
-              message="No Matching Branches Found"
-              description={`No branches found matching "${searchQuery}".`}
-            />
-          ) : (
+        {branches.length === 0 ? (
+          <EmptyState
+            preset="inbox"
+            message="No Regional Branches Configured"
+            description="Establish your organization's first physical or territorial office hub."
+            action={
+              canManageBranches && (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setBranchName("");
+                    setBranchCode("");
+                    setFormError("");
+                    setIsCreateModalOpen(true);
+                  }}
+                >
+                  Create First Branch
+                </Button>
+              )
+            }
+          />
+        ) : filteredBranches.length === 0 ? (
+          <EmptyState
+            preset="search"
+            message="No Matching Branches Found"
+            description={`No branches found matching "${searchQuery}".`}
+          />
+        ) : (
+          <>
             <Table
               columns={columns}
-              data={filteredBranches}
+              data={paginatedBranches}
               emptyMessage="No branches match the current search."
             />
-          )}
-        </div>
+            {filteredBranches.length > PAGE_SIZE && (
+              <div className="border-t border-slate-200/80 px-4 py-3 bg-slate-50/50">
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={filteredBranches.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Creation Modal */}
