@@ -1,16 +1,7 @@
 import { Link } from 'react-router-dom';
 import { History, Shield, ExternalLink, ArrowRight } from 'lucide-react';
 import { formatRelativePast } from '../../utils/relativeDate';
-
-function getActionColor(action = '') {
-  if (action.includes('create') || action.includes('grant') || action.includes('reactivate')) {
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  }
-  if (action.includes('suspend') || action.includes('revoke') || action.includes('archive') || action.includes('cancel')) {
-    return 'bg-rose-50 text-rose-700 border-rose-200';
-  }
-  return 'bg-blue-50 text-blue-700 border-blue-200';
-}
+import { AuditActionBadge } from './AuditActionBadge';
 
 export function AuditTable({ logs, loading, onSelectLog }) {
   if (loading) {
@@ -80,9 +71,7 @@ export function AuditTable({ logs, loading, onSelectLog }) {
                   </td>
 
                   <td className="py-3 px-4">
-                    <span className={`px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold border ${getActionColor(log.action)}`}>
-                      {log.action}
-                    </span>
+                    <AuditActionBadge action={log.action} />
                   </td>
 
                   <td className="py-3 px-4">
@@ -90,10 +79,10 @@ export function AuditTable({ logs, loading, onSelectLog }) {
                       <Link
                         to={`/platform/companies/${log.companyId}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                        className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-blue-600 transition-colors"
                       >
-                        <span className="truncate max-w-[140px]">{log.company?.legalName || log.companyId}</span>
-                        <ExternalLink className="w-3 h-3 shrink-0" />
+                        <span className="truncate max-w-[160px]">{log.company?.legalName || log.companyId}</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
                       </Link>
                     ) : (
                       <span className="text-slate-400 italic">Platform Level</span>
@@ -101,13 +90,10 @@ export function AuditTable({ logs, loading, onSelectLog }) {
                   </td>
 
                   <td className="py-3 px-4 text-right">
-                    <button
-                      type="button"
-                      className="text-slate-400 hover:text-blue-600 p-1"
-                      onClick={(e) => { e.stopPropagation(); onSelectLog(log); }}
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
+                    <span className="inline-flex items-center gap-1 text-slate-400 group-hover:text-blue-600 transition-colors font-medium">
+                      <span>Inspect</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
                   </td>
                 </tr>
               );

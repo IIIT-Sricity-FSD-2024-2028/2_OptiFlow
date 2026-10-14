@@ -48,6 +48,211 @@ async function getProjectListWhere(req, branchId) {
 }
 
 
+async function enrichProjectsWithManagers(projects, companyId) {
+  if (!projects || projects.length === 0) return projects;
+
+  const projectIds = projects.map((p) => p.id);
+  const teamIds = projects.map((p) => p.teamId).filter(Boolean);
+  const creatorIds = projects.map((p) => p.createdById).filter(Boolean);
+
+  // 1. Project-level and Team-level PM role assignments
+  const pmAssignments = await prisma.roleAssignment.findMany({
+    where: {
+      companyId,
+      revokedAt: null,
+      OR: [
+        { scopeType: 'Project', scopeId: { in: projectIds } },
+        { scopeType: 'Team', scopeId: { in: teamIds } },
+      ],
+      role: {
+        OR: [
+          { label: ROLES.PROJECT_MANAGER },
+          { name: 'project_manager' },
+          { roleTemplate: { slug: 'project_manager' } },
+        ],
+      },
+    },
+    include: {
+      user: {
+        select: { id: true, fullName: true, email: true, jobTitle: true },
+      },
+    },
+  });
+
+  const projectAssignmentMap = new Map();
+  const teamAssignmentMap = new Map();
+  for (const a of pmAssignments) {
+    if (a.scopeType === 'Project' && !projectAssignmentMap.has(a.scopeId)) {
+      projectAssignmentMap.set(a.scopeId, a.user);
+    } else if (a.scopeType === 'Team' && !teamAssignmentMap.has(a.scopeId)) {
+      teamAssignmentMap.set(a.scopeId, a.user);
+    }
+  }
+
+  // 2. Fetch creators if needed
+  const creators = creatorIds.length > 0 ? await prisma.user.findMany({
+    where: { id: { in: creatorIds }, companyId },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      jobTitle: true,
+      roleAssignments: {
+        where: { revokedAt: null },
+        include: { role: true },
+      },
+    },
+  }) : [];
+  const creatorMap = new Map(creators.map((c) => [c.id, c]));
+
+  // 3. Fetch company-wide PMs as fallback
+  const companyPms = await prisma.roleAssignment.findMany({
+    where: {
+      companyId,
+      revokedAt: null,
+      scopeType: 'Company',
+      role: {
+        OR: [
+          { label: ROLES.PROJECT_MANAGER },
+          { name: 'project_manager' },
+          { roleTemplate: { slug: 'project_manager' } },
+        ],
+      },
+    },
+    include: {
+      user: {
+        select: { id: true, fullName: true, email: true, jobTitle: true },
+      },
+    },
+  });
+  const defaultCompanyPm = companyPms[0]?.user || null;
+
+  // 4. Fetch team members to check explicit PM role or Team Lead's overseeing manager
+  const allTeamMemberUserIds = projects.flatMap(
+    (p) => p.team?.teamMembers?.map((m) => m.userId) || []
+  );
+  const teamUsers = allTeamMemberUserIds.length > 0 ? await prisma.user.findMany({
+    where: { id: { in: allTeamMemberUserIds } },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      jobTitle: true,
+      manager: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          jobTitle: true,
+          roleAssignments: {
+            where: { revokedAt: null },
+            include: { role: true },
+          },
+        },
+      },
+      roleAssignments: {
+        where: { revokedAt: null },
+        include: { role: true },
+      },
+    },
+  }) : [];
+  const teamUserMap = new Map(teamUsers.map((u) => [u.id, u]));
+
+  return projects.map((p) => {
+    // 1. Direct project-scoped or team-scoped PM assignment
+    let pm = projectAssignmentMap.get(p.id) || teamAssignmentMap.get(p.teamId);
+
+    // 2. Check if any team member explicitly holds the Project Manager role (strictly NOT Team Lead)
+    if (!pm && p.team?.teamMembers) {
+      const pmMember = p.team.teamMembers.find((m) => {
+        const u = teamUserMap.get(m.userId);
+        const hasPmRole = u?.roleAssignments?.some(
+          (ra) =>
+            normalizeRole(ra.role?.label) === 'project_manager' ||
+            ra.role?.name === 'project_manager'
+        );
+        const isPmTitle = (u?.jobTitle || '').toLowerCase().includes('project manager');
+        return (m.role === 'Project Manager' || hasPmRole || isPmTitle) && m.role !== 'Lead';
+      });
+      if (pmMember?.user) {
+        pm = pmMember.user;
+      }
+    }
+
+    // 3. If squad has a Team Lead, resolve the Team Lead's reporting manager (the overseeing Project Manager)
+    if (!pm && p.team?.teamMembers) {
+      for (const m of p.team.teamMembers) {
+        const u = teamUserMap.get(m.userId);
+        const isLead =
+          m.role === 'Lead' ||
+          u?.roleAssignments?.some(
+            (ra) =>
+              normalizeRole(ra.role?.label) === 'team_lead' ||
+              ra.role?.name === 'team_lead'
+          );
+        if (isLead && u?.manager) {
+          const managerIsPm = u.manager.roleAssignments?.some(
+            (ra) =>
+              normalizeRole(ra.role?.label) === 'project_manager' ||
+              ra.role?.name === 'project_manager'
+          );
+          if (managerIsPm) {
+            pm = {
+              id: u.manager.id,
+              fullName: u.manager.fullName,
+              email: u.manager.email,
+              jobTitle: u.manager.jobTitle || 'Project Manager',
+            };
+            break;
+          }
+        }
+      }
+    }
+
+    // 4. If creator was a PM, use creator
+    if (!pm && p.createdById && creatorMap.has(p.createdById)) {
+      const creator = creatorMap.get(p.createdById);
+      const isPm = creator.roleAssignments?.some(
+        (ra) =>
+          normalizeRole(ra.role?.label) === 'project_manager' ||
+          ra.role?.name === 'project_manager'
+      );
+      if (isPm) {
+        pm = {
+          id: creator.id,
+          fullName: creator.fullName,
+          email: creator.email,
+          jobTitle: creator.jobTitle || 'Project Manager',
+        };
+      }
+    }
+
+    // 5. Default company-wide PM fallback if none found
+    if (!pm && defaultCompanyPm) {
+      pm = defaultCompanyPm;
+    }
+
+    const creatorUser = p.createdById && creatorMap.has(p.createdById) ? {
+      id: creatorMap.get(p.createdById).id,
+      fullName: creatorMap.get(p.createdById).fullName,
+      email: creatorMap.get(p.createdById).email,
+    } : null;
+
+    return {
+      ...p,
+      projectManager: pm
+        ? {
+            id: pm.id,
+            fullName: pm.fullName,
+            email: pm.email,
+            jobTitle: pm.jobTitle || 'Project Manager',
+          }
+        : null,
+      creator: creatorUser,
+    };
+  });
+}
+
 /**
  * GET /projects & GET /api/projects
  * Lists projects with tenant scoping and branch filtering.
@@ -67,6 +272,7 @@ export async function listProjects(req, res, next) {
                 id: true,
                 userId: true,
                 role: true,
+                user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
               },
             },
           },
@@ -92,9 +298,11 @@ export async function listProjects(req, res, next) {
       orderBy: { id: 'desc' },
     });
 
+    const enriched = await enrichProjectsWithManagers(projects, req.user.companyId);
+
     res.status(200).json({
       success: true,
-      data: projects,
+      data: enriched,
     });
   } catch (err) {
     next(err);
@@ -118,7 +326,14 @@ export async function getProjectById(req, res, next) {
         team: {
           include: {
             branch: { select: { id: true, name: true, companyId: true } },
-            teamMembers: { select: { userId: true, role: true } },
+            teamMembers: {
+              select: {
+                id: true,
+                userId: true,
+                role: true,
+                user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+              },
+            },
           },
         },
         tasks: {
@@ -154,9 +369,11 @@ export async function getProjectById(req, res, next) {
       assertBranchManagerScope(req.user, project.team?.branchId, 'view this project');
     }
 
+    const [enriched] = await enrichProjectsWithManagers([project], req.user.companyId);
+
     res.status(200).json({
       success: true,
-      data: project,
+      data: enriched,
     });
   } catch (err) {
     next(err);
@@ -206,10 +423,44 @@ export async function createProject(req, res, next) {
         team: {
           include: {
             branch: { select: { id: true, name: true, companyId: true } },
+            teamMembers: {
+              select: {
+                id: true,
+                userId: true,
+                role: true,
+                user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+              },
+            },
           },
         },
       },
     });
+
+    const pmId = body.projectManagerId || body.managerId || body.pmId;
+    if (pmId) {
+      const pmRole = await prisma.role.findFirst({
+        where: {
+          companyId: req.user.companyId,
+          OR: [
+            { label: ROLES.PROJECT_MANAGER },
+            { name: 'project_manager' },
+            { roleTemplate: { slug: 'project_manager' } },
+          ],
+        },
+      });
+      if (pmRole) {
+        await prisma.roleAssignment.create({
+          data: {
+            companyId: req.user.companyId,
+            userId: String(pmId),
+            roleId: pmRole.id,
+            scopeType: 'Project',
+            scopeId: newProject.id,
+            grantedById: req.user.id,
+          },
+        });
+      }
+    }
 
     // Record audit log
     try {
@@ -223,10 +474,12 @@ export async function createProject(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during project creation:', auditErr.message);
     }
 
+    const [enrichedProject] = await enrichProjectsWithManagers([newProject], req.user.companyId);
+
     res.status(201).json({
       success: true,
       message: 'Project created successfully',
-      data: newProject,
+      data: enrichedProject,
     });
   } catch (err) {
     next(err);
@@ -289,6 +542,47 @@ export async function updateProject(req, res, next) {
       updateData.teamId = targetTeamId;
     }
 
+    const pmId = body.projectManagerId || body.managerId || body.pmId;
+    if (pmId) {
+      const pmRole = await prisma.role.findFirst({
+        where: {
+          companyId: req.user.companyId,
+          OR: [
+            { label: ROLES.PROJECT_MANAGER },
+            { name: 'project_manager' },
+            { roleTemplate: { slug: 'project_manager' } },
+          ],
+        },
+      });
+      if (pmRole) {
+        const existingPmAssignment = await prisma.roleAssignment.findFirst({
+          where: {
+            companyId: req.user.companyId,
+            scopeType: 'Project',
+            scopeId: id,
+            revokedAt: null,
+          },
+        });
+        if (existingPmAssignment) {
+          await prisma.roleAssignment.update({
+            where: { id: existingPmAssignment.id },
+            data: { userId: String(pmId), roleId: pmRole.id },
+          });
+        } else {
+          await prisma.roleAssignment.create({
+            data: {
+              companyId: req.user.companyId,
+              userId: String(pmId),
+              roleId: pmRole.id,
+              scopeType: 'Project',
+              scopeId: id,
+              grantedById: req.user.id,
+            },
+          });
+        }
+      }
+    }
+
     const updated = await prisma.project.update({
       where: { id },
       data: updateData,
@@ -296,6 +590,14 @@ export async function updateProject(req, res, next) {
         team: {
           include: {
             branch: { select: { id: true, name: true, companyId: true } },
+            teamMembers: {
+              select: {
+                id: true,
+                userId: true,
+                role: true,
+                user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+              },
+            },
           },
         },
       },
@@ -314,10 +616,12 @@ export async function updateProject(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during project update:', auditErr.message);
     }
 
+    const [enrichedUpdated] = await enrichProjectsWithManagers([updated], req.user.companyId);
+
     res.status(200).json({
       success: true,
       message: 'Project updated successfully',
-      data: updated,
+      data: enrichedUpdated,
     });
   } catch (err) {
     next(err);

@@ -11,7 +11,7 @@ import { EmptyState } from "../../../shared/components/EmptyState";
 import { Table } from "../../../shared/components/Table";
 import { Modal } from "../../../shared/components/Modal";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
-import { FormField, Input } from "../../../shared/components/FormField";
+import { FormField, Input, Select } from "../../../shared/components/FormField";
 import { Pagination } from "../../../shared/components/Pagination";
 import { formatDate } from "../../../shared/utils/formatDate";
 import {
@@ -23,6 +23,7 @@ import {
   Trash2,
   RotateCw,
   Search,
+  UserCheck,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -36,6 +37,7 @@ export default function HrBranches() {
 
   // Raw branch records loaded from backend API
   const [branches, setBranches] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,6 +47,7 @@ export default function HrBranches() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [branchName, setBranchName] = useState("");
   const [branchCode, setBranchCode] = useState("");
+  const [managerUserId, setManagerUserId] = useState("");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -67,8 +70,12 @@ export default function HrBranches() {
     setError(null);
 
     try {
-      const data = await apiClient("/branches");
-      setBranches(Array.isArray(data) ? data : []);
+      const [branchesData, usersData] = await Promise.all([
+        apiClient("/branches"),
+        apiClient("/users").catch(() => []),
+      ]);
+      setBranches(Array.isArray(branchesData) ? branchesData : []);
+      setUsers(Array.isArray(usersData) ? usersData : usersData?.data || []);
     } catch (err) {
       console.error("[HrBranches] Failed to load branches:", err);
       setError(err.message || "Failed to load company branches from server.");
@@ -104,6 +111,7 @@ export default function HrBranches() {
         body: {
           name: trimmedName,
           ...(branchCode.trim() ? { code: branchCode.trim() } : {}),
+          ...(managerUserId ? { managerUserId } : {}),
         },
       });
 
@@ -111,6 +119,7 @@ export default function HrBranches() {
       setIsCreateModalOpen(false);
       setBranchName("");
       setBranchCode("");
+      setManagerUserId("");
       await fetchBranches();
     } catch (err) {
       console.error("[HrBranches] Creation failed:", err);
@@ -201,6 +210,25 @@ export default function HrBranches() {
         return (
           <span className="font-mono text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md border border-slate-200">
             {code}
+          </span>
+        );
+      },
+    },
+    {
+      header: "Branch Manager",
+      render: (row) => {
+        const manager = row.manager;
+        if (!manager) {
+          return (
+            <span className="text-xs text-slate-400 italic whitespace-nowrap">
+              Unassigned
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+            <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>{manager.fullName}</span>
           </span>
         );
       },
@@ -457,6 +485,23 @@ export default function HrBranches() {
               value={branchCode}
               onChange={(e) => setBranchCode(e.target.value.toUpperCase())}
             />
+          </FormField>
+
+          <FormField
+            label="Branch Manager (Optional)"
+            hint="Designate an employee to lead and oversee this regional branch"
+          >
+            <Select
+              value={managerUserId}
+              onChange={(e) => setManagerUserId(e.target.value)}
+            >
+              <option value="">No manager assigned</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.fullName} ({u.jobTitle || u.role || "Member"})
+                </option>
+              ))}
+            </Select>
           </FormField>
         </form>
       </Modal>

@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Clock,
   TrendingUp,
+  UserCheck,
 } from 'lucide-react';
 
 const normalize = (r) => (Array.isArray(r) ? r : r?.data || []);
@@ -74,7 +75,7 @@ export default function ExecutiveProjects() {
     const status = p.status === 'On_Hold' ? 'OnHold' : p.status;
     const matchesFilter = filter === 'All' || status === filter;
     const query = search.trim().toLowerCase();
-    const matchesSearch = !query || [p.name, p.description, p.team?.name]
+    const matchesSearch = !query || [p.name, p.description, p.team?.name, p.projectManager?.fullName]
       .some((v) => String(v || '').toLowerCase().includes(query));
     const matchesTeam = !teamFilter || String(p.teamId || p.team?.id) === teamFilter;
     return matchesFilter && matchesSearch && matchesTeam;
@@ -225,10 +226,24 @@ export default function ExecutiveProjects() {
                       </div>
                     </div>
 
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50/80 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                      <span className="flex items-center gap-1.5 min-w-0 truncate" title={`Project Manager: ${project.projectManager?.fullName || 'Unassigned'}`}>
+                        <UserCheck size={13} className="text-blue-600 shrink-0" />
+                        <span className="text-slate-400 font-normal">PM:</span>
+                        <span className="font-semibold text-slate-800 truncate">
+                          {project.projectManager?.fullName || 'Unassigned'}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-1 shrink-0 text-slate-500">
+                        <Users size={12} className="text-slate-400" />
+                        <span className="truncate">{project.team?.name || 'No team'}</span>
+                      </span>
+                    </div>
+
                     <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1 truncate">
-                        <Users size={12} className="text-slate-400" />
-                        {project.team?.name || 'No team'}
+                        <Briefcase size={12} className="text-slate-400" />
+                        <span>Branch: {project.team?.branch?.name || 'HQ Hub'}</span>
                       </span>
                       <span className="flex items-center gap-1 shrink-0">
                         <Calendar size={12} className="text-slate-400" />

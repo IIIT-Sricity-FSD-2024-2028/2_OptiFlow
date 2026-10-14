@@ -19,6 +19,8 @@ import {
   ChevronRight,
   User,
   ListTodo,
+  UserCheck,
+  ShieldCheck,
 } from 'lucide-react';
 
 const normalize = (r) => r?.data || r;
@@ -201,10 +203,10 @@ export default function ExecutiveProjectDetail() {
                   : project.status || 'Planning'}
               </Badge>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
-              <span className="flex items-center gap-1">
-                <CalendarDays size={13} className="text-slate-400" />
-                Due: {formatDate(project.targetDate)}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-500">
+              <span className="inline-flex items-center gap-1.5 font-medium text-blue-900 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-100/80">
+                <UserCheck size={13} className="text-blue-600" />
+                PM: {project.projectManager?.fullName || 'Not Assigned'}
               </span>
               <span className="flex items-center gap-1">
                 <Users size={13} className="text-slate-400" />
@@ -215,6 +217,10 @@ export default function ExecutiveProjectDetail() {
                 Branch: {project.team?.branch?.name || '—'}
               </span>
               <span className="flex items-center gap-1">
+                <CalendarDays size={13} className="text-slate-400" />
+                Due: {formatDate(project.targetDate)}
+              </span>
+              <span className="flex items-center gap-1">
                 <Briefcase size={13} className="text-slate-400" />
                 ID: {String(project.id).slice(0, 8)}
               </span>
@@ -223,9 +229,10 @@ export default function ExecutiveProjectDetail() {
               <p className="max-w-3xl text-sm leading-relaxed text-slate-600 pt-1">{project.description}</p>
             )}
           </div>
-          {/* Read-only indicator */}
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500">
-            👁 View Only
+          {/* Read-only executive governance indicator */}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-xs">
+            <ShieldCheck size={13} className="text-slate-500" />
+            Read-Only Governance
           </span>
         </div>
 
@@ -413,11 +420,33 @@ export default function ExecutiveProjectDetail() {
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
             <div className="border-b border-slate-200 px-5 py-4 bg-slate-50/50 flex items-center gap-2">
               <Users size={16} className="text-blue-600" />
-              <h2 className="font-semibold text-slate-900 text-sm">Team Members</h2>
-              <span className="ml-auto text-xs text-slate-400">{contributors.length}</span>
+              <h2 className="font-semibold text-slate-900 text-sm">Team Roster</h2>
+              <span className="ml-auto text-xs text-slate-400">
+                {contributors.length + (project.projectManager ? 1 : 0)}
+              </span>
             </div>
 
-            {contributors.length === 0 ? (
+            {project.projectManager && (
+              <div className="px-5 py-3.5 bg-blue-50/40 border-b border-blue-100/70 flex items-center gap-3">
+                <Avatar name={project.projectManager.fullName} size="base" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-bold text-sm text-slate-900 truncate">
+                      {project.projectManager.fullName}
+                    </p>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                      PM
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {project.projectManager.email || project.projectManager.jobTitle || 'Lead Project Manager'}
+                  </p>
+                </div>
+                <Badge status="info">Lead PM</Badge>
+              </div>
+            )}
+
+            {contributors.length === 0 && !project.projectManager ? (
               <div className="p-4">
                 <EmptyState title="No team assigned" description="No members found for this project." />
               </div>
@@ -466,6 +495,7 @@ export default function ExecutiveProjectDetail() {
             <div className="p-5 space-y-3 text-sm">
               {[
                 { label: 'Status', value: project.status || 'Planning' },
+                { label: 'Project Manager', value: project.projectManager?.fullName || 'Not Assigned' },
                 { label: 'Team', value: project.team?.name || '—' },
                 { label: 'Branch', value: project.team?.branch?.name || '—' },
                 { label: 'Start Date', value: formatDate(project.startDate) },

@@ -10,10 +10,15 @@ export const Table = ({
   borderless = false,
   noSlider = false,
   className = '',
+  tableClassName = '',
+  containerRef,
 }) => {
   return (
-    <div className={`${styles.container} ${borderless ? styles.borderless : ''} ${noSlider ? styles.noSlider : ''} ${className}`}>
-      <table className={styles.table}>
+    <div
+      ref={containerRef}
+      className={`${styles.container} ${borderless ? styles.borderless : ''} ${noSlider ? styles.noSlider : ''} ${className}`}
+    >
+      <table className={`${styles.table} ${tableClassName}`}>
         <thead className={styles.thead}>
           <tr>
             {columns.map((col, index) => (

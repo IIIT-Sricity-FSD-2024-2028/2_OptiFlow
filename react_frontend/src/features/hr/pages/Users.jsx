@@ -83,6 +83,7 @@ export default function HrUsers() {
   const [jobTitle, setJobTitle] = useState("");
   const [managerUserId, setManagerUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
+  const [selectedBranchId, setSelectedBranchId] = useState("");
   const [formError, setFormError] = useState("");
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
 
@@ -256,6 +257,14 @@ export default function HrUsers() {
       return;
     }
 
+    if (
+      (selectedRole === "Branch Manager" || selectedRole?.toLowerCase().includes("branch")) &&
+      !selectedBranchId
+    ) {
+      setFormError("Please select an assigned regional branch for the Branch Manager.");
+      return;
+    }
+
     setIsSubmittingUser(true);
     setFormError("");
 
@@ -269,6 +278,7 @@ export default function HrUsers() {
           jobTitle: jobTitle.trim() || undefined,
           managerUserId: managerUserId || undefined,
           role: selectedRole || undefined,
+          branchId: selectedBranchId || undefined,
         },
       });
 
@@ -280,6 +290,7 @@ export default function HrUsers() {
       setJobTitle("");
       setManagerUserId("");
       setSelectedRole("");
+      setSelectedBranchId("");
       await fetchData();
     } catch (err) {
       console.error("[HrUsers] User creation failed:", err);
@@ -1060,6 +1071,23 @@ export default function HrUsers() {
               ))}
             </Select>
           </FormField>
+
+          {(selectedRole === "Branch Manager" || selectedRole?.toLowerCase().includes("branch")) && (
+            <FormField label="Assigned Branch Hub" required>
+              <Select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                required
+              >
+                <option value="">Select Regional Branch...</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.code || "HUB"})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
 
           <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <Button

@@ -1,6 +1,7 @@
 import { History, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
+import { AuditActionBadge } from '../audit/AuditActionBadge';
 
 export function DashboardRecentActivity({ activity = [], loading }) {
   if (loading) {
@@ -54,9 +55,7 @@ export function DashboardRecentActivity({ activity = [], loading }) {
                     <span className="font-semibold text-slate-800 truncate">
                       {item.adminUser?.fullName || item.adminUser?.email || 'Platform Admin'}
                     </span>
-                    <code className="text-[10px] font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
-                      {item.action}
-                    </code>
+                    <AuditActionBadge action={item.action} />
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5 truncate">
                     {item.company?.legalName ? (

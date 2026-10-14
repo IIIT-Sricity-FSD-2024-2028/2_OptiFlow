@@ -2,6 +2,20 @@ import React, { useState } from "react";
 import { PATHS } from "../../../app/paths";
 import { Link, useNavigate } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
+import {
+  Building2,
+  User,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  ShieldCheck,
+  Sparkles,
+  ArrowRight,
+  Briefcase,
+  Users,
+} from "lucide-react";
 
 export default function Register() {
   const [ownerFullName, setOwnerFullName] = useState("");
@@ -35,7 +49,7 @@ export default function Register() {
 
     try {
       const payload = {
-        companyLegalName, // Note: Label is "Workspace Name" but field is still companyLegalName for API compatibility
+        companyLegalName,
         ownerFullName,
         ownerEmail,
         password,
@@ -54,45 +68,43 @@ export default function Register() {
       setIsProcessing(false);
       setVerificationSent(true);
     } catch (err) {
-      setError(
-        err.message || "Registration failed. Please try again."
-      );
+      setError(err.message || "Registration failed. Please try again.");
       setIsProcessing(false);
     }
   };
 
   if (verificationSent) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row items-center justify-center p-8">
-        <div className="max-w-md w-full bg-white p-10 rounded-xl shadow-sm border border-slate-200 text-center">
-          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white p-8 sm:p-10 rounded-2xl shadow-sm border border-slate-200 text-center space-y-6">
+          <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto border border-blue-100">
+            <Mail className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Check your email</h2>
-          <p className="text-gray-600 mb-8">
-            We've sent a verification link to <span className="font-semibold text-gray-900">{ownerEmail}</span>.
-            Please click the link to verify your business domain and activate your workspace.
-          </p>
-          
-          <div className="space-y-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Check your email</h2>
+            <p className="text-sm text-slate-600 mt-2">
+              We've sent an activation link to <span className="font-semibold text-slate-900">{ownerEmail}</span>.
+              Please click the link to verify your corporate domain and activate your workspace.
+            </p>
+          </div>
+
+          <div className="space-y-3 pt-2">
             <button
-              onClick={() => {
-                alert("Verification email re-sent!");
-              }}
-              className="w-full p-3 bg-white border border-gray-300 text-gray-700 rounded-md text-sm font-semibold hover:bg-gray-50 transition-colors"
+              type="button"
+              onClick={() => alert("Verification email re-sent!")}
+              className="w-full py-2.5 px-4 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
             >
-              Resend email
+              Resend verification email
             </button>
-            
-            <div className="pt-6 border-t border-gray-200 mt-6">
-              <p className="text-xs text-amber-600 mb-3 font-medium px-4 py-2 bg-amber-50 rounded">
-                Development Mode: Bypass email verification to continue testing.
-              </p>
+
+            <div className="pt-4 border-t border-slate-100">
+              <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-800 font-medium mb-3">
+                Development Mode: Bypass email verification to continue testing immediately.
+              </div>
               <button
-                onClick={() => {
-                  window.location.href = "/";
-                }}
-                className="w-full p-3 bg-slate-900 text-white rounded-md text-sm font-semibold hover:bg-slate-800 transition-colors"
+                type="button"
+                onClick={() => { window.location.href = "/"; }}
+                className="w-full py-3 px-4 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
               >
                 Proceed to Dashboard (Dev Bypass)
               </button>
@@ -104,130 +116,219 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-      <aside className="hidden md:flex w-1/3 bg-blue-900 text-white p-12 flex-col justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-12">
-            <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center font-bold text-white shadow-lg">
-              O
-            </div>
-            <span className="text-2xl font-bold tracking-tight">OptiFlow</span>
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
+      {/* Brand & Value Proposition Sidebar */}
+      <aside className="hidden md:flex w-2/5 lg:w-1/3 bg-slate-900 text-white p-10 lg:p-12 flex-col justify-between border-r border-slate-800 relative overflow-hidden">
+        {/* Subtle background glow */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10">
+          <Link to="/" className="inline-block mb-10">
+            <img
+              src="/assets/images/logo-light.svg"
+              alt="OfficeSync"
+              className="h-8 w-auto"
+            />
+          </Link>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-6">
+            <Sparkles className="w-3.5 h-3.5" />
+            14-Day Free Trial · Full Access
           </div>
-          <h2 className="text-4xl font-bold mb-6 leading-tight">
-            Start your 14-day free trial.
+
+          <h2 className="text-3xl font-extrabold tracking-tight text-white mb-4 leading-tight">
+            Centralized operations & compliance for modern enterprises.
           </h2>
-          <p className="text-blue-200 text-lg mb-8 leading-relaxed">
-            No credit card required. Invite your team and experience seamless operations instantly.
+          <p className="text-slate-400 text-sm leading-relaxed mb-8">
+            Structure your organization into regional branches and delivery squads. Automate audit-ready evidence reviews on every milestone.
           </p>
+
+          {/* Key Value Points */}
+          <div className="space-y-4 pt-4 border-t border-slate-800/80">
+            {[
+              {
+                title: "Branch & Squad Topology",
+                desc: "Organize teams by physical or logical regional units with strict role boundaries.",
+              },
+              {
+                title: "Automated Compliance Gates",
+                desc: "Enforce audit evidence uploads and compliance sign-offs before tasks complete.",
+              },
+              {
+                title: "Executive Pulse Telemetry",
+                desc: "Single-pane visibility over portfolio delivery, blocker escalations, and risk posture.",
+              },
+            ].map((feature, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-200">{feature.title}</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">{feature.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Customer Testimonial Quote */}
+        <div className="relative z-10 pt-8 border-t border-slate-800/80">
+          <div className="flex items-center gap-1 text-amber-400 text-xs mb-2">
+            ★★★★★
+          </div>
+          <p className="text-xs text-slate-300 italic leading-relaxed">
+            "OfficeSync centralized delivery across 4 regional branches and cut our compliance review cycle by over 60%."
+          </p>
+          <div className="mt-3 flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+              SC
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white">Sarah Chen</p>
+              <p className="text-[11px] text-slate-400">VP of Operations, FinScale Tech</p>
+            </div>
+          </div>
         </div>
       </aside>
 
-      <main className="flex-1 flex items-center justify-center p-8 bg-white relative">
-        <div className="max-w-xl w-full relative z-10">
-          <div className="mb-8 text-center md:text-left">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Create your workspace
+      {/* Main Registration Form */}
+      <main className="flex-1 flex items-center justify-center p-6 sm:p-10 lg:p-12 bg-white">
+        <div className="max-w-xl w-full">
+          {/* Mobile Logo */}
+          <div className="text-center md:hidden mb-6">
+            <Link to="/" className="inline-block">
+              <img
+                src="/assets/images/logo.svg"
+                alt="OfficeSync"
+                className="h-7 w-auto mx-auto"
+              />
+            </Link>
+          </div>
+
+          <div className="mb-8">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 mb-2">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Enterprise Setup
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              Create your corporate workspace
             </h1>
-            <p className="text-gray-500">
-              Set up your environment and get started in seconds.
+            <p className="text-sm text-slate-500 mt-1">
+              Start your 14-day free trial. No credit card required.
             </p>
           </div>
 
           {error && (
-            <div className="p-4 mb-6 bg-red-50 border-l-4 border-red-500 text-red-700 rounded text-sm">
-              {error}
+            <div className="p-4 mb-6 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-sm flex items-start gap-3">
+              <div className="w-2 h-2 rounded-full bg-rose-600 mt-1.5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form
-            className="space-y-5"
-            onSubmit={handleRegister}
-          >
-            <div className="flex flex-col md:flex-row gap-5">
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
+          <form className="space-y-4" onSubmit={handleRegister}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Workspace Name
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={companyLegalName}
-                  onChange={(e) => setCompanyLegalName(e.target.value)}
-                  placeholder="e.g. Acme Corp"
-                  className="w-full p-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 transition-shadow"
-                />
+                <div className="relative">
+                  <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={companyLegalName}
+                    onChange={(e) => setCompanyLegalName(e.target.value)}
+                    placeholder="e.g. Acme Corporation"
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                  />
+                </div>
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Your Full Name
                 </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={ownerFullName}
+                    onChange={(e) => setOwnerFullName(e.target.value)}
+                    placeholder="e.g. Jane Doe"
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Work Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={ownerFullName}
-                  onChange={(e) => setOwnerFullName(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full p-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 transition-shadow"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                  placeholder="jane@company.com"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Work Email
-              </label>
-              <input
-                type="email"
-                required
-                value={ownerEmail}
-                onChange={(e) => setOwnerEmail(e.target.value)}
-                placeholder="john@example.com"
-                className="w-full p-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 transition-shadow"
-              />
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-5">
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Company Size
                 </label>
-                <select
-                  value={companySize}
-                  onChange={(e) => setCompanySize(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 bg-white"
-                >
-                  <option value="" disabled>Select size...</option>
-                  <option value="1-10">1-10 employees</option>
-                  <option value="11-50">11-50 employees</option>
-                  <option value="51-250">51-250 employees</option>
-                  <option value="250+">250+ employees</option>
-                </select>
+                <div className="relative">
+                  <Users className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    value={companySize}
+                    onChange={(e) => setCompanySize(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer"
+                  >
+                    <option value="" disabled>Select workforce size...</option>
+                    <option value="1-10">1 - 10 employees</option>
+                    <option value="11-50">11 - 50 employees</option>
+                    <option value="51-250">51 - 250 employees</option>
+                    <option value="250+">250+ enterprise employees</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Industry
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Industry / Domain
                 </label>
-                <select
-                  value={industry}
-                  onChange={(e) => setIndustry(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 bg-white"
-                >
-                  <option value="" disabled>Select industry...</option>
-                  <option value="Software & Technology">Software & Technology</option>
-                  <option value="Healthcare & Medical">Healthcare & Medical</option>
-                  <option value="Financial Services">Financial Services</option>
-                  <option value="Manufacturing & Logistics">Manufacturing & Logistics</option>
-                  <option value="Professional Services">Professional Services (Legal, Consulting)</option>
-                  <option value="Other">Other</option>
-                </select>
+                <div className="relative">
+                  <Briefcase className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all cursor-pointer"
+                  >
+                    <option value="" disabled>Select industry...</option>
+                    <option value="Software & Technology">Software & Technology</option>
+                    <option value="Financial Services">Financial Services & Fintech</option>
+                    <option value="Healthcare & Medical">Healthcare & Medical</option>
+                    <option value="Manufacturing & Logistics">Manufacturing & Logistics</option>
+                    <option value="Professional Services">Professional Services</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Password
               </label>
               <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
@@ -235,18 +336,14 @@ export default function Register() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 8 characters"
-                  className="w-full p-3 pr-10 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                 >
-                  {showPassword ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                  )}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -254,20 +351,23 @@ export default function Register() {
             <button
               type="submit"
               disabled={isProcessing}
-              className="w-full p-3.5 mt-6 bg-blue-600 text-white rounded-md text-base font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="w-full py-3 px-4 mt-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-xs hover:shadow transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
             >
-              {isProcessing ? "Creating Workspace..." : "Start 14-Day Free Trial"}
+              <span>{isProcessing ? "Creating Workspace..." : "Create Workspace & Start 14-Day Free Trial"}</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          <div className="text-center mt-6 text-sm text-gray-500">
-            Already have an account?{" "}
-            <Link
-              to={PATHS.PUBLIC.LOGIN}
-              className="text-blue-600 font-semibold hover:underline"
-            >
-              Sign in instead
-            </Link>
+          <div className="pt-6 mt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <span>
+              Already have an account?{" "}
+              <Link to={PATHS.PUBLIC.LOGIN} className="text-blue-600 font-bold hover:underline">
+                Sign in
+              </Link>
+            </span>
+            <span className="text-slate-400">
+              SOC-2 Type II Certified · 256-bit Encryption
+            </span>
           </div>
         </div>
       </main>

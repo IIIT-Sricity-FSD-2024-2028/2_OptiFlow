@@ -268,12 +268,40 @@ export async function createUser(req, res, next) {
       });
 
       if (targetRole) {
+        let assignedScopeType = body.scopeType || 'Company';
+        let assignedScopeId = req.user.companyId;
+
+        const branchId = body.branchId || body.branch_id || (assignedScopeType === 'Branch' ? body.scopeId : null);
+        if (branchId) {
+          const branch = await tx.branch.findFirst({
+            where: { id: String(branchId), companyId: req.user.companyId },
+          });
+          if (branch) {
+            assignedScopeType = 'Branch';
+            assignedScopeId = branch.id;
+          }
+        } else if (
+          normalizeRole(targetRole.label) === 'branch_manager' ||
+          targetRole.name === 'branch_manager'
+        ) {
+          // If no branch specified, fallback to the company's first branch
+          const defaultBranch = await tx.branch.findFirst({
+            where: { companyId: req.user.companyId },
+            orderBy: { createdAt: 'asc' },
+          });
+          if (defaultBranch) {
+            assignedScopeType = 'Branch';
+            assignedScopeId = defaultBranch.id;
+          }
+        }
+
         await tx.roleAssignment.create({
           data: {
+            companyId: req.user.companyId,
             userId: user.id,
             roleId: targetRole.id,
-            scopeType: 'Company',
-            scopeId: req.user.companyId,
+            scopeType: assignedScopeType,
+            scopeId: assignedScopeId,
             grantedById: req.user.id,
           },
         });

@@ -1,6 +1,7 @@
 import { X, ExternalLink, Shield, History } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuditDiffViewer } from './AuditDiffViewer';
+import { AuditActionBadge } from './AuditActionBadge';
 
 export function AuditDetailDrawer({ log, isOpen, onClose }) {
   if (!isOpen || !log) return null;
@@ -15,9 +16,7 @@ export function AuditDetailDrawer({ log, isOpen, onClose }) {
         <div className="p-5 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-xs z-10">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
-                {log.action}
-              </span>
+              <AuditActionBadge action={log.action} showRaw={true} />
             </div>
             <p className="text-xs text-slate-400 mt-1 font-mono">Event ID: {log.id}</p>
           </div>

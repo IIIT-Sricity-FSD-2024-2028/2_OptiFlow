@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { QuotaInput } from "./QuotaInput";
-import styles from "./Plans.module.css";
+import styles from "../pages/Plans.module.css";
 
 const INITIAL_FORM_STATE = {
   name: "",
