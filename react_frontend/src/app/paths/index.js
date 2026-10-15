@@ -51,6 +51,7 @@ export const PATHS = {
     ROLE_ASSIGNMENTS: "/hr/role-assignments",
     BRANCHES: "/hr/branches",
     TEAMS: "/hr/teams",
+    AUDIT_LOGS: "/hr/audit-logs",
   },
   PROCESS_ADMIN: {
     DASHBOARD: "/process-admin/dashboard",
@@ -58,6 +59,7 @@ export const PATHS = {
     TEMPLATE_DETAIL: "/process-admin/templates/:id",
     INSTANCES: "/process-admin/instances",
     INSTANCE_DETAIL: "/process-admin/instances/:id",
+    AUDIT_LOGS: "/process-admin/audit-logs",
   },
   PM: {
     DASHBOARD: "/pm/dashboard",

@@ -7,6 +7,7 @@ const HrRoles = React.lazy(() => import('../../features/hr/pages/Roles'));
 const HrRoleAssignments = React.lazy(() => import('../../features/hr/pages/RoleAssignments'));
 const HrBranches = React.lazy(() => import('../../features/hr/pages/Branches'));
 const HrTeams = React.lazy(() => import('../../features/hr/pages/Teams'));
+const HrAuditLogs = React.lazy(() => import('../../features/hr/pages/AuditLogs'));
 
 export const hrRoutes = [
   { path: PATHS.HR.DASHBOARD, element: <HrDashboard /> },
@@ -15,5 +16,6 @@ export const hrRoutes = [
   { path: PATHS.HR.ROLES, element: <HrRoles /> },
   { path: PATHS.HR.ROLE_ASSIGNMENTS, element: <HrRoleAssignments /> },
   { path: PATHS.HR.BRANCHES, element: <HrBranches /> },
-  { path: PATHS.HR.TEAMS, element: <HrTeams /> }
+  { path: PATHS.HR.TEAMS, element: <HrTeams /> },
+  { path: PATHS.HR.AUDIT_LOGS, element: <HrAuditLogs /> }
 ];

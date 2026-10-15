@@ -7,4 +7,5 @@ export const hrNav = [
     { label: 'Roles & Permissions', path: PATHS.HR.ROLES, icon: 'Key' },
     { label: 'Branches', path: PATHS.HR.BRANCHES, icon: 'Building' },
     { label: 'Org Chart & Teams', path: PATHS.HR.TEAMS, icon: 'Network' },
+    { label: 'System Audit Logs', path: PATHS.HR.AUDIT_LOGS, icon: 'ShieldCheck' },
 ];

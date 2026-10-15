@@ -6,7 +6,7 @@ import {
   ConflictError,
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
-import { hasRole, ROLES } from '../utils/roles.js';
+import { hasRole, normalizeRole, ROLES } from '../utils/roles.js';
 import {
   buildTaskListWhere,
   buildSubtaskListWhere,
@@ -247,10 +247,6 @@ export async function createTask(req, res, next) {
     validateEnum(status, ALLOWED_TASK_STATUSES, 'status');
     validateEnum(priority, ALLOWED_TASK_PRIORITIES, 'priority');
 
-    if (assignedToId) {
-      throw new BadRequestError('Tasks are assigned to the project Team Lead automatically; do not choose an individual assignee');
-    }
-
     if (!projectId) {
       throw new BadRequestError('A project must be selected so the task can be assigned to its Team Lead');
     }
@@ -271,7 +267,47 @@ export async function createTask(req, res, next) {
       assertBranchManagerScope(req.user, project.team?.branchId, 'create tasks in');
     }
 
-    const teamLead = await resolveProjectTeamLead(project, req.user.companyId);
+    let targetAssigneeId = null;
+    if (assignedToId) {
+      const candidateUser = await prisma.user.findFirst({
+        where: {
+          id: assignedToId,
+          companyId: req.user.companyId,
+          isActive: true,
+        },
+        include: {
+          teamMembers: {
+            where: { teamId: project.teamId },
+          },
+          roleAssignments: {
+            where: { revokedAt: null },
+            include: { role: true },
+          },
+        },
+      });
+
+      if (!candidateUser) {
+        throw new NotFoundError('Selected Team Lead was not found or is inactive');
+      }
+
+      const hasTlRole = candidateUser.roleAssignments.some(
+        (ra) =>
+          normalizeRole(ra.role?.label) === 'team_lead' ||
+          ra.role?.name === 'team_lead' ||
+          ra.role?.roleTemplate?.slug === 'team_lead'
+      );
+      const isTeamLeadInTeam = candidateUser.teamMembers.some((tm) => /lead/i.test(tm.role || ''));
+
+      if (!hasTlRole && !isTeamLeadInTeam) {
+        throw new BadRequestError('The selected assignee must be a designated Team Lead');
+      }
+
+      targetAssigneeId = candidateUser.id;
+    } else {
+      const teamLead = await resolveProjectTeamLead(project, req.user.companyId);
+      targetAssigneeId = teamLead.id;
+    }
+
     const newTask = await prisma.task.create({
       data: {
         companyId: req.user.companyId,
@@ -280,7 +316,7 @@ export async function createTask(req, res, next) {
         description,
         status,
         priority,
-        assignedToId: teamLead.id,
+        assignedToId: targetAssigneeId,
         createdById: req.user.id,
         dueDate: dueDate ? new Date(dueDate) : null,
         estimatedHours: estimatedHours ? Number(estimatedHours) : null,

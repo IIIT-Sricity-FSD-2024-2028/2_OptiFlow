@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Badge } from '../../../../shared/components/Badge';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
@@ -8,6 +8,15 @@ import { Modal } from '../../../../shared/components/Modal';
 import { FormField, Textarea } from '../../../../shared/components/FormField';
 import { Pagination } from '../../../../shared/components/Pagination';
 import { formatDate } from '../../../../shared/utils/formatDate';
+import { 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  FileText, 
+  AlertTriangle, 
+  ArrowUpRight,
+  RotateCcw
+} from 'lucide-react';
 import * as evidenceApi from '../../../../services/api/evidence';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as tasksApi from '../../../../services/api/tasks';
@@ -73,9 +82,25 @@ export default function TeamLeadReviews() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
 
-  const filtered = list.filter(e => {
+  const counts = useMemo(() => {
+    let pending = 0;
+    let approved = 0;
+    let rejected = 0;
+    list.forEach((e) => {
+      const s = String(e.status || '').toLowerCase();
+      if (s === 'pending' || s === 'under_review') pending++;
+      else if (s === 'approved') approved++;
+      else if (s === 'rejected') rejected++;
+    });
+    return { pending, approved, rejected };
+  }, [list]);
+
+  const filtered = list.filter((e) => {
     const s = String(e.status || '').toLowerCase();
-    return tab === 'pending' ? (s === 'pending' || s === 'under_review') : s === 'approved';
+    if (tab === 'pending') return s === 'pending' || s === 'under_review';
+    if (tab === 'approved') return s === 'approved';
+    if (tab === 'rejected') return s === 'rejected';
+    return true;
   });
 
   const paginatedList = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -162,31 +187,93 @@ export default function TeamLeadReviews() {
       <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6 items-start">
 
         {/* Master list */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col">
-          <div className="border-b border-gray-200 flex">
-            {['pending', 'approved'].map(t => (
-              <button key={t} onClick={() => { setTab(t); setSelected(null); setPage(1); }}
-                className={`flex-1 py-3 text-sm font-semibold transition-colors ${tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                {t === 'pending' ? 'Pending Review' : 'Approved'}
-              </button>
-            ))}
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col shadow-xs">
+          <div className="border-b border-gray-200 flex bg-gray-50/50">
+            {[
+              { key: 'pending', label: 'Pending Review', count: counts.pending },
+              { key: 'approved', label: 'Approved', count: counts.approved },
+              { key: 'rejected', label: 'Rejections', count: counts.rejected },
+            ].map((t) => {
+              const isActive = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => {
+                    setTab(t.key);
+                    setSelected(null);
+                    setPage(1);
+                  }}
+                  className={`flex-1 py-3 px-2 text-xs sm:text-sm font-semibold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
+                    isActive
+                      ? t.key === 'rejected'
+                        ? 'text-rose-700 border-rose-600 bg-white'
+                        : 'text-blue-600 border-blue-600 bg-white'
+                      : 'text-gray-500 hover:text-gray-800 border-transparent hover:bg-gray-100/50'
+                  }`}
+                >
+                  <span>{t.label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                      isActive
+                        ? t.key === 'rejected'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-blue-100 text-blue-800'
+                        : 'bg-gray-200/80 text-gray-600'
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
-            {filtered.length === 0
-              ? <div className="p-6"><EmptyState title="No items" description={tab === 'pending' ? 'No pending evidence.' : 'No approved evidence.'} /></div>
-              : paginatedList.map(e => (
-                <button key={e.id} onClick={() => setSelected(e)}
-                  className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${selected?.id === e.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{e.user?.fullName || e.user?.email || e.submittedBy || e.userName || 'Team Member'}</p>
-                  <p className="text-sm font-semibold text-gray-900 mb-2 truncate">{e.title || 'Untitled Evidence'}</p>
+            {filtered.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No items"
+                  description={
+                    tab === 'pending'
+                      ? 'No pending evidence deliverables awaiting review.'
+                      : tab === 'approved'
+                      ? 'No approved evidence items.'
+                      : 'No rejected deliverables. Items returned for revision will appear here.'
+                  }
+                />
+              </div>
+            ) : (
+              paginatedList.map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => setSelected(e)}
+                  className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${
+                    selected?.id === e.id
+                      ? tab === 'rejected'
+                        ? 'bg-rose-50/70 border-l-4 border-l-rose-500'
+                        : 'bg-blue-50 border-l-4 border-l-blue-500'
+                      : ''
+                  }`}
+                >
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                    {e.user?.fullName || e.user?.email || e.submittedBy || e.userName || 'Team Member'}
+                  </p>
+                  <p className="text-sm font-semibold text-gray-900 mb-1 truncate">{e.title || 'Untitled Evidence'}</p>
                   {(e.task?.title || e.violation?.rule?.name) && (
                     <p className="mb-2 truncate text-xs text-gray-500">
                       {e.task?.title ? `Task: ${e.task.title}` : `Rule: ${e.violation.rule.name}`}
                     </p>
                   )}
-                  <Badge status={statusVariant(e.status)}>{String(e.status || 'Pending').replace(/_/g, ' ')}</Badge>
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge status={statusVariant(e.status)}>{String(e.status || 'Pending').replace(/_/g, ' ')}</Badge>
+                    {e.notes && tab === 'rejected' && (
+                      <span className="text-[10px] text-rose-600 font-medium truncate max-w-[130px]">
+                        Feedback logged
+                      </span>
+                    )}
+                  </div>
                 </button>
-              ))}
+              ))
+            )}
           </div>
           {filtered.length > PAGE_SIZE && (
             <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
@@ -250,17 +337,35 @@ export default function TeamLeadReviews() {
                   )}
                 </div>
 
-                {selected.notes && (
+                {String(selected.status || '').toLowerCase() === 'rejected' ? (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 space-y-2.5">
+                    <div className="flex items-center gap-2 text-rose-800 font-bold text-sm">
+                      <XCircle size={18} className="text-rose-600 shrink-0" />
+                      <span>Returned for Revision by Team Lead</span>
+                    </div>
+                    {selected.notes && (
+                      <div className="text-xs text-rose-900 bg-white/95 p-3 rounded-lg border border-rose-200/80 shadow-xs">
+                        <p className="font-semibold text-rose-700 uppercase tracking-wide text-[10px] mb-1">
+                          TL Feedback & Revision Instructions:
+                        </p>
+                        <p className="italic leading-relaxed">{selected.notes}</p>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-rose-700 leading-normal">
+                      Task status was reverted to Active so the team member can make adjustments. An escalation ticket was logged with the Project Manager.
+                    </p>
+                  </div>
+                ) : selected.notes ? (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                     <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Notes</p>
                     <p className="text-sm text-amber-900 italic">"{selected.notes}"</p>
                   </div>
-                )}
+                ) : null}
 
                 <div className="grid grid-cols-2 gap-4">
                   {[
                     ['Task', selected.taskTitle || selected.task_id || '—'],
-                    ['Submitted', formatDate(selected.createdAt || selected.created_at)],
+                    ['Submitted', formatDate(selected.submittedAt || selected.createdAt || selected.created_at)],
                     ['Type', selected.type || selected.evidenceType || '—'],
                     ['Status', String(selected.status || 'Pending').replace(/_/g, ' ')],
                   ].map(([label, value]) => (
@@ -271,27 +376,41 @@ export default function TeamLeadReviews() {
                   ))}
                 </div>
 
-                {String(selected.status || '').toLowerCase() !== 'approved'
-                  ? (
-                    <div className="flex flex-wrap gap-3 pt-2">
-                      <Button variant="primary" onClick={() => handleApprove(selected)} disabled={approving || rejecting}>
-                        {approving ? 'Approving…' : 'Approve Team Evidence'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="text-rose-600 border-rose-300 hover:bg-rose-50"
-                        onClick={() => { setRejectionReason(''); setRejectModalOpen(true); }}
-                        disabled={approving || rejecting}
-                      >
-                        Reject & Escalate to PM
-                      </Button>
+                {String(selected.status || '').toLowerCase() === 'approved' ? (
+                  <div className="flex items-center gap-2 py-3 px-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <span className="text-sm font-semibold text-emerald-800">Evidence Approved & Validated</span>
+                  </div>
+                ) : String(selected.status || '').toLowerCase() === 'rejected' ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <Clock size={16} className="text-slate-500" />
+                      <span className="text-xs font-medium text-slate-700">Awaiting revised submission from team member</span>
                     </div>
-                  )
-                  : <div className="flex items-center gap-2 py-3 px-4 bg-green-50 border border-green-200 rounded-lg">
-                      <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                      <span className="text-sm font-semibold text-green-700">Evidence Approved</span>
-                    </div>
-                }
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApprove(selected)}
+                      disabled={approving || rejecting}
+                    >
+                      {approving ? 'Approving…' : 'Re-evaluate & Approve'}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <Button variant="primary" onClick={() => handleApprove(selected)} disabled={approving || rejecting}>
+                      {approving ? 'Approving…' : 'Approve Team Evidence'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="text-rose-600 border-rose-300 hover:bg-rose-50"
+                      onClick={() => { setRejectionReason(''); setRejectModalOpen(true); }}
+                      disabled={approving || rejecting}
+                    >
+                      Reject & Escalate to PM
+                    </Button>
+                  </div>
+                )}
               </div>
           }
         </div>

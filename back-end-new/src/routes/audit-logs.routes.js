@@ -4,6 +4,8 @@ import { requireRoles } from '../middleware/authorize.js';
 import { ROLES } from '../utils/roles.js';
 import {
   listAuditLogs,
+  listSystemAuditLogs,
+  listProcessAuditLogs,
   listAuditLogsByUser,
   listAuditLogsByEntity,
   createAuditLogEndpoint
@@ -12,6 +14,8 @@ import {
 const router = Router();
 
 // Audit Logs Routes
+router.get(['/audit-logs/system', '/api/audit-logs/system'], authenticate, listSystemAuditLogs);
+router.get(['/audit-logs/process', '/api/audit-logs/process'], authenticate, listProcessAuditLogs);
 router.get(['/audit-logs', '/api/audit-logs'], authenticate, listAuditLogs);
 router.get(['/audit-logs/by-user/:userId', '/api/audit-logs/by-user/:userId'], authenticate, listAuditLogsByUser);
 router.get(['/audit-logs/by-entity/:entityType/:entityId', '/api/audit-logs/by-entity/:entityType/:entityId'], authenticate, listAuditLogsByEntity);

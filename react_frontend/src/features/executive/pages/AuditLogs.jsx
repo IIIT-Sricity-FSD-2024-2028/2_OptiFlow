@@ -5,6 +5,7 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { Pagination } from '../../../shared/components/Pagination';
 import { Modal } from '../../../shared/components/Modal';
 import { apiClient } from '../../../services/api/client';
+import { formatAuditTimestamp } from '../../../shared/utils/formatDate';
 import {
   Search,
   Eye,
@@ -33,21 +34,17 @@ const formatEntityType = (type) => {
   if (type === 'ComplianceRule') return 'Compliance Rule';
   if (type === 'ComplianceViolation') return 'Violation';
   if (type === 'ComplianceEvidence') return 'Evidence';
+  if (type === 'ProcessTemplate') return 'Process Template';
+  if (type === 'User') return 'User Account';
+  if (type === 'Role') return 'Role & Permission';
+  if (type === 'Branch') return 'Regional Branch';
+  if (type === 'Team') return 'Org Team';
   return type.replace(/([A-Z])/g, ' $1').trim();
-};
-
-const formatTimestamp = (ts) => {
-  if (!ts) return '—';
-  const d = new Date(ts);
-  return {
-    date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
-  };
 };
 
 function LogDetailModal({ log, onClose }) {
   if (!log) return null;
-  const ts = formatTimestamp(log.performedAt || log.createdAt);
+  const ts = formatAuditTimestamp(log.performedAt || log.createdAt);
 
   return (
     <Modal isOpen={!!log} onClose={onClose} title="Audit Log Detail" className="max-w-lg">
@@ -55,7 +52,7 @@ function LogDetailModal({ log, onClose }) {
         {/* Timestamp */}
         <div className="flex items-center gap-2 text-sm text-slate-600">
           <Clock size={14} className="text-slate-400 shrink-0" />
-          <span>{ts.date} at {ts.time}</span>
+          <span>{ts.full}</span>
         </div>
 
         {/* Action */}
@@ -110,7 +107,7 @@ export default function ExecutiveAuditLogs() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiClient('/audit-logs');
+      const data = await apiClient('/audit-logs?type=all');
       setLogs(Array.isArray(data) ? data : data?.data || []);
       setCurrentPage(1);
     } catch (err) {
@@ -275,7 +272,7 @@ export default function ExecutiveAuditLogs() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {paginated.map((log, i) => {
-                  const ts = formatTimestamp(log.performedAt || log.createdAt);
+                  const ts = formatAuditTimestamp(log.performedAt || log.createdAt);
                   return (
                     <tr
                       key={log.id || i}
@@ -283,8 +280,10 @@ export default function ExecutiveAuditLogs() {
                     >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span className="font-semibold text-slate-800 text-xs">{ts.date}</span>
-                          <span className="text-[11px] text-slate-500">{ts.time}</span>
+                          <span className={`font-semibold text-xs ${ts.isSameDay ? 'text-blue-700' : 'text-slate-800'}`}>
+                            {ts.primary}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-mono">{ts.secondary}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">

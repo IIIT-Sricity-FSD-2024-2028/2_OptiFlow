@@ -2,6 +2,7 @@ import React from "react";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { Badge } from "../../../shared/components/Badge";
+import { formatAuditTimestamp } from "../../../shared/utils/formatDate";
 
 // Internal foreign key IDs that should not clutter the human-readable changes diff
 const IGNORED_DIFF_KEYS = new Set([
@@ -91,15 +92,7 @@ export function AuditLogDetailModal({ isOpen, onClose, log }) {
 
   const hasAnyChanges = filteredNewKeys.length > 0 || filteredOldKeys.length > 0;
 
-  const formattedTimestamp = log.performedAt ? new Date(log.performedAt).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  }) : '—';
+  const ts = formatAuditTimestamp(log.performedAt || log.createdAt);
 
   return (
     <Modal 
@@ -120,7 +113,7 @@ export function AuditLogDetailModal({ isOpen, onClose, log }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/80 p-5 rounded-xl border border-slate-200/80">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">Timestamp</span>
-            <span className="text-sm font-semibold text-slate-900">{formattedTimestamp}</span>
+            <span className="text-sm font-semibold text-slate-900">{ts.full}</span>
           </div>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">Action</span>

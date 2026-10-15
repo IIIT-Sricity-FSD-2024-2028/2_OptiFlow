@@ -5,11 +5,13 @@ const ProcessAdminTemplates = React.lazy(() => import('../../features/process-ad
 const ProcessAdminTemplateDetail = React.lazy(() => import('../../features/process-admin/pages/TemplateDetail'));
 const ProcessAdminInstances = React.lazy(() => import('../../features/process-admin/pages/Instances'));
 const ProcessAdminInstanceDetail = React.lazy(() => import('../../features/process-admin/pages/InstanceDetail'));
+const ProcessAdminAuditLogs = React.lazy(() => import('../../features/process-admin/pages/AuditLogs'));
 
 export const processAdminRoutes = [
   { path: PATHS.PROCESS_ADMIN.DASHBOARD, element: <ProcessAdminDashboard /> },
   { path: PATHS.PROCESS_ADMIN.TEMPLATES, element: <ProcessAdminTemplates /> },
   { path: PATHS.PROCESS_ADMIN.TEMPLATE_DETAIL, element: <ProcessAdminTemplateDetail /> },
   { path: PATHS.PROCESS_ADMIN.INSTANCES, element: <ProcessAdminInstances /> },
-  { path: PATHS.PROCESS_ADMIN.INSTANCE_DETAIL, element: <ProcessAdminInstanceDetail /> }
+  { path: PATHS.PROCESS_ADMIN.INSTANCE_DETAIL, element: <ProcessAdminInstanceDetail /> },
+  { path: PATHS.PROCESS_ADMIN.AUDIT_LOGS, element: <ProcessAdminAuditLogs /> }
 ];

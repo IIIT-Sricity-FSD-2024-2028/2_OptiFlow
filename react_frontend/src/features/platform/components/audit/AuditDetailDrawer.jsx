@@ -2,11 +2,13 @@ import { X, ExternalLink, Shield, History } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuditDiffViewer } from './AuditDiffViewer';
 import { AuditActionBadge } from './AuditActionBadge';
+import { formatAuditTimestamp } from '../../../../shared/utils/formatDate';
 
 export function AuditDetailDrawer({ log, isOpen, onClose }) {
   if (!isOpen || !log) return null;
 
   const date = new Date(log.createdAt);
+  const ts = formatAuditTimestamp(log.createdAt);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
@@ -31,7 +33,7 @@ export function AuditDetailDrawer({ log, isOpen, onClose }) {
           <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3">
             <div>
               <span className="text-slate-400 font-medium">Timestamp</span>
-              <p className="font-semibold text-slate-800 mt-0.5">{date.toLocaleString()}</p>
+              <p className="font-semibold text-slate-800 mt-0.5">{ts.full}</p>
               <span className="text-[10px] text-slate-400 font-mono">{date.toISOString()}</span>
             </div>
 
