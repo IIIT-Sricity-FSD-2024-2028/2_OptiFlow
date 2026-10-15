@@ -156,11 +156,14 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
     return { ...where, assignedToId: user.id };
   }
 
-  // Team Members can see parent-task context only when they have an assigned subtask.
+  // Team Members see parent-task context when directly assigned or when they have an assigned subtask.
   if ((role === 'team_member' || role === 'member') && user?.id) {
     return {
       ...where,
-      subtasks: { some: { assignedToId: user.id, deletedAt: null } },
+      OR: [
+        { assignedToId: user.id },
+        { subtasks: { some: { assignedToId: user.id, deletedAt: null } } },
+      ],
     };
   }
 

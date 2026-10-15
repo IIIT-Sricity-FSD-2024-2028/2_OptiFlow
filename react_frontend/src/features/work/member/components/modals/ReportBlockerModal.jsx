@@ -52,6 +52,7 @@ export function ReportBlockerModal({
 
     setSubmitting(true);
     try {
+      const selectedTask = tasks.find((t) => String(t.id || t.taskId) === String(finalTaskId));
       const isSubtask = Boolean(selectedTask?.isSubtask || selectedTask?.parentTaskId);
       const actualTaskId = isSubtask ? (selectedTask.parentTaskId || selectedTask.taskId) : finalTaskId;
       const finalProjId = projectId || selectedTask?.projectId || selectedTask?.project?.id;

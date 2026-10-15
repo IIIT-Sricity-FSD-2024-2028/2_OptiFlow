@@ -383,6 +383,19 @@ export async function updateTask(req, res, next) {
       throw new ForbiddenError('Parent tasks remain assigned to the project Team Lead; assign work through subtasks');
     }
 
+    const role = normalizeRole(req.user?.roleLabel || req.user?.role);
+    const isMember = role === 'team_member' || role === 'member';
+
+    // Governance: Team members can submit work (In_Review) or report blockers (Blocked), but cannot tamper with parent task configurations or complete tasks directly
+    if (isMember) {
+      if (body.title || body.description !== undefined || body.priority || body.dueDate !== undefined || body.due_date !== undefined) {
+        throw new ForbiddenError('Team members cannot modify parent task configurations (title, priority, due date, description)');
+      }
+      if (body.status && !['In_Review', 'Blocked', 'Active'].includes(body.status)) {
+        throw new ForbiddenError('Team members can only submit work for review or report blockers; only Team Leads or Managers can approve or complete tasks');
+      }
+    }
+
     if (body.title) updateData.title = String(body.title).trim();
     if (body.description !== undefined) updateData.description = body.description;
     if (body.status) {
@@ -850,6 +863,11 @@ export async function updateSubtask(req, res, next) {
     if (body.status) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');
       updateData.status = body.status;
+      if (body.status === 'Completed') {
+        updateData.completedAt = new Date();
+      } else {
+        updateData.completedAt = null;
+      }
     }
 
     const updated = await prisma.subtask.update({
