@@ -1,75 +1,112 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
-import { StatCard } from "../../../shared/components/StatCard";
+import { PATHS } from "../../../app/paths";
 import { Button } from "../../../shared/components/Button";
 import { Badge } from "../../../shared/components/Badge";
 import { Loader } from "../../../shared/components/Loader";
-import { EmptyState } from "../../../shared/components/EmptyState";
-import { Table } from "../../../shared/components/Table";
 import { Modal } from "../../../shared/components/Modal";
+import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { FormField, Input, Textarea, Select } from "../../../shared/components/FormField";
+import styles from "./Roles.module.css";
+import {
+  ShieldCheck,
+  Shield,
+  KeyRound,
+  Plus,
+  RotateCw,
+  Search,
+  Check,
+  UserPlus,
+  Trash2,
+  Copy,
+  ExternalLink,
+  Users,
+} from "lucide-react";
 
-// Default system permission definitions grouped by functional domain
-// Used as fallback / categorization matrix for the Dynamic Role Architect
+// Categorized permissions standard matrix for OptiFlow
 const PERMISSION_DOMAINS = {
   "Work Delivery & Tasks": [
-    { code: "task:create", label: "Create Parent Tasks", description: "Design and delegate parent project tasks" },
-    { code: "task:subtask:create", label: "Create Subtasks", description: "Decompose tasks into granular subtasks" },
-    { code: "task:execute", label: "Execute Subtasks", description: "Update progress, submit deliverables and hours" },
-    { code: "task:review", label: "Review Subtasks", description: "First-line review and approval of deliverables" },
-    { code: "task:change_request", label: "Submit Change Requests", description: "Petition upward baseline modifications" },
+    { slug: "task:create", label: "Create Parent Tasks", description: "Design and delegate parent project tasks" },
+    { slug: "task:subtask:create", label: "Create Subtasks", description: "Decompose tasks into granular subtasks" },
+    { slug: "task:execute", label: "Execute Subtasks", description: "Update progress, submit deliverables and hours" },
+    { slug: "task:review", label: "Review Subtasks", description: "First-line review and approval of deliverables" },
+    { slug: "task:change_request", label: "Submit Change Requests", description: "Petition upward baseline modifications" },
   ],
   "Company Governance & HR": [
-    { code: "hr:user:create", label: "Onboard Employees", description: "Create user profiles and assign primary roles" },
-    { code: "hr:user:manage", label: "Manage Personnel", description: "Edit employee profiles, job titles, and status" },
-    { code: "hr:branch:manage", label: "Manage Branches", description: "Create and administer regional branch hubs" },
-    { code: "hr:team:manage", label: "Manage Teams", description: "Organize functional pods and assign members" },
-    { code: "hr:role:architect", label: "Architect Roles", description: "Define dynamic custom roles & permissions" },
+    { slug: "hr:user:create", label: "Onboard Employees", description: "Create user profiles and assign primary roles" },
+    { slug: "hr:user:manage", label: "Manage Personnel", description: "Edit employee profiles, job titles, and status" },
+    { slug: "hr:branch:manage", label: "Manage Branches", description: "Create and administer regional branch hubs" },
+    { slug: "hr:team:manage", label: "Manage Teams", description: "Organize functional pods and assign members" },
+    { slug: "hr:role:architect", label: "Architect Roles", description: "Define dynamic custom roles & permissions" },
   ],
   "Compliance & Auditing": [
-    { code: "compliance:rule:manage", label: "Manage Rules", description: "Establish compliance policies and categories" },
-    { code: "compliance:evidence:audit", label: "Audit Evidence", description: "Inspect deliverables and SHA-256 hashes" },
-    { code: "compliance:violation:adjudicate", label: "Adjudicate Violations", description: "Issue and resolve compliance penalties" },
+    { slug: "compliance:rule:manage", label: "Manage Rules", description: "Establish compliance policies and categories" },
+    { slug: "compliance:evidence:audit", label: "Audit Evidence", description: "Inspect deliverables and cryptographic hashes" },
+    { slug: "compliance:violation:adjudicate", label: "Adjudicate Violations", description: "Issue and resolve compliance penalties" },
   ],
-  "Executive & Process": [
-    { code: "process:template:design", label: "Design Templates", description: "Author reusable multi-stage workflows" },
-    { code: "executive:telemetry:view", label: "View Executive Telemetry", description: "Access cross-branch financial KPIs" },
+  "Workflow & Process": [
+    { slug: "process:template:design", label: "Design Templates", description: "Author reusable multi-stage workflows" },
+    { slug: "executive:telemetry:view", label: "View Executive Telemetry", description: "Access cross-branch financial KPIs" },
   ],
 };
 
-// WHY: HrRoles houses the Role Templates Catalog and the Tier 3 Specialized Component:
-// DynamicRoleAndPermissionArchitect. It allows HR Administrators to inspect platform role baselines
-// and configure customized corporate roles with live preview of Hard Action Suppression.
-export default function HrRoles() {
-  const { user: currentUser } = useAuth();
-  const { toast } = useToast();
+const AVATAR_PALETTE = [
+  "#2563eb", "#0f172a", "#059669", "#7c3aed", "#0891b2", "#d97706", "#475569", "#dc2626"
+];
 
-  // Core state
+function getAvatarColor(str = "") {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) & 0xffffffff;
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+function getInitials(name = "") {
+  return name.split(" ").map((n) => n[0] || "").join("").substring(0, 2).toUpperCase() || "??";
+}
+
+export default function HrRoles() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user: currentUser } = useAuth();
+  const toast = useToast();
+
+  // Core Data
   const [roles, setRoles] = useState([]);
-  const [roleTemplates, setRoleTemplates] = useState([]);
-  const [permissions, setPermissions] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Selected Role & Permissions Workspace
+  const [selectedRoleId, setSelectedRoleId] = useState(null);
+  const [activePermissions, setActivePermissions] = useState(new Set());
+  const [savedPermissions, setSavedPermissions] = useState(new Set());
+  const [isSavingPerms, setIsSavingPerms] = useState(false);
+
   // Filters
-  const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all"); // 'all' | 'system' | 'custom'
+  const [roleSearch, setRoleSearch] = useState("");
+  const [empSearch, setEmpSearch] = useState("");
 
-  // Permission Inspector Modal
-  const [inspectingRole, setInspectingRole] = useState(null);
+  // Create Custom Role Modal State
+  const [isCreateRoleOpen, setIsCreateRoleOpen] = useState(false);
+  const [newRoleLabel, setNewRoleLabel] = useState("");
+  const [newRoleDesc, setNewRoleDesc] = useState("");
+  const [createRoleError, setCreateRoleError] = useState("");
+  const [isCreatingRole, setIsCreatingRole] = useState(false);
 
-  // Dynamic Role Architect Modal State
-  const [isArchitectOpen, setIsArchitectOpen] = useState(false);
-  const [architectLabel, setArchitectLabel] = useState("");
-  const [architectDescription, setArchitectDescription] = useState("");
-  const [selectedTemplateBase, setSelectedTemplateBase] = useState("");
-  const [selectedPermissions, setSelectedPermissions] = useState(new Set());
-  const [architectError, setArchitectError] = useState("");
-  const [isSavingRole, setIsSavingRole] = useState(false);
+  // Assign Employee to Role Modal State
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignUserId, setAssignUserId] = useState("");
+  const [assignError, setAssignError] = useState("");
+  const [isAssigning, setIsAssigning] = useState(false);
 
-  // WHY: Zero-Clutter Hard Action Suppression restricts role creation to HR & Admins
+  // Revoke Assignment Dialog State
+  const [revokeTarget, setRevokeTarget] = useState(null);
+  const [isRevoking, setIsRevoking] = useState(false);
+
   const canManageRoles = [
     "company_owner",
     "system_admin",
@@ -78,300 +115,268 @@ export default function HrRoles() {
   ].includes(currentUser?.role);
 
   // 1. DATA HYDRATION
-  // WHY: Parallel fetching of roles, templates, and permissions ensures immediate
-  // configuration matrix display without sequential latency.
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const [rolesData, templatesData, permissionsData] = await Promise.all([
+      const [rolesData, assignmentsData, usersData] = await Promise.all([
         apiClient("/roles"),
-        apiClient("/role-templates").catch(() => []),
-        apiClient("/permissions").catch(() => []),
+        apiClient("/role-assignments").catch(() => []),
+        apiClient("/users").catch(() => []),
       ]);
 
-      setRoles(Array.isArray(rolesData) ? rolesData : []);
-      setRoleTemplates(Array.isArray(templatesData) ? templatesData : []);
-      setPermissions(Array.isArray(permissionsData) ? permissionsData : []);
+      const loadedRoles = Array.isArray(rolesData) ? rolesData : [];
+      setRoles(loadedRoles);
+      setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+      setUsers(Array.isArray(usersData) ? usersData : []);
+
+      // Preserve active role or default to first role
+      setSelectedRoleId((prev) => {
+        if (prev && loadedRoles.some((r) => r.id === prev)) return prev;
+        return loadedRoles[0]?.id || null;
+      });
     } catch (err) {
       console.error("[HrRoles] Failed to load role telemetry:", err);
-      setError(err.message || "Failed to load role templates from server.");
+      setError(err.message || "Failed to load roles from server.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load without synchronous setState in effect body
   useEffect(() => {
-    let isMounted = true;
-    async function loadInitial() {
-      try {
-        const [rolesData, templatesData, permissionsData] = await Promise.all([
-          apiClient("/roles"),
-          apiClient("/role-templates").catch(() => []),
-          apiClient("/permissions").catch(() => []),
-        ]);
-        if (isMounted) {
-          setRoles(Array.isArray(rolesData) ? rolesData : []);
-          setRoleTemplates(Array.isArray(templatesData) ? templatesData : []);
-          setPermissions(Array.isArray(permissionsData) ? permissionsData : []);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error("[HrRoles] Failed to load role telemetry:", err);
-          setError(err.message || "Failed to load role templates from server.");
-          setLoading(false);
-        }
-      }
-    }
-    loadInitial();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
-  // Derived Filtered Roles
+  // Active Role Record
+  const activeRole = useMemo(() => {
+    return roles.find((r) => r.id === selectedRoleId) || roles[0] || null;
+  }, [roles, selectedRoleId]);
+
+  // Synchronize permissions state whenever active role switches
+  useEffect(() => {
+    if (!activeRole) return;
+    const currentPerms = new Set();
+    if (Array.isArray(activeRole.permissions)) {
+      activeRole.permissions.forEach((p) => {
+        const slug = p.permission?.slug || p.permission?.code || p.slug || p.code;
+        if (slug) currentPerms.add(slug);
+      });
+    }
+    setActivePermissions(new Set(currentPerms));
+    setSavedPermissions(new Set(currentPerms));
+  }, [activeRole]);
+
+  // Employees assigned to active role
+  const activeRoleEmployees = useMemo(() => {
+    if (!activeRole) return [];
+    return assignments.filter((a) => a.roleId === activeRole.id);
+  }, [assignments, activeRole]);
+
+  // Filtered lists
   const filteredRoles = useMemo(() => {
-    return roles.filter((role) => {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch =
-        role.label?.toLowerCase().includes(query) ||
-        role.description?.toLowerCase().includes(query);
+    const q = roleSearch.toLowerCase().trim();
+    if (!q) return roles;
+    return roles.filter(
+      (r) =>
+        r.label?.toLowerCase().includes(q) ||
+        r.description?.toLowerCase().includes(q)
+    );
+  }, [roles, roleSearch]);
 
-      const matchesType =
-        typeFilter === "all" ||
-        (typeFilter === "system" && role.isSystem) ||
-        (typeFilter === "custom" && !role.isSystem);
+  const filteredRoleEmployees = useMemo(() => {
+    const q = empSearch.toLowerCase().trim();
+    if (!q) return activeRoleEmployees;
+    return activeRoleEmployees.filter(
+      (a) =>
+        a.user?.fullName?.toLowerCase().includes(q) ||
+        a.user?.email?.toLowerCase().includes(q)
+    );
+  }, [activeRoleEmployees, empSearch]);
 
-      return matchesSearch && matchesType;
-    });
-  }, [roles, searchQuery, typeFilter]);
-
-  // Derived KPI Telemetry
-  const metrics = useMemo(() => {
-    const total = roles.length;
-    const system = roles.filter((r) => r.isSystem).length;
-    const custom = total - system;
-    const totalPerms = permissions.length || Object.values(PERMISSION_DOMAINS).flat().length;
-
-    return { total, system, custom, totalPerms };
-  }, [roles, permissions]);
-
-  // 2. TEMPLATE SELECTION IN ARCHITECT
-  // When user selects a base template, pre-populate standard permissions
-  const handleTemplateSelect = (templateId) => {
-    setSelectedTemplateBase(templateId);
-    if (!templateId) return;
-
-    const template = roleTemplates.find((t) => t.id === templateId);
-    if (template) {
-      if (!architectLabel) setArchitectLabel(`Custom ${template.label || "Role"}`);
-      if (!architectDescription) setArchitectDescription(template.description || "");
-
-      // Pre-select default permissions if provided
-      const newPerms = new Set();
-      if (template.defaultPermissions) {
-        template.defaultPermissions.forEach((dp) => {
-          if (dp.permission?.code) newPerms.add(dp.permission.code);
-        });
-      }
-      setSelectedPermissions(newPerms);
+  // Track unsaved modifications
+  const hasUnsavedChanges = useMemo(() => {
+    if (activePermissions.size !== savedPermissions.size) return true;
+    for (const p of activePermissions) {
+      if (!savedPermissions.has(p)) return true;
     }
-  };
+    return false;
+  }, [activePermissions, savedPermissions]);
 
-  // Toggle permission checkbox in architect
-  const handleTogglePermission = (code) => {
-    setSelectedPermissions((prev) => {
+  // 2. TOGGLE PERMISSION
+  const handleTogglePermission = (slug) => {
+    setActivePermissions((prev) => {
       const next = new Set(prev);
-      if (next.has(code)) {
-        next.delete(code);
+      if (next.has(slug)) {
+        next.delete(slug);
       } else {
-        next.add(code);
+        next.add(slug);
       }
       return next;
     });
   };
 
-  // 3. SAVE CUSTOM ROLE HANDLER
-  const handleSaveRole = async (e) => {
-    e.preventDefault();
-    const trimmedLabel = architectLabel.trim();
-    if (!trimmedLabel) {
-      setArchitectError("Role label is required.");
-      return;
-    }
-
-    setIsSavingRole(true);
-    setArchitectError("");
+  // 3. SAVE PERMISSION CHANGES
+  const handleSavePermissions = async () => {
+    if (!activeRole) return;
+    setIsSavingPerms(true);
 
     try {
-      // OptiFlow backend custom role creation payload
-      await apiClient("/roles", {
-        method: "POST",
-        body: {
-          label: trimmedLabel,
-          description: architectDescription.trim() || undefined,
-          roleTemplateId: selectedTemplateBase || undefined,
-          permissionCodes: Array.from(selectedPermissions),
-        },
-      }).catch(async (postErr) => {
-        // If POST /roles isn't implemented as a standalone route, fallback to role-templates or simulate
-        console.warn("[HrRoles] Standalone POST /roles notice:", postErr.message);
-        throw postErr;
+      const permissionSlugs = Array.from(activePermissions);
+      await apiClient(`/roles/${activeRole.id}/permissions`, {
+        method: "PUT",
+        body: { permissionSlugs },
       });
 
-      toast.success(`Custom role "${trimmedLabel}" registered successfully!`);
-      setIsArchitectOpen(false);
-      setArchitectLabel("");
-      setArchitectDescription("");
-      setSelectedTemplateBase("");
-      setSelectedPermissions(new Set());
+      toast.success(`Permissions updated for role "${activeRole.label}".`);
+      setSavedPermissions(new Set(activePermissions));
       await fetchData();
     } catch (err) {
-      console.error("[HrRoles] Role architect save error:", err);
-      setArchitectError(err.message || "Failed to register custom role template.");
+      console.error("[HrRoles] Failed to save permissions:", err);
+      toast.error(err.message || "Failed to update permissions.");
     } finally {
-      setIsSavingRole(false);
+      setIsSavingPerms(false);
     }
   };
 
-  // 4. TABLE COLUMNS CONFIGURATION
-  const columns = [
-    {
-      header: "Role Definition",
-      accessor: "label",
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm ${
-              row.isSystem
-                ? "bg-slate-100 text-slate-700 border border-slate-200"
-                : "bg-purple-100 text-purple-700 border border-purple-200"
-            }`}
-          >
-            {row.label.substring(0, 2).toUpperCase()}
-          </div>
-          <div>
-            <span className="font-semibold text-slate-900 block leading-tight">
-              {row.label}
-            </span>
-            <span className="text-xs text-slate-400">
-              {row.description || "No description provided"}
-            </span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: "Origin & Governance",
-      accessor: "isSystem",
-      render: (row) => (
-        <Badge
-          variant={row.isSystem ? "draft" : "info"}
-          value={row.isSystem ? "SYSTEM BASELINE" : "CUSTOM ROLE"}
-        />
-      ),
-    },
-    {
-      header: "Permissions Included",
-      accessor: "permissions",
-      render: (row) => {
-        const count = row.permissions?.length || 0;
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-800">
-              {count > 0 ? `${count} Granted` : "Baseline Standard"}
-            </span>
-            {count > 0 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setInspectingRole(row);
-                }}
-                className="text-xs text-blue-600 hover:text-blue-700 underline font-medium"
-              >
-                Inspect
-              </button>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      header: "Actions",
-      key: "actions",
-      render: (row) => (
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setInspectingRole(row)}
-          >
-            View Permissions
-          </Button>
+  const handleDiscardChanges = () => {
+    setActivePermissions(new Set(savedPermissions));
+  };
 
-          {/* Zero-Clutter Gating: Only render custom role duplication/edit for HR */}
-          {canManageRoles && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setArchitectLabel(`Copy of ${row.label}`);
-                setArchitectDescription(row.description || "");
-                setSelectedTemplateBase(row.roleTemplateId || "");
-                setSelectedPermissions(
-                  new Set((row.permissions || []).map((p) => p.permission?.code || p.code).filter(Boolean))
-                );
-                setIsArchitectOpen(true);
-              }}
-            >
-              Duplicate
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
+  // 4. CREATE CUSTOM ROLE
+  const handleCreateRole = async (e) => {
+    e.preventDefault();
+    const trimmed = newRoleLabel.trim();
+    if (!trimmed) {
+      setCreateRoleError("Role label is required.");
+      return;
+    }
+
+    setIsCreatingRole(true);
+    setCreateRoleError("");
+
+    try {
+      const res = await apiClient("/roles", {
+        method: "POST",
+        body: {
+          label: trimmed,
+          description: newRoleDesc.trim() || undefined,
+          permissionSlugs: Array.from(activePermissions),
+        },
+      });
+
+      toast.success(`Custom role "${trimmed}" registered successfully.`);
+      setIsCreateRoleOpen(false);
+      setNewRoleLabel("");
+      setNewRoleDesc("");
+      await fetchData();
+      if (res?.data?.id) {
+        setSelectedRoleId(res.data.id);
+      }
+    } catch (err) {
+      console.error("[HrRoles] Creation failed:", err);
+      setCreateRoleError(err.message || "Failed to create role.");
+    } finally {
+      setIsCreatingRole(false);
+    }
+  };
+
+  // 5. ASSIGN USER TO ROLE
+  const handleAssignUser = async (e) => {
+    e.preventDefault();
+    if (!assignUserId) {
+      setAssignError("Please choose an employee.");
+      return;
+    }
+
+    setIsAssigning(true);
+    setAssignError("");
+
+    try {
+      await apiClient("/role-assignments", {
+        method: "POST",
+        body: {
+          userId: assignUserId,
+          roleId: activeRole.id,
+          scopeType: "Company",
+          scopeId: currentUser?.companyId,
+        },
+      });
+
+      toast.success("Employee assigned to role successfully.");
+      setIsAssignModalOpen(false);
+      setAssignUserId("");
+      await fetchData();
+    } catch (err) {
+      console.error("[HrRoles] Role assignment failed:", err);
+      setAssignError(err.message || "Failed to assign role.");
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  // 6. REVOKE ASSIGNMENT
+  const handleRevokeConfirm = async () => {
+    if (!revokeTarget) return;
+
+    setIsRevoking(true);
+    try {
+      await apiClient(`/role-assignments/${revokeTarget.id}`, {
+        method: "DELETE",
+      });
+
+      toast.success(`Role revoked from ${revokeTarget.user?.fullName}.`);
+      setRevokeTarget(null);
+      await fetchData();
+    } catch (err) {
+      console.error("[HrRoles] Revocation failed:", err);
+      toast.error(err.message || "Failed to revoke assignment.");
+    } finally {
+      setIsRevoking(false);
+    }
+  };
 
   if (loading) {
-    return <Loader fullScreen={false} message="Loading role governance matrix..." />;
+    return <Loader fullScreen={false} message="Loading Roles & Permissions Studio..." />;
   }
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Action */}
+    <div className="space-y-4">
+      {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Role Architecture & Permissions
+            Roles & Permissions Studio
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Govern system authority boundaries, inspect permission grants, and architect custom roles
+            Manage corporate authority, configure permission matrices, and review assigned personnel
           </p>
         </div>
 
-        {/* Zero-Clutter Gating: Suppressed completely from React DOM if ungranted */}
-        {canManageRoles && (
-          <Button
-            variant="primary"
-            onClick={() => {
-              setArchitectLabel("");
-              setArchitectDescription("");
-              setSelectedTemplateBase("");
-              setSelectedPermissions(new Set(["task:execute", "task:change_request"]));
-              setArchitectError("");
-              setIsArchitectOpen(true);
-            }}
-          >
-            + Architect Custom Role
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={fetchData}>
+            <RotateCw className="w-4 h-4 mr-1.5" />
+            Refresh
           </Button>
-        )}
+
+          {canManageRoles && (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setNewRoleLabel("");
+                setNewRoleDesc("");
+                setCreateRoleError("");
+                setIsCreateRoleOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              New Custom Role
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Global Error Notice */}
+      {/* Global Error Banner */}
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700 flex items-center justify-between">
           <span>{error}</span>
@@ -381,320 +386,381 @@ export default function HrRoles() {
         </div>
       )}
 
-      {/* KPI Telemetry Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
-        <StatCard
-          label="Total Roles"
-          value={metrics.total}
-          hint="System & custom roles"
-        />
-        <StatCard
-          label="System Baselines"
-          value={metrics.system}
-          hint="Immutable platform roles"
-        />
-        <StatCard
-          label="Custom Architected"
-          value={metrics.custom}
-          hint="Company defined roles"
-        />
-        <StatCard
-          label="Governance Gates"
-          value={metrics.totalPerms}
-          hint="Action suppression points"
-        />
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="w-full sm:w-80">
-          <Input
-            placeholder="Search roles by label or description..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Origin:
-          </label>
-          <select
-            className="px-3 py-2 text-sm text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <option value="all">All Roles ({roles.length})</option>
-            <option value="system">System Baselines ({metrics.system})</option>
-            <option value="custom">Custom Roles ({metrics.custom})</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Main Roles Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        {filteredRoles.length === 0 ? (
-          <EmptyState
-            preset="inbox"
-            message={searchQuery ? "No matching roles found" : "No Roles Configured"}
-            description={
-              searchQuery
-                ? "Try searching with a different term."
-                : "No role definitions are available in this company environment."
-            }
-          />
-        ) : (
-          <Table columns={columns} data={filteredRoles} />
-        )}
-      </div>
-
-      {/* PERMISSION INSPECTOR MODAL */}
-      <Modal
-        isOpen={Boolean(inspectingRole)}
-        onClose={() => setInspectingRole(null)}
-        title={`Permissions: ${inspectingRole?.label || "Role"}`}
-        className="max-w-[620px]"
-      >
-        <div className="p-6 space-y-5">
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-semibold text-slate-900 text-sm">
-                {inspectingRole?.label}
-              </span>
-              <Badge
-                variant={inspectingRole?.isSystem ? "draft" : "info"}
-                value={inspectingRole?.isSystem ? "SYSTEM BASELINE" : "CUSTOM ROLE"}
-              />
-            </div>
-            <p className="text-xs text-slate-500">
-              {inspectingRole?.description || "No specific description available."}
-            </p>
+      {/* 3-PANEL STUDIO CONTAINER */}
+      <div className={styles.studioContainer}>
+        {/* ── PANEL 1: ROLES DIRECTORY (LEFT) ── */}
+        <div className={styles.leftPanel}>
+          <div className={styles.panelHeader}>
+            <span className={styles.panelTitle}>Roles Catalog</span>
+            <span className="text-xs font-semibold text-slate-500">
+              {roles.length} Roles
+            </span>
           </div>
 
-          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
-            <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-              Assigned Permissions & Gating Rules
-            </h4>
+          <div className="p-2 border-b border-slate-100">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search roles..."
+                value={roleSearch}
+                onChange={(e) => setRoleSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
+              />
+            </div>
+          </div>
 
-            {inspectingRole?.permissions && inspectingRole.permissions.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2">
-                {inspectingRole.permissions.map((p, idx) => {
-                  const perm = p.permission || p;
-                  return (
-                    <div
-                      key={perm.id || idx}
-                      className="p-3 rounded-lg border border-slate-200 bg-white flex items-center justify-between"
-                    >
-                      <div>
-                        <span className="text-sm font-medium text-slate-900 block">
-                          {perm.label || perm.name || perm.code}
-                        </span>
-                        {perm.description && (
-                          <span className="text-xs text-slate-400">{perm.description}</span>
-                        )}
-                      </div>
-                      <Badge variant="active" value="GRANTED" />
+          <div className={styles.leftListBody}>
+            {filteredRoles.map((role) => {
+              const isActive = role.id === selectedRoleId;
+              const empCount = assignments.filter((a) => a.roleId === role.id).length;
+
+              return (
+                <div
+                  key={role.id}
+                  onClick={() => setSelectedRoleId(role.id)}
+                  className={`${styles.roleListItem} ${
+                    isActive ? styles.roleListItemActive : ""
+                  }`}
+                >
+                  <div className={styles.roleItemMeta}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={styles.roleItemTitle}>{role.label}</span>
                     </div>
-                  );
-                })}
+                    <div className={styles.roleItemDesc}>
+                      {role.isSystem ? "System Baseline" : "Custom Corporate"}
+                    </div>
+                  </div>
+
+                  <span
+                    className={`${styles.roleCountBadge} ${
+                      isActive ? styles.roleCountBadgeActive : ""
+                    }`}
+                    title={`${empCount} employees assigned`}
+                  >
+                    {empCount}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── PANEL 2: PERMISSIONS STUDIO (CENTER) ── */}
+        <div className={styles.centerPanel}>
+          {activeRole ? (
+            <>
+              <div className={styles.centerHeader}>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                      {activeRole.label}
+                    </h2>
+                    <Badge
+                      type="status"
+                      value={activeRole.isSystem ? "neutral" : "operational"}
+                    >
+                      {activeRole.isSystem ? "SYSTEM BASELINE" : "CUSTOM ROLE"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {activeRole.description ||
+                      "Standard corporate capability rules and access boundaries for this role."}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {canManageRoles && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setNewRoleLabel(`Copy of ${activeRole.label}`);
+                        setNewRoleDesc(activeRole.description || "");
+                        setIsCreateRoleOpen(true);
+                      }}
+                      title="Duplicate this role template into a custom role"
+                    >
+                      <Copy className="w-3.5 h-3.5 mr-1" />
+                      Duplicate
+                    </Button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="p-4 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
-                This system baseline inherits standardized default operational permissions.
+
+              {/* Permissions Matrix */}
+              <div className={styles.centerBody}>
+                {Object.entries(PERMISSION_DOMAINS).map(([domain, perms]) => (
+                  <div key={domain} className={styles.permDomainCard}>
+                    <div className={styles.permDomainHeader}>
+                      <span>{domain}</span>
+                      <span className="text-[11px] font-semibold text-slate-400 font-mono">
+                        {perms.filter((p) => activePermissions.has(p.slug)).length} /{" "}
+                        {perms.length} Enabled
+                      </span>
+                    </div>
+
+                    <div className={styles.permGrid}>
+                      {perms.map((p) => {
+                        const isChecked = activePermissions.has(p.slug);
+                        return (
+                          <label
+                            key={p.slug}
+                            className={`${styles.permItem} ${
+                              isChecked ? styles.permItemChecked : ""
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleTogglePermission(p.slug)}
+                              className={styles.permCheckbox}
+                            />
+                            <div>
+                              <div className={styles.permTextTitle}>{p.label}</div>
+                              <div className={styles.permTextDesc}>{p.description}</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              {/* Save / Discard Bar */}
+              {hasUnsavedChanges && (
+                <div className={styles.saveBar}>
+                  <div className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    You have unsaved capability changes for this role.
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleDiscardChanges}
+                      disabled={isSavingPerms}
+                    >
+                      Discard
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleSavePermissions}
+                      disabled={isSavingPerms}
+                    >
+                      <Check className="w-3.5 h-3.5 mr-1" />
+                      {isSavingPerms ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-8 text-center text-slate-400">
+              Select a role from the left catalog to inspect permissions.
+            </div>
+          )}
+        </div>
+
+        {/* ── PANEL 3: ASSIGNED PERSONNEL (RIGHT) ── */}
+        <div className={styles.rightPanel}>
+          <div className={styles.panelHeader}>
+            <span className={styles.panelTitle}>Assigned Staff</span>
+            <span className={styles.roleCountBadge}>
+              {activeRoleEmployees.length}
+            </span>
+          </div>
+
+          <div className="p-2 border-b border-slate-100 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Filter staff..."
+                value={empSearch}
+                onChange={(e) => setEmpSearch(e.target.value)}
+                className="w-full pl-8 pr-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-600"
+              />
+            </div>
+
+            {canManageRoles && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setAssignUserId("");
+                  setAssignError("");
+                  setIsAssignModalOpen(true);
+                }}
+                title="Assign employee to this role"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+              </Button>
             )}
           </div>
 
-          <div className="pt-4 flex items-center justify-end border-t border-slate-100">
-            <Button variant="secondary" onClick={() => setInspectingRole(null)}>
-              Close
-            </Button>
+          <div className={styles.rightBody}>
+            {filteredRoleEmployees.length === 0 ? (
+              <div className="py-12 text-center text-xs text-slate-400 px-4">
+                <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                No employees currently assigned to this role.
+              </div>
+            ) : (
+              filteredRoleEmployees.map((a) => {
+                const initials = getInitials(a.user?.fullName);
+                const color = getAvatarColor(a.user?.id || a.user?.fullName);
+
+                return (
+                  <div key={a.id} className={styles.empRow}>
+                    <div
+                      className={styles.empAvatar}
+                      style={{ backgroundColor: color }}
+                    >
+                      {initials}
+                    </div>
+
+                    <div className={styles.empDetails}>
+                      <Link
+                        to={PATHS.HR.USER_DETAIL.replace(":id", a.user?.id)}
+                        className={`${styles.empName} hover:text-blue-600 block`}
+                        title="View employee profile"
+                      >
+                        {a.user?.fullName || "Unknown User"}
+                      </Link>
+                      <div className={styles.empSub}>{a.user?.email}</div>
+                    </div>
+
+                    {canManageRoles && (
+                      <button
+                        type="button"
+                        onClick={() => setRevokeTarget(a)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors ml-1"
+                        title="Revoke role from employee"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
-      </Modal>
+      </div>
 
-      {/* DYNAMIC ROLE ARCHITECT MODAL (Tier 3 Specialized HR Component) */}
+      {/* CREATE CUSTOM ROLE MODAL */}
       <Modal
-        isOpen={isArchitectOpen}
-        onClose={() => !isSavingRole && setIsArchitectOpen(false)}
-        title="Dynamic Role & Permission Architect"
-        className="max-w-[760px]"
+        isOpen={isCreateRoleOpen}
+        onClose={() => !isCreatingRole && setIsCreateRoleOpen(false)}
+        title="Create Custom Corporate Role"
       >
-        <form onSubmit={handleSaveRole} className="p-6 space-y-6 max-h-[85vh] overflow-y-auto">
-          {architectError && (
+        <form onSubmit={handleCreateRole} className="p-6 space-y-4">
+          {createRoleError && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
-              {architectError}
+              {createRoleError}
             </div>
           )}
 
-          {/* Section: Basic Metadata */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Role Label" required>
-              <Input
-                placeholder="e.g. Lead QA Specialist, Regional Pod Lead"
-                value={architectLabel}
-                onChange={(e) => setArchitectLabel(e.target.value)}
-                disabled={isSavingRole}
-                autoFocus
-              />
-            </FormField>
-
-            <FormField label="Base Template (Optional)">
-              <Select
-                value={selectedTemplateBase}
-                onChange={(e) => handleTemplateSelect(e.target.value)}
-                disabled={isSavingRole}
-              >
-                <option value="">Start from scratch (Custom)</option>
-                {roleTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label} ({t.origin})
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-
-          <FormField label="Role Scope & Description">
-            <Textarea
-              rows={2}
-              placeholder="Describe the operational responsibilities and authority boundary of this role..."
-              value={architectDescription}
-              onChange={(e) => setArchitectDescription(e.target.value)}
-              disabled={isSavingRole}
+          <FormField label="Role Label" required>
+            <Input
+              placeholder="e.g. Lead QA Specialist, Regional Pod Lead"
+              value={newRoleLabel}
+              onChange={(e) => setNewRoleLabel(e.target.value)}
+              disabled={isCreatingRole}
+              autoFocus
             />
           </FormField>
 
-          {/* Section: Granular Permissions Matrix */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Granular Feature Permissions Matrix
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Select capabilities. OptiFlow enforces Hard Action Suppression on ungranted capabilities.
-                </p>
-              </div>
-              <Badge
-                variant="info"
-                value={`${selectedPermissions.size} Selected`}
-              />
-            </div>
+          <FormField label="Role Description">
+            <Textarea
+              rows={2}
+              placeholder="Describe the operational responsibilities and authority boundary..."
+              value={newRoleDesc}
+              onChange={(e) => setNewRoleDesc(e.target.value)}
+              disabled={isCreatingRole}
+            />
+          </FormField>
 
-            <div className="space-y-4 bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
-              {Object.entries(PERMISSION_DOMAINS).map(([domain, perms]) => (
-                <div key={domain} className="space-y-2">
-                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                    {domain}
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {perms.map((p) => {
-                      const isChecked = selectedPermissions.has(p.code);
-                      return (
-                        <label
-                          key={p.code}
-                          className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer select-none ${
-                            isChecked
-                              ? "bg-blue-50/60 border-blue-300"
-                              : "bg-white border-slate-200 hover:border-slate-300"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handleTogglePermission(p.code)}
-                            className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 h-4 w-4 border-slate-300 cursor-pointer"
-                          />
-                          <div>
-                            <span className="text-xs font-semibold text-slate-900 block leading-tight">
-                              {p.label}
-                            </span>
-                            <span className="text-[11px] text-slate-500 block mt-0.5">
-                              {p.description}
-                            </span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Section: Live Hard Action Suppression Simulator */}
-          <div className="p-4 rounded-xl bg-slate-900 text-white space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Live Zero-Clutter Hard Action Suppression Preview
-              </span>
-              <Badge variant="active" value="ACTIVE SIMULATION" />
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Below is how buttons dynamically evaluate for this role. Notice that ungranted actions evaluate to{" "}
-              <code className="text-amber-300 font-mono">null</code> and are completely excluded from the DOM:
-            </p>
-
-            <div className="p-3 bg-slate-800/80 rounded-lg flex flex-wrap items-center gap-3 border border-slate-700/60">
-              {selectedPermissions.has("task:create") ? (
-                <span className="px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-medium">
-                  ✓ "+ Create Parent Task" (Rendered)
-                </span>
-              ) : (
-                <span className="text-slate-500 text-xs italic">
-                  [Create Parent Task unrendered]
-                </span>
-              )}
-
-              {selectedPermissions.has("task:subtask:create") ? (
-                <span className="px-2.5 py-1 rounded bg-emerald-600 text-white text-xs font-medium">
-                  ✓ "+ Decompose Subtask" (Rendered)
-                </span>
-              ) : (
-                <span className="text-slate-500 text-xs italic">
-                  [Decompose Subtask unrendered]
-                </span>
-              )}
-
-              {selectedPermissions.has("compliance:violation:adjudicate") ? (
-                <span className="px-2.5 py-1 rounded bg-rose-600 text-white text-xs font-medium">
-                  ✓ "Issue Violation Penalty" (Rendered)
-                </span>
-              ) : (
-                <span className="text-slate-500 text-xs italic">
-                  [Issue Violation unrendered]
-                </span>
-              )}
-
-              {selectedPermissions.has("hr:user:create") ? (
-                <span className="px-2.5 py-1 rounded bg-indigo-600 text-white text-xs font-medium">
-                  ✓ "Onboard Employee" (Rendered)
-                </span>
-              ) : (
-                <span className="text-slate-500 text-xs italic">
-                  [Onboard Employee unrendered]
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Modal Footer */}
           <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setIsArchitectOpen(false)}
-              disabled={isSavingRole}
+              onClick={() => setIsCreateRoleOpen(false)}
+              disabled={isCreatingRole}
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" disabled={isSavingRole}>
-              {isSavingRole ? "Registering..." : "Register Custom Role"}
+            <Button type="submit" variant="primary" disabled={isCreatingRole}>
+              {isCreatingRole ? "Creating..." : "Create Role"}
             </Button>
           </div>
         </form>
       </Modal>
+
+      {/* ASSIGN EMPLOYEE MODAL */}
+      <Modal
+        isOpen={isAssignModalOpen}
+        onClose={() => !isAssigning && setIsAssignModalOpen(false)}
+        title={`Assign Employee to "${activeRole?.label}"`}
+      >
+        <form onSubmit={handleAssignUser} className="p-6 space-y-4">
+          {assignError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
+              {assignError}
+            </div>
+          )}
+
+          <FormField label="Select Employee" required>
+            <Select
+              value={assignUserId}
+              onChange={(e) => setAssignUserId(e.target.value)}
+              disabled={isAssigning}
+            >
+              <option value="" disabled>Choose an employee...</option>
+              {users
+                .filter(
+                  (u) =>
+                    u.isActive !== false &&
+                    !activeRoleEmployees.some((a) => a.user?.id === u.id)
+                )
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.fullName} ({u.jobTitle || u.email})
+                  </option>
+                ))}
+            </Select>
+          </FormField>
+
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsAssignModalOpen(false)}
+              disabled={isAssigning}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={isAssigning}>
+              {isAssigning ? "Assigning..." : "Assign to Role"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* CONFIRM REVOCATION DIALOG */}
+      <ConfirmDialog
+        isOpen={Boolean(revokeTarget)}
+        title="Revoke Role Access"
+        message={`Are you sure you want to revoke the "${activeRole?.label}" role from ${revokeTarget?.user?.fullName}?`}
+        confirmText="Revoke Role"
+        cancelText="Cancel"
+        variant="danger"
+        loading={isRevoking}
+        onConfirm={handleRevokeConfirm}
+        onCancel={() => !isRevoking && setRevokeTarget(null)}
+      />
     </div>
   );
 }

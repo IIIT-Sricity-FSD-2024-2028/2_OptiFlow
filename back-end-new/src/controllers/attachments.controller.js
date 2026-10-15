@@ -94,6 +94,7 @@ export async function createAttachment(req, res, next) {
         fileName: String(fileName),
         fileType: String(fileType),
         fileSizeBytes: Math.max(0, fileSizeBytes),
+        storageKey: body.storageKey || body.fileUrl || `attachments/${entityType}/${entityId}/${Date.now()}-${fileName}`,
         uploadedById: req.user.id,
       },
       include: {

@@ -268,12 +268,40 @@ export async function createUser(req, res, next) {
       });
 
       if (targetRole) {
+        let assignedScopeType = body.scopeType || 'Company';
+        let assignedScopeId = req.user.companyId;
+
+        const branchId = body.branchId || body.branch_id || (assignedScopeType === 'Branch' ? body.scopeId : null);
+        if (branchId) {
+          const branch = await tx.branch.findFirst({
+            where: { id: String(branchId), companyId: req.user.companyId },
+          });
+          if (branch) {
+            assignedScopeType = 'Branch';
+            assignedScopeId = branch.id;
+          }
+        } else if (
+          normalizeRole(targetRole.label) === 'branch_manager' ||
+          targetRole.name === 'branch_manager'
+        ) {
+          // If no branch specified, fallback to the company's first branch
+          const defaultBranch = await tx.branch.findFirst({
+            where: { companyId: req.user.companyId },
+            orderBy: { createdAt: 'asc' },
+          });
+          if (defaultBranch) {
+            assignedScopeType = 'Branch';
+            assignedScopeId = defaultBranch.id;
+          }
+        }
+
         await tx.roleAssignment.create({
           data: {
+            companyId: req.user.companyId,
             userId: user.id,
             roleId: targetRole.id,
-            scopeType: 'Company',
-            scopeId: req.user.companyId,
+            scopeType: assignedScopeType,
+            scopeId: assignedScopeId,
             grantedById: req.user.id,
           },
         });
@@ -329,6 +357,10 @@ export async function updateUser(req, res, next) {
       ROLES.COMPANY_OWNER,
       ROLES.SYSTEM_ADMIN,
       ROLES.ACCESS_GOVERNANCE,
+      ROLES.HR_MANAGER,
+      'hr_manager',
+      ROLES.SUPERUSER,
+      'superuser',
     ]);
 
     if (!isSelf && !isAdmin) {
@@ -512,5 +544,55 @@ export async function deactivateUser(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * PATCH /users/:id/reactivate & POST /users/:id/reactivate
+ * Reactivates an employee account (resets isActive to true, clears deactivatedAt).
+ */
+export async function reactivateUser(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const targetUser = await prisma.user.findFirst({
+      where: { id, companyId: req.user.companyId },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundError(`User with ID ${id} not found in this company`);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        isActive: true,
+        deactivatedAt: null,
+      },
+      select: USER_SELECT_FIELDS,
+    });
+
+    // Record audit log
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        targetUserId: id,
+        action: AUDIT_ACTIONS.STATUS_CHANGE,
+        performedById: req.user.id,
+        oldValue: { isActive: false, deactivatedAt: targetUser.deactivatedAt },
+        newValue: { isActive: true, deactivatedAt: null },
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: Audit record logging during user reactivation:', auditErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `User "${updatedUser.fullName}" reactivated successfully`,
+      data: updatedUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 
 

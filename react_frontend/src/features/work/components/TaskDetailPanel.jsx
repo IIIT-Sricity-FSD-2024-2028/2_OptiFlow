@@ -1,4 +1,3 @@
-import React from 'react';
 import { Button } from '../../../shared/components/Button';
 import { Badge } from '../../../shared/components/Badge';
 import { formatDate } from '../../../shared/utils/formatDate';
@@ -71,7 +70,14 @@ export function TaskDetailPanel({
             </div>
             <div>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Assignee</h3>
-              <p className="text-sm text-gray-900">{task.assigneeName || task.assignee || 'Unassigned'}</p>
+              <p className="text-sm text-gray-900">
+                {task.assigneeName
+                  || (typeof task.assignedTo === 'object'
+                    ? task.assignedTo?.fullName || task.assignedTo?.email
+                    : task.assignedTo)
+                  || task.assignee
+                  || 'Unassigned'}
+              </p>
             </div>
             <div>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Priority</h3>

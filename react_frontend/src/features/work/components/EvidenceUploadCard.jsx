@@ -1,11 +1,12 @@
 import React, { useRef, useState } from 'react';
 import { Button } from '../../../shared/components/Button';
-import { FileText, ExternalLink, Trash2 } from 'lucide-react';
+import { FileText, ExternalLink, Trash2, UploadCloud } from 'lucide-react';
 
 export function EvidenceUploadCard({
   taskId,
   evidenceList = [],
   readOnly = false,
+  required = false,
   onUpload,
   onRequestUpload,
   onDelete,
@@ -40,7 +41,18 @@ export function EvidenceUploadCard({
     <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
       <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
         <div>
-          <h3 className="font-bold text-slate-900 text-sm">Evidence & Deliverable Artifacts</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-slate-900 text-sm">Evidence & Deliverable Artifacts</h3>
+            {required ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                Required by Policy
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                Optional
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">Files, audit records, or links verifying this deliverable</p>
         </div>
         {!readOnly && (
@@ -68,7 +80,27 @@ export function EvidenceUploadCard({
 
       <div className="p-5">
         {evidenceList.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-4">No evidence deliverables submitted yet.</p>
+          <div
+            onClick={!readOnly ? handleButtonClick : undefined}
+            className={`border-2 border-dashed border-slate-200 rounded-xl p-6 text-center transition-all ${
+              !readOnly ? 'hover:border-blue-400 hover:bg-blue-50/40 cursor-pointer group' : 'bg-slate-50/50'
+            }`}
+          >
+            <div className="mx-auto w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+              <UploadCloud className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-semibold text-slate-700">
+              {!readOnly ? 'Click to attach compliance evidence or deliverable artifact' : 'No evidence deliverables submitted yet.'}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+              {!readOnly ? 'Upload test proofs, audit checklists, scan logs, or documentation (PDF, PNG, DOCX, CSV)' : 'This task currently has no attached evidence deliverables.'}
+            </p>
+            {!readOnly && (
+              <span className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-blue-600 shadow-xs group-hover:border-blue-300">
+                + Attach Document
+              </span>
+            )}
+          </div>
         ) : (
           <ul className="divide-y divide-slate-100">
             {evidenceList.map((evidence) => {

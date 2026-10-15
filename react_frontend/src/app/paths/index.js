@@ -15,15 +15,20 @@ export const PATHS = {
   PLATFORM: {
     DASHBOARD: "/platform/dashboard",
     COMPANIES: "/platform/companies",
+    COMPANY_NEW: "/platform/companies/new",
+    COMPANY_DETAIL: "/platform/companies/:id",
     PLANS: "/platform/plans",
     SUBSCRIPTIONS: "/platform/subscriptions",
     ADMIN_USERS: "/platform/admin-users",
     SUPPORT_ACCESS: "/platform/support-access",
+    AUDIT_LOGS: "/platform/audit-logs",
     PROFILE: "/platform/profile",
   },
   EXECUTIVE: {
     DASHBOARD: "/executive/dashboard",
     PROJECTS: "/executive/projects",
+    PROJECT_DETAIL: "/executive/projects/:id",
+    EMPLOYEES: "/executive/employees",
     AUDIT_LOGS: "/executive/audit-logs",
   },
   COMPLIANCE: {

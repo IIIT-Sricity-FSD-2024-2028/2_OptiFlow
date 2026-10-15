@@ -42,6 +42,7 @@ async function runArchivePlanTests() {
   const baseUrl = `http://127.0.0.1:${port}`;
 
   let createdPlanId = null;
+  let createdCompanyId = null;
 
   try {
     // 2. Create a new test plan
@@ -100,12 +101,10 @@ async function runArchivePlanTests() {
 
     // 5. Test guard: Cannot assign archived plan to subscription
     console.log('\n4. Verifying subscription guard against archived plan...');
-    let company = await prisma.company.findFirst();
-    if (!company) {
-      company = await prisma.company.create({
-        data: { legalName: `Test Company ${Date.now()}` },
-      });
-    }
+    const testCompany = await prisma.company.create({
+      data: { legalName: `Test Co NoSub ${Date.now()}` },
+    });
+    createdCompanyId = testCompany.id;
 
     const subRes = await fetch(`${baseUrl}/api/platform/subscriptions`, {
       method: 'POST',
@@ -114,7 +113,7 @@ async function runArchivePlanTests() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        companyId: company.id,
+        companyId: testCompany.id,
         planId: createdPlanId,
         billingCycle: 'Monthly',
       }),
@@ -188,6 +187,11 @@ async function runArchivePlanTests() {
       });
       await prisma.plan.delete({
         where: { id: createdPlanId },
+      }).catch(() => {});
+    }
+    if (createdCompanyId) {
+      await prisma.company.delete({
+        where: { id: createdCompanyId },
       }).catch(() => {});
     }
     await prisma.$disconnect();

@@ -5,8 +5,39 @@
   overflow-x: auto;
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.container::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.container::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 4px;
+}
+
+.container::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+.noSlider {
+  overflow-x: hidden !important;
+}
+
+.borderless {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .table {
@@ -23,13 +54,14 @@
 }
 
 .th {
-  padding: 12px 16px;
-  font-size: 12px;
+  padding: 12px 14px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: #64748b;
   white-space: nowrap;
+  text-align: left;
 }
 
 .tbody tr {
@@ -50,8 +82,9 @@
 }
 
 .td {
-  padding: 12px 16px;
+  padding: 11px 14px;
   vertical-align: middle;
+  text-align: left;
 }
 
 .loadingCell,

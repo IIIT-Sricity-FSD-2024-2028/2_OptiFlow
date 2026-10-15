@@ -16,16 +16,20 @@ import {
   createPlan,
   updatePlan,
   listSubscriptions,
+  getSubscriptionById,
   createSubscription,
+  updateSubscription,
   listPlatformAdminUsers,
   getPlatformAdminUserById,
   createPlatformAdminUser,
   updatePlatformAdminUser,
-  deletePlatformAdminUser,
+  resetPlatformAdminPassword,
   listPlatformSupportAccesses,
   getPlatformSupportAccessById,
   createPlatformSupportAccess,
-  revokePlatformSupportAccess
+  revokePlatformSupportAccess,
+  listPlatformAuditLogs,
+  exportPlatformAuditLogs,
 } from '../controllers/platform.controller.js';
 
 const router = Router();
@@ -49,12 +53,20 @@ router.get(['/platform/plans/:id', '/api/platform/plans/:id'], authenticatePlatf
 router.post(['/platform/plans', '/api/platform/plans'], authenticatePlatformAdmin, createPlan);
 router.patch(['/platform/plans/:id', '/api/platform/plans/:id'], authenticatePlatformAdmin, updatePlan);
 router.get(['/platform/subscriptions', '/api/platform/subscriptions'], authenticatePlatformAdmin, listSubscriptions);
+router.get(['/platform/subscriptions/:id', '/api/platform/subscriptions/:id'], authenticatePlatformAdmin, getSubscriptionById);
 router.post(['/platform/subscriptions', '/api/platform/subscriptions'], authenticatePlatformAdmin, createSubscription);
+router.patch(['/platform/subscriptions/:id', '/api/platform/subscriptions/:id'], authenticatePlatformAdmin, updateSubscription);
+router.get(['/platform/audit-logs/export', '/api/platform/audit-logs/export'], authenticatePlatformAdmin, exportPlatformAuditLogs);
+router.get(['/platform/audit-logs', '/api/platform/audit-logs'], authenticatePlatformAdmin, listPlatformAuditLogs);
 router.get(['/platform/admin-users', '/api/platform/admin-users', '/api/platform-admin-users'], authenticatePlatformAdmin, listPlatformAdminUsers);
 router.get(['/platform/admin-users/:id', '/api/platform/admin-users/:id', '/api/platform-admin-users/:id'], authenticatePlatformAdmin, getPlatformAdminUserById);
 router.post(['/platform/admin-users', '/api/platform/admin-users', '/api/platform-admin-users'], authenticatePlatformAdmin, createPlatformAdminUser);
 router.patch(['/platform/admin-users/:id', '/api/platform/admin-users/:id', '/api/platform-admin-users/:id'], authenticatePlatformAdmin, updatePlatformAdminUser);
-router.delete(['/platform/admin-users/:id', '/api/platform/admin-users/:id', '/api/platform-admin-users/:id'], authenticatePlatformAdmin, deletePlatformAdminUser);
+router.post(
+  ['/platform/admin-users/:id/reset-password', '/api/platform/admin-users/:id/reset-password', '/api/platform-admin-users/:id/reset-password'],
+  authenticatePlatformAdmin,
+  resetPlatformAdminPassword
+);
 router.get(
   ['/platform/support-access', '/api/platform/support-access', '/platform-support-access', '/api/platform-support-access'],
   authenticatePlatformAdmin,
@@ -69,6 +81,11 @@ router.post(
   ['/platform/support-access', '/api/platform/support-access', '/platform-support-access', '/api/platform-support-access'],
   authenticatePlatformAdmin,
   createPlatformSupportAccess
+);
+router.post(
+  ['/platform/support-access/:id/revoke', '/api/platform/support-access/:id/revoke', '/platform-support-access/:id/revoke', '/api/platform-support-access/:id/revoke'],
+  authenticatePlatformAdmin,
+  revokePlatformSupportAccess
 );
 router.delete(
   ['/platform/support-access/:id', '/api/platform/support-access/:id', '/platform-support-access/:id', '/api/platform-support-access/:id'],

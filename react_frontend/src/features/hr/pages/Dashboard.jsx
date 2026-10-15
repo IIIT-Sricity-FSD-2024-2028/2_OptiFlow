@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { PATHS } from "../../../app/paths";
@@ -9,41 +9,51 @@ import { Loader } from "../../../shared/components/Loader";
 import { EmptyState } from "../../../shared/components/EmptyState";
 import { Table } from "../../../shared/components/Table";
 import { formatDate } from "../../../shared/utils/formatDate";
+import {
+  Users,
+  User,
+  Shield,
+  Building2,
+  Network,
+  ShieldCheck,
+  Briefcase,
+  RefreshCw,
+  UserPlus,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  ArrowRight,
+} from "lucide-react";
+import {
+  normalizeEmployees,
+  ROLE_BADGE_STYLES,
+} from "../components/orgTreeUtils";
 
-// WHY: HrDashboard serves as the primary operational telemetry hub and navigation
-// launchpad for the Company Role Administrator (HR). It aggregates workforce headcounts,
-// branch network footprints, functional team pods, and dynamic role architectures into
-// scannable KPIs, while offering quick access to deep governance consoles.
+/**
+ * HrDashboard
+ * Practical HR & Workforce Overview.
+ * Displays company headcount, departmental squad staffing, regional offices,
+ * operational attention items, and recent employee directory access.
+ */
 export default function HrDashboard() {
   const navigate = useNavigate();
 
-  // Raw datasets loaded from Express backend APIs
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
-
-  // Aggregated operational metrics calculated from fetched collections
-  const [metrics, setMetrics] = useState({
-    totalEmployees: 0,
-    activeEmployees: 0,
-    inactiveEmployees: 0,
-    totalBranches: 0,
-    totalTeams: 0,
-    totalRoles: 0,
-    customRoles: 0,
-  });
+  const [teams, setTeams] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [projects, setProjects] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // 1. DATA HYDRATION
-  // WHY: Parallel Promise.all avoids network waterfalls against Neon PostgreSQL,
-  // ensuring the HR Administrator sees immediate comprehensive workforce telemetry.
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const [usersData, branchesData, teamsData, rolesData] = await Promise.all([
+      const [usersData, branchesData, teamsData, rolesData, projectsData] = await Promise.all([
         apiClient("/users").catch((err) => {
           console.warn("[HrDashboard] Failed to fetch users:", err.message);
           return [];
@@ -60,222 +70,291 @@ export default function HrDashboard() {
           console.warn("[HrDashboard] Failed to fetch roles:", err.message);
           return [];
         }),
+        apiClient("/projects").catch((err) => {
+          console.warn("[HrDashboard] Failed to fetch projects:", err.message);
+          return [];
+        }),
       ]);
 
-      const loadedUsers = Array.isArray(usersData) ? usersData : [];
-      const loadedBranches = Array.isArray(branchesData) ? branchesData : [];
-      const loadedTeams = Array.isArray(teamsData) ? teamsData : [];
-      const loadedRoles = Array.isArray(rolesData) ? rolesData : [];
-
-      setUsers(loadedUsers);
-      setBranches(loadedBranches);
-
-      // Derive workforce and topology statistics
-      const totalEmployees = loadedUsers.length;
-      const activeEmployees = loadedUsers.filter((u) => u.isActive !== false).length;
-      const inactiveEmployees = totalEmployees - activeEmployees;
-      const totalBranches = loadedBranches.length;
-      const totalTeams = loadedTeams.length;
-      const totalRoles = loadedRoles.length;
-      const customRoles = loadedRoles.filter((r) => !r.isSystem).length;
-
-      setMetrics({
-        totalEmployees,
-        activeEmployees,
-        inactiveEmployees,
-        totalBranches,
-        totalTeams,
-        totalRoles,
-        customRoles,
-      });
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      setBranches(Array.isArray(branchesData) ? branchesData : []);
+      setTeams(Array.isArray(teamsData) ? teamsData : []);
+      setRoles(Array.isArray(rolesData) ? rolesData : []);
+      setProjects(
+        Array.isArray(projectsData)
+          ? projectsData
+          : projectsData?.data || []
+      );
     } catch (err) {
-      console.error("[HrDashboard] Critical hydration failure:", err);
-      setError(err.message || "Failed to load HR telemetry from server.");
+      console.error("[HrDashboard] Failed to load dashboard data:", err);
+      setError(err.message || "Failed to load HR data from server.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load without synchronous setState in effect body
   useEffect(() => {
-    let isMounted = true;
-    async function loadInitial() {
-      try {
-        const [usersData, branchesData, teamsData, rolesData] = await Promise.all([
-          apiClient("/users").catch(() => []),
-          apiClient("/branches").catch(() => []),
-          apiClient("/teams").catch(() => []),
-          apiClient("/roles").catch(() => []),
-        ]);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
-        if (isMounted) {
-          const loadedUsers = Array.isArray(usersData) ? usersData : [];
-          const loadedBranches = Array.isArray(branchesData) ? branchesData : [];
-          const loadedTeams = Array.isArray(teamsData) ? teamsData : [];
-          const loadedRoles = Array.isArray(rolesData) ? rolesData : [];
+  // 2. WORKFORCE NORMALIZATION
+  const normalizedEmployees = useMemo(() => {
+    return normalizeEmployees(users, teams);
+  }, [users, teams]);
 
-          setUsers(loadedUsers);
-          setBranches(loadedBranches);
+  // 3. OPERATIONAL METRICS
 
-          const totalEmployees = loadedUsers.length;
-          const activeEmployees = loadedUsers.filter((u) => u.isActive !== false).length;
-          const inactiveEmployees = totalEmployees - activeEmployees;
-          const totalBranches = loadedBranches.length;
-          const totalTeams = loadedTeams.length;
-          const totalRoles = loadedRoles.length;
-          const customRoles = loadedRoles.filter((r) => !r.isSystem).length;
+  // Workforce Headcount
+  const workforce = useMemo(() => {
+    const total = normalizedEmployees.length;
+    const active = normalizedEmployees.filter((e) => e.isActive).length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [normalizedEmployees]);
 
-          setMetrics({
-            totalEmployees,
-            activeEmployees,
-            inactiveEmployees,
-            totalBranches,
-            totalTeams,
-            totalRoles,
-            customRoles,
-          });
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error("[HrDashboard] Critical hydration failure:", err);
-          setError(err.message || "Failed to load HR telemetry from server.");
-          setLoading(false);
-        }
-      }
+  // Attention Items / Operational Health Checks
+  const attentionItems = useMemo(() => {
+    const items = [];
+
+    // 1. Unassigned personnel (individual contributors needing squad placement)
+    const unassignedContributors = normalizedEmployees.filter(
+      (e) => !e.teamName && (e.rank >= 3 || e.roleSlug === "team_member")
+    );
+    if (unassignedContributors.length > 0) {
+      items.push({
+        id: "unassigned",
+        type: "warning",
+        title: `${unassignedContributors.length} ${
+          unassignedContributors.length === 1 ? "team member" : "team members"
+        } unassigned to a squad`,
+        description: "Assign members to functional squads in the Squads Directory roster.",
+        actionPath: `${PATHS.HR.TEAMS}?view=table`,
+        actionLabel: "Manage Squads",
+      });
     }
-    loadInitial();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
-  // Quick launchpad actions for core HR workflows
-  const quickActions = [
-    {
-      title: "Employee Directory",
-      description: "Search, filter, onboard, and manage personnel profiles.",
-      path: PATHS.HR.USERS,
-      icon: (
-        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-      ),
-      count: `${metrics.totalEmployees} Employees`,
-    },
-    {
-      title: "Regional Branches",
-      description: "Setup territorial offices, addresses, and branch boundaries.",
-      path: PATHS.HR.BRANCHES,
-      icon: (
-        <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-      ),
-      count: `${metrics.totalBranches} Locations`,
-    },
-    {
-      title: "Functional Teams",
-      description: "Organize squads, designate Team Leaders, and review structures.",
-      path: PATHS.HR.TEAMS,
-      icon: (
-        <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-      ),
-      count: `${metrics.totalTeams} Teams`,
-    },
-    {
-      title: "Role Templates",
-      description: "Architect permission bundles and manage system/custom roles.",
-      path: PATHS.HR.ROLES,
-      icon: (
-        <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-      ),
-      count: `${metrics.totalRoles} Roles`,
-    },
-    {
-      title: "Role Assignments",
-      description: "Grant and revoke scoped role allocations across branches.",
-      path: PATHS.HR.ROLE_ASSIGNMENTS,
-      icon: (
-        <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-        </svg>
-      ),
-      count: "Access Console",
-    },
-  ];
+    // 2. Squads without designated leads
+    const squadsWithoutLead = teams.filter((t) => {
+      const members = t.teamMembers || [];
+      const hasLead = members.some(
+        (m) =>
+          m.role?.toLowerCase() === "lead" ||
+          m.roleInTeam?.toLowerCase() === "lead" ||
+          m.user?.roleAssignments?.[0]?.role?.name === "team_lead" ||
+          m.user?.roleAssignments?.[0]?.role?.name === "team_leader"
+      );
+      return !hasLead && members.length > 0;
+    });
 
-  // Table columns for the Recent Employee Roster
+    if (squadsWithoutLead.length > 0) {
+      items.push({
+        id: "missing-leads",
+        type: "warning",
+        title: `${squadsWithoutLead.length} ${squadsWithoutLead.length === 1 ? "squad has" : "squads have"} no designated Team Lead`,
+        description: `Needs leadership: ${squadsWithoutLead.map((s) => s.name).slice(0, 2).join(", ")}${squadsWithoutLead.length > 2 ? "..." : ""}`,
+        actionPath: `${PATHS.HR.TEAMS}?view=table`,
+        actionLabel: "Designate Leads",
+      });
+    }
+
+    // 3. Deactivated accounts
+    if (workforce.inactive > 0) {
+      items.push({
+        id: "inactive",
+        type: "info",
+        title: `${workforce.inactive} deactivated employee ${workforce.inactive === 1 ? "account" : "accounts"}`,
+        description: "Review deactivated profiles or reactivate if required.",
+        actionPath: PATHS.HR.USERS,
+        actionLabel: "Review Directory",
+      });
+    }
+
+    return items;
+  }, [normalizedEmployees, teams, workforce]);
+
+  // Squad Staffing Breakdown
+  const squadOverview = useMemo(() => {
+    return teams.map((team) => {
+      const members = team.teamMembers || [];
+      const leadMember = members.find(
+        (m) =>
+          m.role?.toLowerCase() === "lead" ||
+          m.roleInTeam?.toLowerCase() === "lead" ||
+          m.user?.roleAssignments?.[0]?.role?.name === "team_lead" ||
+          m.user?.roleAssignments?.[0]?.role?.name === "team_leader"
+      );
+      const leadName = leadMember?.user?.fullName || null;
+      const projectCount = team.projects?.length || 0;
+
+      return {
+        id: team.id,
+        name: team.name,
+        branchName: team.branch?.name || "Corporate",
+        memberCount: members.length,
+        leadName,
+        projectCount,
+      };
+    });
+  }, [teams]);
+
+  // Branch Headcount Breakdown
+  const branchOverview = useMemo(() => {
+    if (!branches.length || !normalizedEmployees.length) return [];
+    return branches
+      .map((b) => {
+        const count = normalizedEmployees.filter(
+          (e) => e.branchId === b.id || e.branchName === b.name
+        ).length;
+        const pct =
+          normalizedEmployees.length > 0
+            ? Math.round((count / normalizedEmployees.length) * 100)
+            : 0;
+        const squadCount = teams.filter((t) => t.branchId === b.id).length;
+        return {
+          id: b.id,
+          name: b.name,
+          code: b.code || "HUB",
+          count,
+          pct,
+          squadCount,
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+  }, [branches, normalizedEmployees, teams]);
+
+  // Recent Employees Columns
   const recentUserColumns = [
     {
       header: "Employee",
+      accessor: "name",
+      className: "w-[24%]",
       render: (row) => (
-        <div className="py-1">
-          <div className="font-semibold text-slate-900">{row.fullName}</div>
-          <div className="text-xs text-slate-500">{row.email}</div>
+        <div className="py-0.5">
+          <Link
+            to={PATHS.HR.USER_DETAIL.replace(":id", row.id)}
+            className="font-semibold text-slate-900 hover:text-blue-600 transition-colors block text-[13.5px] leading-snug whitespace-nowrap"
+          >
+            {row.name}
+          </Link>
+          <div className="text-[11.5px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">{row.email}</div>
         </div>
       ),
     },
     {
       header: "Job Title",
+      className: "w-[16%]",
       render: (row) => (
-        <span className="text-xs font-medium text-slate-700">
-          {row.jobTitle || "Team Member"}
+        <span className="text-[13px] font-medium text-slate-700 whitespace-nowrap">
+          {row.jobTitle}
         </span>
       ),
     },
     {
-      header: "Primary Role",
+      header: "Role",
+      className: "w-[14%]",
       render: (row) => {
-        const primaryRole = row.roleAssignments?.[0]?.role?.label || "User";
+        const isElevated = ["company_owner", "system_admin", "superuser", "access_governance", "hr_manager"].includes(row.roleSlug);
+
         return (
-          <Badge type="status" value="info">
-            {primaryRole}
-          </Badge>
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${
+              isElevated ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-700"
+            }`}
+          >
+            {row.roleLevel || "Member"}
+          </span>
         );
       },
     },
     {
-      header: "Reporting Line",
-      render: (row) => (
-        <span className="text-xs text-slate-600">
-          {row.manager?.fullName || "— (Direct)"}
-        </span>
-      ),
+      header: "Squad",
+      className: "w-[16%]",
+      render: (row) => {
+        if (row.teamName) {
+          return (
+            <Link
+              to={`${PATHS.HR.TEAMS}?view=table`}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-800 hover:text-blue-600 transition-colors whitespace-nowrap"
+              title="View Squad in Squads Directory"
+            >
+              <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>{row.teamName}</span>
+            </Link>
+          );
+        }
+        return (
+          <Link
+            to={`${PATHS.HR.TEAMS}?view=table`}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
+            title="Click to assign to a delivery squad"
+          >
+            + Assign Squad
+          </Link>
+        );
+      },
+    },
+    {
+      header: "Branch",
+      className: "w-[16%]",
+      render: (row) => {
+        if (row.branchName) {
+          return (
+            <Link
+              to={PATHS.HR.BRANCHES}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-800 hover:text-blue-600 transition-colors whitespace-nowrap"
+              title="View Regional Branches"
+            >
+              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>{row.branchName}</span>
+            </Link>
+          );
+        }
+        return (
+          <Link
+            to={PATHS.HR.BRANCHES}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
+            title="Click to assign to a branch office"
+          >
+            + Assign Branch
+          </Link>
+        );
+      },
+    },
+    {
+      header: "Reports To",
+      className: "w-[14%]",
+      render: (row) => {
+        if (!row.managerId) {
+          return (
+            <span className="text-xs text-slate-400 font-medium italic whitespace-nowrap">
+              Executive / Board
+            </span>
+          );
+        }
+        const manager = normalizedEmployees.find((e) => e.id === row.managerId);
+        if (!manager) {
+          return <span className="text-xs text-slate-400 whitespace-nowrap">Designated Lead</span>;
+        }
+        return (
+          <Link
+            to={PATHS.HR.USER_DETAIL.replace(":id", manager.id)}
+            className="text-xs font-medium text-slate-700 hover:text-blue-600 transition-colors whitespace-nowrap"
+          >
+            {manager.name}
+          </Link>
+        );
+      },
     },
     {
       header: "Status",
+      className: "w-[75px] text-center",
+      align: "center",
       render: (row) => (
         <Badge
-          type="status"
-          value={row.isActive !== false ? "active" : "neutral"}
-          dot={row.isActive !== false}
+          variant={row.isActive ? "active" : "inactive"}
         >
-          {row.isActive !== false ? "Active" : "Deactivated"}
+          {row.isActive ? "Active" : "Inactive"}
         </Badge>
-      ),
-    },
-    {
-      header: "Joined",
-      render: (row) => (
-        <span className="text-xs text-slate-500">
-          {row.createdAt ? formatDate(row.createdAt) : "—"}
-        </span>
-      ),
-    },
-    {
-      header: "Action",
-      render: (row) => (
-        <Link
-          to={`/hr/users/${row.id}`}
-          className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
-        >
-          View Profile &rarr;
-        </Link>
       ),
     },
   ];
@@ -284,40 +363,32 @@ export default function HrDashboard() {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center p-12">
         <Loader className="mb-3" />
-        <p className="text-sm font-medium text-slate-600">Loading workforce telemetry...</p>
+        <p className="text-sm font-medium text-slate-600">Loading workforce overview...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              HR Workforce Command Center
-            </h1>
-            <Badge type="status" value="active" dot>
-              Governance Live
-            </Badge>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Real-time workforce demographics, territorial branch topology, and access governance.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Workforce Overview
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Company headcount, functional squad staffing, and regional office locations
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={() => fetchDashboardData()}>
+        <div className="flex items-center gap-2.5">
+          <Button variant="secondary" size="sm" onClick={() => fetchDashboardData()}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Refresh
           </Button>
-          <Button variant="primary" onClick={() => navigate(PATHS.HR.USERS)}>
-            <span className="inline-flex items-center gap-1.5">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-              Manage Employees
-            </span>
+          <Button variant="primary" size="sm" onClick={() => navigate(PATHS.HR.USERS)}>
+            <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+            Onboard Employee
           </Button>
         </div>
       </div>
@@ -326,196 +397,244 @@ export default function HrDashboard() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" onClick={() => fetchDashboardData()}>
+          <Button variant="secondary" size="sm" onClick={() => fetchDashboardData()}>
             Retry
           </Button>
         </div>
       )}
 
-      {/* 4 Core Workforce KPI StatCards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Stat 1: Total Workforce */}
+      {/* 4 Core Workforce KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total Workforce"
-          value={metrics.totalEmployees}
-          trend={`+${metrics.activeEmployees}`}
-          trendLabel="Active"
-          hint={`${metrics.activeEmployees} active, ${metrics.inactiveEmployees} deactivated`}
-          icon={
-            <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          }
+          label="Total Employees"
+          value={workforce.total}
+          hint={`${workforce.active} active personnel, ${workforce.inactive} inactive`}
+          icon={Users}
         />
-
-        {/* Stat 2: Regional Branches */}
         <StatCard
-          label="Regional Branches"
-          value={metrics.totalBranches}
-          hint="Operational office locations"
-          icon={
-            <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          }
+          label="Functional Squads"
+          value={teams.length}
+          hint={`Operating across ${branches.length} branches`}
+          icon={Network}
         />
-
-        {/* Stat 3: Functional Teams */}
         <StatCard
-          label="Functional Teams"
-          value={metrics.totalTeams}
-          hint="Departmental operational squads"
-          icon={
-            <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          }
+          label="Branch Offices"
+          value={branches.length}
+          hint="Regional office locations"
+          icon={Building2}
         />
-
-        {/* Stat 4: Role Architect */}
         <StatCard
-          label="Role Templates"
-          value={metrics.totalRoles}
-          hint={`${metrics.customRoles} custom scoped definitions`}
-          icon={
-            <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          }
+          label="Defined Roles"
+          value={roles.length}
+          hint="System & custom role tiers"
+          icon={ShieldCheck}
         />
       </div>
 
-      {/* Governance & Operations Launchpad */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-            Governance & Domain Consoles
-          </h2>
-          <span className="text-xs text-slate-400">Quick Access Workspaces</span>
+      {/* Operational Health & Action Items */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
+        <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-900">
+              Operational Status
+            </h2>
+            <span className="text-[11px] text-slate-400 font-medium">
+              • Team assignments & account checks
+            </span>
+          </div>
+          {attentionItems.length === 0 ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200/80">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              All records up to date
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200/80">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              {attentionItems.length} {attentionItems.length === 1 ? "item requires attention" : "items require attention"}
+            </span>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {quickActions.map((action) => (
-            <Link
-              key={action.title}
-              to={action.path}
-              className="group p-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                    {action.icon}
+        {attentionItems.length === 0 ? (
+          <p className="text-xs text-slate-500 py-2">
+            All personnel have designated reporting lines, all active squads have assigned leads, and accounts are in healthy status.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {attentionItems.map((item) => (
+              <div
+                key={item.id}
+                className="p-3 rounded-xl border border-amber-200/70 bg-amber-50/40 flex items-start justify-between gap-3"
+              >
+                <div>
+                  <div className="text-xs font-bold text-slate-900">
+                    {item.title}
                   </div>
-                  <span className="text-xs font-semibold text-slate-500 group-hover:text-blue-600 transition-colors">
-                    &rarr;
-                  </span>
+                  <div className="text-[11px] text-slate-600 mt-0.5">
+                    {item.description}
+                  </div>
                 </div>
-                <h3 className="font-semibold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">
-                  {action.title}
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                  {action.description}
+                <button
+                  type="button"
+                  onClick={() => navigate(item.actionPath)}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 shrink-0 inline-flex items-center gap-1 mt-0.5"
+                >
+                  {item.actionLabel} &rarr;
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Workforce Breakdown: Squads and Locations */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Squad Staffing Overview */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Squad Staffing
+                </h2>
+                <p className="text-[11px] text-slate-500">
+                  Personnel distribution across delivery teams
                 </p>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-medium text-slate-400">
-                <span>{action.count}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Recent Employee Roster & Regional Footprint */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Personnel Table (2 cols) */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h2 className="font-bold text-slate-900 text-base">Recently Added Personnel</h2>
-              <p className="text-xs text-slate-500">Latest employee registrations across all branches</p>
+              <button
+                type="button"
+                onClick={() => navigate(PATHS.HR.TEAMS)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+              >
+                Manage Squads &rarr;
+              </button>
             </div>
-            <Link
-              to={PATHS.HR.USERS}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              View Full Directory &rarr;
-            </Link>
-          </div>
 
-          <div className="p-6">
-            {users.length === 0 ? (
-              <EmptyState
-                preset="inbox"
-                message="No Employees Registered"
-                description="The company employee directory has not been populated yet."
-                action={
-                  <Button variant="primary" onClick={() => navigate(PATHS.HR.USERS)}>
-                    Add First Employee
-                  </Button>
-                }
-              />
+            {squadOverview.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No teams or squads created yet.
+              </div>
             ) : (
-              <Table
-                columns={recentUserColumns}
-                data={users.slice(0, 6)}
-                emptyMessage="No personnel records found."
-              />
+              <div className="space-y-2.5">
+                {squadOverview.slice(0, 5).map((squad) => (
+                  <div
+                    key={squad.id}
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-xs text-slate-900">
+                        {squad.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        Lead: {squad.leadName || <span className="text-amber-600">Unassigned</span>} • {squad.branchName}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200">
+                        {squad.memberCount} {squad.memberCount === 1 ? "member" : "members"}
+                      </span>
+                      {squad.projectCount > 0 && (
+                        <span className="text-[11px] text-slate-500">
+                          {squad.projectCount} {squad.projectCount === 1 ? "proj" : "projs"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Branch Network Topology Overview (1 col) */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between">
+        {/* Branch Offices & Regional Headcount */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col justify-between">
           <div>
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
               <div>
-                <h2 className="font-bold text-slate-900 text-base">Branch Topology</h2>
-                <p className="text-xs text-slate-500">Active regional hubs</p>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Branch Offices
+                </h2>
+                <p className="text-[11px] text-slate-500">
+                  Headcount distribution by regional location
+                </p>
               </div>
-              <Link
-                to={PATHS.HR.BRANCHES}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+              <button
+                type="button"
+                onClick={() => navigate(PATHS.HR.BRANCHES)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800"
               >
-                Manage &rarr;
-              </Link>
+                Manage Branches &rarr;
+              </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              {branches.length === 0 ? (
-                <EmptyState
-                  preset="search"
-                  message="No Branches Found"
-                  description="Create company branches to establish territorial operations."
-                />
-              ) : (
-                branches.slice(0, 5).map((branch) => {
-                  const branchTeamsCount = Array.isArray(branch.teams) ? branch.teams.length : 0;
-                  return (
-                    <div
-                      key={branch.id}
-                      className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-semibold text-slate-800 text-sm">{branch.name}</div>
-                        <div className="text-xs text-slate-500 font-mono mt-0.5">{branch.code || "BRANCH"}</div>
-                      </div>
-                      <Badge type="status" value="active">
-                        {branchTeamsCount} {branchTeamsCount === 1 ? "Team" : "Teams"}
-                      </Badge>
+            {branchOverview.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No branch offices registered yet.
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {branchOverview.map((branch) => (
+                  <div key={branch.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-800">
+                        {branch.name}
+                        <span className="ml-1.5 font-mono text-[10px] text-slate-400 font-normal">
+                          ({branch.code})
+                        </span>
+                      </span>
+                      <span className="font-medium text-slate-600">
+                        {branch.count} {branch.count === 1 ? "employee" : "employees"} ({branch.pct}%)
+                      </span>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="p-6 border-t border-slate-100 bg-slate-50/50">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>Total Configured Teams</span>
-              <span className="font-bold text-slate-800">{metrics.totalTeams}</span>
-            </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                        style={{ width: `${Math.max(branch.pct, 4)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* Recent Employees Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-slate-900 text-sm">
+              Employee Directory Roster
+            </h2>
+            <p className="text-xs text-slate-500">
+              Company personnel records, job titles, and reporting structures
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(PATHS.HR.USERS)}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+          >
+            View Full Directory ({normalizedEmployees.length}) &rarr;
+          </button>
+        </div>
+
+        {normalizedEmployees.length === 0 ? (
+          <EmptyState
+            preset="inbox"
+            message="No Employees Registered"
+            description="The company employee directory has not been populated yet."
+          />
+        ) : (
+          <Table
+            columns={recentUserColumns}
+            data={normalizedEmployees.slice(0, 7)}
+            emptyMessage="No personnel records found."
+            borderless
+            noSlider
+          />
+        )}
       </div>
     </div>
   );

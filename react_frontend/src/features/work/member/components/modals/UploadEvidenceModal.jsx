@@ -41,10 +41,10 @@ export function UploadEvidenceModal({
         setType(EVIDENCE_TYPES[0]);
         setNotes('');
         setFileUrl('');
-        setSelectedTaskId(taskId || (tasks[0]?.id || ''));
+        setSelectedTaskId(taskId || (tasks?.[0]?.id || ''));
       }
     }
-  }, [isOpen, initialData, taskId, tasks]);
+  }, [isOpen, initialData]);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();

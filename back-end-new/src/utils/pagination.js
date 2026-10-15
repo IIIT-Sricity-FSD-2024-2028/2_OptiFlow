@@ -113,12 +113,13 @@ export function parseListParams(query = {}, options = {}) {
 /**
  * Builds the standard list contract response envelope
  */
-export function formatListResponse(items, total, page, pageSize) {
+export function formatListResponse(items, total, page, pageSize, extra = {}) {
   return {
     items,
     total,
     page,
     pageSize,
+    ...extra,
   };
 }
 

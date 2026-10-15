@@ -113,3 +113,62 @@
   border-radius: 8px;
   font-size: 13px;
 }
+
+/* Modal Details */
+.detailsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.detailsRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.detailsLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.detailsValue {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.detailsSection {
+  margin-top: 12px;
+}
+
+.detailsSectionTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.subscriptionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subscriptionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}

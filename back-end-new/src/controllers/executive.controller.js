@@ -80,6 +80,11 @@ export async function getExecutiveMetrics(req, res, next) {
       openEscalations,
       openViolations,
       subscription,
+      branchDistribution,
+      recentViolations,
+      recentEscalations,
+      totalComplianceRules,
+      totalProcessTemplates,
     ] = await Promise.all([
       prisma.user.count({ where: { companyId, isActive: true } }),
       prisma.team.count({ where: teamFilter }),
@@ -91,9 +96,55 @@ export async function getExecutiveMetrics(req, res, next) {
       prisma.escalation.count({ where: { companyId, status: 'Open' } }),
       prisma.complianceViolation.count({ where: { companyId, status: 'Open' } }),
       prisma.subscription.findFirst({
-        where: { companyId, status: 'Active' },
+        where: { companyId, status: { in: ['Active', 'Trialing'] } },
         include: { plan: true },
+        orderBy: { currentPeriodEnd: 'desc' },
       }),
+      prisma.branch.findMany({
+        where: { companyId },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          _count: { select: { teams: true } },
+          teams: {
+            select: {
+              id: true,
+              name: true,
+              _count: { select: { teamMembers: true, projects: true } },
+            },
+          },
+        },
+        take: 6,
+        orderBy: { name: 'asc' },
+      }),
+      prisma.complianceViolation.findMany({
+        where: { companyId, status: 'Open' },
+        select: {
+          id: true,
+          severity: true,
+          detectedAt: true,
+          rule: { select: { id: true, name: true, description: true } },
+        },
+        take: 5,
+        orderBy: { detectedAt: 'desc' },
+      }),
+      prisma.escalation.findMany({
+        where: { companyId, status: 'Open' },
+        select: {
+          id: true,
+          title: true,
+          priority: true,
+          blockerType: true,
+          createdAt: true,
+          task: { select: { id: true, title: true } },
+          project: { select: { id: true, name: true } },
+        },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.complianceRule.count({ where: { companyId } }),
+      prisma.processTemplate.count({ where: { companyId } }),
     ]);
 
     // 30-day completion trend
@@ -129,6 +180,9 @@ export async function getExecutiveMetrics(req, res, next) {
         ? Math.round((completedTasks / (completedTasks + activeTasks)) * 100)
         : 0;
 
+    const complianceScore =
+      openViolations === 0 ? 100 : Math.max(15, Math.round(100 - openViolations * 15));
+
     res.status(200).json({
       success: true,
       data: {
@@ -142,7 +196,22 @@ export async function getExecutiveMetrics(req, res, next) {
         openEscalations,
         openViolations,
         completionRate,
-        planName: subscription?.plan?.name || 'Free Tier',
+        complianceScore,
+        totalComplianceRules,
+        totalProcessTemplates,
+        planName: subscription?.plan?.name || (subscription?.status === 'Trialing' ? '14-Day Free Trial' : 'Free Tier'),
+        subscriptionStatus: subscription?.status || 'Active',
+        trialEndsAt: subscription?.status === 'Trialing' ? subscription.currentPeriodEnd : null,
+        planQuotas: {
+          maxUsers: subscription?.plan?.maxUsers ?? null,
+          maxBranches: subscription?.plan?.maxBranches ?? null,
+          maxActiveProcessTemplates: subscription?.plan?.maxActiveProcessTemplates ?? null,
+          maxComplianceRules: subscription?.plan?.maxComplianceRules ?? null,
+          auditLogRetentionDays: subscription?.plan?.auditLogRetentionDays ?? 90,
+        },
+        branchDistribution,
+        recentViolations,
+        recentEscalations,
         taskTrend,
       },
     });

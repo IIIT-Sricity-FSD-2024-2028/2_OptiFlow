@@ -10,7 +10,7 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
 
   const handleUpdateStatus = async (newStatus) => {
     if (!evidence) return;
-    
+
     setIsSubmitting(true);
     try {
       await apiClient(`/evidence/${evidence.id}`, {
@@ -30,23 +30,23 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
   if (!evidence) return null;
 
   return (
-    <Modal 
-      isOpen={isOpen} 
+    <Modal
+      isOpen={isOpen}
       onClose={onClose}
       title="Review Evidence Submission"
       footer={
         <div className="flex justify-between w-full">
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <div className="flex gap-2">
-            <Button 
-              variant="danger" 
+            <Button
+              variant="danger"
               onClick={() => handleUpdateStatus('Rejected')}
               disabled={isSubmitting || evidence.status === 'Rejected'}
             >
               Reject
             </Button>
-            <Button 
-              variant="primary" 
+            <Button
+              variant="primary"
               onClick={() => handleUpdateStatus('Approved')}
               disabled={isSubmitting || evidence.status === 'Approved'}
             >
@@ -80,9 +80,9 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
               <span className="font-semibold text-blue-900">Attached Document</span>
               <span className="text-blue-700 text-xs mt-1">Review the provided proof before approving.</span>
             </div>
-            <a 
+            <a
               href={`${import.meta.env.VITE_API_URL || 'http://localhost:5500'}/api/evidence/${evidence.id}/file?token=${encodeURIComponent(sessionStorage.getItem('authToken') || '')}`}
-              target="_blank" 
+              target="_blank"
               rel="noreferrer"
               className="flex items-center gap-2 bg-white px-4 py-2 rounded-md text-blue-700 font-semibold border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm"
             >

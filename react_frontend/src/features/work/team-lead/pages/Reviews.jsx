@@ -4,9 +4,13 @@ import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Toast } from '../../../../shared/components/Toast';
+import { Modal } from '../../../../shared/components/Modal';
+import { FormField, Textarea } from '../../../../shared/components/FormField';
 import { Pagination } from '../../../../shared/components/Pagination';
 import { formatDate } from '../../../../shared/utils/formatDate';
 import * as evidenceApi from '../../../../services/api/evidence';
+import * as escalationsApi from '../../../../services/api/escalations';
+import * as tasksApi from '../../../../services/api/tasks';
 
 const statusVariant = (s) => {
   s = String(s || '').toLowerCase();
@@ -15,12 +19,41 @@ const statusVariant = (s) => {
   return 'warning';
 };
 
+const getDocumentName = (evidence) => {
+  if (!evidence) return 'Deliverable Artifact';
+  if (evidence.fileName) return evidence.fileName;
+
+  const rawUrl = evidence.fileUrl || evidence.file_url || evidence.file || '';
+  if (!rawUrl) return evidence.title || 'Attached Document';
+
+  let name = rawUrl;
+  if (name.includes('/')) {
+    name = name.split('/').pop() || name;
+  }
+
+  // Strip timestamp prefix if any (e.g. 1739123456789-file.pdf -> file.pdf)
+  name = name.replace(/^\d+[-_]/, '');
+
+  try {
+    name = decodeURIComponent(name);
+  } catch (_) {}
+
+  if (!name || name.startsWith('http') || name.startsWith('supabase')) {
+    return evidence.title || 'Attached Deliverable';
+  }
+
+  return name;
+};
+
 export default function TeamLeadReviews() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [selected, setSelected] = useState(null);
   const [approving, setApproving] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
@@ -59,6 +92,54 @@ export default function TeamLeadReviews() {
       showToast('error', error.message || 'Failed to approve evidence.');
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleRejectAndEscalate = async () => {
+    if (!rejectionReason.trim()) {
+      showToast('error', 'Please provide revision feedback.');
+      return;
+    }
+    setRejecting(true);
+    try {
+      const taskId = selected?.taskId || selected?.task_id;
+      // 1. Update evidence to Rejected with rejection feedback
+      await evidenceApi.updateEvidence(selected.id, {
+        status: 'Rejected',
+        notes: rejectionReason.trim(),
+      });
+
+      // 2. Revert task status to Active so team member can revise deliverables
+      if (taskId) {
+        try {
+          await tasksApi.update(taskId, { status: 'Active' });
+        } catch (_) {}
+      }
+
+      // 3. Create Escalation to PM
+      if (taskId) {
+        try {
+          await escalationsApi.create({
+            taskId,
+            title: `Deliverable Rejected: ${selected.title}`,
+            blockerType: 'Compliance Blocker',
+            description: `Team Lead rejected evidence "${selected.title}". Feedback: ${rejectionReason.trim()}. Work reopened for revision.`,
+            priority: 'High',
+          });
+        } catch (_) {}
+      }
+
+      // 4. Update local state
+      const update = e => e.id === selected.id ? { ...e, status: 'Rejected', notes: rejectionReason.trim() } : e;
+      setList(l => l.map(update));
+      setSelected(s => s ? { ...s, status: 'Rejected', notes: rejectionReason.trim() } : null);
+      showToast('success', 'Evidence rejected, work reopened, and escalated to PM.');
+      setRejectModalOpen(false);
+      setRejectionReason('');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to reject evidence.');
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -132,11 +213,15 @@ export default function TeamLeadReviews() {
                   <Badge status={statusVariant(selected.status)}>{String(selected.status || 'Pending').replace(/_/g, ' ')}</Badge>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-10 text-center">
-                  <svg className="w-12 h-12 text-blue-500 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  <p className="text-sm font-medium text-gray-700">{selected.fileUrl || selected.file_url || selected.file || selected.fileName || 'document.pdf'}</p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 max-w-md mx-auto truncate">
+                    {getDocumentName(selected)}
+                  </p>
                   {(selected.fileUrl || selected.file_url || selected.file) && (() => {
                     const rawUrl = selected.fileUrl || selected.file_url || selected.file || '';
                     const isExternal = rawUrl.startsWith('http://') || rawUrl.startsWith('https://');
@@ -145,16 +230,22 @@ export default function TeamLeadReviews() {
                       ? rawUrl
                       : `${apiBase}/api/evidence/${selected.id}/file?token=${encodeURIComponent(sessionStorage.getItem('authToken') || '')}`;
                     return (
-                      <a href={openDocUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs font-semibold text-blue-600 hover:underline">
-                        Open document ↗
+                      <a
+                        href={openDocUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:bg-gray-50 rounded-md text-xs font-semibold shadow-xs transition-colors"
+                      >
+                        <span>Open Document</span>
+                        <span>↗</span>
                       </a>
                     );
                   })()}
                   {(selected.task?.title || selected.taskTitle || selected.violation?.rule?.name) && (
-                    <p className="mt-3 text-sm text-gray-600">
+                    <p className="mt-3 text-xs text-gray-500">
                       {selected.task?.title || selected.taskTitle
-                        ? <>Task: <span className="font-semibold text-gray-900">{selected.task?.title || selected.taskTitle}</span></>
-                        : <>Rule: <span className="font-semibold text-gray-900">{selected.violation.rule.name}</span></>}
+                        ? <>Related Task: <span className="font-semibold text-gray-700">{selected.task?.title || selected.taskTitle}</span></>
+                        : <>Compliance Rule: <span className="font-semibold text-gray-700">{selected.violation.rule.name}</span></>}
                     </p>
                   )}
                 </div>
@@ -181,7 +272,21 @@ export default function TeamLeadReviews() {
                 </div>
 
                 {String(selected.status || '').toLowerCase() !== 'approved'
-                  ? <Button variant="primary" onClick={() => handleApprove(selected)} disabled={approving}>{approving ? 'Approving…' : 'Approve Team Evidence'}</Button>
+                  ? (
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <Button variant="primary" onClick={() => handleApprove(selected)} disabled={approving || rejecting}>
+                        {approving ? 'Approving…' : 'Approve Team Evidence'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="text-rose-600 border-rose-300 hover:bg-rose-50"
+                        onClick={() => { setRejectionReason(''); setRejectModalOpen(true); }}
+                        disabled={approving || rejecting}
+                      >
+                        Reject & Escalate to PM
+                      </Button>
+                    </div>
+                  )
                   : <div className="flex items-center gap-2 py-3 px-4 bg-green-50 border border-green-200 rounded-lg">
                       <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                       <span className="text-sm font-semibold text-green-700">Evidence Approved</span>
@@ -191,6 +296,37 @@ export default function TeamLeadReviews() {
           }
         </div>
       </div>
+
+      {/* Reject & Escalate Modal */}
+      <Modal
+        isOpen={rejectModalOpen}
+        onClose={() => setRejectModalOpen(false)}
+        title="Reject Evidence & Escalate to Project Manager"
+        footer={(
+          <div className="flex justify-end gap-2 w-full">
+            <Button variant="outline" onClick={() => setRejectModalOpen(false)} disabled={rejecting}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleRejectAndEscalate} disabled={rejecting}>
+              {rejecting ? 'Rejecting…' : 'Confirm Rejection & Escalate'}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Rejecting this evidence deliverable will revert the task/subtask status back to <strong>In Progress (Active)</strong> for revision, and register an active <strong>Compliance Blocker Escalation</strong> on the Project Manager's board.
+          </p>
+          <FormField label="Reason for Rejection & Revision Instructions" required>
+            <Textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              rows={4}
+              placeholder="Explain why this deliverable is insufficient (e.g. Missing security signature, invalid format, incomplete test coverage)..."
+            />
+          </FormField>
+        </div>
+      </Modal>
 
       <Toast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast(t => ({ ...t, visible: false }))} />
     </div>
