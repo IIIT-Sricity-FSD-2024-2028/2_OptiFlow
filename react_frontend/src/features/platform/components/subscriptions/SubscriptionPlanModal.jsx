@@ -8,6 +8,7 @@ export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm
   const [cycle, setCycle] = useState('Monthly');
   const [reason, setReason] = useState('');
   const [formError, setFormError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen && subscription) {

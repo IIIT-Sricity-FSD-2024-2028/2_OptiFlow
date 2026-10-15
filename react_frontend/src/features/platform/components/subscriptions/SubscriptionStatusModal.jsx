@@ -17,6 +17,7 @@ export function SubscriptionStatusModal({
   const [targetStatus, setTargetStatus] = useState('');
   const [reason, setReason] = useState('');
   const [formError, setFormError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen && subscription) {

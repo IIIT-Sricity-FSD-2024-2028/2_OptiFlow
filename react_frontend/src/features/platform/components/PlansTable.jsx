@@ -27,7 +27,7 @@ export function PlansTable({
   const renderLimit = (value, icon) => {
     if (value === null || value === undefined) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-gray-50 text-gray-700 border border-gray-100/60">
           Unlimited
         </span>
       );
@@ -67,10 +67,9 @@ export function PlansTable({
       render: (row) => {
         const count = row._count?.subscriptions ?? 0;
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-            <Building2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-grey-50 text-grey-700 border border-grey-100">
             <span>
-              {count} {count === 1 ? 'company' : 'companies'}
+              {count}
             </span>
           </span>
         );
