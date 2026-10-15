@@ -389,7 +389,10 @@ export async function updateTask(req, res, next) {
     }
 
     // 🔴 THE INTERCEPTOR: Evaluate Compliance Before Saving
-    if (updateData.status && updateData.status !== existing.status) {
+    // PM final-approval: skip compliance gate when PM explicitly approves
+    const isPmApproval = body.pmApproval === true
+      && hasRole(req.user.roleLabel || req.user.role, [ROLES.PROJECT_MANAGER]);
+    if (updateData.status && updateData.status !== existing.status && !isPmApproval) {
       const evaluation = await evaluateTaskTransition(id, existing, updateData);
 
       if (!evaluation.allowed) {
