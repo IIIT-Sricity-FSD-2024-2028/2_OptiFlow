@@ -30,6 +30,7 @@ export const PATHS = {
     PROJECT_DETAIL: "/executive/projects/:id",
     EMPLOYEES: "/executive/employees",
     AUDIT_LOGS: "/executive/audit-logs",
+    BILLING: "/executive/billing",
   },
   COMPLIANCE: {
     DASHBOARD: "/compliance/dashboard",
