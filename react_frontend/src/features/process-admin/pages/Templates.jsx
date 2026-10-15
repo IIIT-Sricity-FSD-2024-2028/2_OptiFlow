@@ -170,6 +170,8 @@ export default function ProcessAdminTemplates() {
           <Button
             variant="danger"
             className="text-xs py-1 px-2.5"
+            disabled={(row.instances?.length || 0) > 0}
+            title={(row.instances?.length || 0) > 0 ? 'Cannot delete a template with run instances' : 'Delete template'}
             onClick={() => setTemplateToDelete(row)}
           >
             Delete

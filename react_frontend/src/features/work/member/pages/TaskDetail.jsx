@@ -130,15 +130,12 @@ export default function MemberTaskDetail() {
   const handleSubtaskToggle = async (subId, completed) => {
     try {
       const nextStatus = completed ? 'Completed' : 'Active';
-      try {
-        await subtasksApi.update(subId, { status: nextStatus });
-      } catch (_) {}
-
+      await subtasksApi.update(subId, { status: nextStatus });
       setSubtasks((prev) =>
         prev.map((st) => ((st.id || st.subtaskId) === subId ? { ...st, status: nextStatus } : st))
       );
     } catch (err) {
-      toast.error('Could not update subtask');
+      toast.error('Could not update subtask. Please try again.');
     }
   };
 

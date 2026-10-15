@@ -5,7 +5,7 @@ import {
   ForbiddenError,
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
-import { ROLES } from '../utils/roles.js';
+import { ROLES, hasRole } from '../utils/roles.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 
@@ -226,6 +226,14 @@ export async function updateTemplate(req, res, next) {
         const stepIdMap = new Map();
         const existingIdSet = new Set(existingSteps.map((es) => es.id));
 
+        // Free positive stepOrder values to prevent unique constraint collisions (templateId, stepOrder)
+        for (let i = 0; i < existingSteps.length; i++) {
+          await tx.processTemplateStep.update({
+            where: { id: existingSteps[i].id },
+            data: { stepOrder: -(i + 1) },
+          });
+        }
+
         // Phase 1: Update existing steps or insert new ones
         for (let i = 0; i < formattedSteps.length; i++) {
           const s = formattedSteps[i];
@@ -258,9 +266,16 @@ export async function updateTemplate(req, res, next) {
           }
         }
 
-        // Delete removed steps safely
+        // Delete removed steps safely (nullify any loopback references first)
         const incomingIds = new Set(formattedSteps.map((s) => s.id).filter(Boolean));
         const toDelete = existingSteps.filter((es) => !incomingIds.has(es.id));
+        const toDeleteIds = toDelete.map((es) => es.id);
+        if (toDeleteIds.length > 0) {
+          await tx.processTemplateStep.updateMany({
+            where: { onRejectGotoStepId: { in: toDeleteIds } },
+            data: { onRejectGotoStepId: null },
+          });
+        }
         for (const delStep of toDelete) {
           try {
             await tx.processTemplateStep.delete({ where: { id: delStep.id } });
@@ -343,10 +358,21 @@ export async function deleteTemplate(req, res, next) {
         id: req.params.id,
         companyId: req.user.companyId,
       },
+      include: {
+        _count: {
+          select: { instances: true },
+        },
+      },
     });
 
     if (!existing) {
       throw new NotFoundError(`Process template ${req.params.id} not found`);
+    }
+
+    if (existing._count?.instances > 0) {
+      throw new BadRequestError(
+        'Cannot delete a process template with existing run instances. Archive it by setting isActive to false instead.'
+      );
     }
 
     await prisma.processTemplate.delete({
@@ -550,6 +576,14 @@ export async function createInstance(req, res, next) {
 
     if (!template) {
       throw new NotFoundError(`Process template ${templateId} not found`);
+    }
+
+    if (!template.isActive) {
+      throw new BadRequestError('Cannot launch an instance from an inactive template');
+    }
+
+    if (!template.steps || template.steps.length === 0) {
+      throw new BadRequestError('Cannot launch an instance from a template that has no steps configured');
     }
 
     let project = null;
@@ -943,18 +977,38 @@ export async function actionStep(req, res, next) {
       throw new NotFoundError(`Process step ${req.params.id} not found`);
     }
 
+    // Guard: Instance must be active to perform step transitions
+    if (currentStep.processInstance.status !== 'Active') {
+      throw new BadRequestError(`Cannot action steps on a ${currentStep.processInstance.status} instance`);
+    }
+
+    // Guard: Prevent double-click or re-actioning already resolved steps
+    if (currentStep.status !== 'Pending') {
+      throw new BadRequestError(`Step has already been actioned (status: ${currentStep.status})`);
+    }
+
+    // Guard: Enforce sequence - only current active step can be actioned
+    if (currentStep.processInstance.currentStepId && currentStep.id !== currentStep.processInstance.currentStepId) {
+      throw new BadRequestError('Only the current active step in the workflow can be actioned');
+    }
+
     if (status) {
       validateEnum(status, ALLOWED_STEP_STATUSES, 'status');
     }
 
-    // Role check: If step assigned to another user, regular Team Member cannot action it
-    const isOwnerOrManager = req.user.role === ROLES.COMPANY_OWNER ||
-      req.user.role === ROLES.SYSTEM_ADMIN ||
-      req.user.role === ROLES.PROCESS_ADMIN ||
-      req.user.role === ROLES.PROJECT_MANAGER;
+    // Role check: If step assigned to another user, regular Team Member cannot action it.
+    // If step is unassigned, only managers/admins can action it.
+    const isOwnerOrManager = hasRole(req.user.roleLabel || req.user.role, [
+      ...PROCESS_MANAGER_ROLES,
+      ROLES.PLATFORM_ADMIN,
+    ]);
 
-    if (currentStep.assignedToId && currentStep.assignedToId !== req.user.id && !isOwnerOrManager) {
-      throw new ForbiddenError('You are not authorized to action a step assigned to another user');
+    if (currentStep.assignedToId) {
+      if (currentStep.assignedToId !== req.user.id && !isOwnerOrManager) {
+        throw new ForbiddenError('You are not authorized to action a step assigned to another user');
+      }
+    } else if (!isOwnerOrManager) {
+      throw new ForbiddenError('Only Process Administrators, Project Managers, or Admins can action unassigned steps');
     }
 
     if (assignedToId !== undefined && assignedToId !== null) {
@@ -984,6 +1038,30 @@ export async function actionStep(req, res, next) {
         },
       });
 
+      // Synchronize linked Project Task if one exists
+      if (newStatus === 'Approved') {
+        await tx.task.updateMany({
+          where: {
+            processInstanceStepId: currentStep.id,
+            companyId: req.user.companyId,
+          },
+          data: {
+            status: 'Completed',
+            completedAt: new Date(),
+          },
+        });
+      } else if (newStatus === 'Rejected') {
+        await tx.task.updateMany({
+          where: {
+            processInstanceStepId: currentStep.id,
+            companyId: req.user.companyId,
+          },
+          data: {
+            status: 'Blocked',
+          },
+        });
+      }
+
       // State Machine Transition Logic
       if (newStatus === 'Rejected') {
         if (currentStep.templateStep.onRejectGotoStepId) {
@@ -994,13 +1072,34 @@ export async function actionStep(req, res, next) {
               processInstanceId: currentStep.processInstanceId,
               templateStepId: targetTemplateStepId,
             },
+            include: { templateStep: true },
           });
 
           if (targetInstanceStep) {
-            await tx.processInstanceStep.update({
-              where: { id: targetInstanceStep.id },
-              data: { status: 'Pending' },
+            // Reset target step and all intermediate steps up to current step back to Pending
+            const allInstanceSteps = await tx.processInstanceStep.findMany({
+              where: { processInstanceId: currentStep.processInstanceId },
+              include: { templateStep: true },
             });
+
+            const stepsToResetIds = allInstanceSteps
+              .filter(
+                (s) =>
+                  s.templateStep.stepOrder >= targetInstanceStep.templateStep.stepOrder &&
+                  s.templateStep.stepOrder <= currentStep.templateStep.stepOrder
+              )
+              .map((s) => s.id);
+
+            if (stepsToResetIds.length > 0) {
+              await tx.processInstanceStep.updateMany({
+                where: { id: { in: stepsToResetIds } },
+                data: {
+                  status: 'Pending',
+                  actionedById: null,
+                  actionedAt: null,
+                },
+              });
+            }
 
             await tx.processInstance.update({
               where: { id: currentStep.processInstanceId },
@@ -1068,7 +1167,7 @@ export async function actionStep(req, res, next) {
         action: AUDIT_ACTIONS.UPDATE,
         performedById: req.user.id,
         oldValue: { status: currentStep.status },
-        newValue: { status: result.status },
+        newValue: { status: result.status, comment: req.body?.comment || undefined },
       });
     } catch (auditErr) {
       console.warn('Audit log error on action step:', auditErr?.message);

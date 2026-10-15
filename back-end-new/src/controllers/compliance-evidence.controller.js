@@ -165,6 +165,21 @@ export async function updateEvidence(req, res, next) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
+    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const isMember = role === 'team_member' || role === 'member';
+
+    if (isMember) {
+      if (existing.userId !== req.user.id) {
+        throw new ForbiddenError('You can only edit your own evidence submissions');
+      }
+      if (existing.status !== 'Pending') {
+        throw new ForbiddenError('Reviewed or approved evidence cannot be modified');
+      }
+      if (body.status !== undefined && body.status !== existing.status) {
+        throw new ForbiddenError('Team members cannot review or change evidence status');
+      }
+    }
+
     const updateData = {};
     if (body.title) updateData.title = String(body.title).trim();
     if (body.evidenceType) updateData.evidenceType = body.evidenceType;
@@ -326,6 +341,18 @@ export async function deleteEvidence(req, res, next) {
 
     if (!existing) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
+    }
+
+    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const isMember = role === 'team_member' || role === 'member';
+
+    if (isMember) {
+      if (existing.userId !== req.user.id) {
+        throw new ForbiddenError('You can only delete your own evidence submissions');
+      }
+      if (existing.status !== 'Pending') {
+        throw new ForbiddenError('Reviewed or approved evidence cannot be deleted');
+      }
     }
 
     if (existing.fileUrl) {

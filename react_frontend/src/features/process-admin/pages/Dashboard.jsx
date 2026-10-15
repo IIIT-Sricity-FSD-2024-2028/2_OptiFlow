@@ -251,11 +251,13 @@ export default function ProcessAdminDashboard() {
               }}
               placeholder="Choose a template..."
             >
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} (v{t.version || 1}) - {t.steps?.length || 0} steps
-                </option>
-              ))}
+              {templates
+                .filter((t) => t.isActive && (t.steps?.length || 0) > 0)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} (v{t.version || 1}) - {t.steps?.length || 0} steps
+                  </option>
+                ))}
             </Select>
           </FormField>
         </form>
