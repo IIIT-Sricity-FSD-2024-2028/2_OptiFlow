@@ -229,7 +229,7 @@ export default function PmProjectDetail() {
 
   const handleMarkTaskComplete = async (task) => {
     try {
-      await tasksApi.update(task.id, { status: 'Completed' });
+      await tasksApi.update(task.id, { status: 'Completed', pmApproval: true });
       const response = await projectsApi.get(id);
       setProject(normalize(response));
       setSelectedTask((prev) => prev ? { ...prev, status: 'Completed' } : null);
@@ -240,7 +240,7 @@ export default function PmProjectDetail() {
 
   const handleApproveTask = async (task) => {
     try {
-      await tasksApi.update(task.id, { status: 'Completed' });
+      await tasksApi.update(task.id, { status: 'Completed', pmApproval: true });
       const response = await projectsApi.get(id);
       setProject(normalize(response));
       setSelectedTask(null);
