@@ -31,16 +31,12 @@ export const router = createBrowserRouter([
         children: [
           ...wrapSuspense(commonRoutes.filter(r => r.path.startsWith('/profile') || r.path.startsWith('/notifications'))),
           ...wrapSuspense(executiveRoutes),
+          ...wrapSuspense(complianceRoutes),
           ...wrapSuspense(hrRoutes),
           ...wrapSuspense(processAdminRoutes),
           ...wrapSuspense(pmRoutes),
           ...wrapSuspense(teamLeadRoutes),
-          ...wrapSuspense(memberRoutes),
-          // Compliance routes are nested inside their own role guard
-          {
-            element: <ProtectedRoute allowedRoles={['compliance_officer', 'system_admin', 'company_owner']} />,
-            children: wrapSuspense(complianceRoutes),
-          },
+          ...wrapSuspense(memberRoutes)
         ]
       }
     ]
