@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, ConflictError } from '../utils/errors.js';
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
@@ -291,6 +291,7 @@ export async function updateBranch(req, res, next) {
 export async function deleteBranch(req, res, next) {
   try {
     const { id } = req.params;
+    const reassignBranchId = req.body?.reassignBranchId || req.query?.reassignBranchId;
 
     const existing = await prisma.branch.findFirst({
       where: { id, companyId: req.user.companyId },
@@ -305,28 +306,135 @@ export async function deleteBranch(req, res, next) {
     });
 
     if (teamsCount > 0) {
-      throw new ConflictError(`Cannot delete branch: ${teamsCount} team(s) are currently assigned to this branch`);
+      if (!reassignBranchId) {
+        throw new ConflictError(
+          `Cannot delete branch: ${teamsCount} team(s) are currently assigned. Specify a destination branch (reassignBranchId) to migrate teams before deletion.`
+        );
+      }
+
+      if (reassignBranchId === id) {
+        throw new BadRequestError('Cannot reassign teams to the same branch being deleted');
+      }
+
+      const targetBranch = await prisma.branch.findFirst({
+        where: { id: String(reassignBranchId), companyId: req.user.companyId },
+      });
+
+      if (!targetBranch) {
+        throw new NotFoundError(`Target migration branch with ID ${reassignBranchId} not found in this company`);
+      }
+
+      await prisma.$transaction(async (tx) => {
+        // Fetch existing team names in target branch to avoid @@unique([branchId, name]) collisions
+        const existingTargetTeams = await tx.team.findMany({
+          where: { branchId: targetBranch.id },
+          select: { name: true },
+        });
+        const targetTeamNames = new Set(existingTargetTeams.map((t) => t.name.toLowerCase()));
+
+        const teamsToMigrate = await tx.team.findMany({
+          where: { branchId: id },
+        });
+
+        for (const team of teamsToMigrate) {
+          let newName = team.name;
+          if (targetTeamNames.has(team.name.toLowerCase())) {
+            newName = `${team.name} (${existing.code || existing.name})`;
+          }
+          await tx.team.update({
+            where: { id: team.id },
+            data: {
+              branchId: targetBranch.id,
+              name: newName,
+            },
+          });
+        }
+
+        // Revoke any branch manager assignments for this decommissioned branch
+        await tx.roleAssignment.updateMany({
+          where: {
+            companyId: req.user.companyId,
+            scopeType: 'Branch',
+            scopeId: id,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: new Date(),
+          },
+        });
+
+        // Nullify branchId on historical systemAuditLogs so deleting branch doesn't hit FK constraint
+        await tx.systemAuditLog.updateMany({
+          where: { branchId: id },
+          data: { branchId: null },
+        });
+
+        // Delete the now empty branch
+        await tx.branch.delete({
+          where: { id },
+        });
+      });
+
+      // Record audit log
+      try {
+        await createSystemAuditLog({
+          companyId: req.user.companyId,
+          action: AUDIT_ACTIONS.DELETE,
+          performedById: req.user.id,
+          oldValue: { name: existing.name, code: existing.code, teamsMigrated: teamsCount },
+          newValue: { migratedToBranchId: targetBranch.id, migratedToBranchName: targetBranch.name },
+        });
+      } catch (auditErr) {
+        console.warn('[AuditLog] Notice: Audit record logging during branch deletion:', auditErr.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Branch "${existing.name}" decommissioned successfully. ${teamsCount} team(s) migrated to "${targetBranch.name}".`,
+      });
     }
 
-    await prisma.branch.delete({
-      where: { id },
+    // teamsCount === 0: Clean decommission
+    await prisma.$transaction(async (tx) => {
+      // Revoke any branch manager assignments for this branch
+      await tx.roleAssignment.updateMany({
+        where: {
+          companyId: req.user.companyId,
+          scopeType: 'Branch',
+          scopeId: id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+
+      // Nullify branchId on historical systemAuditLogs
+      await tx.systemAuditLog.updateMany({
+        where: { branchId: id },
+        data: { branchId: null },
+      });
+
+      await tx.branch.delete({
+        where: { id },
+      });
     });
 
     // Record audit log
     try {
-      await createSystemAuditLog({companyId: req.user.companyId,
-        branchId: id,
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
         action: AUDIT_ACTIONS.DELETE,
         performedById: req.user.id,
-        oldValue: { name: existing.name },
+        oldValue: { name: existing.name, code: existing.code },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during branch deletion:', auditErr.message);
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: 'Branch deleted successfully',
+      message: `Branch "${existing.name}" deleted successfully`,
     });
   } catch (err) {
     next(err);
