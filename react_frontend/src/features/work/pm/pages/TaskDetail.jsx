@@ -181,14 +181,7 @@ export default function PmTaskDetail() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Link
-              to={PATHS.COMPLIANCE.EVIDENCE}
-              className="rounded-lg bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow hover:bg-rose-700"
-            >
-              View Evidence Vault →
-            </Link>
-          </div>
+
         </div>
       )}
 
