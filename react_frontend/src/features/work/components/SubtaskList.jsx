@@ -12,6 +12,7 @@ export function SubtaskList({
   submittedSubtaskIds = new Set(),
   onAddSubtask,
   onDeleteSubtask,
+  currentUserId,
 }) {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -70,27 +71,31 @@ export function SubtaskList({
 
               return (
                 <li key={subId} className="py-3 flex items-start gap-3">
-                  {!readOnly && onStatusToggle ? (
-                    <button
-                      type="button"
-                      onClick={() => onStatusToggle(subId, !isCompleted)}
-                      className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-                    >
-                      {isCompleted || isInReview ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <Circle className="w-4 h-4 text-slate-300" />
-                      )}
-                    </button>
-                  ) : (
-                    <div className="mt-0.5">
-                      {isCompleted || isInReview ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <Circle className="w-4 h-4 text-slate-300" />
-                      )}
-                    </div>
-                  )}
+                  {!readOnly && onStatusToggle && (() => {
+                    const assignedId = subtask.assignedToId || subtask.assignedTo?.id;
+                    const canToggle = !currentUserId || !assignedId || String(assignedId) === String(currentUserId);
+                    return canToggle ? (
+                      <button
+                        type="button"
+                        onClick={() => onStatusToggle(subId, !isCompleted)}
+                        className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                      >
+                        {isCompleted || isInReview ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-300" />
+                        )}
+                      </button>
+                    ) : (
+                      <div className="mt-0.5">
+                        {isCompleted || isInReview ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-300" />
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div className="flex-1 min-w-0">
                     <p
