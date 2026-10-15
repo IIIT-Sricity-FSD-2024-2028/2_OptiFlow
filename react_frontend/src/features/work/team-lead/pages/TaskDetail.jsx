@@ -300,6 +300,27 @@ export default function TeamLeadTaskDetail() {
     finally { setSavingSt(false); }
   };
 
+  const handleToggleSubtask = async (subtaskId, markComplete) => {
+    if (!subtaskId) {
+      showToast('error', 'Could not identify subtask — please refresh.');
+      return;
+    }
+    const newStatus = markComplete ? 'Completed' : 'Active';
+    try {
+      await subtasksApi.update(subtaskId, { status: newStatus });
+      setSubtasks((prev) =>
+        prev.map((st) =>
+          (st.id || st.subtaskId) === subtaskId
+            ? { ...st, status: newStatus }
+            : st
+        )
+      );
+      showToast('success', markComplete ? 'Subtask marked complete.' : 'Subtask reopened.');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to update subtask.');
+    }
+  };
+
   if (loading) return (
     <div className="min-h-full flex items-center justify-center p-8">
       <div className="flex flex-col items-center gap-3"><Loader /><p className="text-sm text-gray-500">Loading task...</p></div>
@@ -366,9 +387,12 @@ export default function TeamLeadTaskDetail() {
             <div className="flex justify-end -mb-4 relative z-10 pr-2">
               <Button variant="outline" onClick={() => { setSubtaskError(''); setSubtaskOpen(true); }}>+ Add Subtask</Button>
             </div>
-            <SubtaskList 
+            <SubtaskList
               subtasks={subtasks}
-              readOnly={true}
+              readOnly={false}
+              onStatusToggle={(subId, markComplete) =>
+                handleToggleSubtask(subId, markComplete)
+              }
             />
 
             <EvidenceUploadCard

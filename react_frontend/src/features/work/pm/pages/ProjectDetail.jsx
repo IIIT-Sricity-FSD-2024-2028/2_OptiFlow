@@ -8,6 +8,7 @@ import { Loader } from '../../../../shared/components/Loader';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import { Pagination } from '../../../../shared/components/Pagination';
+import { Toast } from '../../../../shared/components/Toast';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
@@ -37,6 +38,8 @@ export default function PmProjectDetail() {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
   const [taskError, setTaskError] = useState('');
+  const [approvingTask, setApprovingTask] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
@@ -44,6 +47,11 @@ export default function PmProjectDetail() {
     estimatedHours: '',
     dueDate: '',
   });
+
+  const showToast = (type, message) => {
+    setToast({ visible: true, type, message });
+    setTimeout(() => setToast((t) => ({ ...t, visible: false })), 4000);
+  };
 
   useEffect(() => {
     let active = true;
@@ -228,24 +236,42 @@ export default function PmProjectDetail() {
   };
 
   const handleMarkTaskComplete = async (task) => {
+    setApprovingTask(true);
     try {
-      await tasksApi.update(task.id, { status: 'Completed' });
+      await tasksApi.update(task.id, { status: 'Completed', pmApproval: true });
       const response = await projectsApi.get(id);
       setProject(normalize(response));
       setSelectedTask((prev) => prev ? { ...prev, status: 'Completed' } : null);
+      showToast('success', `"${task.title}" marked as complete.`);
     } catch (err) {
-      setError(err.message || 'Failed to mark task as complete.');
+      const msg = err.message || '';
+      if (msg.includes('COMPLIANCE_BLOCK') || msg.toLowerCase().includes('compliance')) {
+        showToast('error', 'Blocked by compliance: ensure all required evidence is approved before completing this task.');
+      } else {
+        showToast('error', msg || 'Failed to mark task as complete.');
+      }
+    } finally {
+      setApprovingTask(false);
     }
   };
 
   const handleApproveTask = async (task) => {
+    setApprovingTask(true);
     try {
-      await tasksApi.update(task.id, { status: 'Completed' });
+      await tasksApi.update(task.id, { status: 'Completed', pmApproval: true });
       const response = await projectsApi.get(id);
       setProject(normalize(response));
       setSelectedTask(null);
+      showToast('success', `"${task.title}" approved and marked complete.`);
     } catch (err) {
-      setError(err.message || 'Failed to approve task.');
+      const msg = err.message || '';
+      if (msg.includes('COMPLIANCE_BLOCK') || msg.toLowerCase().includes('compliance')) {
+        showToast('error', 'Blocked by compliance: ensure all required evidence is approved before approving this task.');
+      } else {
+        showToast('error', msg || 'Failed to approve task.');
+      }
+    } finally {
+      setApprovingTask(false);
     }
   };
 
@@ -342,9 +368,9 @@ export default function PmProjectDetail() {
         <div className="mt-4 flex items-center gap-4">
           <span className="w-28 shrink-0 text-sm font-semibold text-slate-600">Overall Progress</span>
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-            <div className="h-full rounded-full bg-blue-600" style={{ width: `${progress}%` }} />
+            <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${progress}%` }} />
           </div>
-          <span className="w-10 text-right text-sm font-bold text-slate-900">{progress}%</span>
+          <span className="whitespace-nowrap text-sm font-bold text-slate-900">{completed}/{tasks.length} tasks ({progress}%)</span>
         </div>
       </header>
 
@@ -615,7 +641,7 @@ export default function PmProjectDetail() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge status="info">{(task.status || '').replace(/_/g, ' ')}</Badge>
-                  <Button variant="primary" onClick={() => handleApproveTask(task)}>Approve ✓</Button>
+                  <Button variant="primary" onClick={() => handleApproveTask(task)} disabled={approvingTask}>Approve ✓</Button>
                   <Button variant="outline" onClick={() => setSelectedTask(task)}>View</Button>
                 </div>
               </div>
@@ -719,16 +745,18 @@ export default function PmProjectDetail() {
                       variant="primary"
                       onClick={() => handleApproveTask(selectedTask)}
                       className="flex-1"
+                      disabled={approvingTask}
                     >
-                      ✓ Approve & Mark Complete
+                      {approvingTask ? 'Approving…' : '✓ Approve & Mark Complete'}
                     </Button>
                   ) : (
                     <Button
                       variant="secondary"
                       onClick={() => handleMarkTaskComplete(selectedTask)}
                       className="flex-1"
+                      disabled={approvingTask}
                     >
-                      Mark as Complete
+                      {approvingTask ? 'Saving…' : 'Mark as Complete'}
                     </Button>
                   )}
                 </>
@@ -741,6 +769,13 @@ export default function PmProjectDetail() {
           </aside>
         </>
       )}
+
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onClose={() => setToast((t) => ({ ...t, visible: false }))}
+      />
     </div>
   );
 }

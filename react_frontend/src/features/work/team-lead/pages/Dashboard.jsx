@@ -181,8 +181,12 @@ export default function TeamLeadDashboard() {
   // Subtasks submitted for review by team members
   const reviewQueueSubtasks = tasks.flatMap((task) =>
     (task.subtasks || []).filter(
-      (st) => st.status === 'In_Review'
-    ).map((st) => ({ ...st, _parentTask: task }))
+      (st) => st.status === 'In_Review' || st.status === 'Pending_TL_Review'
+    ).map((st) => ({
+      ...st,
+      _parentTask: task,
+      assignedToName: st.assignedToName || st.assignedTo?.fullName || st.assignedTo?.email || null,
+    }))
   );
 
   const inProgressCount = teamOverviewTasks.filter((task) =>
@@ -462,15 +466,20 @@ export default function TeamLeadDashboard() {
   };
 
   const handleApproveSubtask = async (subtask) => {
+    const subId = subtask.id || subtask.subtaskId;
+    if (!subId) {
+      showToast('error', 'Could not identify subtask — please refresh and try again.');
+      return;
+    }
     try {
-      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Completed' });
+      await subtasksApi.update(subId, { status: 'Completed' });
       setTasks((prev) =>
         prev.map((t) =>
           t.id === subtask._parentTask?.id
             ? {
                 ...t,
                 subtasks: (t.subtasks || []).map((st) =>
-                  (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
+                  (st.id || st.subtaskId) === subId
                     ? { ...st, status: 'Completed' }
                     : st
                 ),
@@ -492,20 +501,30 @@ export default function TeamLeadDashboard() {
       }
       showToast('success', `Subtask "${subtask.title}" approved.`);
     } catch (err) {
-      showToast('error', 'Failed to approve subtask.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('not found')) {
+        showToast('error', 'Subtask not found — it may have been updated. Please refresh.');
+      } else {
+        showToast('error', msg || 'Failed to approve subtask.');
+      }
     }
   };
 
   const handleRejectSubtask = async (subtask) => {
+    const subId = subtask.id || subtask.subtaskId;
+    if (!subId) {
+      showToast('error', 'Could not identify subtask — please refresh and try again.');
+      return;
+    }
     try {
-      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Active' });
+      await subtasksApi.update(subId, { status: 'Active' });
       setTasks((prev) =>
         prev.map((t) =>
           t.id === subtask._parentTask?.id
             ? {
                 ...t,
                 subtasks: (t.subtasks || []).map((st) =>
-                  (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
+                  (st.id || st.subtaskId) === subId
                     ? { ...st, status: 'Active' }
                     : st
                 ),
@@ -527,7 +546,36 @@ export default function TeamLeadDashboard() {
       }
       showToast('success', 'Subtask sent back to In Progress.');
     } catch (err) {
-      showToast('error', 'Failed to reject subtask.');
+      const msg = err.message || '';
+      showToast('error', msg || 'Failed to send subtask back.');
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // TL marks their OWN subtask complete/active (self-assigned work)
+  // ---------------------------------------------------------------------------
+
+  const handleToggleTlSubtask = async (subtaskId, markComplete) => {
+    if (!subtaskId) {
+      showToast('error', 'Could not identify subtask — please refresh.');
+      return;
+    }
+    const newStatus = markComplete ? 'Completed' : 'Active';
+    try {
+      await subtasksApi.update(subtaskId, { status: newStatus });
+      setTasks((prev) =>
+        prev.map((t) => ({
+          ...t,
+          subtasks: (t.subtasks || []).map((st) =>
+            (st.id || st.subtaskId) === subtaskId
+              ? { ...st, status: newStatus }
+              : st
+          ),
+        }))
+      );
+      showToast('success', markComplete ? 'Subtask marked complete.' : 'Subtask reopened.');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to update subtask.');
     }
   };
 
@@ -808,7 +856,10 @@ export default function TeamLeadDashboard() {
                           <div className="pl-4 border-l-2 border-blue-300 mt-2">
                             <SubtaskList
                               subtasks={task.subtasks || []}
-                              readOnly={true}
+                              readOnly={false}
+                              onStatusToggle={(subId, markComplete) =>
+                                handleToggleTlSubtask(subId, markComplete)
+                              }
                             />
                           </div>
                         )}
@@ -873,28 +924,28 @@ export default function TeamLeadDashboard() {
             </div>
 
             <div className="mb-6">
-              <div className="flex justify-between text-xs text-gray-500 mb-2">
-                <span>Progress</span>
-
-                <span className="font-semibold text-gray-900">
-                  {project.progress || 0}%
-                </span>
-              </div>
-
-              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(
-                        0,
-                        Number(project.progress) || 0
-                      )
-                    )}%`,
-                  }}
-                />
-              </div>
+              {(() => {
+                const projectTasks = tasks.filter((t) => t.projectId === project?.id);
+                const totalTasks = projectTasks.length;
+                const completedTasks = projectTasks.filter((t) => t.status === 'Completed').length;
+                const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+                return (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-500 mb-2">
+                      <span>Progress</span>
+                      <span className="font-semibold text-gray-900">
+                        {completedTasks}/{totalTasks} tasks ({pct}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-600 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
