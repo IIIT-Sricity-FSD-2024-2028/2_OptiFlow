@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, ConflictError } from '../utils/errors.js';
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
@@ -194,6 +194,24 @@ export async function updateTeam(req, res, next) {
       updateData.branchId = newBranchId;
     }
 
+    // Pre-check for unique constraint @@unique([branchId, name]) to prevent P2002 crash (RAT-03)
+    const effectiveBranchId = updateData.branchId || existing.branchId;
+    const effectiveName = updateData.name || existing.name;
+    if (updateData.name || updateData.branchId) {
+      const duplicate = await prisma.team.findFirst({
+        where: {
+          branchId: effectiveBranchId,
+          name: effectiveName,
+          NOT: { id },
+        },
+      });
+      if (duplicate) {
+        throw new ConflictError(
+          `A team named "${effectiveName}" already exists in the destination branch`
+        );
+      }
+    }
+
     const updated = await prisma.team.update({
       where: { id },
       data: updateData,
@@ -250,18 +268,29 @@ export async function deleteTeam(req, res, next) {
       throw new ConflictError(`Cannot delete team: ${projectsCount} project(s) are currently assigned to this team`);
     }
 
-    await prisma.team.delete({
-      where: { id },
+    // Wrap deletion in transaction to nullify foreign key references in SystemAuditLog (RAT-02)
+    await prisma.$transaction(async (tx) => {
+      await tx.systemAuditLog.updateMany({
+        where: { teamId: id },
+        data: { teamId: null },
+      });
+
+      await tx.teamMember.deleteMany({
+        where: { teamId: id },
+      });
+
+      await tx.team.delete({
+        where: { id },
+      });
     });
 
     // Record audit log
     try {
       await createSystemAuditLog({
         companyId: req.user.companyId,
-        teamId: id,
         action: AUDIT_ACTIONS.DELETE,
         performedById: req.user.id,
-        oldValue: { name: existing.name },
+        newValue: { deletedTeamName: existing.name, branchId: existing.branchId },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during team deletion:', auditErr.message);

@@ -601,16 +601,40 @@ export async function createPlatformCompany(req, res, next) {
         },
       });
 
+      // 2b. Seed Default Headquarters Branch (Day-1 Provisioning Seed Deficit Resolution)
+      const defaultBranch = await tx.branch.create({
+        data: {
+          companyId: company.id,
+          name: "Headquarters",
+          code: "HQ",
+          description: "Primary corporate headquarters branch",
+        },
+      });
+
       // 3. Clone all platform predefined role templates for the company (just like registration)
       let platformTemplates = await tx.roleTemplate.findMany({
         where: { origin: "platform_predefined" },
       });
 
       if (platformTemplates.length === 0) {
-        const sysTemplate = await tx.roleTemplate.create({
-          data: { origin: "platform_predefined", label: "System Admin" },
-        });
-        platformTemplates = [sysTemplate];
+        const DEFAULT_TEMPLATES = [
+          { label: "Company Owner", slug: "company_owner" },
+          { label: "System Admin", slug: "system_admin" },
+          { label: "Access Governance", slug: "access_governance" },
+          { label: "Branch Manager", slug: "branch_manager" },
+          { label: "Process Admin", slug: "process_admin" },
+          { label: "Project Manager", slug: "project_manager" },
+          { label: "Compliance Officer", slug: "compliance_officer" },
+          { label: "Team Lead", slug: "team_lead" },
+          { label: "Team Member", slug: "team_member" },
+        ];
+        platformTemplates = await Promise.all(
+          DEFAULT_TEMPLATES.map((dt) =>
+            tx.roleTemplate.create({
+              data: { origin: "platform_predefined", label: dt.label, slug: dt.slug },
+            })
+          )
+        );
       }
 
       let sysAdminRole = null;

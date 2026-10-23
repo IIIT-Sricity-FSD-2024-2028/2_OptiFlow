@@ -107,6 +107,10 @@ export default function HrRoles() {
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [isRevoking, setIsRevoking] = useState(false);
 
+  // Delete Custom Role Dialog State (NORM-01)
+  const [roleToDelete, setRoleToDelete] = useState(null);
+  const [isDeletingRole, setIsDeletingRole] = useState(false);
+
   const canManageRoles = [
     "company_owner",
     "system_admin",
@@ -194,17 +198,19 @@ export default function HrRoles() {
     );
   }, [activeRoleEmployees, empSearch]);
 
-  // Track unsaved modifications
+  // Track unsaved modifications (System Baseline roles are locked and cannot be edited)
   const hasUnsavedChanges = useMemo(() => {
+    if (activeRole?.isSystem) return false;
     if (activePermissions.size !== savedPermissions.size) return true;
     for (const p of activePermissions) {
       if (!savedPermissions.has(p)) return true;
     }
     return false;
-  }, [activePermissions, savedPermissions]);
+  }, [activePermissions, savedPermissions, activeRole?.isSystem]);
 
   // 2. TOGGLE PERMISSION
   const handleTogglePermission = (slug) => {
+    if (activeRole?.isSystem || !canManageRoles) return;
     setActivePermissions((prev) => {
       const next = new Set(prev);
       if (next.has(slug)) {
@@ -218,7 +224,7 @@ export default function HrRoles() {
 
   // 3. SAVE PERMISSION CHANGES
   const handleSavePermissions = async () => {
-    if (!activeRole) return;
+    if (!activeRole || activeRole.isSystem) return;
     setIsSavingPerms(true);
 
     try {
@@ -333,6 +339,28 @@ export default function HrRoles() {
       toast.error(err.message || "Failed to revoke assignment.");
     } finally {
       setIsRevoking(false);
+    }
+  };
+
+  // 7. DELETE CUSTOM ROLE (NORM-01)
+  const handleDeleteRoleConfirm = async () => {
+    if (!roleToDelete) return;
+
+    setIsDeletingRole(true);
+    try {
+      await apiClient(`/roles/${roleToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      toast.success(`Custom role "${roleToDelete.label}" deleted successfully.`);
+      setRoleToDelete(null);
+      setSelectedRoleId(null);
+      await fetchData();
+    } catch (err) {
+      console.error("[HrRoles] Delete failed:", err);
+      toast.error(err.message || "Failed to delete role.");
+    } finally {
+      setIsDeletingRole(false);
     }
   };
 
@@ -485,8 +513,29 @@ export default function HrRoles() {
                       Duplicate
                     </Button>
                   )}
+                  {canManageRoles && !activeRole.isSystem && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setRoleToDelete(activeRole)}
+                      title="Delete this custom role"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      Delete Role
+                    </Button>
+                  )}
                 </div>
               </div>
+
+              {/* Immutable System Baseline Notice */}
+              {activeRole.isSystem && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mx-4 mt-3 flex items-center gap-2.5 text-xs text-slate-600">
+                  <Shield className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>
+                    <strong>System Baseline Role:</strong> Capabilities are locked and immutable to preserve tenant stability and security governance.
+                  </span>
+                </div>
+              )}
 
               {/* Permissions Matrix */}
               <div className={styles.centerBody}>
@@ -508,11 +557,12 @@ export default function HrRoles() {
                             key={p.slug}
                             className={`${styles.permItem} ${
                               isChecked ? styles.permItemChecked : ""
-                            }`}
+                            } ${activeRole.isSystem ? "cursor-not-allowed opacity-80" : ""}`}
                           >
                             <input
                               type="checkbox"
                               checked={isChecked}
+                              disabled={!canManageRoles || activeRole.isSystem}
                               onChange={() => handleTogglePermission(p.slug)}
                               className={styles.permCheckbox}
                             />
@@ -760,6 +810,19 @@ export default function HrRoles() {
         loading={isRevoking}
         onConfirm={handleRevokeConfirm}
         onCancel={() => !isRevoking && setRevokeTarget(null)}
+      />
+
+      {/* CONFIRM DELETE CUSTOM ROLE DIALOG (NORM-01) */}
+      <ConfirmDialog
+        isOpen={Boolean(roleToDelete)}
+        title="Delete Custom Role"
+        message={`Are you sure you want to permanently delete custom role "${roleToDelete?.label}"? All associated capability assignments will be purged.`}
+        confirmText="Delete Role"
+        cancelText="Cancel"
+        variant="danger"
+        loading={isDeletingRole}
+        onConfirm={handleDeleteRoleConfirm}
+        onCancel={() => !isDeletingRole && setRoleToDelete(null)}
       />
     </div>
   );

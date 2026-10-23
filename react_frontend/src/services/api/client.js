@@ -53,7 +53,11 @@ export const apiClient = async (endpoint, options = {}) => {
       }
     }
     // Throw a readable error message from the backend so the component can display it
-    throw new Error(data?.message || `Error ${response.status}: Request failed`);
+    const err = new Error(data?.message || `Error ${response.status}: Request failed`);
+    err.status = response.status;
+    err.code = data?.code;
+    err.data = data;
+    throw err;
   }
 
   // Unwrap { success, data }

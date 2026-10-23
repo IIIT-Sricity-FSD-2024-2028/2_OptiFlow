@@ -155,11 +155,8 @@ export async function handleLogin(req, res, next) {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    if (user.status && user.status !== 'Active') {
-      throw new UnauthorizedError('User account is inactive or suspended');
-    }
-
-    if (user.deletedAt) {
+    // WHY: Use schema fields isActive and deactivatedAt rather than non-existent user.status/deletedAt
+    if (user.isActive === false || user.deactivatedAt !== null) {
       throw new UnauthorizedError('User account has been deactivated');
     }
 
@@ -190,6 +187,7 @@ export async function handleLogin(req, res, next) {
         companyId: user.companyId,
         role: roleSlug,
         roleLabel,
+        tokenVersion: user.tokenVersion || 1, // WHY: Embed tokenVersion to support instantaneous session revocation
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -363,17 +361,42 @@ export async function handleRegisterCompany(req, res, next) {
         });
       }
 
-      // 4. Ensure platform role templates exist
+      // 4a. Seed Default Headquarters Branch
+      await tx.branch.create({
+        data: {
+          companyId: company.id,
+          name: 'Headquarters',
+          code: 'HQ',
+          description: 'Primary corporate headquarters branch',
+        },
+      });
+
+      // 4b. Ensure platform role templates exist
       let platformTemplates = await tx.roleTemplate.findMany({
         where: { origin: 'platform_predefined' },
         include: { defaultPermissions: true },
       });
 
       if (platformTemplates.length === 0) {
-        const sysTemplate = await tx.roleTemplate.create({
-          data: { origin: 'platform_predefined', label: 'System Admin' },
-        });
-        platformTemplates = [{ ...sysTemplate, defaultPermissions: [] }];
+        const DEFAULT_TEMPLATES = [
+          { label: 'Company Owner', slug: 'company_owner' },
+          { label: 'System Admin', slug: 'system_admin' },
+          { label: 'Access Governance', slug: 'access_governance' },
+          { label: 'Branch Manager', slug: 'branch_manager' },
+          { label: 'Process Admin', slug: 'process_admin' },
+          { label: 'Project Manager', slug: 'project_manager' },
+          { label: 'Compliance Officer', slug: 'compliance_officer' },
+          { label: 'Team Lead', slug: 'team_lead' },
+          { label: 'Team Member', slug: 'team_member' },
+        ];
+        platformTemplates = await Promise.all(
+          DEFAULT_TEMPLATES.map(async (dt) => {
+            const tmpl = await tx.roleTemplate.create({
+              data: { origin: 'platform_predefined', label: dt.label, slug: dt.slug },
+            });
+            return { ...tmpl, defaultPermissions: [] };
+          })
+        );
       }
 
       // 5. Clone roles for company

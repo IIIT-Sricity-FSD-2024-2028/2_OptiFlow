@@ -1,7 +1,5 @@
 import path from 'path';
 import fs from 'fs';
-import ws from 'ws';
-import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,15 +14,18 @@ let supabaseClient = null;
 
 if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
   try {
+    const wsModule = await import('ws').catch(() => null);
+    const ws = wsModule?.default || wsModule;
+    const { createClient } = await import('@supabase/supabase-js');
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      realtime: { transport: ws },
+      ...(ws ? { realtime: { transport: ws } } : {}),
       auth: {
         persistSession: false,
         autoRefreshToken: false,
       },
     });
   } catch (err) {
-    console.warn('[Storage] Failed to initialize Supabase client:', err.message);
+    console.warn('[Storage] Notice: Supabase storage client initialization skipped, local fallback active:', err.message);
   }
 }
 

@@ -402,6 +402,18 @@ export async function updateTask(req, res, next) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');
       updateData.status = body.status;
       if (body.status === 'Completed') {
+        const openSubtasksCount = await prisma.subtask.count({
+          where: {
+            taskId: id,
+            status: { not: 'Completed' },
+            deletedAt: null,
+          },
+        });
+        if (openSubtasksCount > 0) {
+          throw new BadRequestError(
+            `Cannot mark task as Completed: ${openSubtasksCount} subtask(s) are still pending completion or review.`
+          );
+        }
         updateData.completedAt = new Date();
       }
     }

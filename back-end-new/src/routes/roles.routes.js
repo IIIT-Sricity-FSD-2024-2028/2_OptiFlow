@@ -7,6 +7,7 @@ import {
   getRoleById,
   createCustomRole,
   updateRolePermissions,
+  deleteRole,
 } from '../controllers/roles.controller.js';
 
 const router = Router();
@@ -31,6 +32,12 @@ router.patch(
   authenticate,
   requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
   updateRolePermissions
+);
+router.delete(
+  ['/roles/:id', '/api/roles/:id'],
+  authenticate,
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  deleteRole
 );
 
 export default router;
