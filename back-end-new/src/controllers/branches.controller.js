@@ -4,6 +4,7 @@ import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, Confli
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
+import { assertWithinPlanLimit } from '../utils/planLimits.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 async function enrichBranchesWithManagers(branches, companyId) {
@@ -123,6 +124,8 @@ export async function createBranch(req, res, next) {
     const code = (body.code || '').trim() || null;
 
     validateRequired({ name }, ['name']);
+
+    await assertWithinPlanLimit(req.user.companyId, 'branches');
 
     const branch = await prisma.branch.create({
       data: {

@@ -16,6 +16,9 @@ import {
 } from "../utils/validation.js";
 import { parseListParams, formatListResponse } from "../utils/pagination.js";
 import { writeAuditLog } from "../utils/platformAudit.js";
+import { buildSetPasswordLink } from "../utils/passwordTokens.js";
+import { sendOwnerInviteEmail } from "../services/email.service.js";
+import { invalidateCompanyAuthCache } from "../utils/companyAuthCache.js";
 
 // ============================================================================
 // 1. PLATFORM ADMIN AUTHENTICATION
@@ -565,27 +568,18 @@ export async function createPlatformCompany(req, res, next) {
       throw new ConflictError("A user with this email address already exists");
     }
 
-    const providedPassword = (
-      body.password ||
-      body.ownerPassword ||
-      ""
-    ).trim();
-    let isGenerated = false;
-    let password = providedPassword;
-
-    if (!password) {
-      password =
-        crypto.randomBytes(9).toString("base64").slice(0, 12) + "!1Aa";
-      isGenerated = true;
-    } else if (password.length < 8) {
-      throw new ValidationError("Password validation failed", [
-        {
-          field: "password",
-          message: "Password must be at least 8 characters long",
-        },
-      ]);
+    // The owner never receives a password from the platform admin. The account is created
+    // with a random, never-disclosed password and the owner chooses their own through a
+    // one-time set-password link (emailed, and shown once to the provisioning admin).
+    if (body.password || body.ownerPassword) {
+      throw new BadRequestError(
+        "Owner passwords cannot be set by platform admins. The owner sets one via the invite link.",
+      );
     }
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(
+      crypto.randomBytes(32).toString("hex"),
+      10,
+    );
 
     const periodEnd = new Date();
     periodEnd.setMonth(
@@ -690,48 +684,53 @@ export async function createPlatformCompany(req, res, next) {
         tx,
       );
 
-      const setPasswordToken = jwt.sign(
-        {
-          sub: owner.id,
-          companyId: company.id,
-          tokenVersion: owner.tokenVersion,
-          purpose: "set_password",
-        },
-        env.JWT_SECRET,
-        { expiresIn: "24h" }
-      );
-
-      const reqOrigin =
-        req.get("origin") ||
-        req.get("referer") ||
-        `${req.protocol}://${req.get("host")}`;
-      const setPasswordPath = `/set-password?token=${setPasswordToken}`;
-      const setPasswordUrl = reqOrigin
-        ? `${reqOrigin.replace(/\/+$/, "")}${setPasswordPath}`
-        : setPasswordPath;
-
       return {
         company,
         owner: {
           id: owner.id,
           fullName: owner.fullName,
           email: owner.email,
+          tokenVersion: owner.tokenVersion,
           role: "Executive (System Admin)",
         },
         subscription,
-        initialPassword: password,
-        isGeneratedPassword: isGenerated,
-        setPasswordToken,
-        setPasswordUrl,
-        mustChangePassword: true,
         targetRoute: "/executive/dashboard",
       };
     });
 
+    invalidateCompanyAuthCache(result.company.id);
+
+    const invite = buildSetPasswordLink({
+      userId: result.owner.id,
+      companyId: result.company.id,
+      tokenVersion: result.owner.tokenVersion,
+    });
+
+    const inviteEmail = await sendOwnerInviteEmail({
+      to: result.owner.email,
+      ownerName: result.owner.fullName,
+      companyName: result.company.legalName,
+      setPasswordUrl: invite.url,
+      expiresIn: env.SET_PASSWORD_TOKEN_TTL,
+    });
+
+    const { tokenVersion: _tv, ...owner } = result.owner;
+
     res.status(201).json({
       success: true,
       message: "Company provisioned successfully",
-      data: result,
+      data: {
+        ...result,
+        owner,
+        // Shown once to the provisioning admin; never stored or audited.
+        setPasswordUrl: invite.url,
+        setPasswordExpiresAt: invite.expiresAt,
+        mustChangePassword: true,
+        inviteEmail: {
+          delivered: inviteEmail.delivered,
+          provider: inviteEmail.provider,
+        },
+      },
     });
   } catch (err) {
     next(err);

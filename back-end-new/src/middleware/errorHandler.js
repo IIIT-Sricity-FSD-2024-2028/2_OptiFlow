@@ -104,6 +104,10 @@ export function errorHandler(err, req, res, next) {
     timestamp: new Date().toISOString(),
   };
 
+  if (err instanceof AppError && err.code) {
+    responseBody.code = err.code;
+  }
+
   if (errors && Array.isArray(errors) && errors.length > 0) {
     responseBody.errors = errors;
   }

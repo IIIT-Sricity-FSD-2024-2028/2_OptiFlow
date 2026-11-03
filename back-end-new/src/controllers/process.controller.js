@@ -6,6 +6,7 @@ import {
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
 import { ROLES, hasRole } from '../utils/roles.js';
+import { assertWithinPlanLimit } from '../utils/planLimits.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 
@@ -126,6 +127,10 @@ export async function createTemplate(req, res, next) {
         })
       : [];
 
+    if (isActive === undefined || Boolean(isActive)) {
+      await assertWithinPlanLimit(req.user.companyId, 'activeProcessTemplates');
+    }
+
     const created = await prisma.processTemplate.create({
       data: {
         companyId: req.user.companyId,
@@ -190,6 +195,10 @@ export async function updateTemplate(req, res, next) {
     const { name, version, isActive, steps } = req.body;
     if (version !== undefined) {
       validateNumber(version, 'version');
+    }
+
+    if (isActive !== undefined && Boolean(isActive) && !existing.isActive) {
+      await assertWithinPlanLimit(req.user.companyId, 'activeProcessTemplates');
     }
 
     const updated = await prisma.$transaction(async (tx) => {

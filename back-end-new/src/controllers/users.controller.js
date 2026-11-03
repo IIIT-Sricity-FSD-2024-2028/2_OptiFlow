@@ -12,6 +12,7 @@ import {
   validateEmail,
 } from '../utils/validation.js';
 import { hasRole, normalizeRole, ROLES } from '../utils/roles.js';
+import { assertWithinPlanLimit } from '../utils/planLimits.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 
@@ -175,39 +176,16 @@ export async function createUser(req, res, next) {
       ]);
     }
 
-    // --- SECURITY IMPLEMENTATION 2: Feature Gating (Plan Limits) ---
-    // 1. Count how many users already exist in this company
-    const currentUserCount = await prisma.user.count({
-      where: { companyId: req.user.companyId },
-    });
+    // Plan limit (central tenant-side guard; counts active users)
+    await assertWithinPlanLimit(req.user.companyId, 'users');
 
-    // 2. Fetch the company's active subscription and its associated plan
-    const company = await prisma.company.findUnique({
-      where: { id: req.user.companyId },
-      include: {
-        subscriptions: {
-          where: { status: { in: ['Active', 'Trialing'] } },
-          include: { plan: true },
-        },
-      },
-    });
-
-    // 3. Compare and Block
-    const activeSub = company?.subscriptions?.[0];
-    const maxUsers = activeSub?.plan?.maxUsers;
-
-    // If maxUsers is null, it means unlimited. Otherwise, enforce the limit.
-    if (maxUsers !== null && maxUsers !== undefined && currentUserCount >= maxUsers) {
-      throw new ForbiddenError(`Plan limit reached: Your current plan only allows up to ${maxUsers} users. Please upgrade your plan.`);
-    }
-    // ----------------------------------------------------------------
-
-    // Check duplicate email within this company
+    // Emails are unique across all tenants (case-insensitive) so that /auth/login,
+    // which identifies a user by email alone, can never match two accounts.
     const existing = await prisma.user.findFirst({
-      where: { companyId: req.user.companyId, email },
+      where: { email: { equals: email, mode: 'insensitive' } },
     });
     if (existing) {
-      throw new ConflictError('A user with this email address already exists in this company');
+      throw new ConflictError('A user with this email address already exists');
     }
 
     // Verify manager reference belongs to same company
@@ -264,6 +242,8 @@ export async function createUser(req, res, next) {
           jobTitle,
           managerUserId,
           isActive: true,
+          // null => the user must replace this admin-chosen password at first sign-in
+          passwordChangedAt: null,
         },
       });
 
@@ -383,10 +363,10 @@ export async function updateUser(req, res, next) {
 
       if (email !== targetUser.email.toLowerCase()) {
         const duplicate = await prisma.user.findFirst({
-          where: { companyId: req.user.companyId, email, NOT: { id } },
+          where: { email: { equals: email, mode: 'insensitive' }, NOT: { id } },
         });
         if (duplicate) {
-          throw new ConflictError('A user with this email address already exists in this company');
+          throw new ConflictError('A user with this email address already exists');
         }
         updateData.email = email;
       }
@@ -399,12 +379,19 @@ export async function updateUser(req, res, next) {
         ]);
       }
       updateData.passwordHash = await bcrypt.hash(body.password, 10);
+      // Sign out existing sessions. An admin-set password must be replaced at next sign-in.
+      updateData.tokenVersion = { increment: 1 };
+      updateData.passwordChangedAt = id === req.user.id ? new Date() : null;
     }
 
     if (isAdmin && (body.isActive !== undefined || body.is_active !== undefined)) {
       const activeVal = body.isActive !== undefined ? Boolean(body.isActive) : Boolean(body.is_active);
+      if (activeVal && !targetUser.isActive) {
+        await assertWithinPlanLimit(req.user.companyId, 'users');
+      }
       updateData.isActive = activeVal;
       updateData.deactivatedAt = activeVal ? null : new Date();
+      if (!activeVal) updateData.tokenVersion = { increment: 1 };
     }
 
     if (isAdmin && (body.managerUserId !== undefined || body.manager_user_id !== undefined)) {
@@ -521,6 +508,7 @@ export async function deactivateUser(req, res, next) {
       data: {
         isActive: false,
         deactivatedAt: new Date(),
+        tokenVersion: { increment: 1 }, // revoke existing sessions immediately
       },
     });
 
@@ -559,6 +547,10 @@ export async function reactivateUser(req, res, next) {
 
     if (!targetUser) {
       throw new NotFoundError(`User with ID ${id} not found in this company`);
+    }
+
+    if (!targetUser.isActive) {
+      await assertWithinPlanLimit(req.user.companyId, 'users');
     }
 
     const updatedUser = await prisma.user.update({

@@ -13,6 +13,7 @@ import {
 import { validateRequired, validateEnum } from "../utils/validation.js";
 import { ROLES, normalizeRole } from "../utils/roles.js";
 import { createComplianceAuditLog, AUDIT_ACTIONS } from "../utils/audit.js";
+import { assertWithinPlanLimit } from "../utils/planLimits.js";
 
 const ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -176,6 +177,8 @@ export async function createComplianceRule(req, res, next) {
         throw new NotFoundError(`Compliance category ${categoryId} not found`);
       }
     }
+
+    await assertWithinPlanLimit(req.user.companyId, "complianceRules");
 
     const newRule = await prisma.complianceRule.create({
       data: {
