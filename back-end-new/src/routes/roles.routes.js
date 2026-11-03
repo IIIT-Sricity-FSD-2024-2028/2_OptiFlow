@@ -14,8 +14,16 @@ import {
 const router = Router();
 
 // Roles Routes
-router.get(['/roles', '/api/roles'], authenticate, listRoles);
-router.get(['/roles/:id', '/api/roles/:id'], authenticate, getRoleById);
+// Read scope (X2): roles are read by the HR and Executive pages only.
+const canReadRoles = requireRoles(
+  ROLES.COMPANY_OWNER,
+  ROLES.SYSTEM_ADMIN,
+  ROLES.BRANCH_MANAGER,
+  ROLES.ACCESS_GOVERNANCE,
+  'superuser'
+);
+router.get(['/roles', '/api/roles'], authenticate, canReadRoles, listRoles);
+router.get(['/roles/:id', '/api/roles/:id'], authenticate, canReadRoles, getRoleById);
 router.post(
   ['/roles', '/api/roles'],
   authenticate,

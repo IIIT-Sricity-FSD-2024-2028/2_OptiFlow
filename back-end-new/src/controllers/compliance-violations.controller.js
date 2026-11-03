@@ -80,10 +80,31 @@ async function hydrateViolations(violations) {
     });
 }
 
+/**
+ * Read scope (X2): a Team Member only sees violations they reported, or that concern a task
+ * assigned to them or evidence they submitted. Other roles keep company-wide access.
+ */
+async function buildViolationReadWhere(req) {
+  const where = { companyId: req.user.companyId };
+  const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+  if (role === 'team_member' || role === 'member') {
+    const myTasks = await prisma.task.findMany({
+      where: { companyId: req.user.companyId, assignedToId: req.user.id },
+      select: { id: true },
+    });
+    where.OR = [
+      { reportedById: req.user.id },
+      { entityType: 'Task', entityId: { in: myTasks.map((t) => t.id) } },
+      { evidence: { some: { userId: req.user.id } } },
+    ];
+  }
+  return where;
+}
+
 export async function listComplianceViolations(req, res, next) {
   try {
     const violations = await prisma.complianceViolation.findMany({
-      where: { companyId: req.user.companyId },
+      where: await buildViolationReadWhere(req),
       include: VIOLATION_LIST_INCLUDE,
       orderBy: { detectedAt: "desc" },
     });
@@ -103,7 +124,7 @@ export async function getComplianceViolationById(req, res, next) {
     const { id } = req.params;
 
     const violation = await prisma.complianceViolation.findFirst({
-      where: { id, companyId: req.user.companyId },
+      where: { AND: [{ id }, await buildViolationReadWhere(req)] },
       include: {
         rule: true,
         reportedBy: { select: { id: true, fullName: true, email: true } },
