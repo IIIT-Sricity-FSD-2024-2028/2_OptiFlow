@@ -16,6 +16,7 @@ export function getNavForRole(roleSlug) {
             return platformNav;
         case ROLES.SYSTEM_ADMIN:
         case ROLES.COMPANY_OWNER:
+        case ROLES.BRANCH_MANAGER:
             return executiveNav;
         case ROLES.COMPLIANCE_OFFICER:
             return complianceNav;
