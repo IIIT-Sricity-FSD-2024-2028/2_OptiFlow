@@ -73,17 +73,24 @@ export async function platformLogin(req, res, next) {
       maxAge: 3600 * 1000,
     });
 
+    const adminMustChangePassword = admin.passwordChangedAt === null;
+
     res.status(200).json({
       success: true,
-      message: "Platform admin authenticated successfully",
+      message: adminMustChangePassword
+        ? "Platform admin authenticated successfully (Password change required)"
+        : "Platform admin authenticated successfully",
       data: {
         token,
+        mustChangePassword: adminMustChangePassword,
         adminUser: {
           id: admin.id,
           email: admin.email,
           fullName: admin.fullName,
           role: "platform_admin",
           isActive: admin.isActive,
+          mustChangePassword: adminMustChangePassword,
+          passwordChangedAt: admin.passwordChangedAt,
           createdAt: admin.createdAt,
         },
       },
@@ -558,12 +565,19 @@ export async function createPlatformCompany(req, res, next) {
       throw new ConflictError("A user with this email address already exists");
     }
 
-    const password = (
+    const providedPassword = (
       body.password ||
       body.ownerPassword ||
-      "OptiFlow@2026!"
+      ""
     ).trim();
-    if (password.length < 8) {
+    let isGenerated = false;
+    let password = providedPassword;
+
+    if (!password) {
+      password =
+        crypto.randomBytes(9).toString("base64").slice(0, 12) + "!1Aa";
+      isGenerated = true;
+    } else if (password.length < 8) {
       throw new ValidationError("Password validation failed", [
         {
           field: "password",
@@ -598,6 +612,7 @@ export async function createPlatformCompany(req, res, next) {
           passwordHash,
           tokenVersion: 1,
           isActive: true,
+          passwordChangedAt: null, // Forces set/change on first login
         },
       });
 
@@ -675,6 +690,26 @@ export async function createPlatformCompany(req, res, next) {
         tx,
       );
 
+      const setPasswordToken = jwt.sign(
+        {
+          sub: owner.id,
+          companyId: company.id,
+          tokenVersion: owner.tokenVersion,
+          purpose: "set_password",
+        },
+        env.JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+
+      const reqOrigin =
+        req.get("origin") ||
+        req.get("referer") ||
+        `${req.protocol}://${req.get("host")}`;
+      const setPasswordPath = `/set-password?token=${setPasswordToken}`;
+      const setPasswordUrl = reqOrigin
+        ? `${reqOrigin.replace(/\/+$/, "")}${setPasswordPath}`
+        : setPasswordPath;
+
       return {
         company,
         owner: {
@@ -685,6 +720,10 @@ export async function createPlatformCompany(req, res, next) {
         },
         subscription,
         initialPassword: password,
+        isGeneratedPassword: isGenerated,
+        setPasswordToken,
+        setPasswordUrl,
+        mustChangePassword: true,
         targetRoute: "/executive/dashboard",
       };
     });

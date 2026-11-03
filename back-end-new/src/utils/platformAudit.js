@@ -7,6 +7,8 @@ import { UnauthorizedError } from './errors.js';
  * - any key containing 'password' (case-insensitive)
  * - any key containing 'token' (case-insensitive)
  * - any key containing 'secret' (case-insensitive)
+ * - any key containing 'credential' (case-insensitive)
+ * - any key containing 'authlink' (case-insensitive)
  */
 export function redactSensitiveData(data) {
   if (data === null || data === undefined) {
@@ -28,7 +30,10 @@ export function redactSensitiveData(data) {
       lowerKey === 'passwordhash' ||
       lowerKey.includes('password') ||
       lowerKey.includes('token') ||
-      lowerKey.includes('secret')
+      lowerKey.includes('secret') ||
+      lowerKey.includes('credential') ||
+      lowerKey.includes('authlink') ||
+      lowerKey.includes('setpassword')
     ) {
       redacted[key] = '[REDACTED]';
     } else if (value && typeof value === 'object') {
