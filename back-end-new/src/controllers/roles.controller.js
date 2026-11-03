@@ -122,6 +122,128 @@ export async function createCustomRole(req, res, next) {
   }
 }
 
+const ROLE_RESPONSE_INCLUDE = {
+  roleTemplate: true,
+  permissions: { include: { permission: true } },
+};
+
+/**
+ * PATCH /roles/:id & PATCH /api/roles/:id
+ * Updates a role's label and description. System roles keep their label (they are referenced by name).
+ */
+export async function updateRole(req, res, next) {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+
+    const role = await prisma.role.findFirst({
+      where: { id, companyId: req.user.companyId },
+    });
+    if (!role) {
+      throw new NotFoundError(`Role "${id}" not found in this company`);
+    }
+
+    const updateData = {};
+    if (body.label !== undefined) {
+      const label = String(body.label).trim();
+      validateRequired({ label }, ['label']);
+      if (role.isSystem && label !== role.label) {
+        throw new ForbiddenError('The label of a system role cannot be changed');
+      }
+      if (label !== role.label) {
+        const clash = await prisma.role.findFirst({
+          where: { companyId: req.user.companyId, label, NOT: { id } },
+        });
+        if (clash) throw new BadRequestError(`Role with label "${label}" already exists`);
+        updateData.label = label;
+        updateData.name = label.toLowerCase().replace(/\s+/g, '_');
+      }
+    }
+    if (body.description !== undefined) {
+      updateData.description = body.description ? String(body.description).trim() : null;
+    }
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestError('No updatable fields provided (label, description)');
+    }
+
+    const updated = await prisma.role.update({
+      where: { id },
+      data: updateData,
+      include: ROLE_RESPONSE_INCLUDE,
+    });
+
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.UPDATE,
+        performedById: req.user.id,
+        roleId: id,
+        oldValue: { label: role.label, description: role.description },
+        newValue: updateData,
+      });
+    } catch (e) {
+      console.warn('[Audit] Role update log failed:', e.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Role "${updated.label}" updated successfully`,
+      data: updated,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /roles/:id & DELETE /api/roles/:id
+ * Deletes a custom role. System roles and roles that still have assignments cannot be deleted.
+ */
+export async function deleteRole(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const role = await prisma.role.findFirst({
+      where: { id, companyId: req.user.companyId },
+      include: { _count: { select: { roleAssignments: true } } },
+    });
+    if (!role) {
+      throw new NotFoundError(`Role "${id}" not found in this company`);
+    }
+    if (role.isSystem) {
+      throw new ForbiddenError('System roles cannot be deleted');
+    }
+    if (role._count.roleAssignments > 0) {
+      throw new BadRequestError(
+        `Role "${role.label}" is still assigned to ${role._count.roleAssignments} user(s). Revoke those assignments first.`
+      );
+    }
+
+    await prisma.$transaction([
+      prisma.rolePermission.deleteMany({ where: { roleId: id } }),
+      prisma.role.delete({ where: { id } }),
+    ]);
+
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.DELETE,
+        performedById: req.user.id,
+        oldValue: { label: role.label },
+      });
+    } catch (e) {
+      console.warn('[Audit] Role delete log failed:', e.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Role "${role.label}" deleted successfully`,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function updateRolePermissions(req, res, next) {
   try {
     const { id } = req.params;

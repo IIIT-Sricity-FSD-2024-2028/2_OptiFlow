@@ -68,6 +68,43 @@ async function resolveProjectTeamLead(project, companyId) {
   return teamLeads[0];
 }
 
+/** Includes shared by list, create and update so every response has the same shape. */
+function taskListInclude(subtaskScope) {
+  return {
+    project: {
+      include: {
+        team: {
+          include: {
+            branch: { select: { id: true, name: true, companyId: true } },
+          },
+        },
+      },
+    },
+    assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+    createdBy: { select: { id: true, fullName: true, email: true } },
+    subtasks: subtaskScope ? { where: subtaskScope } : true,
+    escalations: { where: { status: 'Open' } },
+  };
+}
+
+function loadTaskForResponse(req, id) {
+  const subtaskScope = buildSubtaskListWhere({
+    companyId: req.user.companyId,
+    branchId: req.query?.branchId,
+    user: req.user,
+  });
+  return prisma.task.findUnique({ where: { id }, include: taskListInclude(subtaskScope) });
+}
+
+const SUBTASK_LIST_INCLUDE = { task: { select: { id: true, title: true } } };
+
+const ESCALATION_LIST_INCLUDE = {
+  task: { select: { id: true, title: true, status: true } },
+  project: { select: { id: true, name: true } },
+  reportedBy: { select: { id: true, fullName: true, email: true } },
+  targetManager: { select: { id: true, fullName: true, email: true } },
+};
+
 // ============================================================================
 // 1. TASKS ENDPOINTS
 // ============================================================================
@@ -91,21 +128,7 @@ export async function listTasks(req, res, next) {
 
     const tasks = await prisma.task.findMany({
       where,
-      include: {
-        project: {
-          include: {
-            team: {
-              include: {
-                branch: { select: { id: true, name: true, companyId: true } },
-              },
-            },
-          },
-        },
-        assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
-        createdBy: { select: { id: true, fullName: true, email: true } },
-        subtasks: { where: subtaskScope },
-        escalations: { where: { status: 'Open' } },
-      },
+      include: taskListInclude(subtaskScope),
       orderBy: { createdAt: 'desc' },
     });
 
@@ -342,7 +365,7 @@ export async function createTask(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Task created successfully',
-      data: newTask,
+      data: await loadTaskForResponse(req, newTask.id),
     });
   } catch (err) {
     next(err);
@@ -588,7 +611,7 @@ export async function updateTask(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Task updated successfully',
-      data: updated,
+      data: await loadTaskForResponse(req, updated.id),
     });
   } catch (err) {
     next(err);
@@ -665,7 +688,7 @@ export async function listSubtasks(req, res, next) {
         branchId: req.query.branchId,
         user: req.user,
       }),
-      include: { task: { select: { id: true, title: true } } },
+      include: SUBTASK_LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -825,7 +848,7 @@ export async function createSubtask(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Subtask created successfully',
-      data: subtask,
+      data: await prisma.subtask.findUnique({ where: { id: subtask.id }, include: SUBTASK_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);
@@ -878,7 +901,7 @@ export async function updateSubtask(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Subtask updated successfully',
-      data: updated,
+      data: await prisma.subtask.findUnique({ where: { id: updated.id }, include: SUBTASK_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);
@@ -935,12 +958,7 @@ export async function listEscalations(req, res, next) {
   try {
     const escalations = await prisma.escalation.findMany({
       where: { companyId: req.user.companyId },
-      include: {
-        task: { select: { id: true, title: true, status: true } },
-        project: { select: { id: true, name: true } },
-        reportedBy: { select: { id: true, fullName: true, email: true } },
-        targetManager: { select: { id: true, fullName: true, email: true } },
-      },
+      include: ESCALATION_LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -1044,7 +1062,7 @@ export async function createEscalation(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Escalation created successfully',
-      data: escalation,
+      data: await prisma.escalation.findUnique({ where: { id: escalation.id }, include: ESCALATION_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);
@@ -1087,7 +1105,7 @@ export async function updateEscalation(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Escalation updated successfully',
-      data: updated,
+      data: await prisma.escalation.findUnique({ where: { id: updated.id }, include: ESCALATION_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);

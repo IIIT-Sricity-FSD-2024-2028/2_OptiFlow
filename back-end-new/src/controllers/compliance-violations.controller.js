@@ -36,18 +36,15 @@ const ALLOWED_EVIDENCE_STATUSES = [
   "Rejected",
 ];
 
-export async function listComplianceViolations(req, res, next) {
-  try {
-    const violations = await prisma.complianceViolation.findMany({
-      where: { companyId: req.user.companyId },
-      include: {
-        rule: true,
-        reportedBy: { select: { id: true, fullName: true, email: true } },
-        resolvedBy: { select: { id: true, fullName: true, email: true } },
-        evidence: true,
-      },
-      orderBy: { detectedAt: "desc" },
-    });
+const VIOLATION_LIST_INCLUDE = {
+  rule: true,
+  reportedBy: { select: { id: true, fullName: true, email: true } },
+  resolvedBy: { select: { id: true, fullName: true, email: true } },
+  evidence: true,
+};
+
+/** Adds entityName to violations; shared by list, create and update. */
+async function hydrateViolations(violations) {
     // O(N) Single-pass ID extraction
     const projectIds = new Set();
     const taskIds = new Set();
@@ -70,7 +67,7 @@ export async function listComplianceViolations(req, res, next) {
     const taskMap = new Map(tasks.map(t => [t.id, t.title]));
     const userMap = new Map(users.map(u => [u.id, u.fullName || u.email]));
 
-    const hydratedViolations = violations.map((v) => {
+    return violations.map((v) => {
       if (v.entityType === "Project" && projectMap.has(v.entityId)) return { ...v, entityName: projectMap.get(v.entityId) };
       if (v.entityType === "Task" && taskMap.has(v.entityId)) return { ...v, entityName: taskMap.get(v.entityId) };
       if (v.entityType === "User" && userMap.has(v.entityId)) return { ...v, entityName: userMap.get(v.entityId) };
@@ -81,6 +78,16 @@ export async function listComplianceViolations(req, res, next) {
         entityName: `${v.entityType || "General"} #${(v.entityId || "N/A").substring(0, 8)}`,
       };
     });
+}
+
+export async function listComplianceViolations(req, res, next) {
+  try {
+    const violations = await prisma.complianceViolation.findMany({
+      where: { companyId: req.user.companyId },
+      include: VIOLATION_LIST_INCLUDE,
+      orderBy: { detectedAt: "desc" },
+    });
+    const hydratedViolations = await hydrateViolations(violations);
 
     res.status(200).json({
       success: true,
@@ -156,7 +163,7 @@ export async function createComplianceViolation(req, res, next) {
         reportedById: req.user.id,
         dueDate: dueDate ? new Date(dueDate) : null,
       },
-      include: { rule: true },
+      include: VIOLATION_LIST_INCLUDE,
     });
 
     try {
@@ -178,7 +185,7 @@ export async function createComplianceViolation(req, res, next) {
     res.status(201).json({
       success: true,
       message: "Compliance violation created successfully",
-      data: newViolation,
+      data: (await hydrateViolations([newViolation]))[0],
     });
   } catch (err) {
     next(err);
@@ -222,7 +229,7 @@ export async function updateComplianceViolation(req, res, next) {
     const updated = await prisma.complianceViolation.update({
       where: { id },
       data: updateData,
-      include: { rule: true },
+      include: VIOLATION_LIST_INCLUDE,
     });
 
     try {
@@ -245,7 +252,7 @@ export async function updateComplianceViolation(req, res, next) {
     res.status(200).json({
       success: true,
       message: "Compliance violation updated successfully",
-      data: updated,
+      data: (await hydrateViolations([updated]))[0],
     });
   } catch (err) {
     next(err);

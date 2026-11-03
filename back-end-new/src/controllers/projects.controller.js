@@ -253,6 +253,42 @@ async function enrichProjectsWithManagers(projects, companyId) {
   });
 }
 
+/** Include used by list, create and update so every response has the same shape. */
+function projectListInclude(req) {
+  return {
+    team: {
+      include: {
+        branch: { select: { id: true, name: true, companyId: true } },
+        teamMembers: {
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+            user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+          },
+        },
+      },
+    },
+    tasks: {
+      where: buildTaskListWhere({
+        companyId: req.user.companyId,
+        user: req.user,
+      }),
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        priority: true,
+        estimatedHours: true,
+        actualHours: true,
+      },
+    },
+    escalations: {
+      where: { status: 'Open' },
+    },
+  };
+}
+
 /**
  * GET /projects & GET /api/projects
  * Lists projects with tenant scoping and branch filtering.
@@ -263,38 +299,7 @@ export async function listProjects(req, res, next) {
 
     const projects = await prisma.project.findMany({
       where,
-      include: {
-        team: {
-          include: {
-            branch: { select: { id: true, name: true, companyId: true } },
-            teamMembers: {
-              select: {
-                id: true,
-                userId: true,
-                role: true,
-                user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
-              },
-            },
-          },
-        },
-        tasks: {
-          where: buildTaskListWhere({
-            companyId: req.user.companyId,
-            user: req.user,
-          }),
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            priority: true,
-            estimatedHours: true,
-            actualHours: true,
-          },
-        },
-        escalations: {
-          where: { status: 'Open' },
-        },
-      },
+      include: projectListInclude(req),
       orderBy: { id: 'desc' },
     });
 
@@ -474,7 +479,8 @@ export async function createProject(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during project creation:', auditErr.message);
     }
 
-    const [enrichedProject] = await enrichProjectsWithManagers([newProject], req.user.companyId);
+    const fullProject = await prisma.project.findUnique({ where: { id: newProject.id }, include: projectListInclude(req) });
+    const [enrichedProject] = await enrichProjectsWithManagers([fullProject], req.user.companyId);
 
     res.status(201).json({
       success: true,
@@ -616,7 +622,8 @@ export async function updateProject(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during project update:', auditErr.message);
     }
 
-    const [enrichedUpdated] = await enrichProjectsWithManagers([updated], req.user.companyId);
+    const fullUpdated = await prisma.project.findUnique({ where: { id }, include: projectListInclude(req) });
+    const [enrichedUpdated] = await enrichProjectsWithManagers([fullUpdated], req.user.companyId);
 
     res.status(200).json({
       success: true,

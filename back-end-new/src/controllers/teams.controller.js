@@ -6,6 +6,26 @@ import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
+/** Include shared by list, create and update so every response has the same shape. */
+const TEAM_LIST_INCLUDE = {
+  branch: { select: { id: true, name: true, companyId: true } },
+  projects: { select: { id: true, name: true, status: true } },
+  teamMembers: {
+    include: {
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          jobTitle: true,
+          isActive: true,
+        },
+      },
+    },
+    orderBy: { joinedAt: 'asc' },
+  },
+};
+
 export async function listTeams(req, res, next) {
   try {
     const effectiveBranchId = resolveEffectiveBranchId({
@@ -22,24 +42,7 @@ export async function listTeams(req, res, next) {
 
     const teams = await prisma.team.findMany({
       where,
-      include: {
-        branch: { select: { id: true, name: true, companyId: true } },
-        projects: { select: { id: true, name: true, status: true } },
-        teamMembers: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                fullName: true,
-                email: true,
-                jobTitle: true,
-                isActive: true,
-              },
-            },
-          },
-          orderBy: { joinedAt: 'asc' },
-        },
-      },
+      include: TEAM_LIST_INCLUDE,
       orderBy: { name: 'asc' },
     });
 
@@ -125,12 +128,11 @@ export async function createTeam(req, res, next) {
 
     const team = await prisma.team.create({
       data: {
+        companyId: req.user.companyId,
         name,
         branchId,
       },
-      include: {
-        branch: { select: { id: true, name: true, companyId: true } },
-      },
+      include: TEAM_LIST_INCLUDE,
     });
 
     // Record audit log
@@ -197,9 +199,7 @@ export async function updateTeam(req, res, next) {
     const updated = await prisma.team.update({
       where: { id },
       data: updateData,
-      include: {
-        branch: { select: { id: true, name: true, companyId: true } },
-      },
+      include: TEAM_LIST_INCLUDE,
     });
 
     // Record audit log

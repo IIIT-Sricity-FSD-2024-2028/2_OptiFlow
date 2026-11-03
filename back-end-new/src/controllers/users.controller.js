@@ -308,7 +308,7 @@ export async function createUser(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'User created successfully',
-      data: newUser,
+      data: formatUserResponse(newUser),
     });
   } catch (err) {
     next(err);
@@ -476,7 +476,7 @@ export async function updateUser(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'User updated successfully',
-      data: updatedUser,
+      data: formatUserResponse(updatedUser),
     });
   } catch (err) {
     next(err);
@@ -579,7 +579,7 @@ export async function reactivateUser(req, res, next) {
     res.status(200).json({
       success: true,
       message: `User "${updatedUser.fullName}" reactivated successfully`,
-      data: updatedUser,
+      data: formatUserResponse(updatedUser),
     });
   } catch (err) {
     next(err);
