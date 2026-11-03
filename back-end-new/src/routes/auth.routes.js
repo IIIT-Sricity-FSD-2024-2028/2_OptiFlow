@@ -6,6 +6,7 @@ import {
   handleSetPassword,
   handleGetMe,
   handleGetPublicPlans,
+  handleChangePassword,
 } from '../controllers/auth.controller.js';
 
 const router = Router();
@@ -14,6 +15,7 @@ const router = Router();
 router.post(['/auth/login', '/api/auth/login'], handleLogin);
 router.post(['/auth/register-company', '/api/auth/register-company', '/companies/register', '/api/companies/register'], handleRegisterCompany);
 router.post(['/auth/set-password', '/api/auth/set-password'], handleSetPassword);
+router.post(['/auth/change-password', '/api/auth/change-password'], authenticate, handleChangePassword);
 router.get(['/auth/me', '/api/auth/me'], authenticate, handleGetMe);
 router.get(['/auth/public-plans', '/api/auth/public-plans', '/public/plans', '/api/public/plans'], handleGetPublicPlans);
 

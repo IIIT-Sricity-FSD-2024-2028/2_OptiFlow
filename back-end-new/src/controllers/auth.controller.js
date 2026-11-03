@@ -16,6 +16,7 @@ import {
   validateEmail,
   validateEnum,
 } from '../utils/validation.js';
+import { sendPasswordChangedEmail } from '../services/email.service.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 
@@ -190,6 +191,7 @@ export async function handleLogin(req, res, next) {
         companyId: user.companyId,
         role: roleSlug,
         roleLabel,
+        tokenVersion: user.tokenVersion,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -426,6 +428,7 @@ export async function handleRegisterCompany(req, res, next) {
         companyId: result.company.id,
         role: 'system_admin',
         roleLabel: 'System Admin',
+        tokenVersion: result.user.tokenVersion,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -560,8 +563,11 @@ export async function handleSetPassword(req, res, next) {
         passwordHash,
         tokenVersion: { increment: 1 },
         isActive: true,
+        passwordChangedAt: new Date(),
       },
     });
+
+    sendPasswordChangedEmail({ to: user.email, fullName: user.fullName });
 
     res.status(200).json({
       success: true,
@@ -572,4 +578,63 @@ export async function handleSetPassword(req, res, next) {
   }
 }
 
+/**
+ * POST /auth/change-password (authenticated)
+ * Verifies the current password, stores the new one, marks the password as set (lifting the
+ * first-login gate), revokes older sessions and returns a fresh token for this session.
+ */
+export async function handleChangePassword(req, res, next) {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    validateRequired({ currentPassword, newPassword }, ['currentPassword', 'newPassword']);
 
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      throw new ValidationError('Password validation failed', [
+        { field: 'newPassword', message: 'Password must be at least 8 characters long' },
+      ]);
+    }
+    if (newPassword === currentPassword) {
+      throw new ValidationError('Password validation failed', [
+        { field: 'newPassword', message: 'New password must be different from the current password' },
+      ]);
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) throw new NotFoundError('User not found');
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError('Current password is incorrect');
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 10),
+        tokenVersion: { increment: 1 },
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    sendPasswordChangedEmail({ to: user.email, fullName: user.fullName });
+
+    const token = jwt.sign(
+      {
+        sub: updated.id,
+        email: updated.email,
+        companyId: updated.companyId,
+        role: req.user.role,
+        roleLabel: req.user.roleLabel,
+        tokenVersion: updated.tokenVersion,
+      },
+      env.JWT_SECRET,
+      { expiresIn: env.JWT_EXPIRES_IN }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully.',
+      data: { token },
+    });
+  } catch (err) {
+    next(err);
+  }
+}

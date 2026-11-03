@@ -791,6 +791,11 @@ async function main() {
   });
 
 
+  // Seeded accounts have known demo passwords: mark them as already set so the
+  // first-login password-change gate does not lock them out.
+  await prisma.user.updateMany({ data: { passwordChangedAt: new Date() } });
+  await prisma.platformAdminUser.updateMany({ data: { passwordChangedAt: new Date() } });
+
   console.log("\n==========================================================");
   console.log("Admin Support Team ID:", adminSupportTeam.id);
   console.log("🎉 OFFICIAL USER TESTING MATRIX SEED COMPLETE!");
