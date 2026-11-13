@@ -49,7 +49,7 @@ export default function PlatformAdminUsers() {
             Platform Administrators
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Safe onboarding, deactivation safeguards, and accountability for cross-tenant personnel.
+            Safe onboarding, deactivation safeguards, and  - accountability for cross-tenant personnel.
           </p>
         </div>
         <button
