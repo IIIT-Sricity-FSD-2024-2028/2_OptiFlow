@@ -1,3 +1,4 @@
+import { getToken } from '../../services/auth/session';
 // Opens an evidence file the signed-in user is allowed to see.
 //
 // Files are protected, so the browser cannot just follow a link: it has to send the session token in
@@ -22,7 +23,7 @@ export async function openEvidenceFile(evidenceId) {
   }
 
   try {
-    const token = sessionStorage.getItem('authToken');
+    const token = getToken();
     const response = await fetch(`${API_BASE}/api/evidence/${encodeURIComponent(evidenceId)}/file`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: 'include',

@@ -24,7 +24,7 @@ export async function getBootstrapState(req, res, next) {
         where: { id: req.user.id },
         include: {
           company: true,
-          roleAssignments: { include: { role: true } },
+          roleAssignments: { where: { revokedAt: null }, include: { role: true } },
         },
       }),
       prisma.branch.findMany({

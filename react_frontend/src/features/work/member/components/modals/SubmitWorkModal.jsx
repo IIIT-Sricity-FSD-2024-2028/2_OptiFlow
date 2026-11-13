@@ -94,7 +94,7 @@ export function SubmitWorkModal({
       onClose();
     } catch (err) {
       console.error(err);
-      if (err.error === 'COMPLIANCE_BLOCK' || err.message?.toLowerCase().includes('compliance')) {
+      if (err.code === 'COMPLIANCE_BLOCK') {
         toast.error(
           `Submission blocked: Compliance rule "${complianceRuleName || 'Audit Policy'}" requires approved evidence before review.`
         );

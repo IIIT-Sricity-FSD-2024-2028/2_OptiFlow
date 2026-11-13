@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '../../../../shared/components/ConfirmDialog';
+import { useToast } from '../../../../shared/components/Toast';
 
 export function SupportRevokeDialog({
   isOpen,
@@ -7,6 +8,7 @@ export function SupportRevokeDialog({
   onClose,
   onConfirm,
 }) {
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
 
   if (!isOpen || !grant) return null;
@@ -17,7 +19,7 @@ export function SupportRevokeDialog({
       await onConfirm(grant.id);
       onClose();
     } catch (err) {
-      alert(err.message || 'Failed to revoke support grant');
+      toast.error(err.message || 'Failed to revoke support grant');
     } finally {
       setLoading(false);
     }

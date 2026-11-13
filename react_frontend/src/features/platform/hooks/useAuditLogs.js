@@ -1,3 +1,4 @@
+import { getToken } from '../../../services/auth/session';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../../services/api/client';
@@ -116,7 +117,7 @@ export function useAuditLogs(initialPageSize = 20) {
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
 
-    const token = sessionStorage.getItem('authToken');
+    const token = getToken();
     const res = await fetch(`/api/platform/audit-logs/export?${params.toString()}`, {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });

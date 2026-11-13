@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { X, UserPlus, AlertTriangle } from 'lucide-react';
 import { AdminCredentialsView } from './AdminCredentialsView';
+import { useToast } from '../../../shared/components/Toast';
 
 export function AdminCreateModal({ isOpen, onClose, onConfirm, onCreate }) {
+  const toast = useToast();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [isConfirming, setIsConfirming] = useState(false);
@@ -35,7 +37,7 @@ export function AdminCreateModal({ isOpen, onClose, onConfirm, onCreate }) {
       if (tempPass) setTemporaryPassword(tempPass);
       else handleClose();
     } catch (err) {
-      alert(err.message || 'Failed to create platform administrator');
+      toast.error(err.message || 'Failed to create platform administrator');
       setIsConfirming(false);
     } finally {
       setSubmitting(false);

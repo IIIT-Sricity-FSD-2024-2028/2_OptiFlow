@@ -287,8 +287,7 @@ export default function TeamLeadDashboard() {
       );
     } catch (error) {
       console.error('Approve task failed:', error);
-      const errMsg = error.message || '';
-      if (errMsg.includes('COMPLIANCE_BLOCK') || errMsg.includes('blocked by active compliance')) {
+      if (error.code === 'COMPLIANCE_BLOCK') {
         showToast(
           'error',
           'Approval blocked: Mandatory compliance evidence must be approved before completion.'
@@ -296,7 +295,7 @@ export default function TeamLeadDashboard() {
       } else {
         showToast(
           'error',
-          errMsg || 'Failed to approve task.'
+          error.message || 'Failed to approve task.'
         );
       }
     } finally {

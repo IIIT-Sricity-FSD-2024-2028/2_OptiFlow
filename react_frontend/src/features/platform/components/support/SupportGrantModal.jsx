@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { X, ShieldCheck, Clock } from 'lucide-react';
 import { apiClient } from '../../../../services/api/client';
+import { useToast } from '../../../../shared/components/Toast';
 
 export function SupportGrantModal({ isOpen, preselectedCompanyId, onClose, onConfirm }) {
+  const toast = useToast();
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState('');
   const [reason, setReason] = useState('');
@@ -37,7 +39,7 @@ export function SupportGrantModal({ isOpen, preselectedCompanyId, onClose, onCon
       await onConfirm({ companyId, reason: reason.trim(), durationHours: Number(durationHours) });
       onClose();
     } catch (err) {
-      alert(err.message || 'Failed to grant support access');
+      toast.error(err.message || 'Failed to grant support access');
     } finally {
       setSubmitting(false);
     }

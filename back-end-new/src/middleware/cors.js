@@ -1,8 +1,9 @@
 import cors from 'cors';
 import { env } from '../config/env.js';
 
-// Default development origins used by the frontend applications
-const DEFAULT_ORIGINS = [
+// Local development origins. They are trusted ONLY outside production (SEC-M2-16): in production
+// the allowed origins come exclusively from FRONTEND_ORIGINS.
+const DEV_ORIGINS = [
   'http://localhost:5500',
   'http://127.0.0.1:5500',
   'http://localhost:3000',
@@ -12,13 +13,17 @@ const DEFAULT_ORIGINS = [
 ];
 
 function getAllowedOrigins() {
-  if (env.FRONTEND_ORIGINS) {
-    const envOrigins = env.FRONTEND_ORIGINS.split(',')
-      .map((o) => o.trim())
-      .filter(Boolean);
-    return [...new Set([...DEFAULT_ORIGINS, ...envOrigins])];
+  const envOrigins = (env.FRONTEND_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (env.isProduction) {
+    if (envOrigins.length === 0) {
+      console.warn('[CORS] FRONTEND_ORIGINS is empty in production: all browser origins will be blocked.');
+    }
+    return envOrigins;
   }
-  return DEFAULT_ORIGINS;
+  return [...new Set([...DEV_ORIGINS, ...envOrigins])];
 }
 
 const allowedOrigins = getAllowedOrigins();

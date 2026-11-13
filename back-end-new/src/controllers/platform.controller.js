@@ -13,7 +13,56 @@ import {
   validateRequired,
   validateEmail,
   validateNumber,
+  validateEnum,
 } from "../utils/validation.js";
+import { ValidationError } from "../utils/errors.js";
+
+// ---------------------------------------------------------------------------
+// Input guards shared by the privileged endpoints below (SEC-M2-15).
+// Everything here rejects with a 400 instead of letting a bad value reach Prisma or throw a
+// TypeError (which surfaced as a 500).
+// ---------------------------------------------------------------------------
+
+/** Required/optional string field: must be a string, trimmed, within a length range. */
+function textField(value, field, { min = 1, max = 200 } = {}) {
+  if (typeof value !== "string") {
+    throw new ValidationError(`${field} must be text`, [
+      { field, message: `${field} must be text` },
+    ]);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length < min || trimmed.length > max) {
+    throw new ValidationError(`${field} length is invalid`, [
+      { field, message: `${field} must be between ${min} and ${max} characters` },
+    ]);
+  }
+  return trimmed;
+}
+
+/** Password text: string, 8-128 characters (bcrypt only uses the first 72 bytes anyway). */
+function passwordField(value, field = "password") {
+  if (typeof value !== "string" || value.length < 8 || value.length > 128) {
+    throw new BadRequestError(`${field} must be 8 to 128 characters long`);
+  }
+  return value;
+}
+
+/** Plan limit: null means unlimited, otherwise a whole number >= 0. */
+function planLimit(value, field) {
+  if (value === null) return null;
+  validateNumber(value, field, { min: 0, max: 1_000_000, integer: true });
+  return Number(value);
+}
+
+/** Boolean flag: only real booleans are accepted (Boolean("false") would be true). */
+function boolField(value, field) {
+  if (typeof value !== "boolean") {
+    throw new ValidationError(`${field} must be true or false`, [
+      { field, message: `${field} must be true or false` },
+    ]);
+  }
+  return value;
+}
 import { parseListParams, formatListResponse } from "../utils/pagination.js";
 import { writeAuditLog } from "../utils/platformAudit.js";
 import { buildSetPasswordLink } from "../utils/passwordTokens.js";
@@ -946,13 +995,23 @@ export async function getPlanById(req, res, next) {
 export async function createPlan(req, res, next) {
   try {
     const body = req.body || {};
-    const name = (body.name || "").trim();
+    validateRequired({ name: body.name }, ["name"]);
+    const name = textField(body.name, "name", { max: 120 });
+    validateNumber(body.auditLogRetentionDays ?? 90, "auditLogRetentionDays", {
+      min: 1,
+      max: 3650,
+      integer: true,
+    });
     const auditLogRetentionDays = Number(body.auditLogRetentionDays ?? 90);
-    const allowsIntegrations = Boolean(body.allowsIntegrations ?? false);
+    const allowsIntegrations = boolField(
+      body.allowsIntegrations ?? false,
+      "allowsIntegrations",
+    );
     const isActive =
-      body.isActive !== undefined ? Boolean(body.isActive) : true;
-
-    validateRequired({ name }, ["name"]);
+      body.isActive !== undefined ? boolField(body.isActive, "isActive") : true;
+    for (const f of ["maxBranches", "maxUsers", "maxActiveProcessTemplates", "maxComplianceRules"]) {
+      if (body[f] !== undefined) planLimit(body[f], f);
+    }
 
     const newPlan = await prisma.$transaction(async (tx) => {
       const plan = await tx.plan.create({
@@ -1022,29 +1081,26 @@ export async function updatePlan(req, res, next) {
     if (!plan) throw new NotFoundError(`Plan with ID ${id} not found`);
 
     const updateData = {};
-    if (body.name) updateData.name = body.name.trim();
-    if (body.maxBranches !== undefined)
-      updateData.maxBranches =
-        body.maxBranches === null ? null : Number(body.maxBranches);
-    if (body.maxUsers !== undefined)
-      updateData.maxUsers =
-        body.maxUsers === null ? null : Number(body.maxUsers);
-    if (body.maxActiveProcessTemplates !== undefined)
-      updateData.maxActiveProcessTemplates =
-        body.maxActiveProcessTemplates === null
-          ? null
-          : Number(body.maxActiveProcessTemplates);
-    if (body.maxComplianceRules !== undefined)
-      updateData.maxComplianceRules =
-        body.maxComplianceRules === null
-          ? null
-          : Number(body.maxComplianceRules);
-    if (body.auditLogRetentionDays !== undefined)
+    if (body.name !== undefined)
+      updateData.name = textField(body.name, "name", { max: 120 });
+    for (const f of ["maxBranches", "maxUsers", "maxActiveProcessTemplates", "maxComplianceRules"]) {
+      if (body[f] !== undefined) updateData[f] = planLimit(body[f], f);
+    }
+    if (body.auditLogRetentionDays !== undefined) {
+      validateNumber(body.auditLogRetentionDays, "auditLogRetentionDays", {
+        min: 1,
+        max: 3650,
+        integer: true,
+      });
       updateData.auditLogRetentionDays = Number(body.auditLogRetentionDays);
+    }
     if (body.allowsIntegrations !== undefined)
-      updateData.allowsIntegrations = Boolean(body.allowsIntegrations);
+      updateData.allowsIntegrations = boolField(body.allowsIntegrations, "allowsIntegrations");
     if (body.isActive !== undefined)
-      updateData.isActive = Boolean(body.isActive);
+      updateData.isActive = boolField(body.isActive, "isActive");
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestError("No valid fields provided for update");
+    }
 
     const action =
       body.isActive === false
@@ -1289,6 +1345,10 @@ export async function createSubscription(req, res, next) {
     const status = body.status || "Active";
 
     validateRequired({ companyId, planId }, ["companyId", "planId"]);
+    validateEnum(status, ["Trialing", "Active", "PastDue"], "status");
+    if (typeof companyId !== "string" || typeof planId !== "string") {
+      throw new BadRequestError("companyId and planId must be text ids");
+    }
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -1771,19 +1831,19 @@ export async function getPlatformAdminUserById(req, res, next) {
 export async function createPlatformAdminUser(req, res, next) {
   try {
     const body = req.body || {};
-    const email = (body.email || "").trim().toLowerCase();
-    const fullName = (body.fullName || body.full_name || "").trim();
+    validateRequired({ email: body.email, fullName: body.fullName || body.full_name }, ["email", "fullName"]);
+    const email = textField(body.email, "email", { max: 254 }).toLowerCase();
+    const fullName = textField(body.fullName || body.full_name, "fullName", { max: 120 });
     let password = body.password;
     let isGenerated = false;
 
-    validateRequired({ email, fullName }, ["email", "fullName"]);
     validateEmail(email, "email");
 
     if (!password) {
       password = crypto.randomBytes(9).toString("base64").slice(0, 12) + "!1Aa";
       isGenerated = true;
-    } else if (password.length < 8) {
-      throw new BadRequestError("Password must be at least 8 characters long");
+    } else {
+      passwordField(password);
     }
 
     const existing = await prisma.platformAdminUser.findUnique({
@@ -1856,6 +1916,8 @@ export async function updatePlatformAdminUser(req, res, next) {
       throw new NotFoundError(`Platform admin user with ID ${id} not found`);
     }
 
+    if (body.isActive !== undefined) boolField(body.isActive, "isActive");
+
     // Safeguard: An admin cannot deactivate themselves from this page
     if (body.isActive === false && req.platformAdmin.id === id) {
       throw new BadRequestError(
@@ -1877,9 +1939,9 @@ export async function updatePlatformAdminUser(req, res, next) {
 
     const updateData = {};
     if (body.fullName || body.full_name)
-      updateData.fullName = (body.fullName || body.full_name).trim();
+      updateData.fullName = textField(body.fullName || body.full_name, "fullName", { max: 120 });
     if (body.email) {
-      const normalizedEmail = body.email.trim().toLowerCase();
+      const normalizedEmail = textField(body.email, "email", { max: 254 }).toLowerCase();
       validateEmail(normalizedEmail, "email");
       if (normalizedEmail !== existing.email) {
         const emailInUse = await prisma.platformAdminUser.findUnique({
@@ -1894,13 +1956,9 @@ export async function updatePlatformAdminUser(req, res, next) {
       }
     }
     if (body.isActive !== undefined)
-      updateData.isActive = Boolean(body.isActive);
+      updateData.isActive = boolField(body.isActive, "isActive");
     if (body.password) {
-      if (body.password.length < 8) {
-        throw new BadRequestError(
-          "Password must be at least 8 characters long",
-        );
-      }
+      passwordField(body.password);
       updateData.passwordHash = await bcrypt.hash(body.password, 10);
       updateData.passwordChangedAt = new Date();
     }
@@ -1968,8 +2026,8 @@ export async function resetPlatformAdminPassword(req, res, next) {
       newPassword =
         crypto.randomBytes(9).toString("base64").slice(0, 12) + "!1Aa";
       isGenerated = true;
-    } else if (newPassword.length < 8) {
-      throw new BadRequestError("Password must be at least 8 characters long");
+    } else {
+      passwordField(newPassword);
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -2228,12 +2286,14 @@ export async function createPlatformSupportAccess(req, res, next) {
   try {
     const body = req.body || {};
     const companyId = body.companyId || body.company_id;
-    const reason = (body.reason || "").trim();
-    const durationHours = Number(
-      body.durationHours || body.duration_hours || 4,
-    );
-
-    validateRequired({ companyId, reason }, ["companyId", "reason"]);
+    validateRequired({ companyId, reason: body.reason }, ["companyId", "reason"]);
+    if (typeof companyId !== "string") {
+      throw new BadRequestError("companyId must be a text id");
+    }
+    const reason = textField(body.reason, "reason", { min: 1, max: 1000 });
+    const rawDuration = body.durationHours ?? body.duration_hours ?? 4;
+    validateNumber(rawDuration, "durationHours", { min: 1, max: 24 });
+    const durationHours = Number(rawDuration);
 
     // Enforce minimum reason length
     if (reason.length < 10) {

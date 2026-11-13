@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.js",
     "test": "node test-step10.js && node test-contract-audit.js && node test-archive-plan.js",
     "test:ci": "node scripts/setup-test-db.js && node test-step10.js && node test-contract-audit.js && node test-archive-plan.js",
-    "test:platform": "node test-step10.js && node test-contract-audit.js && node test-archive-plan.js",
+    "test:platform": "node test-sec-m2-auth-platform.js && node test-step10.js && node test-contract-audit.js && node test-archive-plan.js",
     "prisma:generate": "prisma generate",
     "db:seed": "npx tsx prisma/seed.ts"
   },

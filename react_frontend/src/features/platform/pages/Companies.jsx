@@ -4,11 +4,13 @@ import { Plus, Building2, AlertTriangle } from "lucide-react";
 import { PATHS } from "../../../app/paths";
 import { Pagination } from "../../../shared/components/Pagination";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
+import { useToast } from '../../../shared/components/Toast';
 import { useCompanies } from "../hooks/useCompanies";
 import { CompanyFilterBar } from "../components/CompanyFilterBar";
 import { CompanyTable } from "../components/CompanyTable";
 
 export default function PlatformCompanies() {
+  const toast = useToast();
   const {
     companies,
     total,
@@ -55,7 +57,7 @@ export default function PlatformCompanies() {
         loading: false,
       });
     } catch (err) {
-      alert(err.message || "Failed to update company status");
+      toast.error(err.message || "Failed to update company status");
       setConfirmModal((prev) => ({ ...prev, loading: false }));
     }
   };

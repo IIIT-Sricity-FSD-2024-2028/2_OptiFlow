@@ -5,6 +5,7 @@ import { PATHS } from '../../../app/paths';
 import { apiClient } from '../../../services/api/client';
 import { Badge } from '../../../shared/components/Badge';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
+import { useToast } from '../../../shared/components/Toast';
 import { CompanyOverviewTab } from '../components/detail/CompanyOverviewTab';
 import { CompanySubscriptionTab } from '../components/detail/CompanySubscriptionTab';
 import { CompanyActivityTab } from '../components/detail/CompanyActivityTab';
@@ -12,6 +13,7 @@ import { CompanyActivityTab } from '../components/detail/CompanyActivityTab';
 const TABS = ['Overview', 'Subscription', 'Activity'];
 
 export default function CompanyDetail() {
+  const toast = useToast();
   const { id } = useParams();
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,7 @@ export default function CompanyDetail() {
       setConfirmModal({ isOpen: false, targetStatus: null, loading: false });
       await loadCompany();
     } catch (err) {
-      alert(err.message || 'Status transition failed');
+      toast.error(err.message || 'Status transition failed');
       setConfirmModal((prev) => ({ ...prev, loading: false }));
     }
   };

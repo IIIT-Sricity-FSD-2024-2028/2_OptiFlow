@@ -67,10 +67,9 @@ export default function PmTaskDetail() {
       setTask((current) => ({ ...current, ...normalize(response), ...patch }));
       showToast('success', 'Task updated.');
     } catch (error) {
-      const msg = error.message || 'Failed to update task.';
-      showToast('error', msg.includes('COMPLIANCE_BLOCK') || msg.includes('blocked by active compliance')
+      showToast('error', error.code === 'COMPLIANCE_BLOCK'
         ? 'Blocked by Compliance: Complete required evidence before marking Completed.'
-        : msg
+        : (error.message || 'Failed to update task.')
       );
     } finally {
       setSaving(false);

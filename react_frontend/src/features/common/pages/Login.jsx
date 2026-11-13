@@ -1,21 +1,34 @@
 import React, { useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { PATHS } from "../../../app/paths";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useToast } from "../../../shared/components/Toast";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const { login } = useAuth();
+  const [platformMode, setPlatformMode] = useState(false);
+  const { login, platformLogin } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
+  const [searchParams] = useSearchParams();
+
+  // Explains why the user landed here (SEC-M2-11): an expired session is not a silent redirect.
+  const NOTICES = {
+    session_expired: "Your session has ended. Please sign in again.",
+    plan_expired: "Your company's plan is not active. Please contact your administrator.",
+  };
+  const notice = NOTICES[searchParams.get("reason")] || "";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     try {
-      await login({ email, password });
+      // SEC-M2-13: platform administrators use their own endpoint; company users use /auth/login.
+      if (platformMode) await platformLogin({ email, password });
+      else await login({ email, password });
       navigate("/");
     } catch (error) {
       setError("Login Failed : " + error.message);
@@ -51,9 +64,14 @@ export default function Login() {
               Welcome Back
             </p>
             <h1 className="text-2xl text-gray-900 font-bold">
-              Sign in to your account
+              {platformMode ? "Platform administrator sign in" : "Sign in to your account"}
             </h1>
           </div>
+          {notice && !error && (
+            <div className="mb-6 p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded text-sm text-center font-medium">
+              {notice}
+            </div>
+          )}
           {error && (
             <div className="mb-6 p-3 bg-red-50 text-red-700 border border-red-200 rounded text-sm text-center font-medium">
               {error}
@@ -165,7 +183,7 @@ export default function Login() {
 
             <button
               type="button"
-              onClick={() => alert("Enterprise SSO (SAML/Okta) integration is coming soon! Contact Sales to upgrade your plan.")}
+              onClick={() => toast.info("Enterprise SSO (SAML/Okta) integration is coming soon! Contact Sales to upgrade your plan.")}
               className="w-full p-3.5 bg-white text-gray-900 border border-gray-300 rounded-md font-semibold flex justify-center items-center gap-2 hover:bg-gray-50 transition-colors"
             >
               Sign in with Organization SSO
@@ -173,6 +191,16 @@ export default function Login() {
           </form>
 
           <div className="text-center mt-6 text-sm text-gray-500">
+            <button
+              type="button"
+              onClick={() => { setPlatformMode((m) => !m); setError(""); }}
+              className="text-gray-600 font-medium hover:underline"
+            >
+              {platformMode ? "Back to company sign in" : "Platform administrator? Sign in here"}
+            </button>
+          </div>
+
+          <div className="text-center mt-3 text-sm text-gray-500">
             New organization?{" "}
             <Link
               to={PATHS.PUBLIC.REGISTER}

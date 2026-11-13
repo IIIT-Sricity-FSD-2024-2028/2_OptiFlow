@@ -21,6 +21,23 @@ import { sendPasswordChangedEmail } from '../services/email.service.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 
+// Consumer mailbox providers that cannot register a company (SEC-M2-12). Provider families
+// (yahoo.co.in, hotmail.fr, outlook.in, live.com ...) are matched by prefix below.
+const FREE_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'msn.com',
+  'ymail.com', 'rocketmail.com', 'protonmail.com', 'proton.me', 'pm.me', 'tutanota.com',
+  'tuta.io', 'fastmail.com', 'hey.com', 'zoho.com', 'zohomail.com', 'yandex.com', 'yandex.ru',
+  'mail.com', 'gmx.com', 'gmx.net', 'gmx.de', 'web.de', 'inbox.com', 'mail.ru', 'qq.com',
+  '163.com', '126.com', 'sina.com', 'rediffmail.com', 'mailinator.com', 'guerrillamail.com',
+  '10minutemail.com', 'tempmail.com', 'yopmail.com', 'trashmail.com',
+]);
+const FREE_EMAIL_FAMILIES = /^(yahoo|hotmail|outlook|live)\./;
+
+function isFreeEmailDomain(domain) {
+  if (!domain) return false;
+  return FREE_EMAIL_DOMAINS.has(domain) || FREE_EMAIL_FAMILIES.test(domain);
+}
+
 /**
  * Resolves static UI route redirect from role slug
  */
@@ -50,7 +67,7 @@ function resolveTargetRoute(roleSlug) {
 
 /**
  * POST /auth/login & POST /api/auth/login
- * Verifies email/password credentials, signs JWT, records audit log, and returns user identity.
+ * Company (tenant) users only. Verifies email/password credentials, signs JWT, records audit log, and returns user identity.
  */
 export async function handleLogin(req, res, next) {
   try {
@@ -63,60 +80,10 @@ export async function handleLogin(req, res, next) {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    // --- PLATFORM ADMIN CHECK (Unified Login) ---
-    // We check the PlatformAdminUser table first. If the email exists here,
-    // they are a super-admin logging into the platform dashboard.
-    const platformAdmin = await prisma.platformAdminUser.findUnique({
-      where: { email: email.trim().toLowerCase() }
-    });
-
-    if (platformAdmin) {
-      if (!platformAdmin.isActive) {
-        throw new UnauthorizedError('Platform administrator account is deactivated');
-      }
-
-      const isMatch = await bcrypt.compare(password, platformAdmin.passwordHash);
-      if (!isMatch) {
-        throw new UnauthorizedError('Invalid email or password');
-      }
-
-      const token = jwt.sign(
-        {
-          sub: platformAdmin.id,
-          role: 'platform_admin',
-          type: 'platform_admin',
-          email: platformAdmin.email,
-          fullName: platformAdmin.fullName,
-        },
-        env.JWT_SECRET,
-        { expiresIn: env.JWT_EXPIRES_IN || '8h' }
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: 'Platform admin authenticated successfully',
-        data: {
-          success: true,
-          token,
-          targetRoute: '/platform/dashboard',
-          role: 'platform_admin',
-          roleSlug: 'platform_admin',
-          roleLabel: 'Platform Admin',
-          user: {
-            id: platformAdmin.id,
-            fullName: platformAdmin.fullName,
-            email: platformAdmin.email,
-            role: 'platform_admin',
-            roleLabel: 'Platform Admin',
-            assignedRole: 'Platform Admin',
-            targetRoute: '/platform/dashboard'
-          },
-        },
-      });
-    }
-    // --------------------------------------------
-
-    // If not a platform admin, proceed with standard tenant user login
+    // SEC-M2-13: this endpoint authenticates company users only. Platform administrators sign in at
+    // POST /platform/auth/login, which issues a shorter-lived platform token. Looking them up here
+    // too meant a platform account could shadow a company user with the same email and received the
+    // longer tenant token lifetime.
     // Emails are globally unique (case-insensitive index users_email_lower_key). If older data still
     // holds the same address in two companies we refuse to guess which tenant the person means.
     const matches = await prisma.user.findMany({
@@ -300,11 +267,10 @@ export async function handleRegisterCompany(req, res, next) {
     validateEmail(ownerEmail, 'ownerEmail');
 
     // --- SECURITY IMPLEMENTATION 1: Business Email Validation ---
-    // Block common free email providers to ensure B2B legitimacy.
-    const freeEmailProviders = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com'];
+    // Block free / consumer mailbox providers to ensure B2B legitimacy.
     const emailDomain = ownerEmail.split('@')[1]?.toLowerCase();
-    
-    if (freeEmailProviders.includes(emailDomain)) {
+
+    if (isFreeEmailDomain(emailDomain)) {
       throw new AppError('Registration restricted to corporate emails. Please use your work email address.', 400);
     }
     // -------------------------------------------------------------
@@ -323,6 +289,38 @@ export async function handleRegisterCompany(req, res, next) {
 
     if (existingUser) {
       throw new ConflictError('A user with this email address already exists');
+    }
+
+    // A platform administrator's email must not be reusable as a company owner (no shadowing).
+    const platformAdminWithEmail = await prisma.platformAdminUser.findUnique({
+      where: { email: ownerEmail.toLowerCase() },
+      select: { id: true },
+    });
+    if (platformAdminWithEmail) {
+      throw new ConflictError('A user with this email address already exists');
+    }
+
+    // The plan must exist and be active. Without a requested plan the first active plan is used.
+    let chosenPlan = null;
+    if (planId) {
+      chosenPlan = await prisma.plan.findFirst({
+        where: { id: String(planId), isActive: true },
+        select: { id: true },
+      });
+      if (!chosenPlan) {
+        throw new ValidationError('Plan validation failed', [
+          { field: 'planId', message: 'The selected plan does not exist or is no longer available' },
+        ]);
+      }
+    } else {
+      chosenPlan = await prisma.plan.findFirst({
+        where: { isActive: true },
+        orderBy: [{ maxUsers: { sort: 'asc', nulls: 'last' } }, { name: 'asc' }],
+        select: { id: true },
+      });
+      if (!chosenPlan) {
+        throw new AppError('Registration is temporarily unavailable: no subscription plan is open for sign-up.', 503);
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -348,14 +346,8 @@ export async function handleRegisterCompany(req, res, next) {
         },
       });
 
-      // 3. Create Subscription
-      let effectivePlanId = planId;
-      if (!effectivePlanId) {
-        const defaultPlan = await tx.plan.findFirst({ select: { id: true } });
-        if (defaultPlan) {
-          effectivePlanId = defaultPlan.id;
-        }
-      }
+      // 3. Create Subscription (the plan was validated above)
+      const effectivePlanId = chosenPlan.id;
 
       if (effectivePlanId) {
         // ALWAYS put new signups on a 14-day free trial.
@@ -379,7 +371,6 @@ export async function handleRegisterCompany(req, res, next) {
           companyId: company.id,
           name: 'Headquarters',
           code: 'HQ',
-          description: 'Primary corporate headquarters branch',
         },
       });
 
@@ -428,24 +419,29 @@ export async function handleRegisterCompany(req, res, next) {
             } : undefined,
           },
         });
-        if (t.label === 'System Admin') {
+        if (t.slug === 'system_admin') {
           sysAdminRole = role;
         }
       }
 
-      // 6. Assign System Admin role to user
-      if (sysAdminRole) {
-        await tx.roleAssignment.create({
-          data: {
-            companyId: company.id,
-            userId: user.id,
-            roleId: sysAdminRole.id,
-            scopeType: 'Company',
-            scopeId: company.id,
-            grantedById: user.id,
-          },
-        });
+      // 6. Assign System Admin role to user. Without that role the owner would silently fall back
+      // to Team Member and the company would have no administrator, so fail and roll everything back.
+      if (!sysAdminRole) {
+        throw new AppError(
+          'Registration is temporarily unavailable: the System Admin role template is not configured.',
+          500,
+        );
       }
+      await tx.roleAssignment.create({
+        data: {
+          companyId: company.id,
+          userId: user.id,
+          roleId: sysAdminRole.id,
+          scopeType: 'Company',
+          scopeId: company.id,
+          grantedById: user.id,
+        },
+      });
 
       return { user, company, sysAdminRole };
     });
@@ -484,7 +480,6 @@ export async function handleRegisterCompany(req, res, next) {
       data: {
         success: true,
         token,
-        targetRoute: 'admin-console/admin-dashboard.html',
         role: 'system_admin',
         roleSlug: 'system_admin',
         roleLabel: 'System Admin',
@@ -498,8 +493,7 @@ export async function handleRegisterCompany(req, res, next) {
           roleLabel: 'System Admin',
           assignedRole: 'System Admin',
           roleId: result.sysAdminRole?.id || null,
-          targetRoute: 'admin-console/admin-dashboard.html',
-        },
+          },
       },
     });
   } catch (err) {
@@ -528,6 +522,7 @@ export function handleGetMe(req, res) {
 export async function handleGetPublicPlans(req, res, next) {
   try {
     const plans = await prisma.plan.findMany({
+      where: { isActive: true },
       select: {
         id: true,
         name: true,
