@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
@@ -12,9 +12,7 @@ import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { FormField, Input, Textarea, Select } from "../../../shared/components/FormField";
 import styles from "./Roles.module.css";
 import {
-  ShieldCheck,
   Shield,
-  KeyRound,
   Plus,
   RotateCw,
   Search,
@@ -22,7 +20,6 @@ import {
   UserPlus,
   Trash2,
   Copy,
-  ExternalLink,
   Users,
 } from "lucide-react";
 
@@ -68,8 +65,6 @@ function getInitials(name = "") {
 }
 
 export default function HrRoles() {
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { user: currentUser } = useAuth();
   const toast = useToast();
 
@@ -100,6 +95,9 @@ export default function HrRoles() {
   // Assign Employee to Role Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignUserId, setAssignUserId] = useState("");
+  // A Branch Manager is assigned to one branch; every other role here is company-wide.
+  const [assignBranchId, setAssignBranchId] = useState("");
+  const [branches, setBranches] = useState([]);
   const [assignError, setAssignError] = useState("");
   const [isAssigning, setIsAssigning] = useState(false);
 
@@ -124,16 +122,18 @@ export default function HrRoles() {
     setError(null);
 
     try {
-      const [rolesData, assignmentsData, usersData] = await Promise.all([
+      const [rolesData, assignmentsData, usersData, branchesData] = await Promise.all([
         apiClient("/roles"),
         apiClient("/role-assignments").catch(() => []),
         apiClient("/users").catch(() => []),
+        apiClient("/branches").catch(() => []),
       ]);
 
       const loadedRoles = Array.isArray(rolesData) ? rolesData : [];
       setRoles(loadedRoles);
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
+      setBranches(Array.isArray(branchesData) ? branchesData : []);
 
       // Preserve active role or default to first role
       setSelectedRoleId((prev) => {
@@ -149,6 +149,7 @@ export default function HrRoles() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchData();
   }, [fetchData]);
 
@@ -158,8 +159,10 @@ export default function HrRoles() {
   }, [roles, selectedRoleId]);
 
   // Synchronize permissions state whenever active role switches
-  useEffect(() => {
-    if (!activeRole) return;
+  // (adjusted during render instead of in an effect)
+  const [syncedRole, setSyncedRole] = useState(null);
+  if (activeRole && syncedRole !== activeRole) {
+    setSyncedRole(activeRole);
     const currentPerms = new Set();
     if (Array.isArray(activeRole.permissions)) {
       activeRole.permissions.forEach((p) => {
@@ -169,7 +172,7 @@ export default function HrRoles() {
     }
     setActivePermissions(new Set(currentPerms));
     setSavedPermissions(new Set(currentPerms));
-  }, [activeRole]);
+  }
 
   // Employees assigned to active role
   const activeRoleEmployees = useMemo(() => {
@@ -288,10 +291,18 @@ export default function HrRoles() {
   };
 
   // 5. ASSIGN USER TO ROLE
+  const activeRoleNeedsBranch =
+    activeRole?.isSystem === true &&
+    (activeRole?.name === "branch_manager" || activeRole?.roleTemplate?.slug === "branch_manager");
+
   const handleAssignUser = async (e) => {
     e.preventDefault();
     if (!assignUserId) {
       setAssignError("Please choose an employee.");
+      return;
+    }
+    if (activeRoleNeedsBranch && !assignBranchId) {
+      setAssignError("Please choose the branch this Branch Manager will manage.");
       return;
     }
 
@@ -304,14 +315,15 @@ export default function HrRoles() {
         body: {
           userId: assignUserId,
           roleId: activeRole.id,
-          scopeType: "Company",
-          scopeId: currentUser?.companyId,
+          scopeType: activeRoleNeedsBranch ? "Branch" : "Company",
+          scopeId: activeRoleNeedsBranch ? assignBranchId : currentUser?.companyId,
         },
       });
 
       toast.success("Employee assigned to role successfully.");
       setIsAssignModalOpen(false);
       setAssignUserId("");
+      setAssignBranchId("");
       await fetchData();
     } catch (err) {
       console.error("[HrRoles] Role assignment failed:", err);
@@ -641,6 +653,7 @@ export default function HrRoles() {
                 size="sm"
                 onClick={() => {
                   setAssignUserId("");
+                  setAssignBranchId("");
                   setAssignError("");
                   setIsAssignModalOpen(true);
                 }}
@@ -764,6 +777,7 @@ export default function HrRoles() {
 
           <FormField label="Select Employee" required>
             <Select
+              aria-label="Select employee"
               value={assignUserId}
               onChange={(e) => setAssignUserId(e.target.value)}
               disabled={isAssigning}
@@ -782,6 +796,24 @@ export default function HrRoles() {
                 ))}
             </Select>
           </FormField>
+
+          {activeRoleNeedsBranch && (
+            <FormField label="Branch" required hint="A Branch Manager manages one branch.">
+              <Select
+                aria-label="Branch"
+                value={assignBranchId}
+                onChange={(e) => setAssignBranchId(e.target.value)}
+                disabled={isAssigning}
+              >
+                <option value="" disabled>Choose a branch...</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
 
           <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <Button

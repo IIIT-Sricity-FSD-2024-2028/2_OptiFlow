@@ -5,7 +5,6 @@ import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { StatCard } from "../../../shared/components/StatCard";
 import { Button } from "../../../shared/components/Button";
-import { Badge } from "../../../shared/components/Badge";
 import { Loader } from "../../../shared/components/Loader";
 import { EmptyState } from "../../../shared/components/EmptyState";
 import { Table } from "../../../shared/components/Table";
@@ -13,21 +12,16 @@ import { Modal } from "../../../shared/components/Modal";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { FormField, Input, Select } from "../../../shared/components/FormField";
 import { Pagination } from "../../../shared/components/Pagination";
-import { formatDate } from "../../../shared/utils/formatDate";
 import { OrgTree } from "../components/OrgTree";
 import { ThreadedOrgTree } from "../components/ThreadedOrgTree";
 import {
-  Users,
   User,
   Briefcase,
   Building,
   Network,
   Plus,
   Pencil,
-  Edit3,
   Trash2,
-  ShieldCheck,
-  Link2,
   GitFork,
   LayoutList,
   RotateCw,
@@ -53,7 +47,11 @@ export default function HrTeams() {
       : "threaded";
   const [viewMode, setViewMode] = useState(initialView);
 
-  useEffect(() => {
+  // Follow the URL whenever the query string changes (adjusted during render, not in an effect).
+  const queryString = searchParams.toString();
+  const [syncedQuery, setSyncedQuery] = useState(queryString);
+  if (syncedQuery !== queryString) {
+    setSyncedQuery(queryString);
     const currentView = searchParams.get("view") || searchParams.get("tab");
     if (currentView === "table" || currentView === "squads") {
       setViewMode("table");
@@ -62,7 +60,7 @@ export default function HrTeams() {
     } else if (currentView === "threaded") {
       setViewMode("threaded");
     }
-  }, [searchParams]);
+  }
 
   // Core state
   const [teams, setTeams] = useState([]);
@@ -74,11 +72,13 @@ export default function HrTeams() {
   const branchParam = searchParams.get("branch");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState(branchParam || "all");
 
-  useEffect(() => {
+  const [syncedBranchParam, setSyncedBranchParam] = useState(branchParam);
+  if (syncedBranchParam !== branchParam) {
+    setSyncedBranchParam(branchParam);
     if (branchParam) {
       setSelectedBranchFilter(branchParam);
     }
-  }, [branchParam]);
+  }
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -141,6 +141,7 @@ export default function HrTeams() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchData();
   }, [fetchData]);
 
@@ -275,6 +276,17 @@ export default function HrTeams() {
   };
 
   // 5. SQUAD ROSTER HANDLERS
+  // Refresh teams data and update the open roster modal.
+  const refreshRoster = async () => {
+    const updatedTeams = await apiClient("/teams");
+    const teamList = Array.isArray(updatedTeams) ? updatedTeams : [];
+    setTeams(teamList);
+    const refreshedTeam = teamList.find((t) => t.id === rosterTeam.id);
+    if (refreshedTeam) {
+      setRosterTeam(refreshedTeam);
+    }
+  };
+
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!rosterTeam || !newMemberUserId) {
@@ -286,24 +298,27 @@ export default function HrTeams() {
     setRosterError("");
 
     try {
+      // A team has exactly one Lead. Adding someone as Lead when a Lead exists is a handover:
+      // add them as Member, then promote them (the server demotes the current Lead).
+      const hasLead = (rosterTeam.teamMembers || []).some((tm) => /lead/i.test(tm.role || ""));
+      const handover = newMemberRole === "Lead" && hasLead;
       await apiClient(`/teams/${rosterTeam.id}/members`, {
         method: "POST",
         body: {
           userId: newMemberUserId,
-          role: newMemberRole,
+          role: handover ? "Member" : newMemberRole,
         },
       });
-
-      toast.success("Team member assigned to squad successfully.");
-      setNewMemberUserId("");
-      // Refresh teams data and update the active rosterTeam modal
-      const updatedTeams = await apiClient("/teams");
-      const teamList = Array.isArray(updatedTeams) ? updatedTeams : [];
-      setTeams(teamList);
-      const refreshedTeam = teamList.find((t) => t.id === rosterTeam.id);
-      if (refreshedTeam) {
-        setRosterTeam(refreshedTeam);
+      if (handover) {
+        await apiClient(`/teams/${rosterTeam.id}/members/${newMemberUserId}`, {
+          method: "PATCH",
+          body: { role: "Lead" },
+        });
       }
+
+      toast.success(handover ? "Member added and made the new Squad Lead." : "Team member assigned to squad successfully.");
+      setNewMemberUserId("");
+      await refreshRoster();
     } catch (err) {
       console.error("[HrTeams] Failed to add squad member:", err);
       setRosterError(err.message || "Failed to add member to team.");
@@ -324,16 +339,32 @@ export default function HrTeams() {
       });
 
       toast.success("Team member removed from squad.");
-      const updatedTeams = await apiClient("/teams");
-      const teamList = Array.isArray(updatedTeams) ? updatedTeams : [];
-      setTeams(teamList);
-      const refreshedTeam = teamList.find((t) => t.id === rosterTeam.id);
-      if (refreshedTeam) {
-        setRosterTeam(refreshedTeam);
-      }
+      await refreshRoster();
     } catch (err) {
       console.error("[HrTeams] Failed to remove squad member:", err);
       setRosterError(err.message || "Failed to remove member.");
+    } finally {
+      setRosterSubmitting(false);
+    }
+  };
+
+  // Hands the Lead role to another member; the server makes the current Lead a Member.
+  const handleMakeLead = async (userId) => {
+    if (!rosterTeam) return;
+
+    setRosterSubmitting(true);
+    setRosterError("");
+
+    try {
+      await apiClient(`/teams/${rosterTeam.id}/members/${userId}`, {
+        method: "PATCH",
+        body: { role: "Lead" },
+      });
+      toast.success("Squad Lead handed over.");
+      await refreshRoster();
+    } catch (err) {
+      console.error("[HrTeams] Failed to hand over squad lead:", err);
+      setRosterError(err.message || "Failed to change the Squad Lead.");
     } finally {
       setRosterSubmitting(false);
     }
@@ -939,16 +970,29 @@ export default function HrTeams() {
                       </div>
 
                       {canManageTeams && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-rose-600 hover:text-rose-800 hover:bg-rose-50 text-xs px-2.5 py-1"
-                          disabled={rosterSubmitting}
-                          onClick={() => handleRemoveMember(tm.userId || tm.user?.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 mr-1" />
-                          Remove
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          {!isLead && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 text-xs px-2.5 py-1"
+                              disabled={rosterSubmitting}
+                              onClick={() => handleMakeLead(tm.userId || tm.user?.id)}
+                            >
+                              Make Lead
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-rose-600 hover:text-rose-800 hover:bg-rose-50 text-xs px-2.5 py-1"
+                            disabled={rosterSubmitting}
+                            onClick={() => handleRemoveMember(tm.userId || tm.user?.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
                       )}
                     </div>
                   );

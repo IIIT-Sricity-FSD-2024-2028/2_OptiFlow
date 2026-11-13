@@ -1,9 +1,8 @@
 import { prisma } from '../config/prisma.js';
-import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, ConflictError } from '../utils/errors.js';
-import { validateRequired, validateEmail } from '../utils/validation.js';
-import { ROLES, normalizeRole, isReservedRoleName } from '../utils/roles.js';
-import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ConflictError } from '../utils/errors.js';
+import { validateRequired } from '../utils/validation.js';
+import { isReservedRoleName } from '../utils/roles.js';
+import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 export async function listRoles(req, res, next) {
   try {
@@ -300,8 +299,10 @@ export async function deleteRole(req, res, next) {
       );
     }
 
+    // Only active assignments block deletion. Revoked rows (soft revoke, D-S9) are history:
+    // they are copied into the SystemAuditLog and then removed with the role below.
     const assignedCount = await prisma.roleAssignment.count({
-      where: { roleId: role.id },
+      where: { roleId: role.id, revokedAt: null },
     });
 
     if (assignedCount > 0) {
@@ -320,6 +321,42 @@ export async function deleteRole(req, res, next) {
       await tx.rolePermission.deleteMany({
         where: { roleId: role.id },
       });
+
+      // Re-check inside the transaction: an assignment made since the check above must block
+      // the delete with 409, not fail on the foreign key with a 500.
+      const activeNow = await tx.roleAssignment.count({ where: { roleId: role.id, revokedAt: null } });
+      if (activeNow > 0) {
+        throw new ConflictError(`Cannot delete role "${role.label}" because it was just assigned. Please reassign users first.`);
+      }
+
+      // The revoked rows must go (the FK has no cascade), so their history is copied into the
+      // audit log first, in the same transaction: if that write fails, nothing is deleted (D-S9).
+      const history = await tx.roleAssignment.findMany({
+        where: { roleId: role.id, revokedAt: { not: null } },
+        select: { userId: true, scopeType: true, scopeId: true, grantedById: true, grantedAt: true, revokedAt: true },
+        orderBy: { grantedAt: 'asc' },
+      });
+      if (history.length) {
+        await tx.systemAuditLog.create({
+          data: {
+            companyId: req.user.companyId,
+            action: AUDIT_ACTIONS.DELETE,
+            performedById: req.user.id,
+            oldValue: {
+              deletedRoleLabel: role.label,
+              deletedRoleId: role.id,
+              revokedAssignments: history.map((h) => ({
+                ...h,
+                grantedAt: h.grantedAt.toISOString(),
+                revokedAt: h.revokedAt.toISOString(),
+              })),
+            },
+          },
+        });
+        await tx.roleAssignment.deleteMany({
+          where: { roleId: role.id, revokedAt: { not: null } },
+        });
+      }
 
       await tx.role.delete({
         where: { id: role.id },

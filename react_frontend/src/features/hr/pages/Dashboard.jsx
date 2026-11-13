@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { PATHS } from "../../../app/paths";
@@ -8,25 +8,18 @@ import { Badge } from "../../../shared/components/Badge";
 import { Loader } from "../../../shared/components/Loader";
 import { EmptyState } from "../../../shared/components/EmptyState";
 import { Table } from "../../../shared/components/Table";
-import { formatDate } from "../../../shared/utils/formatDate";
 import {
   Users,
-  User,
-  Shield,
   Building2,
   Network,
   ShieldCheck,
-  Briefcase,
   RefreshCw,
   UserPlus,
   CheckCircle2,
   AlertTriangle,
-  Info,
-  ArrowRight,
 } from "lucide-react";
 import {
   normalizeEmployees,
-  ROLE_BADGE_STYLES,
 } from "../components/orgTreeUtils";
 
 /**
@@ -42,7 +35,6 @@ export default function HrDashboard() {
   const [branches, setBranches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [roles, setRoles] = useState([]);
-  const [projects, setProjects] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -53,7 +45,7 @@ export default function HrDashboard() {
     setError(null);
 
     try {
-      const [usersData, branchesData, teamsData, rolesData, projectsData] = await Promise.all([
+      const [usersData, branchesData, teamsData, rolesData] = await Promise.all([
         apiClient("/users").catch((err) => {
           console.warn("[HrDashboard] Failed to fetch users:", err.message);
           return [];
@@ -70,21 +62,12 @@ export default function HrDashboard() {
           console.warn("[HrDashboard] Failed to fetch roles:", err.message);
           return [];
         }),
-        apiClient("/projects").catch((err) => {
-          console.warn("[HrDashboard] Failed to fetch projects:", err.message);
-          return [];
-        }),
       ]);
 
       setUsers(Array.isArray(usersData) ? usersData : []);
       setBranches(Array.isArray(branchesData) ? branchesData : []);
       setTeams(Array.isArray(teamsData) ? teamsData : []);
       setRoles(Array.isArray(rolesData) ? rolesData : []);
-      setProjects(
-        Array.isArray(projectsData)
-          ? projectsData
-          : projectsData?.data || []
-      );
     } catch (err) {
       console.error("[HrDashboard] Failed to load dashboard data:", err);
       setError(err.message || "Failed to load HR data from server.");
@@ -94,6 +77,7 @@ export default function HrDashboard() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchDashboardData();
   }, [fetchDashboardData]);
 

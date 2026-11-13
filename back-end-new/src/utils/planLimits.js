@@ -69,3 +69,18 @@ export async function getPlanUsage(companyId) {
   }
   return out;
 }
+
+/**
+ * Runs `fn(tx)` in a transaction that first locks the company row (SELECT ... FOR UPDATE).
+ *
+ * A limit check followed by a create is only safe if no other request can count and create in
+ * between (SEC-M5-09). Holding the company row lock serialises those sections per company, so
+ * `assertWithinPlanLimit(companyId, resource, { client: tx })` inside `fn` sees every earlier
+ * create. Other companies are not blocked.
+ */
+export async function withCompanyLock(companyId, fn, { client = prisma } = {}) {
+  return client.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM companies WHERE id = ${companyId} FOR UPDATE`;
+    return fn(tx);
+  });
+}

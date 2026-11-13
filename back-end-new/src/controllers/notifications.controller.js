@@ -5,7 +5,6 @@ import {
   ForbiddenError,
 } from '../utils/errors.js';
 import { validateRequired } from '../utils/validation.js';
-import { ROLES } from '../utils/roles.js';
 
 
 // ============================================================================
@@ -13,51 +12,43 @@ import { ROLES } from '../utils/roles.js';
 // ============================================================================
 
 /**
+ * Roles that may read or change another user's notifications (SEC-M5-15). Used by every
+ * handler in this file, so list, read, read-all and delete agree on who is privileged.
+ */
+const NOTIFICATION_ADMIN_ROLES = ['company_owner', 'system_admin'];
+const isNotificationAdmin = (user) => NOTIFICATION_ADMIN_ROLES.includes(user?.role);
+
+/** Notification types clients may send (SEC-M5-13). Stored in the canonical spelling below. */
+const NOTIFICATION_TYPES = ['System', 'info', 'success', 'warning', 'error', 'Task', 'Review', 'Escalation', 'Compliance'];
+const TITLE_MAX = 150;
+// Lead spellings found in team_members data (see teams.controller.js).
+const TEAM_LEAD_ROLES = ['Lead', 'Leader'];
+const MESSAGE_MAX = 2000;
+
+/**
  * GET /notifications & GET /api/notifications
- * Lists notifications. Regular members only see their own notifications.
- * Admins/Leads can filter by userId if user belongs to the same company.
+ * Every caller gets their own notifications. Only Owner / System Admin may pass ?userId=
+ * to read another user's.
  */
 export async function listNotifications(req, res, next) {
   try {
-    const { userId } = req.query;
+    const requested = req.query.userId ? String(req.query.userId) : req.user.id;
 
-    if (userId) {
-      // Validate requested user belongs to caller's company
-      const targetUser = await prisma.user.findFirst({
-        where: { id: String(userId), companyId: req.user.companyId },
-      });
-
-      if (!targetUser) {
-        throw new NotFoundError(`User with ID ${userId} not found in this company`);
-      }
-
-      // If caller is not owner/admin/lead and trying to view another user's notifications
-      if (
-        req.user.id !== String(userId) &&
-        !['company_owner', 'system_admin', 'project_manager', 'team_leader', 'compliance_officer'].includes(req.user.role)
-      ) {
+    if (requested !== req.user.id) {
+      if (!isNotificationAdmin(req.user)) {
         throw new ForbiddenError('You can only view your own notifications');
       }
-
-      const notifications = await prisma.notification.findMany({
-        where: { userId: String(userId) },
-        orderBy: { createdAt: 'desc' },
+      const targetUser = await prisma.user.findFirst({
+        where: { id: requested, companyId: req.user.companyId },
+        select: { id: true },
       });
-
-      return res.status(200).json({
-        success: true,
-        data: notifications,
-      });
+      if (!targetUser) {
+        throw new NotFoundError(`User with ID ${requested} not found in this company`);
+      }
     }
 
-    // If no userId query param:
-    // If regular member, default to own notifications
-    const isPrivileged = ['company_owner', 'system_admin', 'project_manager', 'team_leader', 'compliance_officer', 'hr_manager'].includes(req.user.role);
-
     const notifications = await prisma.notification.findMany({
-      where: isPrivileged
-        ? { user: { companyId: req.user.companyId } }
-        : { userId: req.user.id },
+      where: { userId: requested, companyId: req.user.companyId },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -73,16 +64,32 @@ export async function listNotifications(req, res, next) {
 /**
  * POST /notifications & POST /api/notifications
  * Creates a notification for a target user within the caller's company.
+ * Most notifications are created by server code (D-S12); this endpoint is for the few
+ * client flows that need it. Team Leaders may only write to their direct reports or to
+ * members of a team they lead.
  */
 export async function createNotification(req, res, next) {
   try {
     const body = req.body || {};
     const userId = body.userId || body.user_id;
-    const title = (body.title || '').trim();
-    const message = (body.message || '').trim();
-    const type = body.type || 'System';
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    const rawType = body.type === undefined ? 'System' : body.type;
 
     validateRequired({ userId, title, message }, ['userId', 'title', 'message']);
+
+    const type = typeof rawType === 'string'
+      ? NOTIFICATION_TYPES.find((t) => t.toLowerCase() === rawType.trim().toLowerCase())
+      : undefined;
+    if (!type) {
+      throw new BadRequestError(`type must be one of: ${NOTIFICATION_TYPES.join(', ')}`);
+    }
+    if (title.length > TITLE_MAX) {
+      throw new BadRequestError(`title must be at most ${TITLE_MAX} characters`);
+    }
+    if (message.length > MESSAGE_MAX) {
+      throw new BadRequestError(`message must be at most ${MESSAGE_MAX} characters`);
+    }
 
     // Verify recipient belongs to authenticated company
     const recipient = await prisma.user.findFirst({
@@ -93,9 +100,28 @@ export async function createNotification(req, res, next) {
       throw new NotFoundError(`Target user ${userId} not found in this company`);
     }
 
+    if (req.user.role === 'team_leader') {
+      // A Team Leader's people: members of a team they lead, or their direct reports. The second
+      // rule is the one subtask assignment uses (tasks.controller), so a TL can always notify
+      // the people they can assign work to.
+      const isDirectReport = recipient.managerUserId === req.user.id;
+      const sharedTeam = isDirectReport
+        ? true
+        : await prisma.teamMember.findFirst({
+            where: {
+              userId: recipient.id,
+              team: { teamMembers: { some: { userId: req.user.id, role: { in: TEAM_LEAD_ROLES } } } },
+            },
+            select: { id: true },
+          });
+      if (!sharedTeam) {
+        throw new ForbiddenError('Team Leaders can only notify their direct reports or members of a team they lead');
+      }
+    }
+
     const notification = await prisma.notification.create({
       data: {
-        userId: String(userId),
+        userId: recipient.id,
         companyId: recipient.companyId,
         title,
         message,
@@ -133,7 +159,7 @@ export async function markNotificationAsRead(req, res, next) {
     // Caller can mark own notification or privileged role
     if (
       notification.userId !== req.user.id &&
-      !['company_owner', 'system_admin'].includes(req.user.role)
+      !isNotificationAdmin(req.user)
     ) {
       throw new ForbiddenError('You can only modify your own notifications');
     }
@@ -173,7 +199,7 @@ export async function markAllNotificationsAsRead(req, res, next) {
 
     if (
       String(targetUserId) !== req.user.id &&
-      !['company_owner', 'system_admin'].includes(req.user.role)
+      !isNotificationAdmin(req.user)
     ) {
       throw new ForbiddenError('You can only mark your own notifications as read');
     }
@@ -212,7 +238,7 @@ export async function deleteNotification(req, res, next) {
 
     if (
       notification.userId !== req.user.id &&
-      !['company_owner', 'system_admin'].includes(req.user.role)
+      !isNotificationAdmin(req.user)
     ) {
       throw new ForbiddenError('You can only delete your own notifications');
     }
@@ -227,8 +253,4 @@ export async function deleteNotification(req, res, next) {
     next(err);
   }
 }
-
-// Routes registration
-
-
 

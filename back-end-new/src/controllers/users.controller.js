@@ -11,9 +11,23 @@ import {
   validateRequired,
   validateEmail,
 } from '../utils/validation.js';
-import { hasRole, normalizeRole, ROLES, systemSlugOfRole } from '../utils/roles.js';
-import { assertWithinPlanLimit } from '../utils/planLimits.js';
-import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { systemSlugOfRole, resolveUserRole } from '../utils/roles.js';
+import { assertWithinPlanLimit, withCompanyLock } from '../utils/planLimits.js';
+import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import {
+  assertValidScope,
+  assertScopeFitsRole,
+  COMPANY_WIDE_SLUGS,
+  countActiveOwners,
+  resolveCompanyRole,
+  ROLE_WITH_TEMPLATE,
+} from '../utils/roleAssignmentGuards.js';
+import {
+  buildEmailChangeToken,
+  verifyEmailChangeToken,
+  sendEmailChangeConfirmation,
+  sendEmailChangedNotice,
+} from '../utils/emailChangeTokens.js';
 
 
 const USER_SELECT_FIELDS = {
@@ -177,12 +191,58 @@ export async function getUserById(req, res, next) {
 }
 
 /**
+ * Works out the scope for a new primary role from the request body (SEC-M5-04 / SEC-M5-10).
+ * - branchId, or scopeType + scopeId, must name a real row of the company (400 otherwise).
+ * - Company Owner / System Admin are always Company-scoped.
+ * - Branch Manager must end up Branch-scoped.
+ * `fallback` is the scope to keep when the body names none.
+ */
+async function resolveAssignmentScope({ companyId, body, role, fallback }) {
+  const slug = systemSlugOfRole(role);
+  if (COMPANY_WIDE_SLUGS.includes(slug)) {
+    return { scopeType: 'Company', scopeId: companyId };
+  }
+
+  const branchId = body.branchId || body.branch_id;
+  const scopeType = body.scopeType || body.scope_type;
+  const scopeId = body.scopeId || body.scope_id;
+
+  let scope;
+  if (branchId) {
+    scope = { scopeType: 'Branch', scopeId: String(branchId) };
+  } else if (scopeType) {
+    scope = { scopeType, scopeId: String(scopeId || (scopeType === 'Company' ? companyId : '')) };
+  } else {
+    scope = fallback;
+  }
+  await assertValidScope({ companyId, ...scope });
+  assertScopeFitsRole(role, scope.scopeType);
+  return scope;
+}
+
+/** Throws unless the caller may grant this role (only owners grant owner; owners/admins grant admin). */
+function assertMayGrantRole(req, role) {
+  const slug = systemSlugOfRole(role);
+  if (slug === 'company_owner' && req.user.role !== 'company_owner') {
+    throw new ForbiddenError('Only the Company Owner can assign the Company Owner role');
+  }
+  if (slug === 'system_admin' && !['company_owner', 'system_admin'].includes(req.user.role)) {
+    throw new ForbiddenError('You do not have permission to assign elevated administrative roles');
+  }
+}
+
+async function loadCompanyRoles(companyId) {
+  return prisma.role.findMany({ where: { companyId }, ...ROLE_WITH_TEMPLATE });
+}
+
+/**
  * POST /users & POST /api/users
  * Creates a new user in the caller's company and assigns requested permitted role.
  */
 export async function createUser(req, res, next) {
   try {
     const body = req.body || {};
+    const companyId = req.user.companyId;
     const fullName = (body.fullName || body.full_name || '').trim();
     const email = (body.email || '').trim().toLowerCase();
     const password = body.password || body.password_hash || '';
@@ -199,9 +259,6 @@ export async function createUser(req, res, next) {
       ]);
     }
 
-    // Plan limit (central tenant-side guard; counts active users)
-    await assertWithinPlanLimit(req.user.companyId, 'users');
-
     // Emails are unique across all tenants (case-insensitive) so that /auth/login,
     // which identifies a user by email alone, can never match two accounts.
     const existing = await prisma.user.findFirst({
@@ -214,50 +271,42 @@ export async function createUser(req, res, next) {
     // Verify manager reference belongs to same company
     if (managerUserId) {
       const manager = await prisma.user.findFirst({
-        where: { id: managerUserId, companyId: req.user.companyId },
+        where: { id: managerUserId, companyId },
       });
       if (!manager) {
         throw new BadRequestError('Assigned manager does not exist in this company');
       }
     }
 
-    // Resolve and validate role assignment within the company
+    // Resolve and validate the role and its scope before anything is written.
     let targetRole = null;
+    let scope = null;
     if (requestedRole) {
-      const roles = await prisma.role.findMany({
-        where: { companyId: req.user.companyId },
-      });
-
-      const normReq = normalizeRole(requestedRole);
-      targetRole = roles.find(
-        (r) =>
-          r.id === requestedRole ||
-          normalizeRole(r.label) === normReq
-      );
-
+      targetRole = resolveCompanyRole(await loadCompanyRoles(companyId), requestedRole);
       if (!targetRole) {
         throw new BadRequestError(`Role "${requestedRole}" is not configured for this company`);
       }
+      assertMayGrantRole(req, targetRole);
 
-      // Privilege escalation check: only Company Owners & System Admins can grant Company Owner or System Admin
-      const isTargetPrivileged =
-        systemSlugOfRole(targetRole) === 'company_owner' ||
-        systemSlugOfRole(targetRole) === 'system_admin';
-
-      const callerIsPrivileged =
-        hasRole(req.user.role, [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN]);
-
-      if (isTargetPrivileged && !callerIsPrivileged) {
-        throw new ForbiddenError('You do not have permission to assign elevated administrative roles');
+      let fallback = { scopeType: 'Company', scopeId: companyId };
+      if (systemSlugOfRole(targetRole) === 'branch_manager' && !(body.branchId || body.branch_id || body.scopeType || body.scope_type)) {
+        // No branch given: use the company's first branch, as before.
+        const defaultBranch = await prisma.branch.findFirst({ where: { companyId }, orderBy: { createdAt: 'asc' } });
+        if (defaultBranch) fallback = { scopeType: 'Branch', scopeId: defaultBranch.id };
       }
+      scope = await resolveAssignmentScope({ companyId, body, role: targetRole, fallback });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const newUser = await prisma.$transaction(async (tx) => {
+    // Seat check and create run under the company row lock, so parallel creates cannot all
+    // pass the same count (SEC-M5-09).
+    const newUser = await withCompanyLock(companyId, async (tx) => {
+      await assertWithinPlanLimit(companyId, 'users', { client: tx });
+
       const user = await tx.user.create({
         data: {
-          companyId: req.user.companyId,
+          companyId,
           fullName,
           email,
           passwordHash,
@@ -270,39 +319,13 @@ export async function createUser(req, res, next) {
       });
 
       if (targetRole) {
-        let assignedScopeType = body.scopeType || 'Company';
-        let assignedScopeId = req.user.companyId;
-
-        const branchId = body.branchId || body.branch_id || (assignedScopeType === 'Branch' ? body.scopeId : null);
-        if (branchId) {
-          const branch = await tx.branch.findFirst({
-            where: { id: String(branchId), companyId: req.user.companyId },
-          });
-          if (branch) {
-            assignedScopeType = 'Branch';
-            assignedScopeId = branch.id;
-          }
-        } else if (
-          systemSlugOfRole(targetRole) === 'branch_manager'
-        ) {
-          // If no branch specified, fallback to the company's first branch
-          const defaultBranch = await tx.branch.findFirst({
-            where: { companyId: req.user.companyId },
-            orderBy: { createdAt: 'asc' },
-          });
-          if (defaultBranch) {
-            assignedScopeType = 'Branch';
-            assignedScopeId = defaultBranch.id;
-          }
-        }
-
         await tx.roleAssignment.create({
           data: {
-            companyId: req.user.companyId,
+            companyId,
             userId: user.id,
             roleId: targetRole.id,
-            scopeType: assignedScopeType,
-            scopeId: assignedScopeId,
+            scopeType: scope.scopeType,
+            scopeId: scope.scopeId,
             grantedById: req.user.id,
           },
         });
@@ -316,11 +339,11 @@ export async function createUser(req, res, next) {
 
     // Record audit log
     try {
-      await createSystemAuditLog({companyId: req.user.companyId,
+      await createSystemAuditLog({companyId,
         targetUserId: newUser.id,
         action: AUDIT_ACTIONS.CREATE,
         performedById: req.user.id,
-        newValue: { fullName: newUser.fullName, email: newUser.email, role: targetRole?.label },
+        newValue: { fullName: newUser.fullName, email: newUser.email, role: targetRole?.label, ...(scope || {}) },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during user creation:', auditErr.message);
@@ -339,14 +362,19 @@ export async function createUser(req, res, next) {
 /**
  * PATCH /users/:id & PATCH /api/users/:id
  * Updates supported user profile and role assignments.
+ *
+ * On your own account this endpoint changes profile fields only: your password goes through
+ * POST /auth/change-password (SEC-M5-05), your email through POST /users/me/email-change
+ * (SEC-M5-06), and your role cannot be changed by you at all (D-S3).
  */
 export async function updateUser(req, res, next) {
   try {
     const { id } = req.params;
     const body = req.body || {};
+    const companyId = req.user.companyId;
 
     const targetUser = await prisma.user.findFirst({
-      where: { id, companyId: req.user.companyId },
+      where: { id, companyId },
     });
 
     if (!targetUser) {
@@ -354,11 +382,7 @@ export async function updateUser(req, res, next) {
     }
 
     const isSelf = req.user.id === id;
-    const isAdmin = hasRole(req.user.role, [
-      ROLES.COMPANY_OWNER,
-      ROLES.SYSTEM_ADMIN,
-      ROLES.ACCESS_GOVERNANCE,
-    ]);
+    const isAdmin = ['company_owner', 'system_admin', 'hr_manager'].includes(req.user.role);
 
     if (!isSelf && !isAdmin) {
       throw new ForbiddenError('You do not have permission to update this user');
@@ -367,7 +391,7 @@ export async function updateUser(req, res, next) {
     // Sovereign checks: Non-owners cannot modify Company Owner accounts (demote, change credentials, or deactivate)
     const targetAssignments = await prisma.roleAssignment.findMany({
       where: { userId: id, revokedAt: null },
-      include: { role: true },
+      include: { role: ROLE_WITH_TEMPLATE },
     });
     const targetIsOwner = targetAssignments.some(
       (ra) => systemSlugOfRole(ra.role) === 'company_owner'
@@ -376,8 +400,8 @@ export async function updateUser(req, res, next) {
       (ra) => systemSlugOfRole(ra.role) === 'system_admin'
     );
 
-    const callerIsOwner = hasRole(req.user.role, [ROLES.COMPANY_OWNER]);
-    const callerIsAdminOrOwner = hasRole(req.user.role, [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN]);
+    const callerIsOwner = req.user.role === 'company_owner';
+    const callerIsAdminOrOwner = ['company_owner', 'system_admin'].includes(req.user.role);
 
     if (!isSelf) {
       if (targetIsOwner && !callerIsOwner) {
@@ -403,6 +427,9 @@ export async function updateUser(req, res, next) {
       validateEmail(email);
 
       if (email !== targetUser.email.toLowerCase()) {
+        if (isSelf) {
+          throw new BadRequestError('To change your own email, use POST /users/me/email-change with your current password');
+        }
         const duplicate = await prisma.user.findFirst({
           where: { email: { equals: email, mode: 'insensitive' }, NOT: { id } },
         });
@@ -414,6 +441,9 @@ export async function updateUser(req, res, next) {
     }
 
     if (body.password) {
+      if (isSelf) {
+        throw new BadRequestError('To change your own password, use POST /auth/change-password with your current password');
+      }
       if (typeof body.password !== 'string' || body.password.length < 8) {
         throw new ValidationError('Password validation failed', [
           { field: 'password', message: 'Password must be at least 8 characters long' },
@@ -422,17 +452,16 @@ export async function updateUser(req, res, next) {
       updateData.passwordHash = await bcrypt.hash(body.password, 10);
       // Sign out existing sessions. An admin-set password must be replaced at next sign-in.
       updateData.tokenVersion = { increment: 1 };
-      updateData.passwordChangedAt = id === req.user.id ? new Date() : null;
+      updateData.passwordChangedAt = null;
     }
 
+    let needsSeat = false;
     if (isAdmin && (body.isActive !== undefined || body.is_active !== undefined)) {
       const activeVal = body.isActive !== undefined ? Boolean(body.isActive) : Boolean(body.is_active);
       if (targetIsOwner && !activeVal) {
         throw new ForbiddenError('The Company Owner account cannot be deactivated');
       }
-      if (activeVal && !targetUser.isActive) {
-        await assertWithinPlanLimit(req.user.companyId, 'users');
-      }
+      needsSeat = activeVal && !targetUser.isActive;
       updateData.isActive = activeVal;
       updateData.deactivatedAt = activeVal ? null : new Date();
       if (!activeVal) updateData.tokenVersion = { increment: 1 };
@@ -445,65 +474,92 @@ export async function updateUser(req, res, next) {
           throw new BadRequestError('A user cannot be their own reporting manager');
         }
         const manager = await prisma.user.findFirst({
-          where: { id: mgrId, companyId: req.user.companyId },
+          where: { id: mgrId, companyId },
         });
         if (!manager) {
           throw new BadRequestError('Assigned manager does not exist in this company');
         }
         // Guard against circular reporting lines
-        await validateNoReportingCycle(prisma, req.user.companyId, id, mgrId);
+        await validateNoReportingCycle(prisma, companyId, id, mgrId);
       }
       updateData.managerUserId = mgrId || null;
     }
 
+    // Role change (SEC-M5-04 / SEC-M5-14): replace only the primary assignment and keep its scope.
     const requestedRole = body.role || body.roleId || body.role_id;
     let targetRole = null;
+    let primary = null;
+    let newScope = null;
 
     if (requestedRole && isAdmin) {
-      const roles = await prisma.role.findMany({
-        where: { companyId: req.user.companyId },
-      });
-      const normReq = normalizeRole(requestedRole);
-      targetRole = roles.find(
-        (r) => r.id === requestedRole || normalizeRole(r.label) === normReq
-      );
-
+      targetRole = resolveCompanyRole(await loadCompanyRoles(companyId), requestedRole);
       if (!targetRole) {
         throw new BadRequestError(`Role "${requestedRole}" is not configured for this company`);
       }
-
-      // Privilege check
-      const isTargetPrivileged =
-        systemSlugOfRole(targetRole) === 'company_owner' ||
-        systemSlugOfRole(targetRole) === 'system_admin';
-
-      if (isTargetPrivileged && !callerIsAdminOrOwner) {
-        throw new ForbiddenError('You do not have permission to assign elevated administrative roles');
-      }
-
-      if (systemSlugOfRole(targetRole) === 'company_owner' && !callerIsOwner) {
-        throw new ForbiddenError('Only the Company Owner can assign the Company Owner role');
-      }
     }
 
-    const updatedUser = await prisma.$transaction(async (tx) => {
+    const updatedUser = await withCompanyLock(companyId, async (tx) => {
+      if (needsSeat) {
+        await assertWithinPlanLimit(companyId, 'users', { client: tx });
+      }
+
+      if (targetRole) {
+        // Read the current assignments under the lock, so parallel role changes for the same
+        // user see each other's result and cannot each add a new primary.
+        const current = await tx.roleAssignment.findMany({
+          where: { userId: id, revokedAt: null },
+          include: { role: ROLE_WITH_TEMPLATE },
+        });
+        primary = resolveUserRole({ roleAssignments: current }).matchedAssignment;
+        const fallback = primary
+          ? { scopeType: primary.scopeType, scopeId: primary.scopeId }
+          : { scopeType: 'Company', scopeId: companyId };
+        newScope = await resolveAssignmentScope({ companyId, body, role: targetRole, fallback });
+
+        const unchanged =
+          primary &&
+          primary.roleId === targetRole.id &&
+          primary.scopeType === newScope.scopeType &&
+          primary.scopeId === newScope.scopeId;
+
+        if (unchanged) {
+          // Re-sending the current role (for example from a full edit form) changes nothing.
+          targetRole = null;
+        } else {
+          if (isSelf) {
+            throw new ForbiddenError('You cannot change your own role');
+          }
+          assertMayGrantRole(req, targetRole);
+
+          const losesOwner =
+            primary &&
+            systemSlugOfRole(primary.role) === 'company_owner' &&
+            systemSlugOfRole(targetRole) !== 'company_owner' &&
+            !current.some((ra) => ra.id !== primary.id && systemSlugOfRole(ra.role) === 'company_owner');
+          if (losesOwner && (await countActiveOwners(companyId, tx)) <= 1) {
+            throw new ForbiddenError('The only Company Owner cannot be demoted. Assign another Company Owner first.');
+          }
+          if (primary) {
+            // Soft revoke keeps the history of who held which role (D-S9).
+            await tx.roleAssignment.updateMany({ where: { id: primary.id, revokedAt: null }, data: { revokedAt: new Date() } });
+          }
+          await tx.roleAssignment.create({
+            data: {
+              companyId,
+              userId: id,
+              roleId: targetRole.id,
+              scopeType: newScope.scopeType,
+              scopeId: newScope.scopeId,
+              grantedById: req.user.id,
+            },
+          });
+        }
+      }
+
       await tx.user.update({
         where: { id },
         data: updateData,
       });
-
-      if (targetRole) {
-        await tx.roleAssignment.deleteMany({ where: { userId: id } });
-        await tx.roleAssignment.create({
-          data: {
-            userId: id,
-            roleId: targetRole.id,
-            scopeType: 'Company',
-            scopeId: req.user.companyId,
-            grantedById: req.user.id,
-          },
-        });
-      }
 
       return tx.user.findUnique({
         where: { id },
@@ -513,11 +569,12 @@ export async function updateUser(req, res, next) {
 
     // Record audit log
     try {
-      await createSystemAuditLog({companyId: req.user.companyId,
+      await createSystemAuditLog({companyId,
         targetUserId: id,
         action: AUDIT_ACTIONS.UPDATE,
         performedById: req.user.id,
-        newValue: { fieldsUpdated: Object.keys(updateData), role: targetRole?.label },
+        oldValue: targetRole && primary ? { role: primary.role?.label, scopeType: primary.scopeType, scopeId: primary.scopeId } : undefined,
+        newValue: { fieldsUpdated: Object.keys(updateData), role: targetRole?.label, ...(targetRole ? newScope : {}) },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during user update:', auditErr.message);
@@ -527,6 +584,103 @@ export async function updateUser(req, res, next) {
       success: true,
       message: 'User updated successfully',
       data: formatUserResponse(updatedUser),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /users/me/email-change   { newEmail, currentPassword }
+ * Starts an email change for the signed-in user (SEC-M5-06). The address changes only when
+ * the link sent to the NEW address is confirmed; the token is never returned in the response.
+ */
+export async function requestEmailChange(req, res, next) {
+  try {
+    const body = req.body || {};
+    const newEmail = String(body.newEmail || body.email || '').trim().toLowerCase();
+    const currentPassword = body.currentPassword;
+    validateRequired({ newEmail, currentPassword }, ['newEmail', 'currentPassword']);
+    validateEmail(newEmail);
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) throw new NotFoundError('User not found');
+    // 400, not 401: the session is valid, only the typed password is wrong. A 401 would make the
+    // frontend API client treat it as an expired session and sign the user out.
+    if (typeof currentPassword !== 'string' || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new BadRequestError('Current password is incorrect');
+    }
+    if (newEmail === user.email.toLowerCase()) {
+      throw new BadRequestError('This is already your email address');
+    }
+    // Same answer whether or not the address is taken, so this endpoint cannot be used to find
+    // out which emails exist (SEC-M5-06). A taken address simply gets no link; the confirm step
+    // re-checks anyway.
+    const duplicate = await prisma.user.findFirst({
+      where: { email: { equals: newEmail, mode: 'insensitive' }, NOT: { id: user.id } },
+      select: { id: true },
+    });
+    if (!duplicate) {
+      const { url } = buildEmailChangeToken({
+        userId: user.id,
+        companyId: user.companyId,
+        tokenVersion: user.tokenVersion,
+        newEmail,
+      });
+      sendEmailChangeConfirmation({ to: newEmail, fullName: user.fullName, url });
+    }
+
+    res.status(202).json({
+      success: true,
+      message: `A confirmation link was sent to ${newEmail}. Your email changes when you open it.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /users/email-change/confirm   { token }
+ * Applies a pending email change. Works once: it bumps tokenVersion, which also signs out
+ * every session that used the old address.
+ */
+export async function confirmEmailChange(req, res, next) {
+  try {
+    const payload = verifyEmailChangeToken((req.body || {}).token);
+    const user = await prisma.user.findUnique({ where: { id: String(payload.sub) } });
+    if (!user || !user.isActive || user.companyId !== payload.companyId || user.tokenVersion !== payload.tokenVersion) {
+      throw new BadRequestError('This email confirmation link is invalid or has expired');
+    }
+    const newEmail = String(payload.newEmail).toLowerCase();
+    const duplicate = await prisma.user.findFirst({
+      where: { email: { equals: newEmail, mode: 'insensitive' }, NOT: { id: user.id } },
+    });
+    if (duplicate) {
+      throw new ConflictError('A user with this email address already exists');
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { email: newEmail, tokenVersion: { increment: 1 } },
+    });
+    sendEmailChangedNotice({ to: user.email, fullName: user.fullName, newEmail });
+
+    try {
+      await createSystemAuditLog({
+        companyId: user.companyId,
+        targetUserId: user.id,
+        action: AUDIT_ACTIONS.UPDATE,
+        performedById: user.id,
+        oldValue: { email: user.email },
+        newValue: { email: newEmail, via: 'email-change-confirmation' },
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: Audit record logging during email change:', auditErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Email address updated. Please sign in again with your new address.',
     });
   } catch (err) {
     next(err);
@@ -556,7 +710,7 @@ export async function deactivateUser(req, res, next) {
     // Sovereign checks: Non-owners cannot deactivate Company Owner or System Admin
     const targetAssignments = await prisma.roleAssignment.findMany({
       where: { userId: id, revokedAt: null },
-      include: { role: true },
+      include: { role: ROLE_WITH_TEMPLATE },
     });
     const isTargetOwner = targetAssignments.some(
       (ra) => systemSlugOfRole(ra.role) === 'company_owner'
@@ -565,7 +719,7 @@ export async function deactivateUser(req, res, next) {
       throw new ForbiddenError('The Company Owner account cannot be deactivated');
     }
 
-    const callerIsOwner = hasRole(req.user.role, [ROLES.COMPANY_OWNER]);
+    const callerIsOwner = req.user.role === 'company_owner';
     const isTargetAdmin = targetAssignments.some(
       (ra) => systemSlugOfRole(ra.role) === 'system_admin'
     );
@@ -631,17 +785,18 @@ export async function reactivateUser(req, res, next) {
       });
     }
 
-    // Plan seat limit (central guard)
-    await assertWithinPlanLimit(req.user.companyId, 'users');
-
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: {
-        isActive: true,
-        deactivatedAt: null,
-        tokenVersion: { increment: 1 },
-      },
-      select: USER_SELECT_FIELDS,
+    // Plan seat check and reactivation under the company lock (SEC-M5-09).
+    const updatedUser = await withCompanyLock(req.user.companyId, async (tx) => {
+      await assertWithinPlanLimit(req.user.companyId, 'users', { client: tx });
+      return tx.user.update({
+        where: { id },
+        data: {
+          isActive: true,
+          deactivatedAt: null,
+          tokenVersion: { increment: 1 },
+        },
+        select: USER_SELECT_FIELDS,
+      });
     });
 
     // Record audit log

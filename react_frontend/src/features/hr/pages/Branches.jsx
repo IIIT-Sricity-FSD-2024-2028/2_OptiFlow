@@ -5,7 +5,6 @@ import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { StatCard } from "../../../shared/components/StatCard";
 import { Button } from "../../../shared/components/Button";
-import { Badge } from "../../../shared/components/Badge";
 import { Loader } from "../../../shared/components/Loader";
 import { EmptyState } from "../../../shared/components/EmptyState";
 import { Table } from "../../../shared/components/Table";
@@ -18,11 +17,9 @@ import {
   Building2,
   Users,
   Network,
-  BarChart3,
   Plus,
   Trash2,
   RotateCw,
-  Search,
   UserCheck,
   AlertTriangle,
   ShieldCheck,
@@ -90,13 +87,17 @@ export default function HrBranches() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchBranches();
   }, [fetchBranches]);
 
   // Reset to first page when search changes
-  useEffect(() => {
+  const filterKey = JSON.stringify([searchQuery]);
+  const [pagedFilterKey, setPagedFilterKey] = useState(filterKey);
+  if (pagedFilterKey !== filterKey) {
+    setPagedFilterKey(filterKey);
     setCurrentPage(1);
-  }, [searchQuery]);
+  }
 
   // 2. CREATE BRANCH HANDLER
   const handleCreateBranch = async (e) => {
@@ -181,10 +182,6 @@ export default function HrBranches() {
       return acc + (Array.isArray(b.teams) ? b.teams.length : 0);
     }, 0);
   }, [branches]);
-
-  const avgTeamsPerBranch = useMemo(() => {
-    return branches.length > 0 ? (totalTeamsCount / branches.length).toFixed(1) : "0.0";
-  }, [branches.length, totalTeamsCount]);
 
   const filteredBranches = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();

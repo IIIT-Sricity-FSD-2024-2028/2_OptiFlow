@@ -19,12 +19,8 @@ import {
   User,
   CheckSquare,
   Shield,
-  Building,
   Building2,
   Network,
-  ArrowRight,
-  ExternalLink,
-  ShieldAlert,
 } from "lucide-react";
 import {
   ROLE_BADGE_STYLES,
@@ -108,13 +104,15 @@ export default function HrUserDetail() {
 
   // Initial load
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchEmployeeData();
   }, [fetchEmployeeData]);
 
   // Memoized set of all direct and indirect subordinate IDs to prevent reporting loops (Task 9)
+  const employeeId = employee?.id;
   const subordinateIds = useMemo(() => {
-    if (!employee?.id || !Array.isArray(allUsers)) return new Set();
-    const subs = new Set([employee.id]);
+    if (!employeeId || !Array.isArray(allUsers)) return new Set();
+    const subs = new Set([employeeId]);
     let added = true;
     while (added) {
       added = false;
@@ -126,7 +124,7 @@ export default function HrUserDetail() {
       }
     }
     return subs;
-  }, [employee?.id, allUsers]);
+  }, [employeeId, allUsers]);
 
   // 2. EDIT PROFILE HANDLER
   const handleUpdateProfile = async (e) => {

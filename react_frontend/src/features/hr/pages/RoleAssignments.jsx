@@ -109,13 +109,17 @@ export default function HrRoleAssignments() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchData();
   }, [fetchData]);
 
   // Reset pagination on filter changes
-  useEffect(() => {
+  const filterKey = JSON.stringify([searchQuery, roleFilter, scopeFilter, userFilter]);
+  const [pagedFilterKey, setPagedFilterKey] = useState(filterKey);
+  if (pagedFilterKey !== filterKey) {
+    setPagedFilterKey(filterKey);
     setCurrentPage(1);
-  }, [searchQuery, roleFilter, scopeFilter, userFilter]);
+  }
 
   // Derived Filtered Role Assignments
   const filteredAssignments = useMemo(() => {
