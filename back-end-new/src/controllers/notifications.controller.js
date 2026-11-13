@@ -34,7 +34,7 @@ export async function listNotifications(req, res, next) {
       // If caller is not owner/admin/lead and trying to view another user's notifications
       if (
         req.user.id !== String(userId) &&
-        !['company_owner', 'system_admin', 'superuser', 'project_manager', 'team_leader', 'compliance_officer'].includes(req.user.role)
+        !['company_owner', 'system_admin', 'project_manager', 'team_leader', 'compliance_officer'].includes(req.user.role)
       ) {
         throw new ForbiddenError('You can only view your own notifications');
       }
@@ -52,7 +52,7 @@ export async function listNotifications(req, res, next) {
 
     // If no userId query param:
     // If regular member, default to own notifications
-    const isPrivileged = ['company_owner', 'system_admin', 'superuser', 'project_manager', 'team_leader', 'compliance_officer', 'hr_manager'].includes(req.user.role);
+    const isPrivileged = ['company_owner', 'system_admin', 'project_manager', 'team_leader', 'compliance_officer', 'hr_manager'].includes(req.user.role);
 
     const notifications = await prisma.notification.findMany({
       where: isPrivileged
@@ -81,7 +81,6 @@ export async function createNotification(req, res, next) {
     const title = (body.title || '').trim();
     const message = (body.message || '').trim();
     const type = body.type || 'System';
-    const link = body.link || '';
 
     validateRequired({ userId, title, message }, ['userId', 'title', 'message']);
 
@@ -101,7 +100,6 @@ export async function createNotification(req, res, next) {
         title,
         message,
         type,
-        link,
       },
     });
 
@@ -135,14 +133,14 @@ export async function markNotificationAsRead(req, res, next) {
     // Caller can mark own notification or privileged role
     if (
       notification.userId !== req.user.id &&
-      !['company_owner', 'system_admin', 'superuser'].includes(req.user.role)
+      !['company_owner', 'system_admin'].includes(req.user.role)
     ) {
       throw new ForbiddenError('You can only modify your own notifications');
     }
 
     const updated = await prisma.notification.update({
       where: { id: String(id) },
-      data: { isRead: true },
+      data: { readAt: new Date() },
     });
 
     res.status(200).json({
@@ -175,19 +173,55 @@ export async function markAllNotificationsAsRead(req, res, next) {
 
     if (
       String(targetUserId) !== req.user.id &&
-      !['company_owner', 'system_admin', 'superuser'].includes(req.user.role)
+      !['company_owner', 'system_admin'].includes(req.user.role)
     ) {
       throw new ForbiddenError('You can only mark your own notifications as read');
     }
 
-    await prisma.notification.updateMany({
-      where: { userId: String(targetUserId), isRead: false },
-      data: { isRead: true },
+    const result = await prisma.notification.updateMany({
+      where: { userId: String(targetUserId), readAt: null },
+      data: { readAt: new Date() },
     });
 
     res.status(200).json({
       success: true,
       message: 'All notifications marked as read',
+      data: { userId: String(targetUserId), updatedCount: result.count },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /notifications/:id & DELETE /api/notifications/:id
+ * Deletes a notification. Callers can delete their own; owners and admins can delete any in their company.
+ */
+export async function deleteNotification(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const notification = await prisma.notification.findUnique({
+      where: { id: String(id) },
+      include: { user: { select: { companyId: true, id: true } } },
+    });
+
+    if (!notification || notification.user?.companyId !== req.user.companyId) {
+      throw new NotFoundError(`Notification with ID ${id} not found`);
+    }
+
+    if (
+      notification.userId !== req.user.id &&
+      !['company_owner', 'system_admin'].includes(req.user.role)
+    ) {
+      throw new ForbiddenError('You can only delete your own notifications');
+    }
+
+    await prisma.notification.delete({ where: { id: String(id) } });
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification deleted successfully',
     });
   } catch (err) {
     next(err);

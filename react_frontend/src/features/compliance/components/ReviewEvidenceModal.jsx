@@ -3,6 +3,7 @@ import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { apiClient } from "../../../services/api/client";
 import { useToast } from "../../../shared/components/Toast";
+import { openEvidenceFile } from "../../../shared/utils/evidenceFile";
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -186,15 +187,14 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
                   <span className="text-[11px] text-blue-700">Type: {evidence.evidenceType || "Report / Log"}</span>
                 </div>
               </div>
-              <a
-                href={`${import.meta.env.VITE_API_URL || "http://localhost:5500"}/api/evidence/${evidence.id}/file?token=${encodeURIComponent(sessionStorage.getItem("authToken") || "")}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 bg-white text-blue-700 font-semibold text-xs px-3 py-1.5 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors shadow-2xs"
+              <button
+                type="button"
+                onClick={() => openEvidenceFile(evidence.id)}
+                className="inline-flex items-center gap-1.5 bg-white text-blue-700 font-semibold text-xs px-3 py-1.5 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors shadow-2xs cursor-pointer"
               >
                 <span>Open File</span>
                 <ExternalLink size={12} />
-              </a>
+              </button>
             </div>
           ) : (
             <div className="text-center p-2 text-xs text-slate-400 italic bg-white rounded-lg border border-slate-200">

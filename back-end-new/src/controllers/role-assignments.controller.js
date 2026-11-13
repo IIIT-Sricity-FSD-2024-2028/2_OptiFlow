@@ -5,6 +5,13 @@ import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
+/** Shared by list and create so both return the same shape. */
+const ASSIGNMENT_INCLUDE = {
+  user: { select: { id: true, fullName: true, email: true } },
+  role: true,
+  grantedByUser: { select: { id: true, fullName: true, email: true } },
+};
+
 export async function listRoleAssignments(req, res, next) {
   try {
     const { userId, roleId } = req.query;
@@ -17,11 +24,7 @@ export async function listRoleAssignments(req, res, next) {
 
     const assignments = await prisma.roleAssignment.findMany({
       where,
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        role: true,
-        grantedByUser: { select: { id: true, fullName: true, email: true } },
-      },
+      include: ASSIGNMENT_INCLUDE,
       orderBy: { grantedAt: 'desc' },
     });
 
@@ -103,10 +106,7 @@ export async function createRoleAssignment(req, res, next) {
         scopeId: String(scopeId),
         grantedById: req.user.id,
       },
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        role: true,
-      },
+      include: ASSIGNMENT_INCLUDE,
     });
 
     // Record audit log

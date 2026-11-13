@@ -4,6 +4,7 @@ import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, Confli
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
+import { assertWithinPlanLimit } from '../utils/planLimits.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 async function enrichBranchesWithManagers(branches, companyId) {
@@ -44,6 +45,16 @@ async function enrichBranchesWithManagers(branches, companyId) {
   }));
 }
 
+/** One include shared by list, create and update so every response has the same shape. */
+const BRANCH_LIST_INCLUDE = {
+  teams: {
+    include: {
+      _count: { select: { projects: true } },
+    },
+  },
+  company: { select: { id: true, legalName: true } },
+};
+
 export async function listBranches(req, res, next) {
   try {
     const effectiveBranchId = resolveEffectiveBranchId({
@@ -58,14 +69,7 @@ export async function listBranches(req, res, next) {
 
     const branches = await prisma.branch.findMany({
       where,
-      include: {
-        teams: {
-          include: {
-            _count: { select: { projects: true } },
-          },
-        },
-        company: { select: { id: true, legalName: true } },
-      },
+      include: BRANCH_LIST_INCLUDE,
       orderBy: { name: 'asc' },
     });
 
@@ -124,6 +128,8 @@ export async function createBranch(req, res, next) {
 
     validateRequired({ name }, ['name']);
 
+    await assertWithinPlanLimit(req.user.companyId, 'branches');
+
     const branch = await prisma.branch.create({
       data: {
         name,
@@ -170,7 +176,8 @@ export async function createBranch(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during branch creation:', auditErr.message);
     }
 
-    const [enriched] = await enrichBranchesWithManagers([branch], req.user.companyId);
+    const fullBranch = await prisma.branch.findUnique({ where: { id: branch.id }, include: BRANCH_LIST_INCLUDE });
+    const [enriched] = await enrichBranchesWithManagers([fullBranch], req.user.companyId);
 
     res.status(201).json({
       success: true,
@@ -253,14 +260,7 @@ export async function updateBranch(req, res, next) {
     const updated = await prisma.branch.update({
       where: { id },
       data: updateData,
-      include: {
-        teams: {
-          include: {
-            _count: { select: { projects: true } },
-          },
-        },
-        company: { select: { id: true, legalName: true } },
-      },
+      include: BRANCH_LIST_INCLUDE,
     });
 
     // Record audit log

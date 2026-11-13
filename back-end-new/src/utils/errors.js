@@ -47,8 +47,32 @@ export class ValidationError extends AppError {
   }
 }
 
+/**
+ * 402 Payment Required: the tenant's subscription does not currently allow access.
+ * `code` is a stable machine-readable reason (TRIAL_EXPIRED, SUBSCRIPTION_PAST_DUE, ...).
+ */
 export class PaymentRequiredError extends AppError {
-  constructor(message = 'Payment Required') {
+  constructor(message = 'Payment required', code = 'PAYMENT_REQUIRED') {
     super(message, 402);
+    this.code = code;
   }
+}
+
+/**
+ * 403 with a plan-limit reason. Raised when creating a resource would exceed the plan.
+ */
+export class PlanLimitError extends AppError {
+  constructor(message, { limit, current, resource } = {}) {
+    super(message, 403);
+    this.code = 'PLAN_LIMIT_REACHED';
+    this.errors = [{ field: resource, message, limit, current }];
+  }
+}
+
+/**
+ * Helper to attach a machine-readable code to any AppError subclass instance.
+ */
+export function withCode(error, code) {
+  error.code = code;
+  return error;
 }

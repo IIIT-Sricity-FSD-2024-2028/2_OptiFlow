@@ -1,3 +1,4 @@
+import { openEvidenceFile } from '../../../../shared/utils/evidenceFile';
 import { useEffect, useState, useMemo } from 'react';
 import { Badge } from '../../../../shared/components/Badge';
 import { Button } from '../../../../shared/components/Button';
@@ -312,20 +313,20 @@ export default function TeamLeadReviews() {
                   {(selected.fileUrl || selected.file_url || selected.file) && (() => {
                     const rawUrl = selected.fileUrl || selected.file_url || selected.file || '';
                     const isExternal = rawUrl.startsWith('http://') || rawUrl.startsWith('https://');
-                    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
-                    const openDocUrl = isExternal
-                      ? rawUrl
-                      : `${apiBase}/api/evidence/${selected.id}/file?token=${encodeURIComponent(sessionStorage.getItem('authToken') || '')}`;
+                    const btnClass = 'mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:bg-gray-50 rounded-md text-xs font-semibold shadow-xs transition-colors';
+                    if (isExternal) {
+                      return (
+                        <a href={rawUrl} target="_blank" rel="noopener noreferrer" className={btnClass}>
+                          <span>Open Document</span>
+                          <span>↗</span>
+                        </a>
+                      );
+                    }
                     return (
-                      <a
-                        href={openDocUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:bg-gray-50 rounded-md text-xs font-semibold shadow-xs transition-colors"
-                      >
+                      <button type="button" onClick={() => openEvidenceFile(selected.id)} className={`${btnClass} cursor-pointer`}>
                         <span>Open Document</span>
                         <span>↗</span>
-                      </a>
+                      </button>
                     );
                   })()}
                   {(selected.task?.title || selected.taskTitle || selected.violation?.rule?.name) && (

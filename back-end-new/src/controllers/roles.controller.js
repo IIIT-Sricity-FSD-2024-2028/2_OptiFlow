@@ -2,7 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
 import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, ConflictError } from '../utils/errors.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
-import { ROLES, normalizeRole } from '../utils/roles.js';
+import { ROLES, normalizeRole, isReservedRoleName } from '../utils/roles.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 export async function listRoles(req, res, next) {
@@ -65,6 +65,9 @@ export async function createCustomRole(req, res, next) {
   try {
     const { label, description, permissionSlugs = [] } = req.body;
     validateRequired({ label }, ['label']);
+    if (isReservedRoleName(label)) {
+      throw new BadRequestError(`"${label.trim()}" is reserved for a built-in role. Choose a different name.`);
+    }
 
     const existing = await prisma.role.findFirst({
       where: { companyId: req.user.companyId, label: label.trim() },
@@ -121,6 +124,83 @@ export async function createCustomRole(req, res, next) {
     next(err);
   }
 }
+
+const ROLE_RESPONSE_INCLUDE = {
+  roleTemplate: true,
+  permissions: { include: { permission: true } },
+};
+
+/**
+ * PATCH /roles/:id & PATCH /api/roles/:id
+ * Updates a role's label and description. System roles keep their label (they are referenced by name).
+ */
+export async function updateRole(req, res, next) {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+
+    const role = await prisma.role.findFirst({
+      where: { id, companyId: req.user.companyId },
+    });
+    if (!role) {
+      throw new NotFoundError(`Role "${id}" not found in this company`);
+    }
+
+    const updateData = {};
+    if (body.label !== undefined) {
+      const label = String(body.label).trim();
+      validateRequired({ label }, ['label']);
+      if (role.isSystem && label !== role.label) {
+        throw new ForbiddenError('The label of a system role cannot be changed');
+      }
+      if (label !== role.label) {
+        if (isReservedRoleName(label)) {
+          throw new BadRequestError(`"${label}" is reserved for a built-in role. Choose a different name.`);
+        }
+        const clash = await prisma.role.findFirst({
+          where: { companyId: req.user.companyId, label, NOT: { id } },
+        });
+        if (clash) throw new BadRequestError(`Role with label "${label}" already exists`);
+        updateData.label = label;
+        updateData.name = label.toLowerCase().replace(/\s+/g, '_');
+      }
+    }
+    if (body.description !== undefined) {
+      updateData.description = body.description ? String(body.description).trim() : null;
+    }
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestError('No updatable fields provided (label, description)');
+    }
+
+    const updated = await prisma.role.update({
+      where: { id },
+      data: updateData,
+      include: ROLE_RESPONSE_INCLUDE,
+    });
+
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.UPDATE,
+        performedById: req.user.id,
+        roleId: id,
+        oldValue: { label: role.label, description: role.description },
+        newValue: updateData,
+      });
+    } catch (e) {
+      console.warn('[Audit] Role update log failed:', e.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Role "${updated.label}" updated successfully`,
+      data: updated,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 
 export async function updateRolePermissions(req, res, next) {
   try {

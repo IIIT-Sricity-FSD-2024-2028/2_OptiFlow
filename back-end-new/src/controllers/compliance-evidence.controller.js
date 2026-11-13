@@ -18,9 +18,17 @@ const ALLOWED_EVIDENCE_STATUSES = ['Pending', 'Under_Review', 'Approved', 'Rejec
 
 import { env } from '../config/env.js';
 
+/** Include shared by list, get, create, update and upload so every response has the same shape. */
+const EVIDENCE_LIST_INCLUDE = {
+  user: { select: { id: true, fullName: true, email: true } },
+  task: { select: { id: true, title: true } },
+  violation: { include: { rule: true } },
+  reviewedBy: { select: { id: true, fullName: true, email: true } },
+};
+
 export async function listEvidence(req, res, next) {
   try {
-    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const role = normalizeRole(req.user?.role);
     const where = { companyId: req.user.companyId };
 
     // Role-based scope enforcement
@@ -43,12 +51,7 @@ export async function listEvidence(req, res, next) {
 
     const evidenceList = await prisma.complianceEvidence.findMany({
       where,
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        task: { select: { id: true, title: true } },
-        violation: { include: { rule: true } },
-        reviewedBy: { select: { id: true, fullName: true, email: true } },
-      },
+      include: EVIDENCE_LIST_INCLUDE,
       orderBy: { submittedAt: 'desc' },
     });
 
@@ -67,12 +70,7 @@ export async function getEvidenceById(req, res, next) {
 
     const evidence = await prisma.complianceEvidence.findFirst({
       where: { id, companyId: req.user.companyId },
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        task: { select: { id: true, title: true } },
-        violation: { include: { rule: true } },
-        reviewedBy: { select: { id: true, fullName: true, email: true } },
-      },
+      include: EVIDENCE_LIST_INCLUDE,
     });
 
     if (!evidence) {
@@ -126,7 +124,7 @@ export async function createEvidence(req, res, next) {
         notes,
         status: 'Pending',
       },
-      include: { user: true, violation: true },
+      include: EVIDENCE_LIST_INCLUDE,
     });
 
     try {
@@ -165,7 +163,7 @@ export async function updateEvidence(req, res, next) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
-    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const role = normalizeRole(req.user?.role);
     const isMember = role === 'team_member' || role === 'member';
 
     if (isMember) {
@@ -324,7 +322,7 @@ export async function updateEvidence(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Evidence updated successfully',
-      data: updated,
+      data: await prisma.complianceEvidence.findUnique({ where: { id }, include: EVIDENCE_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);
@@ -343,7 +341,7 @@ export async function deleteEvidence(req, res, next) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
-    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const role = normalizeRole(req.user?.role);
     const isMember = role === 'team_member' || role === 'member';
 
     if (isMember) {

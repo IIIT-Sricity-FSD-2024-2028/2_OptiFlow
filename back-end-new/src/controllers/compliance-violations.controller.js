@@ -36,18 +36,15 @@ const ALLOWED_EVIDENCE_STATUSES = [
   "Rejected",
 ];
 
-export async function listComplianceViolations(req, res, next) {
-  try {
-    const violations = await prisma.complianceViolation.findMany({
-      where: { companyId: req.user.companyId },
-      include: {
-        rule: true,
-        reportedBy: { select: { id: true, fullName: true, email: true } },
-        resolvedBy: { select: { id: true, fullName: true, email: true } },
-        evidence: true,
-      },
-      orderBy: { detectedAt: "desc" },
-    });
+const VIOLATION_LIST_INCLUDE = {
+  rule: true,
+  reportedBy: { select: { id: true, fullName: true, email: true } },
+  resolvedBy: { select: { id: true, fullName: true, email: true } },
+  evidence: true,
+};
+
+/** Adds entityName to violations; shared by list, create and update. */
+async function hydrateViolations(violations) {
     // O(N) Single-pass ID extraction
     const projectIds = new Set();
     const taskIds = new Set();
@@ -70,7 +67,7 @@ export async function listComplianceViolations(req, res, next) {
     const taskMap = new Map(tasks.map(t => [t.id, t.title]));
     const userMap = new Map(users.map(u => [u.id, u.fullName || u.email]));
 
-    const hydratedViolations = violations.map((v) => {
+    return violations.map((v) => {
       if (v.entityType === "Project" && projectMap.has(v.entityId)) return { ...v, entityName: projectMap.get(v.entityId) };
       if (v.entityType === "Task" && taskMap.has(v.entityId)) return { ...v, entityName: taskMap.get(v.entityId) };
       if (v.entityType === "User" && userMap.has(v.entityId)) return { ...v, entityName: userMap.get(v.entityId) };
@@ -81,6 +78,37 @@ export async function listComplianceViolations(req, res, next) {
         entityName: `${v.entityType || "General"} #${(v.entityId || "N/A").substring(0, 8)}`,
       };
     });
+}
+
+/**
+ * Read scope (X2): a Team Member only sees violations they reported, or that concern a task
+ * assigned to them or evidence they submitted. Other roles keep company-wide access.
+ */
+async function buildViolationReadWhere(req) {
+  const where = { companyId: req.user.companyId };
+  const role = normalizeRole(req.user?.role);
+  if (role === 'team_member' || role === 'member') {
+    const myTasks = await prisma.task.findMany({
+      where: { companyId: req.user.companyId, assignedToId: req.user.id },
+      select: { id: true },
+    });
+    where.OR = [
+      { reportedById: req.user.id },
+      { entityType: 'Task', entityId: { in: myTasks.map((t) => t.id) } },
+      { evidence: { some: { userId: req.user.id } } },
+    ];
+  }
+  return where;
+}
+
+export async function listComplianceViolations(req, res, next) {
+  try {
+    const violations = await prisma.complianceViolation.findMany({
+      where: await buildViolationReadWhere(req),
+      include: VIOLATION_LIST_INCLUDE,
+      orderBy: { detectedAt: "desc" },
+    });
+    const hydratedViolations = await hydrateViolations(violations);
 
     res.status(200).json({
       success: true,
@@ -96,7 +124,7 @@ export async function getComplianceViolationById(req, res, next) {
     const { id } = req.params;
 
     const violation = await prisma.complianceViolation.findFirst({
-      where: { id, companyId: req.user.companyId },
+      where: { AND: [{ id }, await buildViolationReadWhere(req)] },
       include: {
         rule: true,
         reportedBy: { select: { id: true, fullName: true, email: true } },
@@ -156,7 +184,7 @@ export async function createComplianceViolation(req, res, next) {
         reportedById: req.user.id,
         dueDate: dueDate ? new Date(dueDate) : null,
       },
-      include: { rule: true },
+      include: VIOLATION_LIST_INCLUDE,
     });
 
     try {
@@ -178,7 +206,7 @@ export async function createComplianceViolation(req, res, next) {
     res.status(201).json({
       success: true,
       message: "Compliance violation created successfully",
-      data: newViolation,
+      data: (await hydrateViolations([newViolation]))[0],
     });
   } catch (err) {
     next(err);
@@ -222,7 +250,7 @@ export async function updateComplianceViolation(req, res, next) {
     const updated = await prisma.complianceViolation.update({
       where: { id },
       data: updateData,
-      include: { rule: true },
+      include: VIOLATION_LIST_INCLUDE,
     });
 
     try {
@@ -245,7 +273,7 @@ export async function updateComplianceViolation(req, res, next) {
     res.status(200).json({
       success: true,
       message: "Compliance violation updated successfully",
-      data: updated,
+      data: (await hydrateViolations([updated]))[0],
     });
   } catch (err) {
     next(err);

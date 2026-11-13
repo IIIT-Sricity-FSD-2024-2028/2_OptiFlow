@@ -37,13 +37,13 @@ router.post(
 router.patch(
   ['/tasks/:id', '/api/tasks/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'branch_manager', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, ROLES.TEAM_LEAD, 'project_manager', 'branch_manager', 'team_leader', 'team_lead'),
   updateTask
 );
 router.delete(
   ['/tasks/:id', '/api/tasks/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'branch_manager', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, ROLES.TEAM_LEAD, 'project_manager', 'branch_manager', 'team_leader', 'team_lead'),
   deleteTask
 );
 
@@ -54,19 +54,19 @@ router.get(['/subtasks/:id', '/api/subtasks/:id'], authenticate, getSubtaskById)
 router.post(
   ['/subtasks', '/api/subtasks'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'project_manager', 'team_leader', 'team_lead'),
   createSubtask
 );
 router.patch(
   ['/subtasks/:id', '/api/subtasks/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'superuser', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'project_manager', 'team_leader', 'team_lead', 'team_member'),
   updateSubtask
 );
 router.delete(
   ['/subtasks/:id', '/api/subtasks/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'project_manager', 'team_leader', 'team_lead'),
   deleteSubtask
 );
 
@@ -81,13 +81,13 @@ router.post(
 router.patch(
   ['/escalations/:id', '/api/escalations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'pm', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'project_manager', 'pm', 'team_leader', 'team_lead'),
   updateEscalation
 );
 router.delete(
   ['/escalations/:id', '/api/escalations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'superuser', 'project_manager', 'pm', 'team_leader', 'team_lead'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, 'project_manager', 'pm', 'team_leader', 'team_lead'),
   deleteEscalation
 );
 

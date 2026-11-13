@@ -8,16 +8,19 @@ import { validateRequired, validateEnum } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
+/** Include shared by list, create and update so every response has the same shape. */
+const CATEGORY_LIST_INCLUDE = {
+  owner: { select: { id: true, fullName: true, email: true } },
+  _count: { select: { rules: true } },
+};
+
 export async function listComplianceCategories(req, res, next) {
   try {
     const categories = await prisma.complianceCategory.findMany({
       where: {
         OR: [{ companyId: null }, { companyId: req.user.companyId }],
       },
-      include: {
-        owner: { select: { id: true, fullName: true, email: true } },
-        _count: { select: { rules: true } },
-      },
+      include: CATEGORY_LIST_INCLUDE,
       orderBy: { name: 'asc' },
     });
 
@@ -73,9 +76,7 @@ export async function createComplianceCategory(req, res, next) {
         description: description || null,
         ownerId: req.user.id,
       },
-      include: {
-        owner: { select: { id: true, fullName: true, email: true } },
-      },
+      include: CATEGORY_LIST_INCLUDE,
     });
 
     res.status(201).json({
@@ -108,6 +109,7 @@ export async function updateComplianceCategory(req, res, next) {
     const updated = await prisma.complianceCategory.update({
       where: { id },
       data: updateData,
+      include: CATEGORY_LIST_INCLUDE,
     });
 
     res.status(200).json({

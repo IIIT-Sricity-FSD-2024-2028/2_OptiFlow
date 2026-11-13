@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticatePlatformAdmin } from '../middleware/authenticatePlatformAdmin.js';
-import { authLimiter } from '../middleware/rateLimit.js';
+import { loginLimiters, changePasswordLimiter } from '../middleware/rateLimit.js';
 import {
   platformLogin,
   platformLogout,
@@ -34,12 +34,12 @@ import {
 
 const router = Router();
 
-router.post(['/platform/auth/login', '/api/platform/auth/login'], platformLogin);
+router.post(['/platform/auth/login', '/api/platform/auth/login'], ...loginLimiters, platformLogin);
 router.post(['/platform/auth/logout', '/api/platform/auth/logout'], platformLogout);
 router.post(
   ['/platform/auth/change-password', '/api/platform/auth/change-password'],
-  authLimiter,
   authenticatePlatformAdmin,
+  changePasswordLimiter,
   changePlatformPassword
 );
 router.get(['/platform/auth/me', '/api/platform/auth/me'], authenticatePlatformAdmin, platformAuthMe);

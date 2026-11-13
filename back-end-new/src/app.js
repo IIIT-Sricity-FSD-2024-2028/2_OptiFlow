@@ -3,7 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { env } from './config/env.js';
 import { corsMiddleware } from './middleware/cors.js';
-import { generalApiLimiter, authLimiter } from './middleware/rateLimit.js';
+import { generalApiLimiter } from './middleware/rateLimit.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import healthRoutes from './routes/health.routes.js';
 import mainRoutes from './routes/index.js';
@@ -41,8 +41,8 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // 4. Rate Limiting Middleware
-  // Stricter limiter on sensitive auth routes
-  app.use(['/auth/login', '/api/auth/login', '/auth/register-company', '/api/auth/register-company', '/platform/auth/login', '/api/platform/auth/login'], authLimiter);
+  // Brute-force limiters for sign-in, register, set-password and change-password are mounted on those
+  // routes (routes/auth.routes.js, routes/platform.routes.js); see middleware/rateLimit.js.
   // General API rate limiter across all api endpoints
   app.use(['/api', '/users', '/projects', '/tasks', '/notifications', '/compliance-rules', '/compliance-violations', '/compliance-categories', '/compliance-bindings', '/evidence', '/platform', '/executive', '/attachments', '/bootstrap', '/permissions', '/role-templates', '/role-assignments'], generalApiLimiter);
 

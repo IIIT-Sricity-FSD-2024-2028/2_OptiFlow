@@ -13,6 +13,7 @@ import {
 import { validateRequired, validateEnum } from "../utils/validation.js";
 import { ROLES, normalizeRole } from "../utils/roles.js";
 import { createComplianceAuditLog, AUDIT_ACTIONS } from "../utils/audit.js";
+import { assertWithinPlanLimit } from "../utils/planLimits.js";
 
 const ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -37,26 +38,31 @@ const ALLOWED_EVIDENCE_STATUSES = [
   "Rejected",
 ];
 
+/** Include shared by list, create and update so every response has the same shape. */
+function ruleListInclude(companyId) {
+  return {
+    category: true,
+    bindings: true,
+    violations: {
+      where: { companyId, status: "Open" },
+    },
+    _count: {
+      select: {
+        violations: true,
+        bindings: true,
+        complianceAuditLogs: true,
+      },
+    },
+  };
+}
+
 export async function listComplianceRules(req, res, next) {
   try {
     const rules = await prisma.complianceRule.findMany({
       where: {
         OR: [{ companyId: null }, { companyId: req.user.companyId }],
       },
-      include: {
-        category: true,
-        bindings: true,
-        violations: {
-          where: { companyId: req.user.companyId, status: "Open" },
-        },
-        _count: {
-          select: {
-            violations: true,
-            bindings: true,
-            complianceAuditLogs: true,
-          },
-        },
-      },
+      include: ruleListInclude(req.user.companyId),
       orderBy: { name: "asc" },
     });
 
@@ -177,6 +183,8 @@ export async function createComplianceRule(req, res, next) {
       }
     }
 
+    await assertWithinPlanLimit(req.user.companyId, "complianceRules");
+
     const newRule = await prisma.complianceRule.create({
       data: {
         companyId: req.user.companyId,
@@ -187,7 +195,7 @@ export async function createComplianceRule(req, res, next) {
         sourceTemplateId,
         isActive,
       },
-      include: { category: true, bindings: true },
+      include: ruleListInclude(req.user.companyId),
     });
 
     try {
@@ -266,7 +274,7 @@ export async function updateComplianceRule(req, res, next) {
     const updated = await prisma.complianceRule.update({
       where: { id },
       data: updateData,
-      include: { category: true, bindings: true },
+      include: ruleListInclude(req.user.companyId),
     });
 
     try {

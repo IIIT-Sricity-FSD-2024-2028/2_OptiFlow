@@ -16,6 +16,9 @@ import {
 } from "../utils/validation.js";
 import { parseListParams, formatListResponse } from "../utils/pagination.js";
 import { writeAuditLog } from "../utils/platformAudit.js";
+import { buildSetPasswordLink } from "../utils/passwordTokens.js";
+import { sendOwnerInviteEmail } from "../services/email.service.js";
+import { invalidateCompanyAuthCache } from "../utils/companyAuthCache.js";
 
 // ============================================================================
 // 1. PLATFORM ADMIN AUTHENTICATION
@@ -73,17 +76,24 @@ export async function platformLogin(req, res, next) {
       maxAge: 3600 * 1000,
     });
 
+    const adminMustChangePassword = admin.passwordChangedAt === null;
+
     res.status(200).json({
       success: true,
-      message: "Platform admin authenticated successfully",
+      message: adminMustChangePassword
+        ? "Platform admin authenticated successfully (Password change required)"
+        : "Platform admin authenticated successfully",
       data: {
         token,
+        mustChangePassword: adminMustChangePassword,
         adminUser: {
           id: admin.id,
           email: admin.email,
           fullName: admin.fullName,
           role: "platform_admin",
           isActive: admin.isActive,
+          mustChangePassword: adminMustChangePassword,
+          passwordChangedAt: admin.passwordChangedAt,
           createdAt: admin.createdAt,
         },
       },
@@ -558,20 +568,18 @@ export async function createPlatformCompany(req, res, next) {
       throw new ConflictError("A user with this email address already exists");
     }
 
-    const password = (
-      body.password ||
-      body.ownerPassword ||
-      "OptiFlow@2026!"
-    ).trim();
-    if (password.length < 8) {
-      throw new ValidationError("Password validation failed", [
-        {
-          field: "password",
-          message: "Password must be at least 8 characters long",
-        },
-      ]);
+    // The owner never receives a password from the platform admin. The account is created
+    // with a random, never-disclosed password and the owner chooses their own through a
+    // one-time set-password link (emailed, and shown once to the provisioning admin).
+    if (body.password || body.ownerPassword) {
+      throw new BadRequestError(
+        "Owner passwords cannot be set by platform admins. The owner sets one via the invite link.",
+      );
     }
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(
+      crypto.randomBytes(32).toString("hex"),
+      10,
+    );
 
     const periodEnd = new Date();
     periodEnd.setMonth(
@@ -598,6 +606,7 @@ export async function createPlatformCompany(req, res, next) {
           passwordHash,
           tokenVersion: 1,
           isActive: true,
+          passwordChangedAt: null, // Forces set/change on first login
         },
       });
 
@@ -705,18 +714,47 @@ export async function createPlatformCompany(req, res, next) {
           id: owner.id,
           fullName: owner.fullName,
           email: owner.email,
+          tokenVersion: owner.tokenVersion,
           role: "Executive (System Admin)",
         },
         subscription,
-        initialPassword: password,
         targetRoute: "/executive/dashboard",
       };
     });
 
+    invalidateCompanyAuthCache(result.company.id);
+
+    const invite = buildSetPasswordLink({
+      userId: result.owner.id,
+      companyId: result.company.id,
+      tokenVersion: result.owner.tokenVersion,
+    });
+
+    const inviteEmail = await sendOwnerInviteEmail({
+      to: result.owner.email,
+      ownerName: result.owner.fullName,
+      companyName: result.company.legalName,
+      setPasswordUrl: invite.url,
+      expiresIn: env.SET_PASSWORD_TOKEN_TTL,
+    });
+
+    const { tokenVersion: _tv, ...owner } = result.owner;
+
     res.status(201).json({
       success: true,
       message: "Company provisioned successfully",
-      data: result,
+      data: {
+        ...result,
+        owner,
+        // Shown once to the provisioning admin; never stored or audited.
+        setPasswordUrl: invite.url,
+        setPasswordExpiresAt: invite.expiresAt,
+        mustChangePassword: true,
+        inviteEmail: {
+          delivered: inviteEmail.delivered,
+          provider: inviteEmail.provider,
+        },
+      },
     });
   } catch (err) {
     next(err);

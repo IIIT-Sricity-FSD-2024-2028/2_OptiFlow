@@ -33,32 +33,32 @@ router.get(['/evidence/:id/file', '/api/evidence/:id/file'], authenticate, strea
 router.post(
   ['/evidence', '/api/evidence'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
   createEvidence
 );
 router.post(
   ['/evidence/:id/upload', '/api/evidence/:id/upload'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
   upload.single('file'),
   uploadEvidenceFile
 );
 router.patch(
   ['/evidence/:id', '/api/evidence/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
   updateEvidence
 );
 router.put(
   ['/evidence/:id', '/api/evidence/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
   updateEvidence
 );
 router.delete(
   ['/evidence/:id', '/api/evidence/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'superuser', 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
   deleteEvidence
 );
 

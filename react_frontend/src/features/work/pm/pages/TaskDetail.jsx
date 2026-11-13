@@ -1,3 +1,4 @@
+import { openEvidenceFile } from '../../../../shared/utils/evidenceFile';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
@@ -334,17 +335,24 @@ export default function PmTaskDetail() {
                 key: 'file',
                 header: 'Document',
                 render: (ev) => {
-                  const token = sessionStorage.getItem('authToken') || '';
                   const fileUrl = ev.fileUrl || ev.url || ev.attachments?.[0]?.filePath || ev.attachment?.filePath;
                   if (!fileUrl) return <span className="text-xs text-gray-400">No file</span>;
                   const isExternal = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
                   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
-                  const viewUrl = isExternal
-                    ? fileUrl
-                    : (ev.id ? `${apiBase}/api/evidence/${ev.id}/file?token=${encodeURIComponent(token)}` : `${apiBase}${fileUrl}`);
+                  if (!isExternal && ev.id) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => openEvidenceFile(ev.id)}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        View File ↗
+                      </button>
+                    );
+                  }
                   return (
                     <a
-                      href={viewUrl}
+                      href={isExternal ? fileUrl : `${apiBase}${fileUrl}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"

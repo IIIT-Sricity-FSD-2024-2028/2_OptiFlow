@@ -14,8 +14,6 @@ export const EXECUTIVE_ALLOWED_ROLES = [
   'company_owner',
   'system_admin',
   'branch_manager',
-  'superuser',
-  'executive',
 ];
 
 /**
