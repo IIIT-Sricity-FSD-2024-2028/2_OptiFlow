@@ -300,6 +300,25 @@ export default function TeamLeadTaskDetail() {
     finally { setSavingSt(false); }
   };
 
+  const handleToggleSubtask = async (subtaskId, markComplete) => {
+    if (!subtaskId) return;
+    const target = subtasks.find((st) => (st.id || st.subtaskId) === subtaskId);
+    const assignedId = target?.assignedToId || target?.assignedTo?.id;
+    if (assignedId && String(assignedId) !== String(user.id)) return; // only TL's own subtasks
+    const newStatus = markComplete ? 'Completed' : 'Active';
+    try {
+      await subtasksApi.update(subtaskId, { status: newStatus });
+      setSubtasks((prev) =>
+        prev.map((st) =>
+          (st.id || st.subtaskId) === subtaskId ? { ...st, status: newStatus } : st
+        )
+      );
+      showToast('success', markComplete ? 'Subtask marked complete.' : 'Subtask reopened.');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to update subtask.');
+    }
+  };
+
   if (loading) return (
     <div className="min-h-full flex items-center justify-center p-8">
       <div className="flex flex-col items-center gap-3"><Loader /><p className="text-sm text-gray-500">Loading task...</p></div>
@@ -368,7 +387,11 @@ export default function TeamLeadTaskDetail() {
             </div>
             <SubtaskList 
               subtasks={subtasks}
-              readOnly={true}
+              readOnly={false}
+              currentUserId={user.id}
+              onStatusToggle={(subId, markComplete) =>
+                handleToggleSubtask(subId, markComplete)
+              }
             />
 
             <EvidenceUploadCard

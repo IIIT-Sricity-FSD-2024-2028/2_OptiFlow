@@ -24,7 +24,7 @@ export const router = createBrowserRouter([
     element: <RoleRedirect />
   },
   {
-    element: <ProtectedRoute allowedRoles={['system_admin', 'company_owner', 'hr_manager', 'process_admin', 'compliance_officer', 'project_manager', 'team_leader', 'team_member']} />,
+    element: <ProtectedRoute allowedRoles={['system_admin', 'company_owner', 'branch_manager', 'hr_manager', 'process_admin', 'compliance_officer', 'project_manager', 'team_leader', 'team_member']} />,
     children: [
       {
         element: <DashboardLayout />,

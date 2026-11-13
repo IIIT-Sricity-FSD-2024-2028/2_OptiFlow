@@ -108,6 +108,7 @@ export default function ExecutiveDashboard() {
     totalProjects = 0,
     activeTasks = 0,
     completedTasks = 0,
+    totalTasks: serverTotalTasks = 0,
     openEscalations = 0,
     openViolations = 0,
     completionRate = 0,
@@ -122,6 +123,8 @@ export default function ExecutiveDashboard() {
     recentViolations = [],
     recentEscalations = [],
   } = metrics || {};
+
+  const totalTasks = serverTotalTasks || (completedTasks + activeTasks);
 
   const recentProjects = projects.slice(0, 5);
 
@@ -188,11 +191,11 @@ export default function ExecutiveDashboard() {
 
       {/* 3. Executive KPI Pulse Bar (4 Core Enterprise Dimensions) */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Dimension 1: Operational Velocity */}
+        {/* Metric 1: Task Completion Rate */}
         <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Delivery Velocity
+              Task Completion Rate
             </span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4" />
@@ -200,7 +203,7 @@ export default function ExecutiveDashboard() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-slate-900">{completionRate}%</span>
-            <span className="text-xs font-semibold text-emerald-600">Completion</span>
+            <span className="text-xs font-semibold text-emerald-600">Completed</span>
           </div>
           <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
             <div
@@ -209,15 +212,15 @@ export default function ExecutiveDashboard() {
             />
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
-            {completedTasks} completed · {activeTasks} in flight
+            {completedTasks} of {totalTasks} tasks completed · {activeTasks} in flight
           </p>
         </div>
 
-        {/* Dimension 2: Governance & Compliance Posture */}
+        {/* Metric 2: Compliance Health */}
         <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Compliance Posture
+              Compliance Health
             </span>
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
               openViolations > 0 ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'
@@ -228,7 +231,7 @@ export default function ExecutiveDashboard() {
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-slate-900">{complianceScore}%</span>
             <span className={`text-xs font-semibold ${openViolations > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-              {openViolations > 0 ? `${openViolations} Violations` : 'Compliant'}
+              {openViolations > 0 ? `${openViolations} Open Violations` : 'Policy Compliant'}
             </span>
           </div>
           <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
@@ -244,11 +247,11 @@ export default function ExecutiveDashboard() {
           </p>
         </div>
 
-        {/* Dimension 3: Active Portfolio Initiatives */}
+        {/* Metric 3: Active Projects */}
         <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Active Portfolio
+              Active Projects
             </span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <Briefcase className="w-4 h-4" />
@@ -265,15 +268,15 @@ export default function ExecutiveDashboard() {
             />
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
-            Assigned to {totalTeams} delivery squads
+            Operating across {totalTeams} delivery squads
           </p>
         </div>
 
-        {/* Dimension 4: Organization Footprint */}
+        {/* Metric 4: Total Workforce */}
         <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Workforce Capacity
+              Total Workforce
             </span>
             <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <Users className="w-4 h-4" />
@@ -281,7 +284,7 @@ export default function ExecutiveDashboard() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-slate-900">{totalUsers}</span>
-            <span className="text-xs font-semibold text-slate-500">Members</span>
+            <span className="text-xs font-semibold text-slate-500">Active Personnel</span>
           </div>
           <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
             <div
@@ -301,10 +304,10 @@ export default function ExecutiveDashboard() {
           <div>
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-blue-600" />
-              <span>Portfolio Initiatives & Delivery Status</span>
+              <span>Projects & Milestone Progression</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live projects, milestone progression, and squad assignments.
+              Live projects, execution progress, and delivery squad assignments.
             </p>
           </div>
           <Link
@@ -425,10 +428,10 @@ export default function ExecutiveDashboard() {
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-rose-600" />
-                <span>Compliance & Audit Alerts</span>
+                <span>Compliance & Policy Violations</span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Active policy violations detected by automated gates.
+                Open policy violations detected by automated compliance gates.
               </p>
             </div>
             <Link
@@ -453,9 +456,14 @@ export default function ExecutiveDashboard() {
           ) : (
             <div className="divide-y divide-slate-100 text-xs">
               {recentViolations.map((v) => (
-                <div key={v.id} className="py-3 flex items-start justify-between gap-3">
+                <div
+                  key={v.id}
+                  onClick={() => navigate(PATHS.COMPLIANCE.VIOLATIONS)}
+                  className="py-3 px-2.5 -mx-2.5 rounded-xl flex items-start justify-between gap-3 hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                  title="Click to inspect and manage violation in Compliance Center"
+                >
                   <div>
-                    <span className="font-semibold text-slate-900 block">
+                    <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors block">
                       {v.rule?.name || 'Regulatory Policy Breach'}
                     </span>
                     <span className="text-[11px] text-slate-500 mt-0.5 block">
@@ -463,15 +471,18 @@ export default function ExecutiveDashboard() {
                       {new Date(v.detectedAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider shrink-0 ${
-                      v.severity === 'Critical'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {v.severity || 'High'}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                        v.severity === 'Critical'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {v.severity || 'High'}
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -484,10 +495,10 @@ export default function ExecutiveDashboard() {
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-500" />
-                <span>Squad Blockers & Escalations</span>
+                <span>Operational Escalations & Blockers</span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Delivery bottlenecks flagged by Team Leads.
+                Delivery bottlenecks flagged by team leads and project managers.
               </p>
             </div>
             <Link
@@ -541,10 +552,10 @@ export default function ExecutiveDashboard() {
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Building2 className="w-4 h-4 text-indigo-600" />
-              <span>Regional Organization & Squad Footprint</span>
+              <span>Branch Locations & Squads</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Branch locations, squad capacity, and personnel assignment.
+              Regional offices, delivery teams, and personnel allocation.
             </p>
           </div>
           <Link
@@ -591,62 +602,6 @@ export default function ExecutiveDashboard() {
             })}
           </div>
         )}
-      </section>
-
-      {/* 7. Commercial Quota & System Capacity (Platform Domain) */}
-      <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-slate-700" />
-              <span>Commercial Plan Entitlements & Capacity</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Live consumption against subscribed plan quotas.
-            </p>
-          </div>
-          <span className="text-xs font-semibold text-slate-500">
-            Billing Status: <strong className="text-slate-800">{subscriptionStatus}</strong>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          {/* Quota 1: User Seats */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1.5">
-            <span className="text-slate-500 font-medium">User Seats</span>
-            <div className="flex items-baseline justify-between">
-              <span className="text-lg font-bold text-slate-900">{totalUsers}</span>
-              <span className="text-slate-400">Cap: {planQuotas?.maxUsers || '∞'}</span>
-            </div>
-          </div>
-
-          {/* Quota 2: Branches */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1.5">
-            <span className="text-slate-500 font-medium">Branch Units</span>
-            <div className="flex items-baseline justify-between">
-              <span className="text-lg font-bold text-slate-900">{totalBranches}</span>
-              <span className="text-slate-400">Cap: {planQuotas?.maxBranches || '∞'}</span>
-            </div>
-          </div>
-
-          {/* Quota 3: Process Templates */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1.5">
-            <span className="text-slate-500 font-medium">Process Templates</span>
-            <div className="flex items-baseline justify-between">
-              <span className="text-lg font-bold text-slate-900">{totalProcessTemplates}</span>
-              <span className="text-slate-400">Cap: {planQuotas?.maxActiveProcessTemplates || '∞'}</span>
-            </div>
-          </div>
-
-          {/* Quota 4: Audit Retention */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1.5">
-            <span className="text-slate-500 font-medium">Audit Trail Retention</span>
-            <div className="flex items-baseline justify-between">
-              <span className="text-lg font-bold text-slate-900">{planQuotas?.auditLogRetentionDays || 90}</span>
-              <span className="text-slate-400">Days</span>
-            </div>
-          </div>
-        </div>
       </section>
     </div>
   );

@@ -161,9 +161,10 @@ export default function HrRoleAssignments() {
     return { total, companyScoped, branchScoped, elevated };
   }, [assignments]);
 
-  // 2. ASSIGN ROLE HANDLER
+  // 2. ASSIGN ROLE HANDLER (Debounced against double-click clutter NORM-04)
   const handleAssignRole = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedUserId) {
       setModalError("Please select an employee.");
       return;

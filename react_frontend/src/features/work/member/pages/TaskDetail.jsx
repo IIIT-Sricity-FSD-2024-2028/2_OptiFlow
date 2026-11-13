@@ -31,6 +31,9 @@ import {
   Send,
   ShieldAlert,
   Check,
+  AlertOctagon,
+  UserCheck,
+  Mail,
 } from 'lucide-react';
 
 export default function MemberTaskDetail() {
@@ -45,6 +48,7 @@ export default function MemberTaskDetail() {
   const [manager, setManager] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
+  const [taskViolations, setTaskViolations] = useState([]);
   // Track which subtasks have been submitted this session so Submit btn hides after send
   const [submittedSubtaskIds, setSubmittedSubtaskIds] = useState(new Set());
   const [isEvidenceRequired, setIsEvidenceRequired] = useState(false);
@@ -56,6 +60,20 @@ export default function MemberTaskDetail() {
   const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
 
+  const getSlaTimeRemaining = (dueDate) => {
+    if (!dueDate) return null;
+    const diff = new Date(dueDate).getTime() - Date.now();
+    if (diff <= 0) return { expired: true, text: 'Expired' };
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      const remHours = hours % 24;
+      return { expired: false, text: `${days}d ${remHours}h remaining` };
+    }
+    return { expired: false, text: `${hours}h ${minutes}m remaining` };
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -63,12 +81,13 @@ export default function MemberTaskDetail() {
       if (!taskId) return;
       setLoading(true);
       try {
-        const [taskRes, usersRes, projectsRes, evRes, bindingsRes] = await Promise.allSettled([
+        const [taskRes, usersRes, projectsRes, evRes, bindingsRes, violationsRes] = await Promise.allSettled([
           tasksApi.get(taskId),
           usersApi.list(),
           projectsApi.list(),
           evidenceApi.list(),
           complianceApi.getBindings(),
+          complianceApi.getViolations(),
         ]);
 
         if (!isMounted) return;
@@ -85,9 +104,15 @@ export default function MemberTaskDetail() {
         const allProjects = projectsRes.status === 'fulfilled' && projectsRes.value ? (Array.isArray(projectsRes.value) ? projectsRes.value : projectsRes.value.data || []) : [];
         const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
         const allBindings = bindingsRes.status === 'fulfilled' && bindingsRes.value ? (Array.isArray(bindingsRes.value) ? bindingsRes.value : bindingsRes.value.data || []) : [];
+        const allViolations = violationsRes.status === 'fulfilled' && violationsRes.value ? (Array.isArray(violationsRes.value) ? violationsRes.value : violationsRes.value.data || []) : [];
 
         setSubtasks(Array.isArray(rawTask.subtasks) ? rawTask.subtasks : []);
         setEvidenceList(allEv.filter((e) => String(e.taskId || e.task_id || e.task?.id) === String(taskId)));
+
+        const activeViolations = allViolations.filter(
+          (v) => String(v.entityId) === String(taskId) && ['Open', 'Under_Review'].includes(v.status)
+        );
+        setTaskViolations(activeViolations);
 
         const projId = rawTask.projectId || rawTask.project?.id;
         const projectObj = allProjects.find((p) => String(p.id) === String(projId)) || rawTask.project || null;
@@ -111,8 +136,8 @@ export default function MemberTaskDetail() {
           return false;
         });
 
-        setIsEvidenceRequired(Boolean(matchingRule));
-        setComplianceRule(matchingRule?.rule || null);
+        setIsEvidenceRequired(Boolean(matchingRule || activeViolations.length > 0));
+        setComplianceRule(matchingRule?.rule || activeViolations[0]?.rule || null);
       } catch (err) {
         console.error('Error loading task details:', err);
         if (isMounted) toast.error('Failed to load task');
@@ -130,15 +155,12 @@ export default function MemberTaskDetail() {
   const handleSubtaskToggle = async (subId, completed) => {
     try {
       const nextStatus = completed ? 'Completed' : 'Active';
-      try {
-        await subtasksApi.update(subId, { status: nextStatus });
-      } catch (_) {}
-
+      await subtasksApi.update(subId, { status: nextStatus });
       setSubtasks((prev) =>
         prev.map((st) => ((st.id || st.subtaskId) === subId ? { ...st, status: nextStatus } : st))
       );
     } catch (err) {
-      toast.error('Could not update subtask');
+      toast.error('Could not update subtask. Please try again.');
     }
   };
 
@@ -196,6 +218,15 @@ export default function MemberTaskDetail() {
   const dueDate = task.dueDate || task.deadline;
   const isOverdue = dueDate && new Date(dueDate) < new Date() && !isCompleted;
   const managerName = manager?.fullName || manager?.name || 'Team Lead';
+
+  const isLockedOut = taskViolations.some((v) => {
+    if (v.breachedAt) return true;
+    if (v.dueDate && new Date(v.dueDate) < new Date() && v.status === 'Open') return true;
+    return false;
+  });
+
+  const primaryViolation = taskViolations.find((v) => v.breachedAt) || taskViolations[0];
+  const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && e.rejectionReason);
 
   const stages = [
     { label: 'Assigned', done: true },
@@ -275,7 +306,15 @@ export default function MemberTaskDetail() {
 
               <PriorityBadge priority={task.priority} />
               <StatusBadge status={task.status} isOverdue={isOverdue} />
-              {isEvidenceRequired ? (
+              {isLockedOut ? (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse"
+                  title="Compliance SLA expired. Remediation lockout active."
+                >
+                  <AlertOctagon className="w-3.5 h-3.5 text-rose-600" />
+                  Governance Lockout
+                </span>
+              ) : isEvidenceRequired ? (
                 <span
                   className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
                   title={`Mandated by compliance rule: ${complianceRule?.name || 'Evidence Policy'}`}
@@ -324,6 +363,17 @@ export default function MemberTaskDetail() {
                   >
                     <Clock className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                     Under Review by Lead
+                  </Button>
+                ) : isLockedOut ? (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled
+                    className="text-xs font-semibold opacity-90 cursor-not-allowed bg-rose-600 hover:bg-rose-600 flex items-center gap-1.5"
+                    title="Remediation deadline expired. Task completion locked by Compliance Governance."
+                  >
+                    <AlertOctagon className="w-3.5 h-3.5" />
+                    Locked by Compliance
                   </Button>
                 ) : (
                   <Button
@@ -387,6 +437,167 @@ export default function MemberTaskDetail() {
       {/* Main Content Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
+          {/* Compliance Governance & Remediation Card */}
+          {(primaryViolation || isEvidenceRequired || latestRejectedEvidence) && (
+            <div
+              className={`rounded-2xl p-6 border shadow-xs transition-all ${
+                isLockedOut
+                  ? 'bg-rose-50/90 border-rose-300 ring-1 ring-rose-200'
+                  : primaryViolation
+                  ? 'bg-amber-50/80 border-amber-300'
+                  : 'bg-blue-50/70 border-blue-200'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                      isLockedOut
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : primaryViolation
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-blue-600 text-white'
+                    }`}
+                  >
+                    {isLockedOut ? <AlertOctagon size={24} /> : <ShieldAlert size={24} />}
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          isLockedOut
+                            ? 'bg-rose-200 text-rose-900'
+                            : primaryViolation
+                            ? 'bg-amber-200 text-amber-900'
+                            : 'bg-blue-200 text-blue-900'
+                        }`}
+                      >
+                        {isLockedOut
+                          ? '🚨 Governance Lockout Engaged'
+                          : primaryViolation
+                          ? '⚠️ Remediation SLA Active'
+                          : '🛡️ Evidence Policy Active'}
+                      </span>
+                      {primaryViolation?.severity && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/80 border border-slate-200 text-slate-700">
+                          Severity: {primaryViolation.severity}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900">
+                      {primaryViolation?.rule?.name || complianceRule?.name || 'Deliverable Compliance Policy'}
+                    </h3>
+                    <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
+                      {primaryViolation?.description ||
+                        complianceRule?.description ||
+                        'This deliverable requires formal regulatory documentation and audit evidence prior to completion.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex sm:flex-col items-end gap-2 shrink-0">
+                  <Button
+                    variant={isLockedOut ? 'danger' : 'primary'}
+                    size="sm"
+                    onClick={() => setIsEvidenceModalOpen(true)}
+                    className="text-xs font-semibold shadow-xs flex items-center gap-1.5"
+                  >
+                    <Send size={13} />
+                    <span>Upload Remediation Evidence</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Rejection Alert Banner if officer rejected previous upload */}
+              {latestRejectedEvidence && (
+                <div className="mt-4 p-3.5 bg-rose-100 border border-rose-300 rounded-xl text-xs text-rose-900 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Prior Submission Rejected by Compliance Officer: </span>
+                    <span>"{latestRejectedEvidence.rejectionReason}"</span>
+                    <p className="mt-1 text-[11px] text-rose-700">
+                      Please resolve the feedback above and submit revised documentation.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata Grid: Officer Contact, SLA Countdown, Policy Scope */}
+              <div className="mt-4 pt-4 border-t border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500 font-medium block">Assigned Compliance Officer:</span>
+                  <div className="mt-0.5 font-bold text-slate-900 flex items-center gap-1">
+                    <UserCheck size={13} className="text-blue-600" />
+                    <span>
+                      {primaryViolation?.assignedOfficer?.fullName ||
+                        primaryViolation?.rule?.assignedOfficer?.fullName ||
+                        'Compliance Governance Office'}
+                    </span>
+                  </div>
+                  <a
+                    href={`mailto:${
+                      primaryViolation?.assignedOfficer?.email ||
+                      primaryViolation?.rule?.assignedOfficer?.email ||
+                      'compliance@optiflow.io'
+                    }`}
+                    className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5"
+                  >
+                    <Mail size={11} />
+                    <span>
+                      {primaryViolation?.assignedOfficer?.email ||
+                        primaryViolation?.rule?.assignedOfficer?.email ||
+                        'compliance@optiflow.io'}
+                    </span>
+                  </a>
+                </div>
+
+                <div>
+                  <span className="text-slate-500 font-medium block">Remediation SLA Deadline:</span>
+                  {primaryViolation?.dueDate ? (
+                    <div className="mt-0.5">
+                      <span
+                        className={`font-bold flex items-center gap-1 ${
+                          isLockedOut ? 'text-rose-700' : 'text-slate-900'
+                        }`}
+                      >
+                        <Clock size={13} className={isLockedOut ? 'text-rose-600' : 'text-amber-600'} />
+                        <span>{new Date(primaryViolation.dueDate).toLocaleString()}</span>
+                      </span>
+                      <span
+                        className={`text-[11px] font-semibold ${
+                          isLockedOut ? 'text-rose-600' : 'text-amber-700'
+                        }`}
+                      >
+                        {isLockedOut
+                          ? '⛔ Deadline Breached (Lockout active)'
+                          : getSlaTimeRemaining(primaryViolation.dueDate)?.text || 'Pending evaluation'}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-semibold text-slate-700 mt-0.5 block">Standard SLA Window</span>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-slate-500 font-medium block">Resolution Actions:</span>
+                  <p className="mt-0.5 text-[11px] text-slate-600 leading-normal">
+                    {isLockedOut ? (
+                      <>
+                        1. Upload remediation evidence.<br />
+                        2. Contact officer for Fast-Track Waiver.<br />
+                        3. Request PM deadline extension.
+                      </>
+                    ) : (
+                      <>
+                        Submit evidence before deadline to maintain continuous task workflow.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Deliverable Scope */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -447,6 +658,38 @@ export default function MemberTaskDetail() {
               </div>
             </div>
           </div>
+
+          {/* Compliance Officer POC Sidebar Card */}
+          {(primaryViolation || isEvidenceRequired) && (
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-3 text-xs">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                <ShieldAlert size={15} className="text-blue-600" />
+                <span>Compliance Governance</span>
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between py-1 border-b border-slate-50">
+                  <span className="text-slate-400">Policy Domain</span>
+                  <span className="font-semibold text-slate-800">
+                    {primaryViolation?.rule?.category?.name || 'Regulatory Standard'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50">
+                  <span className="text-slate-400">Officer Contact</span>
+                  <span className="font-semibold text-slate-800">
+                    {primaryViolation?.assignedOfficer?.fullName ||
+                      primaryViolation?.rule?.assignedOfficer?.fullName ||
+                      'Compliance Lead'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-50">
+                  <span className="text-slate-400">Governance State</span>
+                  <span className={`font-bold ${isLockedOut ? 'text-rose-600' : 'text-amber-600'}`}>
+                    {isLockedOut ? 'Locked Out' : 'Remediating'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -489,7 +732,13 @@ export default function MemberTaskDetail() {
         isOpen={isEvidenceModalOpen}
         onClose={() => setIsEvidenceModalOpen(false)}
         taskId={taskId}
-        onSuccess={(newEv) => setEvidenceList((prev) => [newEv, ...prev])}
+        onSuccess={(newEv) => {
+          if (newEv) setEvidenceList((prev) => [newEv, ...prev]);
+          complianceApi.getViolations().then((res) => {
+            const list = Array.isArray(res) ? res : res?.data || [];
+            setTaskViolations(list.filter((v) => String(v.entityId) === String(taskId) && ['Open', 'Under_Review'].includes(v.status)));
+          }).catch(() => {});
+        }}
       />
     </div>
   );

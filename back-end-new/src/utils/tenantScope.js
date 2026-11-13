@@ -1,47 +1,27 @@
 import { ForbiddenError } from './errors.js';
-import { normalizeRole, toCanonicalRole, ROLES } from './roles.js';
+import { normalizeRole } from './roles.js';
 
 /**
  * Checks if the request user is a Company Owner / CEO (global company access)
  */
 export function isCompanyOwner(user) {
-  if (!user) return false;
-  const canonical = toCanonicalRole(user.roleLabel || user.role);
-  if (canonical === ROLES.COMPANY_OWNER) return true;
-
-  const label = (user.roleLabel || '').toLowerCase();
-  const slug = (user.role || '').toLowerCase();
-
-  return (
-    label.includes('owner') ||
-    label.includes('ceo') ||
-    label.includes('cto') ||
-    label.includes('coo') ||
-    slug === 'superuser' ||
-    slug === 'company_owner'
-  );
+  // Decided by the resolved system role slug only, never by label text (D-S1).
+  return user?.role === 'company_owner';
 }
 
 /**
  * Checks if the request user is a Branch Manager (branch-scoped access)
  */
 export function isBranchManager(user) {
-  if (!user) return false;
-  const canonical = toCanonicalRole(user.roleLabel || user.role);
-  if (canonical === ROLES.BRANCH_MANAGER) return true;
-
-  const label = (user.roleLabel || '').toLowerCase();
-  const slug = (user.role || '').toLowerCase();
-
-  return label.includes('branch manager') || slug === 'branch_manager';
+  return user?.role === 'branch_manager';
 }
 
 /**
  * Resolves the effective branch filter for scoped queries
  */
 export function resolveEffectiveBranchId({ user, branchId }) {
-  if (isBranchManager(user) && user?.scopeId) {
-    return user.scopeId;
+  if (isBranchManager(user)) {
+    return user?.scopeId || '__unassigned_branch_sentinel__';
   }
   if (isCompanyOwner(user) && branchId) {
     return branchId;
@@ -54,7 +34,7 @@ export function resolveEffectiveBranchId({ user, branchId }) {
  */
 export function buildProjectListWhere({ companyId, branchId, user, assignedProjectIds = [] }) {
   const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
-  const role = normalizeRole(user?.role || user?.roleLabel);
+  const role = normalizeRole(user?.role);
 
   const baseWhere = {
     deletedAt: null,
@@ -144,7 +124,7 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
     };
   }
 
-  const role = normalizeRole(user?.role || user?.roleLabel);
+  const role = normalizeRole(user?.role);
 
   // Project Managers only see parent tasks they created.
   if (role === 'project_manager' || role === 'pm') {
@@ -156,11 +136,14 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
     return { ...where, assignedToId: user.id };
   }
 
-  // Team Members can see parent-task context only when they have an assigned subtask.
+  // Team Members see parent-task context when directly assigned or when they have an assigned subtask.
   if ((role === 'team_member' || role === 'member') && user?.id) {
     return {
       ...where,
-      subtasks: { some: { assignedToId: user.id, deletedAt: null } },
+      OR: [
+        { assignedToId: user.id },
+        { subtasks: { some: { assignedToId: user.id, deletedAt: null } } },
+      ],
     };
   }
 
@@ -176,7 +159,7 @@ export function buildSubtaskListWhere({ companyId, branchId, user }) {
     ...(companyId ? { companyId } : {}),
   };
   const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
-  const role = normalizeRole(user?.role || user?.roleLabel);
+  const role = normalizeRole(user?.role);
 
   if (effectiveBranchId) {
     return {
@@ -257,8 +240,8 @@ export async function buildBranchViolationWhere(prisma, companyId, branchId) {
  * Resolves branch filter for executive metrics
  */
 export function resolveMetricsBranchId(user, queryBranchId) {
-  if (isBranchManager(user) && user?.scopeId) {
-    return user.scopeId;
+  if (isBranchManager(user)) {
+    return user?.scopeId || '__unassigned_branch_sentinel__';
   }
   if (isCompanyOwner(user) && queryBranchId) {
     return queryBranchId;
@@ -267,10 +250,14 @@ export function resolveMetricsBranchId(user, queryBranchId) {
 }
 
 /**
- * Ensures a Branch Manager can only act within their assigned branch scope
+ * Ensures a Branch Manager can only act within their assigned branch scope.
+ * Fails closed if the Branch Manager has no valid scope assigned (RAT-06/Security).
  */
 export function assertBranchManagerScope(user, branchId, action = 'access this resource') {
-  if (!isBranchManager(user) || !user?.scopeId) return;
+  if (!isBranchManager(user)) return;
+  if (!user?.scopeId) {
+    throw new ForbiddenError(`Branch Manager is not assigned to a valid branch scope.`);
+  }
   if (!branchId || branchId !== user.scopeId) {
     throw new ForbiddenError(`Branch Managers can only ${action} within their assigned branch.`);
   }

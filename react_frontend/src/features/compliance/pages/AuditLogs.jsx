@@ -5,6 +5,7 @@ import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { Loader2, Eye, FileText } from "lucide-react";
+import { formatAuditTimestamp } from "../../../shared/utils/formatDate";
 import { AuditLogDetailModal } from "../components/AuditLogDetailModal";
 import { GenerateReportModal } from "../components/GenerateReportModal";
 
@@ -37,14 +38,14 @@ export default function ComplianceAuditLogs() {
       header: "TIMESTAMP", 
       accessor: "performedAt",
       render: (row) => {
-        const d = new Date(row.performedAt);
+        const ts = formatAuditTimestamp(row.performedAt || row.createdAt);
         return (
           <div className="flex flex-col text-sm">
-            <span className="font-semibold text-slate-800">
-              {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            <span className={`font-semibold ${ts.isSameDay ? 'text-blue-700' : 'text-slate-800'}`}>
+              {ts.primary}
             </span>
-            <span className="text-xs text-slate-500">
-              {d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+            <span className="text-xs text-slate-500 font-mono">
+              {ts.secondary}
             </span>
           </div>
         );

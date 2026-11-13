@@ -14,8 +14,6 @@ export const EXECUTIVE_ALLOWED_ROLES = [
   'company_owner',
   'system_admin',
   'branch_manager',
-  'superuser',
-  'executive',
 ];
 
 /**
@@ -86,22 +84,49 @@ export async function getExecutiveMetrics(req, res, next) {
       totalComplianceRules,
       totalProcessTemplates,
     ] = await Promise.all([
-      prisma.user.count({ where: { companyId, isActive: true } }),
+      prisma.user.count({
+        where: effectiveBranchId
+          ? {
+              companyId,
+              isActive: true,
+              teamMembers: { some: { team: { branchId: effectiveBranchId } } },
+            }
+          : { companyId, isActive: true },
+      }),
       prisma.team.count({ where: teamFilter }),
       effectiveBranchId ? 1 : prisma.branch.count({ where: { companyId } }),
       prisma.project.count({ where: { ...projectFilter, status: 'Active' } }),
       prisma.project.count({ where: projectFilter }),
       prisma.task.count({ where: { ...taskBranchFilter, status: { in: ['Active', 'In_Review', 'Draft'] } } }),
       prisma.task.count({ where: { ...taskBranchFilter, status: 'Completed' } }),
-      prisma.escalation.count({ where: { companyId, status: 'Open' } }),
-      prisma.complianceViolation.count({ where: { companyId, status: 'Open' } }),
+      prisma.escalation.count({
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              OR: [
+                { project: { team: { branchId: effectiveBranchId } } },
+                { task: { project: { team: { branchId: effectiveBranchId } } } },
+              ],
+            }
+          : { companyId, status: 'Open' },
+      }),
+      prisma.complianceViolation.count({
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              task: { project: { team: { branchId: effectiveBranchId } } },
+            }
+          : { companyId, status: 'Open' },
+      }),
       prisma.subscription.findFirst({
-        where: { companyId, status: { in: ['Active', 'Trialing'] } },
+        where: { companyId, status: { in: ['Active', 'Trialing', 'PastDue'] } },
         include: { plan: true },
         orderBy: { currentPeriodEnd: 'desc' },
       }),
       prisma.branch.findMany({
-        where: { companyId },
+        where: effectiveBranchId ? { id: effectiveBranchId, companyId } : { companyId },
         select: {
           id: true,
           name: true,
@@ -119,7 +144,13 @@ export async function getExecutiveMetrics(req, res, next) {
         orderBy: { name: 'asc' },
       }),
       prisma.complianceViolation.findMany({
-        where: { companyId, status: 'Open' },
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              task: { project: { team: { branchId: effectiveBranchId } } },
+            }
+          : { companyId, status: 'Open' },
         select: {
           id: true,
           severity: true,
@@ -130,7 +161,16 @@ export async function getExecutiveMetrics(req, res, next) {
         orderBy: { detectedAt: 'desc' },
       }),
       prisma.escalation.findMany({
-        where: { companyId, status: 'Open' },
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              OR: [
+                { project: { team: { branchId: effectiveBranchId } } },
+                { task: { project: { team: { branchId: effectiveBranchId } } } },
+              ],
+            }
+          : { companyId, status: 'Open' },
         select: {
           id: true,
           title: true,
@@ -193,6 +233,7 @@ export async function getExecutiveMetrics(req, res, next) {
         totalProjects,
         activeTasks,
         completedTasks,
+        totalTasks: completedTasks + activeTasks,
         openEscalations,
         openViolations,
         completionRate,
@@ -202,12 +243,27 @@ export async function getExecutiveMetrics(req, res, next) {
         planName: subscription?.plan?.name || (subscription?.status === 'Trialing' ? '14-Day Free Trial' : 'Free Tier'),
         subscriptionStatus: subscription?.status || 'Active',
         trialEndsAt: subscription?.status === 'Trialing' ? subscription.currentPeriodEnd : null,
+        currentPeriodStart: subscription?.currentPeriodStart || null,
+        currentPeriodEnd: subscription?.currentPeriodEnd || null,
+        billingCycle: subscription?.billingCycle || 'Monthly',
+        subscription: subscription ? {
+          id: subscription.id,
+          planId: subscription.planId,
+          planName: subscription.plan?.name || 'Standard Plan',
+          status: subscription.status,
+          billingCycle: subscription.billingCycle,
+          currentPeriodStart: subscription.currentPeriodStart,
+          currentPeriodEnd: subscription.currentPeriodEnd,
+          trialEndsAt: subscription.status === 'Trialing' ? subscription.currentPeriodEnd : null,
+          plan: subscription.plan,
+        } : null,
         planQuotas: {
           maxUsers: subscription?.plan?.maxUsers ?? null,
           maxBranches: subscription?.plan?.maxBranches ?? null,
           maxActiveProcessTemplates: subscription?.plan?.maxActiveProcessTemplates ?? null,
           maxComplianceRules: subscription?.plan?.maxComplianceRules ?? null,
           auditLogRetentionDays: subscription?.plan?.auditLogRetentionDays ?? 90,
+          allowsIntegrations: subscription?.plan?.allowsIntegrations ?? true,
         },
         branchDistribution,
         recentViolations,

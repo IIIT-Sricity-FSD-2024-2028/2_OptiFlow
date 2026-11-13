@@ -9,12 +9,13 @@ export function ResolveViolationModal({
   violation,
   onResolved,
 }) {
+  const [waiverType, setWaiverType] = useState("PROVISIONAL_EXEMPTION");
   const [resolutionNotes, setResolutionNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   const handleSubmit = async () => {
-    if (!violation || resolutionNotes.trim().length < 5) return;
+    if (!violation || resolutionNotes.trim().length < 10) return;
     
     setIsSubmitting(true);
     setError(null);
@@ -23,7 +24,8 @@ export function ResolveViolationModal({
         method: 'PATCH',
         body: JSON.stringify({
           status: 'Resolved',
-          resolutionRemarks: resolutionNotes
+          waiverType,
+          resolutionRemarks: resolutionNotes.trim()
         })
       });
       
@@ -31,7 +33,7 @@ export function ResolveViolationModal({
       onResolved();
       onClose();
     } catch (err) {
-      setError("Failed to resolve: " + err.message);
+      setError("Failed to grant waiver: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -45,16 +47,16 @@ export function ResolveViolationModal({
         setError(null);
         onClose();
       }}
-      title="Manual Override: Force Resolve"
+      title="Compliance Fast-Track Waiver & Exception"
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
           <Button 
             variant="warning" 
             onClick={handleSubmit}
-            disabled={isSubmitting || resolutionNotes.trim().length < 5}
+            disabled={isSubmitting || resolutionNotes.trim().length < 10}
           >
-            {isSubmitting ? 'Resolving...' : 'Force Resolve'}
+            {isSubmitting ? 'Applying Waiver...' : 'Grant Waiver & Unblock Task'}
           </Button>
         </>
       }
@@ -69,19 +71,37 @@ export function ResolveViolationModal({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <div>
-          <strong className="block font-semibold mb-1">WARNING: Bypassing standard workflow</strong>
-          You are manually bypassing the evidence review workflow. Please provide explicit justification below. This action and your notes will be permanently logged for audit purposes.
+          <strong className="block font-semibold mb-1">Fast-Track Compliance Exemption</strong>
+          Granting a waiver lifts any active governance lockouts and resolves the violation. Your identity, waiver classification, and justification will be permanently stamped in the audit trail and notified to the Project Manager.
         </div>
       </div>
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-semibold text-slate-700">Resolution Notes *</label>
-        <textarea 
-          value={resolutionNotes}
-          onChange={(e) => setResolutionNotes(e.target.value)}
-          className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-shadow"
-          rows={4}
-          placeholder="Describe the specific reason or actions taken to clear this violation..."
-        />
+
+      <div className="space-y-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-semibold text-slate-700">Waiver Classification *</label>
+          <select
+            value={waiverType}
+            onChange={(e) => setWaiverType(e.target.value)}
+            className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+          >
+            <option value="PROVISIONAL_EXEMPTION">Provisional Exemption (Temporary unblock until next sprint / audit)</option>
+            <option value="PERMANENT_WAIVER">Permanent Policy Waiver (Scope-specific regulatory exemption)</option>
+            <option value="FALSE_POSITIVE">False Positive (Deliverable verified through alternative evidence)</option>
+            <option value="ADMIN_OVERRIDE">Executive Directive (Emergency business continuity override)</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-semibold text-slate-700">Regulatory Justification & Audit Notes *</label>
+          <textarea 
+            value={resolutionNotes}
+            onChange={(e) => setResolutionNotes(e.target.value)}
+            className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-shadow"
+            rows={4}
+            placeholder="Explain why this waiver is legally/operationally justified (e.g. Third-party pen test scheduled for Oct 30; CTO signed ticket SEC-104)..."
+          />
+          <span className="text-xs text-slate-400">Minimum 10 characters required.</span>
+        </div>
       </div>
     </Modal>
   );

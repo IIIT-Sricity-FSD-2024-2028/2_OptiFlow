@@ -30,6 +30,7 @@ export const PATHS = {
     PROJECT_DETAIL: "/executive/projects/:id",
     EMPLOYEES: "/executive/employees",
     AUDIT_LOGS: "/executive/audit-logs",
+    BILLING: "/executive/billing",
   },
   COMPLIANCE: {
     DASHBOARD: "/compliance/dashboard",
@@ -50,6 +51,7 @@ export const PATHS = {
     ROLE_ASSIGNMENTS: "/hr/role-assignments",
     BRANCHES: "/hr/branches",
     TEAMS: "/hr/teams",
+    AUDIT_LOGS: "/hr/audit-logs",
   },
   PROCESS_ADMIN: {
     DASHBOARD: "/process-admin/dashboard",
@@ -57,6 +59,7 @@ export const PATHS = {
     TEMPLATE_DETAIL: "/process-admin/templates/:id",
     INSTANCES: "/process-admin/instances",
     INSTANCE_DETAIL: "/process-admin/instances/:id",
+    AUDIT_LOGS: "/process-admin/audit-logs",
   },
   PM: {
     DASHBOARD: "/pm/dashboard",

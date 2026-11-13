@@ -22,6 +22,7 @@ export const RoleRedirect = () => {
       
     case ROLES.SYSTEM_ADMIN:
     case ROLES.COMPANY_OWNER:
+    case ROLES.BRANCH_MANAGER:
       return <Navigate to={PATHS.EXECUTIVE.DASHBOARD} replace />;
       
     case ROLES.COMPLIANCE_OFFICER:

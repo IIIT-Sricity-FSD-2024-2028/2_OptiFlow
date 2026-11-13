@@ -19,29 +19,29 @@ router.get(['/compliance-rules/:id', '/api/compliance-rules/:id'], authenticate,
 router.post(
   ['/compliance-rules', '/api/compliance-rules'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   createComplianceRule
 );
 router.patch(
   ['/compliance-rules/:id', '/api/compliance-rules/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   updateComplianceRule
 );
 router.put(
   ['/compliance-rules/:id', '/api/compliance-rules/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   updateComplianceRule
 );
 router.delete(
   ['/compliance-rules/:id', '/api/compliance-rules/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   deleteComplianceRule
 );
 
 
 
-router.post(["/compliance-rules/run-engine", "/api/compliance-rules/run-engine"], authenticate, requireRoles(ROLES.COMPANY_OWNER, ROLES.COMPLIANCE_OFFICER, "superuser", "compliance_officer"), triggerComplianceEngine);
+router.post(["/compliance-rules/run-engine", "/api/compliance-rules/run-engine"], authenticate, requireRoles(ROLES.COMPANY_OWNER, ROLES.COMPLIANCE_OFFICER), triggerComplianceEngine);
 export default router;

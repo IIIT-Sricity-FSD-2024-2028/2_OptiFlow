@@ -1,3 +1,4 @@
+import { openEvidenceFile } from '../../../../shared/utils/evidenceFile';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
@@ -181,14 +182,7 @@ export default function PmTaskDetail() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Link
-              to={PATHS.COMPLIANCE.EVIDENCE}
-              className="rounded-lg bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow hover:bg-rose-700"
-            >
-              View Evidence Vault →
-            </Link>
-          </div>
+
         </div>
       )}
 
@@ -246,10 +240,19 @@ export default function PmTaskDetail() {
             <div><p className="text-xs font-semibold uppercase text-gray-500">Created by</p><p className="mt-1 text-sm text-gray-900">{task.createdBy?.fullName || '—'}</p></div>
             <div><p className="text-xs font-semibold uppercase text-gray-500">Completed</p><p className="mt-1 text-sm text-gray-900">{formatDate(task.completedAt)}</p></div>
           </div>
-          {isOverdue && (
+          {(isOverdue || complianceBlocked) && (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-              <p className="text-sm text-amber-800">This overdue task may have an active compliance violation.</p>
-              <Button variant="warning" onClick={() => setExtensionOpen(true)}>Grant deadline extension</Button>
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  {isOverdue ? 'This task is overdue.' : 'Compliance governance blocker active.'}
+                </p>
+                <p className="text-xs text-amber-700">
+                  Extending the deadline will synchronize the compliance remediation window and unfreeze governance lockouts.
+                </p>
+              </div>
+              <Button variant="warning" onClick={() => setExtensionOpen(true)}>
+                Grant deadline extension
+              </Button>
             </div>
           )}
         </div>
@@ -312,28 +315,44 @@ export default function PmTaskDetail() {
               },
               {
                 key: 'status',
-                header: 'Status',
+                header: 'Status & Feedback',
                 render: (ev) => {
                   const st = String(ev.status || '').toLowerCase();
                   const badgeStatus = st === 'approved' ? 'success' : st === 'rejected' ? 'danger' : 'warning';
-                  return <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>;
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>
+                      {st === 'rejected' && ev.rejectionReason && (
+                        <span className="text-[11px] text-rose-700 italic max-w-xs">
+                          Feedback: "{ev.rejectionReason}"
+                        </span>
+                      )}
+                    </div>
+                  );
                 },
               },
               {
                 key: 'file',
                 header: 'Document',
                 render: (ev) => {
-                  const token = sessionStorage.getItem('authToken') || '';
                   const fileUrl = ev.fileUrl || ev.url || ev.attachments?.[0]?.filePath || ev.attachment?.filePath;
                   if (!fileUrl) return <span className="text-xs text-gray-400">No file</span>;
                   const isExternal = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
                   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
-                  const viewUrl = isExternal
-                    ? fileUrl
-                    : (ev.id ? `${apiBase}/api/evidence/${ev.id}/file?token=${encodeURIComponent(token)}` : `${apiBase}${fileUrl}`);
+                  if (!isExternal && ev.id) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => openEvidenceFile(ev.id)}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        View File ↗
+                      </button>
+                    );
+                  }
                   return (
                     <a
-                      href={viewUrl}
+                      href={isExternal ? fileUrl : `${apiBase}${fileUrl}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"

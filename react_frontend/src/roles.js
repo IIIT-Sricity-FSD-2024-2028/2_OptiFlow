@@ -2,6 +2,7 @@ export const ROLES = {
   PLATFORM_ADMIN: 'platform_admin',
   SYSTEM_ADMIN: 'system_admin',
   COMPANY_OWNER: 'company_owner',
+  BRANCH_MANAGER: 'branch_manager',
   HR_MANAGER: 'hr_manager',
   PROCESS_ADMIN: 'process_admin',
   COMPLIANCE_OFFICER: 'compliance_officer',

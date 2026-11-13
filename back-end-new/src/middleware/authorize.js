@@ -11,8 +11,9 @@ export function requireRoles(...allowedRoles) {
       return next(new UnauthorizedError('Authentication required: no authenticated user found'));
     }
 
-    const userRole = req.user.roleLabel || req.user.role;
-    if (!hasRole(userRole, allowedRoles)) {
+    // The resolved role slug is the single source of truth (same value login returns).
+    // The label is display text only and must never decide access.
+    if (!hasRole(req.user.role, allowedRoles)) {
       return next(
         new ForbiddenError(
           `Access denied: your role "${req.user.roleLabel || req.user.role}" is not authorized for this endpoint. Required: [${allowedRoles.join(', ')}]`

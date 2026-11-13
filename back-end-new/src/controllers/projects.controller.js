@@ -3,9 +3,10 @@ import {
   BadRequestError,
   NotFoundError,
   ForbiddenError,
+  ConflictError,
 } from '../utils/errors.js';
 import { validateRequired } from '../utils/validation.js';
-import { normalizeRole, ROLES } from '../utils/roles.js';
+import { normalizeRole, ROLES, systemSlugOfRole } from '../utils/roles.js';
 import {
   buildProjectListWhere,
   buildTaskListWhere,
@@ -16,7 +17,7 @@ import {
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 async function getProjectListWhere(req, branchId) {
-  const role = normalizeRole(req.user.role || req.user.roleLabel);
+  const role = normalizeRole(req.user.role);
   let assignedProjectIds = [];
 
   if (role === 'project_manager' || role === 'pm') {
@@ -168,8 +169,7 @@ async function enrichProjectsWithManagers(projects, companyId) {
         const u = teamUserMap.get(m.userId);
         const hasPmRole = u?.roleAssignments?.some(
           (ra) =>
-            normalizeRole(ra.role?.label) === 'project_manager' ||
-            ra.role?.name === 'project_manager'
+            systemSlugOfRole(ra.role) === 'project_manager'
         );
         const isPmTitle = (u?.jobTitle || '').toLowerCase().includes('project manager');
         return (m.role === 'Project Manager' || hasPmRole || isPmTitle) && m.role !== 'Lead';
@@ -187,14 +187,12 @@ async function enrichProjectsWithManagers(projects, companyId) {
           m.role === 'Lead' ||
           u?.roleAssignments?.some(
             (ra) =>
-              normalizeRole(ra.role?.label) === 'team_lead' ||
-              ra.role?.name === 'team_lead'
+              systemSlugOfRole(ra.role) === 'team_leader'
           );
         if (isLead && u?.manager) {
           const managerIsPm = u.manager.roleAssignments?.some(
             (ra) =>
-              normalizeRole(ra.role?.label) === 'project_manager' ||
-              ra.role?.name === 'project_manager'
+              systemSlugOfRole(ra.role) === 'project_manager'
           );
           if (managerIsPm) {
             pm = {
@@ -214,8 +212,7 @@ async function enrichProjectsWithManagers(projects, companyId) {
       const creator = creatorMap.get(p.createdById);
       const isPm = creator.roleAssignments?.some(
         (ra) =>
-          normalizeRole(ra.role?.label) === 'project_manager' ||
-          ra.role?.name === 'project_manager'
+          systemSlugOfRole(ra.role) === 'project_manager'
       );
       if (isPm) {
         pm = {
@@ -253,6 +250,42 @@ async function enrichProjectsWithManagers(projects, companyId) {
   });
 }
 
+/** Include used by list, create and update so every response has the same shape. */
+function projectListInclude(req) {
+  return {
+    team: {
+      include: {
+        branch: { select: { id: true, name: true, companyId: true } },
+        teamMembers: {
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+            user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+          },
+        },
+      },
+    },
+    tasks: {
+      where: buildTaskListWhere({
+        companyId: req.user.companyId,
+        user: req.user,
+      }),
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        priority: true,
+        estimatedHours: true,
+        actualHours: true,
+      },
+    },
+    escalations: {
+      where: { status: 'Open' },
+    },
+  };
+}
+
 /**
  * GET /projects & GET /api/projects
  * Lists projects with tenant scoping and branch filtering.
@@ -263,38 +296,7 @@ export async function listProjects(req, res, next) {
 
     const projects = await prisma.project.findMany({
       where,
-      include: {
-        team: {
-          include: {
-            branch: { select: { id: true, name: true, companyId: true } },
-            teamMembers: {
-              select: {
-                id: true,
-                userId: true,
-                role: true,
-                user: { select: { id: true, fullName: true, email: true, jobTitle: true } },
-              },
-            },
-          },
-        },
-        tasks: {
-          where: buildTaskListWhere({
-            companyId: req.user.companyId,
-            user: req.user,
-          }),
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            priority: true,
-            estimatedHours: true,
-            actualHours: true,
-          },
-        },
-        escalations: {
-          where: { status: 'Open' },
-        },
-      },
+      include: projectListInclude(req),
       orderBy: { id: 'desc' },
     });
 
@@ -438,6 +440,18 @@ export async function createProject(req, res, next) {
 
     const pmId = body.projectManagerId || body.managerId || body.pmId;
     if (pmId) {
+      // Cross-Tenant PM Spy Injection Prevention (MAL-03)
+      const pmUser = await prisma.user.findFirst({
+        where: {
+          id: String(pmId),
+          companyId: req.user.companyId,
+          isActive: true,
+        },
+      });
+      if (!pmUser) {
+        throw new BadRequestError('Assigned project manager must be an active employee in your company');
+      }
+
       const pmRole = await prisma.role.findFirst({
         where: {
           companyId: req.user.companyId,
@@ -452,7 +466,7 @@ export async function createProject(req, res, next) {
         await prisma.roleAssignment.create({
           data: {
             companyId: req.user.companyId,
-            userId: String(pmId),
+            userId: pmUser.id,
             roleId: pmRole.id,
             scopeType: 'Project',
             scopeId: newProject.id,
@@ -474,7 +488,8 @@ export async function createProject(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during project creation:', auditErr.message);
     }
 
-    const [enrichedProject] = await enrichProjectsWithManagers([newProject], req.user.companyId);
+    const fullProject = await prisma.project.findUnique({ where: { id: newProject.id }, include: projectListInclude(req) });
+    const [enrichedProject] = await enrichProjectsWithManagers([fullProject], req.user.companyId);
 
     res.status(201).json({
       success: true,
@@ -544,6 +559,18 @@ export async function updateProject(req, res, next) {
 
     const pmId = body.projectManagerId || body.managerId || body.pmId;
     if (pmId) {
+      // Cross-Tenant PM Spy Injection Prevention (MAL-03)
+      const pmUser = await prisma.user.findFirst({
+        where: {
+          id: String(pmId),
+          companyId: req.user.companyId,
+          isActive: true,
+        },
+      });
+      if (!pmUser) {
+        throw new BadRequestError('Assigned project manager must be an active employee in your company');
+      }
+
       const pmRole = await prisma.role.findFirst({
         where: {
           companyId: req.user.companyId,
@@ -566,13 +593,13 @@ export async function updateProject(req, res, next) {
         if (existingPmAssignment) {
           await prisma.roleAssignment.update({
             where: { id: existingPmAssignment.id },
-            data: { userId: String(pmId), roleId: pmRole.id },
+            data: { userId: pmUser.id, roleId: pmRole.id },
           });
         } else {
           await prisma.roleAssignment.create({
             data: {
               companyId: req.user.companyId,
-              userId: String(pmId),
+              userId: pmUser.id,
               roleId: pmRole.id,
               scopeType: 'Project',
               scopeId: id,
@@ -616,7 +643,8 @@ export async function updateProject(req, res, next) {
       console.warn('[AuditLog] Notice: Audit record logging during project update:', auditErr.message);
     }
 
-    const [enrichedUpdated] = await enrichProjectsWithManagers([updated], req.user.companyId);
+    const fullUpdated = await prisma.project.findUnique({ where: { id }, include: projectListInclude(req) });
+    const [enrichedUpdated] = await enrichProjectsWithManagers([fullUpdated], req.user.companyId);
 
     res.status(200).json({
       success: true,
@@ -649,17 +677,45 @@ export async function deleteProject(req, res, next) {
       assertBranchManagerScope(req.user, existing.team.branchId, 'delete projects in');
     }
 
-    await prisma.project.delete({
-      where: { id },
+    // Safety checks against orphan cascading
+    const tasksCount = await prisma.task.count({ where: { projectId: id } });
+    if (tasksCount > 0) {
+      throw new ConflictError(`Cannot delete project: ${tasksCount} task(s) are associated with this project. Reassign or delete tasks first.`);
+    }
+
+    const instanceCount = await prisma.processInstance.count({ where: { projectId: id } });
+    if (instanceCount > 0) {
+      throw new ConflictError(`Cannot delete project: ${instanceCount} workflow process instance(s) are associated with this project.`);
+    }
+
+    // Transactional cleanup nullifying foreign key references in ProcessAuditLog (RAT-04)
+    await prisma.$transaction(async (tx) => {
+      await tx.processAuditLog.updateMany({
+        where: { projectId: id },
+        data: { projectId: null },
+      });
+
+      await tx.escalation.updateMany({
+        where: { projectId: id },
+        data: { projectId: null },
+      });
+
+      await tx.roleAssignment.deleteMany({
+        where: { scopeType: 'Project', scopeId: id },
+      });
+
+      await tx.project.delete({
+        where: { id },
+      });
     });
 
     // Record audit log
     try {
-      await createProcessAuditLog({companyId: req.user.companyId,
-        projectId: id,
+      await createProcessAuditLog({
+        companyId: req.user.companyId,
         action: AUDIT_ACTIONS.DELETE,
         performedById: req.user.id,
-        oldValue: { name: existing.name },
+        newValue: { deletedProjectName: existing.name, teamId: existing.teamId },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during project deletion:', auditErr.message);

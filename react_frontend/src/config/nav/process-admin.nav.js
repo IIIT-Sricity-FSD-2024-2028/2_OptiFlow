@@ -5,4 +5,5 @@ export const processAdminNav = [
     { label: 'Process Dashboard', path: PATHS.PROCESS_ADMIN.DASHBOARD, icon: 'Cpu' },
     { label: 'Workflow Templates', path: PATHS.PROCESS_ADMIN.TEMPLATES, icon: 'GitBranch' },
     { label: 'Live Instances', path: PATHS.PROCESS_ADMIN.INSTANCES, icon: 'PlayCircle' },
+    { label: 'Process Audit Logs', path: PATHS.PROCESS_ADMIN.AUDIT_LOGS, icon: 'FileText' },
 ];

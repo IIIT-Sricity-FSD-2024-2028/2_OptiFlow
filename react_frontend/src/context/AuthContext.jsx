@@ -88,7 +88,6 @@ export const AuthProvider = ({ children }) => {
     const isPlatform =
       user?.isPlatform ||
       user?.role === 'platform_admin' ||
-      user?.role === 'system_admin' ||
       sessionStorage.getItem('isPlatform') === 'true' ||
       window.location.pathname.startsWith('/platform');
 

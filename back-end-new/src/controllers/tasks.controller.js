@@ -6,7 +6,7 @@ import {
   ConflictError,
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
-import { hasRole, ROLES } from '../utils/roles.js';
+import { hasRole, normalizeRole, ROLES, systemSlugOfRole } from '../utils/roles.js';
 import {
   buildTaskListWhere,
   buildSubtaskListWhere,
@@ -68,6 +68,43 @@ async function resolveProjectTeamLead(project, companyId) {
   return teamLeads[0];
 }
 
+/** Includes shared by list, create and update so every response has the same shape. */
+function taskListInclude(subtaskScope) {
+  return {
+    project: {
+      include: {
+        team: {
+          include: {
+            branch: { select: { id: true, name: true, companyId: true } },
+          },
+        },
+      },
+    },
+    assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
+    createdBy: { select: { id: true, fullName: true, email: true } },
+    subtasks: subtaskScope ? { where: subtaskScope } : true,
+    escalations: { where: { status: 'Open' } },
+  };
+}
+
+function loadTaskForResponse(req, id) {
+  const subtaskScope = buildSubtaskListWhere({
+    companyId: req.user.companyId,
+    branchId: req.query?.branchId,
+    user: req.user,
+  });
+  return prisma.task.findUnique({ where: { id }, include: taskListInclude(subtaskScope) });
+}
+
+const SUBTASK_LIST_INCLUDE = { task: { select: { id: true, title: true } } };
+
+const ESCALATION_LIST_INCLUDE = {
+  task: { select: { id: true, title: true, status: true } },
+  project: { select: { id: true, name: true } },
+  reportedBy: { select: { id: true, fullName: true, email: true } },
+  targetManager: { select: { id: true, fullName: true, email: true } },
+};
+
 // ============================================================================
 // 1. TASKS ENDPOINTS
 // ============================================================================
@@ -91,21 +128,7 @@ export async function listTasks(req, res, next) {
 
     const tasks = await prisma.task.findMany({
       where,
-      include: {
-        project: {
-          include: {
-            team: {
-              include: {
-                branch: { select: { id: true, name: true, companyId: true } },
-              },
-            },
-          },
-        },
-        assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
-        createdBy: { select: { id: true, fullName: true, email: true } },
-        subtasks: { where: subtaskScope },
-        escalations: { where: { status: 'Open' } },
-      },
+      include: taskListInclude(subtaskScope),
       orderBy: { createdAt: 'desc' },
     });
 
@@ -247,10 +270,6 @@ export async function createTask(req, res, next) {
     validateEnum(status, ALLOWED_TASK_STATUSES, 'status');
     validateEnum(priority, ALLOWED_TASK_PRIORITIES, 'priority');
 
-    if (assignedToId) {
-      throw new BadRequestError('Tasks are assigned to the project Team Lead automatically; do not choose an individual assignee');
-    }
-
     if (!projectId) {
       throw new BadRequestError('A project must be selected so the task can be assigned to its Team Lead');
     }
@@ -271,7 +290,45 @@ export async function createTask(req, res, next) {
       assertBranchManagerScope(req.user, project.team?.branchId, 'create tasks in');
     }
 
-    const teamLead = await resolveProjectTeamLead(project, req.user.companyId);
+    let targetAssigneeId = null;
+    if (assignedToId) {
+      const candidateUser = await prisma.user.findFirst({
+        where: {
+          id: assignedToId,
+          companyId: req.user.companyId,
+          isActive: true,
+        },
+        include: {
+          teamMembers: {
+            where: { teamId: project.teamId },
+          },
+          roleAssignments: {
+            where: { revokedAt: null },
+            include: { role: true },
+          },
+        },
+      });
+
+      if (!candidateUser) {
+        throw new NotFoundError('Selected Team Lead was not found or is inactive');
+      }
+
+      const hasTlRole = candidateUser.roleAssignments.some(
+        (ra) =>
+          systemSlugOfRole(ra.role) === 'team_leader'
+      );
+      const isTeamLeadInTeam = candidateUser.teamMembers.some((tm) => /lead/i.test(tm.role || ''));
+
+      if (!hasTlRole && !isTeamLeadInTeam) {
+        throw new BadRequestError('The selected assignee must be a designated Team Lead');
+      }
+
+      targetAssigneeId = candidateUser.id;
+    } else {
+      const teamLead = await resolveProjectTeamLead(project, req.user.companyId);
+      targetAssigneeId = teamLead.id;
+    }
+
     const newTask = await prisma.task.create({
       data: {
         companyId: req.user.companyId,
@@ -280,7 +337,7 @@ export async function createTask(req, res, next) {
         description,
         status,
         priority,
-        assignedToId: teamLead.id,
+        assignedToId: targetAssigneeId,
         createdById: req.user.id,
         dueDate: dueDate ? new Date(dueDate) : null,
         estimatedHours: estimatedHours ? Number(estimatedHours) : null,
@@ -306,7 +363,7 @@ export async function createTask(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Task created successfully',
-      data: newTask,
+      data: await loadTaskForResponse(req, newTask.id),
     });
   } catch (err) {
     next(err);
@@ -347,12 +404,37 @@ export async function updateTask(req, res, next) {
       throw new ForbiddenError('Parent tasks remain assigned to the project Team Lead; assign work through subtasks');
     }
 
+    const role = normalizeRole(req.user?.role);
+    const isMember = role === 'team_member' || role === 'member';
+
+    // Governance: Team members can submit work (In_Review) or report blockers (Blocked), but cannot tamper with parent task configurations or complete tasks directly
+    if (isMember) {
+      if (body.title || body.description !== undefined || body.priority || body.dueDate !== undefined || body.due_date !== undefined) {
+        throw new ForbiddenError('Team members cannot modify parent task configurations (title, priority, due date, description)');
+      }
+      if (body.status && !['In_Review', 'Blocked', 'Active'].includes(body.status)) {
+        throw new ForbiddenError('Team members can only submit work for review or report blockers; only Team Leads or Managers can approve or complete tasks');
+      }
+    }
+
     if (body.title) updateData.title = String(body.title).trim();
     if (body.description !== undefined) updateData.description = body.description;
     if (body.status) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');
       updateData.status = body.status;
       if (body.status === 'Completed') {
+        const openSubtasksCount = await prisma.subtask.count({
+          where: {
+            taskId: id,
+            status: { not: 'Completed' },
+            deletedAt: null,
+          },
+        });
+        if (openSubtasksCount > 0) {
+          throw new BadRequestError(
+            `Cannot mark task as Completed: ${openSubtasksCount} subtask(s) are still pending completion or review.`
+          );
+        }
         updateData.completedAt = new Date();
       }
     }
@@ -368,7 +450,7 @@ export async function updateTask(req, res, next) {
       ? body.deadlineExtensionReason.trim()
       : '';
     if (body.deadlineExtensionReason !== undefined) {
-      if (!hasRole(req.user.roleLabel || req.user.role, [ROLES.PROJECT_MANAGER])) {
+      if (!hasRole(req.user.role, [ROLES.PROJECT_MANAGER])) {
         throw new ForbiddenError('Only Project Managers can grant deadline extensions');
       }
       if (
@@ -389,7 +471,10 @@ export async function updateTask(req, res, next) {
     }
 
     // 🔴 THE INTERCEPTOR: Evaluate Compliance Before Saving
-    if (updateData.status && updateData.status !== existing.status) {
+    // PM final-approval: skip compliance gate when PM explicitly approves
+    const isPmApproval = body.pmApproval === true
+      && hasRole(req.user.role, [ROLES.PROJECT_MANAGER]);
+    if (updateData.status && updateData.status !== existing.status && !isPmApproval) {
       const evaluation = await evaluateTaskTransition(id, existing, updateData);
 
       if (!evaluation.allowed) {
@@ -536,7 +621,7 @@ export async function updateTask(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Task updated successfully',
-      data: updated,
+      data: await loadTaskForResponse(req, updated.id),
     });
   } catch (err) {
     next(err);
@@ -613,7 +698,7 @@ export async function listSubtasks(req, res, next) {
         branchId: req.query.branchId,
         user: req.user,
       }),
-      include: { task: { select: { id: true, title: true } } },
+      include: SUBTASK_LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -749,7 +834,7 @@ export async function createSubtask(req, res, next) {
       }
 
       if (
-        hasRole(req.user.roleLabel || req.user.role, [ROLES.TEAM_LEAD]) &&
+        hasRole(req.user.role, [ROLES.TEAM_LEAD]) &&
         assignee.id !== req.user.id &&
         assignee.managerUserId !== req.user.id
       ) {
@@ -773,7 +858,7 @@ export async function createSubtask(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Subtask created successfully',
-      data: subtask,
+      data: await prisma.subtask.findUnique({ where: { id: subtask.id }, include: SUBTASK_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);
@@ -811,6 +896,11 @@ export async function updateSubtask(req, res, next) {
     if (body.status) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');
       updateData.status = body.status;
+      if (body.status === 'Completed') {
+        updateData.completedAt = new Date();
+      } else {
+        updateData.completedAt = null;
+      }
     }
 
     const updated = await prisma.subtask.update({
@@ -821,7 +911,7 @@ export async function updateSubtask(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Subtask updated successfully',
-      data: updated,
+      data: await prisma.subtask.findUnique({ where: { id: updated.id }, include: SUBTASK_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);
@@ -878,12 +968,7 @@ export async function listEscalations(req, res, next) {
   try {
     const escalations = await prisma.escalation.findMany({
       where: { companyId: req.user.companyId },
-      include: {
-        task: { select: { id: true, title: true, status: true } },
-        project: { select: { id: true, name: true } },
-        reportedBy: { select: { id: true, fullName: true, email: true } },
-        targetManager: { select: { id: true, fullName: true, email: true } },
-      },
+      include: ESCALATION_LIST_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -987,7 +1072,7 @@ export async function createEscalation(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Escalation created successfully',
-      data: escalation,
+      data: await prisma.escalation.findUnique({ where: { id: escalation.id }, include: ESCALATION_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);
@@ -1030,7 +1115,7 @@ export async function updateEscalation(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Escalation updated successfully',
-      data: updated,
+      data: await prisma.escalation.findUnique({ where: { id: updated.id }, include: ESCALATION_LIST_INCLUDE }),
     });
   } catch (err) {
     next(err);

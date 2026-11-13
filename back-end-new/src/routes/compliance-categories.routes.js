@@ -18,19 +18,19 @@ router.get(['/compliance-categories/:id', '/api/compliance-categories/:id'], aut
 router.post(
   ['/compliance-categories', '/api/compliance-categories'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   createComplianceCategory
 );
 router.patch(
   ['/compliance-categories/:id', '/api/compliance-categories/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   updateComplianceCategory
 );
 router.delete(
   ['/compliance-categories/:id', '/api/compliance-categories/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   deleteComplianceCategory
 );
 

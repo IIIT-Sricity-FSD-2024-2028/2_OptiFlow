@@ -18,19 +18,19 @@ router.get(['/projects/:id', '/api/projects/:id'], authenticate, getProjectById)
 router.post(
   ['/projects', '/api/projects'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, 'superuser', 'project_manager', 'branch_manager'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, 'project_manager', 'branch_manager'),
   createProject
 );
 router.patch(
   ['/projects/:id', '/api/projects/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, 'superuser', 'project_manager', 'branch_manager'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, 'project_manager', 'branch_manager'),
   updateProject
 );
 router.delete(
   ['/projects/:id', '/api/projects/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, 'superuser', 'project_manager', 'branch_manager'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, 'project_manager', 'branch_manager'),
   deleteProject
 );
 

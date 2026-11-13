@@ -21,26 +21,26 @@ router.get(['/users/:id', '/api/users/:id'], authenticate, getUserById);
 router.post(
   ['/users', '/api/users'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE),
   createUser
 );
 router.patch(['/users/:id', '/api/users/:id'], authenticate, updateUser);
 router.patch(
   ['/users/:id/reactivate', '/api/users/:id/reactivate'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE),
   reactivateUser
 );
 router.post(
   ['/users/:id/reactivate', '/api/users/:id/reactivate'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE),
   reactivateUser
 );
 router.delete(
   ['/users/:id', '/api/users/:id'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE),
   deactivateUser
 );
 

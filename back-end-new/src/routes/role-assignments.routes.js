@@ -11,7 +11,13 @@ import {
 const router = Router();
 
 // Role Assignments Routes
-router.get(['/role-assignments', '/api/role-assignments'], authenticate, listRoleAssignments);
+// Read scope (X2): only the HR / admin pages read role assignments.
+router.get(
+  ['/role-assignments', '/api/role-assignments'],
+  authenticate,
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
+  listRoleAssignments
+);
 router.post(
   ['/role-assignments', '/api/role-assignments'],
   authenticate,

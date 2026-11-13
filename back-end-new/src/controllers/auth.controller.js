@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma.js';
 import { env } from '../config/env.js';
-import { authenticate, resolveUserRole } from '../middleware/authenticate.js';
+import { authenticate, resolveUserRole, assertTenantAccess } from '../middleware/authenticate.js';
 import {
   BadRequestError,
   UnauthorizedError,
@@ -10,12 +10,14 @@ import {
   ConflictError,
   ValidationError,
   AppError,
+  withCode,
 } from '../utils/errors.js';
 import {
   validateRequired,
   validateEmail,
   validateEnum,
 } from '../utils/validation.js';
+import { sendPasswordChangedEmail } from '../services/email.service.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 
@@ -115,12 +117,27 @@ export async function handleLogin(req, res, next) {
     // --------------------------------------------
 
     // If not a platform admin, proceed with standard tenant user login
+    // Emails are globally unique (case-insensitive index users_email_lower_key). If older data still
+    // holds the same address in two companies we refuse to guess which tenant the person means.
+    const matches = await prisma.user.findMany({
+      where: { email: { equals: email.trim(), mode: 'insensitive' } },
+      take: 2,
+      select: { id: true },
+    });
+    if (matches.length > 1) {
+      throw withCode(
+        new ConflictError('This email address is linked to more than one account. Please contact support.'),
+        'ACCOUNT_AMBIGUOUS',
+      );
+    }
+
     const user = await prisma.user.findFirst({
       where: { email: { equals: email.trim(), mode: 'insensitive' } },
       include: {
         company: true,
         roleAssignments: {
-          include: { role: true },
+          where: { revokedAt: null },
+          include: { role: { include: { roleTemplate: { select: { slug: true } } } } },
           orderBy: { grantedAt: 'desc' },
         },
         teamMembers: {
@@ -155,17 +172,9 @@ export async function handleLogin(req, res, next) {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    if (user.status && user.status !== 'Active') {
-      throw new UnauthorizedError('User account is inactive or suspended');
-    }
-
-    if (user.deletedAt) {
-      throw new UnauthorizedError('User account has been deactivated');
-    }
-
-    if (user.company && user.company.status && user.company.status !== 'Active') {
-      throw new UnauthorizedError('Company account is inactive or suspended');
-    }
+    // Same checks the auth middleware runs on every request (deactivated user, company
+    // Active, subscription allows access), so login and later requests cannot disagree.
+    await assertTenantAccess(user);
 
     const { roleLabel, roleSlug, matchedAssignment } = resolveUserRole(user);
     const targetRoute = resolveTargetRoute(roleSlug);
@@ -190,6 +199,7 @@ export async function handleLogin(req, res, next) {
         companyId: user.companyId,
         role: roleSlug,
         roleLabel,
+        tokenVersion: user.tokenVersion,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -363,17 +373,42 @@ export async function handleRegisterCompany(req, res, next) {
         });
       }
 
-      // 4. Ensure platform role templates exist
+      // 4a. Seed Default Headquarters Branch
+      await tx.branch.create({
+        data: {
+          companyId: company.id,
+          name: 'Headquarters',
+          code: 'HQ',
+          description: 'Primary corporate headquarters branch',
+        },
+      });
+
+      // 4b. Ensure platform role templates exist
       let platformTemplates = await tx.roleTemplate.findMany({
         where: { origin: 'platform_predefined' },
         include: { defaultPermissions: true },
       });
 
       if (platformTemplates.length === 0) {
-        const sysTemplate = await tx.roleTemplate.create({
-          data: { origin: 'platform_predefined', label: 'System Admin' },
-        });
-        platformTemplates = [{ ...sysTemplate, defaultPermissions: [] }];
+        const DEFAULT_TEMPLATES = [
+          { label: 'Company Owner', slug: 'company_owner' },
+          { label: 'System Admin', slug: 'system_admin' },
+          { label: 'Access Governance', slug: 'access_governance' },
+          { label: 'Branch Manager', slug: 'branch_manager' },
+          { label: 'Process Admin', slug: 'process_admin' },
+          { label: 'Project Manager', slug: 'project_manager' },
+          { label: 'Compliance Officer', slug: 'compliance_officer' },
+          { label: 'Team Lead', slug: 'team_lead' },
+          { label: 'Team Member', slug: 'team_member' },
+        ];
+        platformTemplates = await Promise.all(
+          DEFAULT_TEMPLATES.map(async (dt) => {
+            const tmpl = await tx.roleTemplate.create({
+              data: { origin: 'platform_predefined', label: dt.label, slug: dt.slug },
+            });
+            return { ...tmpl, defaultPermissions: [] };
+          })
+        );
       }
 
       // 5. Clone roles for company
@@ -426,6 +461,7 @@ export async function handleRegisterCompany(req, res, next) {
         companyId: result.company.id,
         role: 'system_admin',
         roleLabel: 'System Admin',
+        tokenVersion: result.user.tokenVersion,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -560,8 +596,11 @@ export async function handleSetPassword(req, res, next) {
         passwordHash,
         tokenVersion: { increment: 1 },
         isActive: true,
+        passwordChangedAt: new Date(),
       },
     });
+
+    sendPasswordChangedEmail({ to: user.email, fullName: user.fullName });
 
     res.status(200).json({
       success: true,
@@ -572,4 +611,63 @@ export async function handleSetPassword(req, res, next) {
   }
 }
 
+/**
+ * POST /auth/change-password (authenticated)
+ * Verifies the current password, stores the new one, marks the password as set (lifting the
+ * first-login gate), revokes older sessions and returns a fresh token for this session.
+ */
+export async function handleChangePassword(req, res, next) {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    validateRequired({ currentPassword, newPassword }, ['currentPassword', 'newPassword']);
 
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      throw new ValidationError('Password validation failed', [
+        { field: 'newPassword', message: 'Password must be at least 8 characters long' },
+      ]);
+    }
+    if (newPassword === currentPassword) {
+      throw new ValidationError('Password validation failed', [
+        { field: 'newPassword', message: 'New password must be different from the current password' },
+      ]);
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) throw new NotFoundError('User not found');
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError('Current password is incorrect');
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 10),
+        tokenVersion: { increment: 1 },
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    sendPasswordChangedEmail({ to: user.email, fullName: user.fullName });
+
+    const token = jwt.sign(
+      {
+        sub: updated.id,
+        email: updated.email,
+        companyId: updated.companyId,
+        role: req.user.role,
+        roleLabel: req.user.roleLabel,
+        tokenVersion: updated.tokenVersion,
+      },
+      env.JWT_SECRET,
+      { expiresIn: env.JWT_EXPIRES_IN }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully.',
+      data: { token },
+    });
+  } catch (err) {
+    next(err);
+  }
+}

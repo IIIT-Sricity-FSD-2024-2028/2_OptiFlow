@@ -6,7 +6,8 @@ import {
   listNotifications,
   createNotification,
   markNotificationAsRead,
-  markAllNotificationsAsRead
+  markAllNotificationsAsRead,
+  deleteNotification,
 } from '../controllers/notifications.controller.js';
 
 const router = Router();
@@ -21,7 +22,6 @@ router.post(
     ROLES.PROJECT_MANAGER,
     ROLES.TEAM_LEAD,
     ROLES.COMPLIANCE_OFFICER,
-    'superuser',
     'project_manager',
     'team_leader',
     'team_lead',
@@ -31,5 +31,6 @@ router.post(
 );
 router.patch(['/notifications/:id/read', '/api/notifications/:id/read'], authenticate, markNotificationAsRead);
 router.post(['/notifications/read-all', '/api/notifications/read-all'], authenticate, markAllNotificationsAsRead);
+router.delete(['/notifications/:id', '/api/notifications/:id'], authenticate, deleteNotification);
 
 export default router;

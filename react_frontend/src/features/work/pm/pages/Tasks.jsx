@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { Button } from '../../../../shared/components/Button';
 import { EmptyState } from '../../../../shared/components/EmptyState';
-import { FormField, Input, Select } from '../../../../shared/components/FormField';
+import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
 import { Loader } from '../../../../shared/components/Loader';
 import { TaskTable } from '../../components/TaskTable';
 import { Pagination } from '../../../../shared/components/Pagination';
@@ -16,11 +16,13 @@ import {
   Plus, 
   X, 
   Search,
-  RotateCcw
+  RotateCcw,
+  UserCheck
 } from 'lucide-react';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as complianceApi from '../../../../services/api/compliance';
+import * as usersApi from '../../../../services/api/users';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const PAGE_SIZE = 10;
@@ -34,6 +36,7 @@ export default function PmTasks() {
   const [tasks, setTasks] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,18 +48,31 @@ export default function PmTasks() {
   const selectedProjectId = selectedProjectParam;
   const [showAssignForm, setShowAssignForm] = useState(false);
 
-  const [form, setForm] = useState({ title: '', projectId: '', dueDate: '', priority: 'Medium' });
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    projectId: '',
+    assignedToId: '',
+    dueDate: '',
+    estimatedHours: '',
+    priority: 'Medium',
+  });
 
   useEffect(() => {
     let active = true;
-    Promise.all([tasksApi.list(), projectsApi.list()])
-      .then(([taskResponse, projectResponse]) => {
+    Promise.all([
+      tasksApi.list(),
+      projectsApi.list(),
+      usersApi.list().catch(() => []),
+    ])
+      .then(([taskResponse, projectResponse, userResponse]) => {
         if (!active) return;
         setTasks(normalize(taskResponse).map((task) => ({
           ...task,
           assigneeName: task.assignedTo?.fullName || task.assignedTo?.email,
         })));
         setProjects(normalize(projectResponse));
+        setUsers(normalize(userResponse));
       })
       .catch((loadError) => {
         if (active) setError(loadError.message || 'Failed to load task data.');
@@ -83,11 +99,67 @@ export default function PmTasks() {
     return projects.find((p) => String(p.id) === String(form.projectId)) || null;
   }, [form.projectId, projects]);
 
+  // Extract designated Team Leads from the selected project's squad
+  const projectTeamLeads = useMemo(() => {
+    if (!selectedProjectForForm?.team?.teamMembers) return [];
+    return selectedProjectForForm.team.teamMembers
+      .filter((m) => /lead/i.test(m.role || ''))
+      .map((m) => m.user)
+      .filter(Boolean);
+  }, [selectedProjectForForm]);
+
+  const projectTeamLeadIds = useMemo(() => {
+    return new Set(projectTeamLeads.map((tl) => tl.id));
+  }, [projectTeamLeads]);
+
+  // Extract all active Team Leads across the company
+  const allTeamLeads = useMemo(() => {
+    return users.filter((u) => {
+      const hasTlRole = (u.roleAssignments || []).some((ra) => {
+        const name = (ra.role?.label || ra.role?.name || '').toLowerCase();
+        return name.includes('lead') || name.includes('team_lead');
+      });
+      const hasTlTitle = (u.jobTitle || '').toLowerCase().includes('lead');
+      const hasTlTeamRole = (u.teamMembers || []).some((tm) => (tm.role || '').toLowerCase().includes('lead'));
+      return hasTlRole || hasTlTitle || hasTlTeamRole;
+    });
+  }, [users]);
+
+  // Combined list with project leads prioritized at the top
+  const availableTeamLeads = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    for (const tl of projectTeamLeads) {
+      if (tl?.id && !seen.has(tl.id)) {
+        seen.add(tl.id);
+        result.push(tl);
+      }
+    }
+    for (const tl of allTeamLeads) {
+      if (tl?.id && !seen.has(tl.id)) {
+        seen.add(tl.id);
+        result.push(tl);
+      }
+    }
+    return result;
+  }, [projectTeamLeads, allTeamLeads]);
+
+  // Helper when user selects a project: pre-fill primary Team Lead
+  const handleProjectSelect = (newProjectId) => {
+    const proj = projects.find((p) => String(p.id) === String(newProjectId));
+    const projTl = proj?.team?.teamMembers?.find((m) => /lead/i.test(m.role || ''))?.user;
+    setForm((current) => ({
+      ...current,
+      projectId: newProjectId,
+      assignedToId: projTl?.id || current.assignedToId || '',
+    }));
+  };
+
   const submitTask = async (event) => {
     event.preventDefault();
     setError('');
     if (!form.title.trim() || !form.projectId) {
-      setError('Enter a task title and select a project.');
+      setError('Enter a task title and select a target project.');
       return;
     }
 
@@ -95,8 +167,11 @@ export default function PmTasks() {
     try {
       const response = await tasksApi.create({
         title: form.title.trim(),
+        description: form.description?.trim() || undefined,
         projectId: form.projectId,
+        assignedToId: form.assignedToId || undefined,
         dueDate: form.dueDate || undefined,
+        estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : undefined,
         priority: form.priority,
         status: 'Active',
       });
@@ -105,7 +180,15 @@ export default function PmTasks() {
         ...createdTask,
         assigneeName: createdTask.assignedTo?.fullName || createdTask.assignedTo?.email,
       }, ...current]);
-      setForm({ title: '', projectId: '', dueDate: '', priority: 'Medium' });
+      setForm({
+        title: '',
+        description: '',
+        projectId: '',
+        assignedToId: '',
+        dueDate: '',
+        estimatedHours: '',
+        priority: 'Medium',
+      });
       setShowAssignForm(false);
     } catch (saveError) {
       setError(saveError.message || 'Failed to create task.');
@@ -212,15 +295,15 @@ export default function PmTasks() {
             setShowAssignForm((prev) => {
               const nextVal = !prev;
               if (nextVal && selectedProjectId && selectedProjectId !== 'all') {
-                setForm((f) => ({ ...f, projectId: selectedProjectId }));
+                handleProjectSelect(selectedProjectId);
               }
               return nextVal;
             });
           }}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ${
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-xs ${
             showAssignForm
               ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
-              : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500/20'
+              : 'bg-slate-900 text-white hover:bg-slate-800 focus:ring-2 focus:ring-slate-900/20'
           }`}
         >
           {showAssignForm ? (
@@ -231,111 +314,190 @@ export default function PmTasks() {
           ) : (
             <>
               <Plus size={16} />
-              <span>Create Team Task</span>
+              <span>Create Task</span>
             </>
           )}
         </button>
       </div>
 
-      {/* New Team Task Form */}
+      {/* Enterprise Create Task Modal / Card */}
       {showAssignForm && (
-        <form onSubmit={submitTask} className="rounded-xl border border-blue-200/80 bg-blue-50/30 p-5 space-y-4 shadow-sm transition-all">
-          <div className="flex items-center justify-between border-b border-blue-100 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white text-xs font-bold">
-                +
-              </span>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all duration-200 ring-1 ring-slate-900/5">
+          {/* Card Header */}
+          <div className="px-6 py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-b border-slate-200/80 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white shadow-xs">
+                <Plus size={18} strokeWidth={2.5} />
+              </div>
               <div>
-                <h2 className="font-semibold text-gray-900 text-sm">Create a New Task</h2>
-                <p className="text-[11px] text-gray-500">
-                  The selected project’s Team Lead will receive the task automatically.
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">Create Project Task</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Define deliverables, set milestones, and assign to a Team Lead.
                 </p>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setShowAssignForm(false)}
-              className="text-gray-400 hover:text-gray-600 p-1 rounded-md transition-colors"
+              onClick={() => {
+                setShowAssignForm(false);
+                setError('');
+              }}
+              className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg transition-colors"
               title="Close form"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
-          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <FormField label="Task title" required>
+
+          {/* Form Content */}
+          <form onSubmit={submitTask} className="p-6 space-y-5">
+            {error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 flex items-start gap-3 text-xs text-rose-800 font-medium">
+                <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-rose-900">Task Creation Error</p>
+                  <p className="mt-0.5 text-rose-700">{error}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Task Title */}
+              <FormField label="Task Title" required hint="Actionable outcome for the delivery team">
                 <Input
-                  placeholder="e.g. Implement OAuth token refresh"
+                  placeholder="e.g. Implement OAuth token refresh & session revocation"
                   value={form.title}
-                  onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                  onChange={(event) => setForm((c) => ({ ...c, title: event.target.value }))}
+                  required
+                />
+              </FormField>
+
+              {/* Project & Team Lead Dropdowns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField 
+                  label="Target Project" 
+                  required
+                  hint={
+                    selectedProjectForForm?.team?.name
+                      ? `Assigned Squad: ${selectedProjectForForm.team.name}`
+                      : 'Select the project to assign this task under'
+                  }
+                >
+                  <Select
+                    value={form.projectId}
+                    onChange={(e) => handleProjectSelect(e.target.value)}
+                    required
+                  >
+                    <option value="">Select project...</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name} {project.team?.name ? `(${project.team.name})` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+
+                <FormField 
+                  label="Assigned Team Lead" 
+                  required
+                  hint={
+                    form.assignedToId
+                      ? 'Team Lead responsible for subtask delegation & delivery reviews'
+                      : 'Choose the Team Lead who will manage this task'
+                  }
+                >
+                  <Select
+                    value={form.assignedToId}
+                    onChange={(e) => setForm((c) => ({ ...c, assignedToId: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select Team Lead...</option>
+                    {availableTeamLeads.map((tl) => (
+                      <option key={tl.id} value={tl.id}>
+                        {tl.fullName || tl.email} ({tl.email}) {projectTeamLeadIds.has(tl.id) ? '★ Project Lead' : ''}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+
+              {/* Priority, Due Date, Estimated Hours */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField label="Priority">
+                  <Select
+                    value={form.priority}
+                    onChange={(event) => setForm((c) => ({ ...c, priority: event.target.value }))}
+                  >
+                    {['Low', 'Medium', 'High', 'Urgent'].map((priority) => (
+                      <option key={priority} value={priority}>{priority}</option>
+                    ))}
+                  </Select>
+                </FormField>
+
+                <FormField label="Target Due Date">
+                  <Input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(event) => setForm((c) => ({ ...c, dueDate: event.target.value }))}
+                  />
+                </FormField>
+
+                <FormField label="Est. Hours (Optional)">
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 40"
+                    value={form.estimatedHours}
+                    onChange={(event) => setForm((c) => ({ ...c, estimatedHours: event.target.value }))}
+                  />
+                </FormField>
+              </div>
+
+              {/* Description / Objectives */}
+              <FormField label="Scope & Acceptance Criteria (Optional)">
+                <Textarea
+                  rows={2}
+                  placeholder="Outline key deliverables, compliance guardrails, or technical constraints..."
+                  value={form.description}
+                  onChange={(event) => setForm((c) => ({ ...c, description: event.target.value }))}
                 />
               </FormField>
             </div>
-            <FormField 
-              label="Project"
-              required
-              hint={
-                selectedProjectForForm?.team?.name
-                  ? `Assigned to ${selectedProjectForForm.team.name}'s Team Lead automatically`
-                  : 'Select the project whose Team Lead will receive this task'
-              }
-            >
-              <Select
-                value={form.projectId}
-                onChange={(event) => setForm((current) => ({ ...current, projectId: event.target.value }))}
-                required
-              >
-                <option value="">Select a project...</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name} {project.team?.name ? `(${project.team.name})` : ''}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField label="Due date">
-              <Input
-                type="date"
-                value={form.dueDate}
-                onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))}
-              />
-            </FormField>
-            <FormField label="Priority">
-              <Select
-                value={form.priority}
-                onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}
-              >
-                {['Low', 'Medium', 'High', 'Urgent'].map((priority) => (
-                  <option key={priority} value={priority}>{priority}</option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowAssignForm(false)}
-              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <Button type="submit" variant="primary" disabled={saving}>
-              {saving ? 'Creating…' : 'Create Task'}
-            </Button>
-          </div>
-        </form>
+
+            {/* Footer with clean action buttons */}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+              <span className="text-[11px] text-slate-400">
+                Task will appear immediately in the selected Team Lead's review queue.
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAssignForm(false);
+                    setError('');
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <Button type="submit" variant="primary" disabled={saving}>
+                  {saving ? 'Creating Task…' : 'Create Task'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
       )}
 
-      {/* Triage & Operational Filter Tabs with Clean Professional Lucide Icons */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3">
+      {/* Unified Professional Filter Pills (No Carnival Saturated Colors) */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         {[
-          { key: 'all', label: 'All Tasks', icon: ListFilter, count: counts.all, countBadge: 'bg-slate-100 text-slate-700' },
-          { key: 'compliance_blocked', label: 'Compliance Blocked', icon: ShieldAlert, count: counts.compliance_blocked, countBadge: counts.compliance_blocked > 0 ? 'bg-amber-100 text-amber-900 font-bold' : 'bg-slate-100 text-slate-600', iconColor: 'text-amber-600' },
-          { key: 'overdue', label: 'Overdue', icon: AlertTriangle, count: counts.overdue, countBadge: counts.overdue > 0 ? 'bg-rose-100 text-rose-800 font-bold' : 'bg-slate-100 text-slate-600', iconColor: 'text-rose-600' },
-          { key: 'active', label: 'Active', icon: Clock, count: counts.active, countBadge: 'bg-blue-50 text-blue-700', iconColor: 'text-blue-600' },
-          { key: 'in_review', label: 'In Review', icon: Clock, count: counts.in_review, countBadge: 'bg-purple-50 text-purple-700', iconColor: 'text-purple-600' },
-          { key: 'completed', label: 'Completed', icon: CheckCircle2, count: counts.completed, countBadge: 'bg-emerald-50 text-emerald-700', iconColor: 'text-emerald-600' },
+          { key: 'all', label: 'All Tasks', icon: ListFilter, count: counts.all },
+          { key: 'compliance_blocked', label: 'Compliance Blocked', icon: ShieldAlert, count: counts.compliance_blocked, hasAlert: counts.compliance_blocked > 0 },
+          { key: 'overdue', label: 'Overdue', icon: AlertTriangle, count: counts.overdue, hasAlert: counts.overdue > 0 },
+          { key: 'active', label: 'Active', icon: Clock, count: counts.active },
+          { key: 'in_review', label: 'In Review', icon: Clock, count: counts.in_review },
+          { key: 'completed', label: 'Completed', icon: CheckCircle2, count: counts.completed },
         ].map((tab) => {
           const isActive = activeFilter === tab.key;
           const TabIcon = tab.icon;
@@ -343,17 +505,30 @@ export default function PmTasks() {
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all border ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20'
-                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300'
               }`}
             >
-              <TabIcon size={14} className={isActive ? 'text-white' : tab.iconColor || 'text-gray-400'} />
+              <TabIcon
+                size={14}
+                className={
+                  isActive
+                    ? 'text-white'
+                    : tab.hasAlert
+                    ? 'text-amber-500'
+                    : 'text-slate-400'
+                }
+              />
               <span>{tab.label}</span>
               <span
-                className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium ${
-                  isActive ? 'bg-blue-700 text-white' : tab.countBadge
+                className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                  isActive
+                    ? 'bg-slate-800 text-slate-200'
+                    : tab.hasAlert
+                    ? 'bg-amber-100 text-amber-800 font-bold'
+                    : 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {tab.count}
@@ -364,15 +539,15 @@ export default function PmTasks() {
       </div>
 
       {/* Control Bar: Project Dropdown + Real-Time Search */}
-      <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
           {/* Project Selector */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Project:</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Project:</span>
             <select
               value={selectedProjectId}
               onChange={(e) => handleProjectFilterChange(e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 text-gray-800 font-medium outline-none focus:border-blue-500 focus:bg-white transition-colors"
+              className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-50 text-slate-800 font-medium outline-none focus:border-slate-400 focus:bg-white transition-colors"
             >
               <option value="all">All Projects ({projects.length})</option>
               {projects.map((proj) => (
@@ -383,7 +558,7 @@ export default function PmTasks() {
 
           {/* Search Box with Lucide Search & Clear */}
           <div className="relative flex-1 max-w-sm">
-            <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+            <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
             <input
               type="text"
               placeholder="Search by title or assignee…"
@@ -392,7 +567,7 @@ export default function PmTasks() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full text-xs border border-gray-200 rounded-lg pl-8 pr-7 py-1.5 bg-gray-50 text-gray-800 placeholder-gray-400 outline-none focus:border-blue-500 focus:bg-white transition-colors"
+              className="w-full text-xs border border-slate-200 rounded-lg pl-8 pr-7 py-1.5 bg-slate-50 text-slate-800 placeholder-slate-400 outline-none focus:border-slate-400 focus:bg-white transition-colors"
             />
             {searchQuery && (
               <button
@@ -401,7 +576,7 @@ export default function PmTasks() {
                   setSearchQuery('');
                   setCurrentPage(1);
                 }}
-                className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded"
+                className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
                 title="Clear search"
               >
                 <X size={13} />
@@ -411,7 +586,7 @@ export default function PmTasks() {
         </div>
 
         {/* Filter Summary & Quick Reset */}
-        <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
           <span>Showing {filteredTasks.length} of {taskRows.length} tasks</span>
           {(activeFilter !== 'all' || selectedProjectId !== 'all' || searchQuery) && (
             <button
@@ -420,7 +595,7 @@ export default function PmTasks() {
                 handleProjectFilterChange('all');
                 handleTabChange('all');
               }}
-              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold ml-1 transition-colors"
+              className="inline-flex items-center gap-1 text-slate-700 hover:text-slate-900 font-semibold ml-1 transition-colors"
             >
               <RotateCcw size={12} />
               <span>Reset Filters</span>

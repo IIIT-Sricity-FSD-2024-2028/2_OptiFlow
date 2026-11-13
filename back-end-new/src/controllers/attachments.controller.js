@@ -142,7 +142,7 @@ export async function deleteAttachment(req, res, next) {
     }
 
     // Only creator or privileged roles can delete attachment
-    const isPrivileged = ['company_owner', 'system_admin', 'superuser'].includes(req.user.role);
+    const isPrivileged = ['company_owner', 'system_admin'].includes(req.user.role);
     if (attachment.uploadedById !== req.user.id && !isPrivileged) {
       throw new ForbiddenError('You can only delete your own attachments');
     }

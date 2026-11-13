@@ -17,13 +17,13 @@ router.get(['/compliance-bindings/:id', '/api/compliance-bindings/:id'], authent
 router.post(
   ['/compliance-bindings', '/api/compliance-bindings'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   createComplianceBinding
 );
 router.delete(
   ['/compliance-bindings/:id', '/api/compliance-bindings/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   deleteComplianceBinding
 );
 
