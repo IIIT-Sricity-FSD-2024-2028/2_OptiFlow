@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams, Link } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
@@ -17,11 +17,8 @@ import { Pagination } from "../../../shared/components/Pagination";
 import { formatDate } from "../../../shared/utils/formatDate";
 import {
   Users,
-  User,
-  UserX,
   UserCheck,
   UserPlus,
-  Shield,
   ShieldCheck,
   ShieldAlert,
   Building2,
@@ -33,7 +30,6 @@ import {
 import {
   resolveFunctionalTitle,
   ROLE_LEVEL_LABELS,
-  ROLE_BADGE_STYLES,
 } from "../components/orgTreeUtils";
 
 const PAGE_SIZE = 10;
@@ -46,7 +42,6 @@ const PAGE_SIZE = 10;
  */
 export default function HrUsers() {
   const { user: currentUser } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
 
@@ -149,13 +144,17 @@ export default function HrUsers() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchData();
   }, [fetchData]);
 
   // Reset pagination on filter or tab change
-  useEffect(() => {
+  const filterKey = JSON.stringify([searchQuery, roleFilter, statusFilter, scopeFilter, activeTab]);
+  const [pagedFilterKey, setPagedFilterKey] = useState(filterKey);
+  if (pagedFilterKey !== filterKey) {
+    setPagedFilterKey(filterKey);
     setCurrentPage(1);
-  }, [searchQuery, roleFilter, statusFilter, scopeFilter, activeTab]);
+  }
 
   // 2. DERIVED DATA FOR PERSONNEL DIRECTORY
   const filteredUsers = useMemo(() => {
@@ -314,7 +313,7 @@ export default function HrUsers() {
       } else {
         try {
           await apiClient(`/users/${deactivateTarget.id}/reactivate`, { method: "PATCH" });
-        } catch (patchErr) {
+        } catch {
           // Graceful fallback to PATCH /users/:id with isActive: true
           await apiClient(`/users/${deactivateTarget.id}`, {
             method: "PATCH",

@@ -1,11 +1,10 @@
 import { prisma } from '../config/prisma.js';
-import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, ConflictError } from '../utils/errors.js';
-import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
-import { validateRequired, validateEmail } from '../utils/validation.js';
-import { ROLES, normalizeRole } from '../utils/roles.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ConflictError } from '../utils/errors.js';
+import { resolveEffectiveBranchId, assertBranchManagerScope } from '../utils/tenantScope.js';
+import { validateRequired } from '../utils/validation.js';
+import { ROLES } from '../utils/roles.js';
 import { assertWithinPlanLimit } from '../utils/planLimits.js';
-import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 async function enrichBranchesWithManagers(branches, companyId) {
   if (!branches || branches.length === 0) return branches;
@@ -120,6 +119,62 @@ export async function getBranchById(req, res, next) {
   }
 }
 
+/**
+ * Sets (or clears, when managerUserId is empty) the Branch Manager of a branch.
+ * Same rules as role assignments (SEC-M5-01 / SEC-M5-08, D-S1, D-S3, D-S9):
+ * - the manager must be an active user of the caller's company;
+ * - nobody can make themselves Branch Manager or remove their own Branch Manager role;
+ * - only Branch Manager rows of this branch are touched, and they are soft-revoked, never
+ *   rewritten in place or deleted.
+ */
+async function setBranchManager(tx, req, branchId, managerUserId) {
+  const companyId = req.user.companyId;
+  const bmRole = await tx.role.findFirst({
+    where: {
+      companyId,
+      isSystem: true,
+      OR: [{ roleTemplate: { slug: 'branch_manager' } }, { name: 'branch_manager' }],
+    },
+  });
+  if (!bmRole) return;
+
+  const newManagerId = managerUserId ? String(managerUserId) : null;
+  if (newManagerId) {
+    if (newManagerId === req.user.id) {
+      throw new ForbiddenError('You cannot make yourself the Branch Manager');
+    }
+    const manager = await tx.user.findFirst({
+      where: { id: newManagerId, companyId, isActive: true },
+      select: { id: true },
+    });
+    if (!manager) {
+      throw new BadRequestError('The selected Branch Manager is not an active user of this company');
+    }
+  }
+
+  const current = await tx.roleAssignment.findMany({
+    where: { companyId, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, revokedAt: null },
+  });
+  if (newManagerId && current.length === 1 && current[0].userId === newManagerId) {
+    return; // unchanged
+  }
+  if (current.some((ra) => ra.userId === req.user.id)) {
+    throw new ForbiddenError('You cannot remove your own Branch Manager role');
+  }
+
+  if (current.length) {
+    await tx.roleAssignment.updateMany({
+      where: { id: { in: current.map((ra) => ra.id) } },
+      data: { revokedAt: new Date() },
+    });
+  }
+  if (newManagerId) {
+    await tx.roleAssignment.create({
+      data: { companyId, userId: newManagerId, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, grantedById: req.user.id },
+    });
+  }
+}
+
 export async function createBranch(req, res, next) {
   try {
     const body = req.body || {};
@@ -130,39 +185,21 @@ export async function createBranch(req, res, next) {
 
     await assertWithinPlanLimit(req.user.companyId, 'branches');
 
-    const branch = await prisma.branch.create({
-      data: {
-        name,
-        code,
-        companyId: req.user.companyId,
-      },
-    });
-
     const managerUserId = body.managerUserId || body.managerId;
-    if (managerUserId) {
-      const bmRole = await prisma.role.findFirst({
-        where: {
+    // Branch and its manager are written together, so an invalid manager leaves no orphan branch.
+    const branch = await prisma.$transaction(async (tx) => {
+      const created = await tx.branch.create({
+        data: {
+          name,
+          code,
           companyId: req.user.companyId,
-          OR: [
-            { label: ROLES.BRANCH_MANAGER },
-            { name: 'branch_manager' },
-            { roleTemplate: { slug: 'branch_manager' } },
-          ],
         },
       });
-      if (bmRole) {
-        await prisma.roleAssignment.create({
-          data: {
-            companyId: req.user.companyId,
-            userId: String(managerUserId),
-            roleId: bmRole.id,
-            scopeType: 'Branch',
-            scopeId: branch.id,
-            grantedById: req.user.id,
-          },
-        });
+      if (managerUserId) {
+        await setBranchManager(tx, req, created.id, managerUserId);
       }
-    }
+      return created;
+    });
 
     // Record audit log
     try {
@@ -210,57 +247,16 @@ export async function updateBranch(req, res, next) {
       updateData.code = body.code ? String(body.code).trim() : null;
     }
 
-    const managerUserId = body.managerUserId || body.managerId;
-    if (managerUserId !== undefined) {
-      const bmRole = await prisma.role.findFirst({
-        where: {
-          companyId: req.user.companyId,
-          OR: [
-            { label: ROLES.BRANCH_MANAGER },
-            { name: 'branch_manager' },
-            { roleTemplate: { slug: 'branch_manager' } },
-          ],
-        },
-      });
-      if (bmRole) {
-        const existingBmAssignment = await prisma.roleAssignment.findFirst({
-          where: {
-            companyId: req.user.companyId,
-            scopeType: 'Branch',
-            scopeId: id,
-            revokedAt: null,
-          },
-        });
-        if (managerUserId) {
-          if (existingBmAssignment) {
-            await prisma.roleAssignment.update({
-              where: { id: existingBmAssignment.id },
-              data: { userId: String(managerUserId), roleId: bmRole.id },
-            });
-          } else {
-            await prisma.roleAssignment.create({
-              data: {
-                companyId: req.user.companyId,
-                userId: String(managerUserId),
-                roleId: bmRole.id,
-                scopeType: 'Branch',
-                scopeId: id,
-                grantedById: req.user.id,
-              },
-            });
-          }
-        } else if (existingBmAssignment) {
-          await prisma.roleAssignment.delete({
-            where: { id: existingBmAssignment.id },
-          });
-        }
+    const managerUserId = body.managerUserId !== undefined ? body.managerUserId : body.managerId;
+    const updated = await prisma.$transaction(async (tx) => {
+      if (managerUserId !== undefined) {
+        await setBranchManager(tx, req, id, managerUserId);
       }
-    }
-
-    const updated = await prisma.branch.update({
-      where: { id },
-      data: updateData,
-      include: BRANCH_LIST_INCLUDE,
+      return tx.branch.update({
+        where: { id },
+        data: updateData,
+        include: BRANCH_LIST_INCLUDE,
+      });
     });
 
     // Record audit log

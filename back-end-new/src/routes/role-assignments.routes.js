@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate.js';
 import { requireRoles } from '../middleware/authorize.js';
-import { ROLES } from '../utils/roles.js';
 import {
   listRoleAssignments,
   createRoleAssignment,
@@ -15,19 +14,19 @@ const router = Router();
 router.get(
   ['/role-assignments', '/api/role-assignments'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
+  requireRoles('company_owner', 'system_admin', 'hr_manager'),
   listRoleAssignments
 );
 router.post(
   ['/role-assignments', '/api/role-assignments'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager'),
+  requireRoles('system_admin', 'company_owner', 'hr_manager'),
   createRoleAssignment
 );
 router.delete(
   ['/role-assignments/:id', '/api/role-assignments/:id'],
   authenticate,
-  requireRoles(ROLES.SYSTEM_ADMIN, ROLES.COMPANY_OWNER, ROLES.ACCESS_GOVERNANCE, 'hr_manager'),
+  requireRoles('system_admin', 'company_owner', 'hr_manager'),
   deleteRoleAssignment
 );
 

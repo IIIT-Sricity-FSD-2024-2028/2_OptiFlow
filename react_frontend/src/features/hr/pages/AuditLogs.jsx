@@ -179,6 +179,7 @@ export default function HrAuditLogs() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchLogs();
   }, [fetchLogs]);
 

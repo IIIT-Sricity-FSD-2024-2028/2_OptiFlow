@@ -1,7 +1,12 @@
 import { apiClient } from './client';
 
-export const list = () => apiClient('/api/notifications');
-export const get = (id) => apiClient(`/api/notifications/${id}`);
+// Matches back-end-new/src/routes/notifications.routes.js (PRE-M5-06).
+// GET returns the caller's own notifications; Owner/System Admin may pass a userId.
+export const list = (params = {}) => {
+  const qs = params?.userId ? `?userId=${encodeURIComponent(params.userId)}` : '';
+  return apiClient(`/api/notifications${qs}`);
+};
 export const create = (data) => apiClient('/api/notifications', { body: data });
-export const update = (id, data) => apiClient(`/api/notifications/${id}`, { method: 'PATCH', body: data });
+export const markRead = (id) => apiClient(`/api/notifications/${id}/read`, { method: 'PATCH' });
+export const markAllRead = () => apiClient('/api/notifications/read-all', { method: 'POST' });
 export const remove = (id) => apiClient(`/api/notifications/${id}`, { method: 'DELETE' });

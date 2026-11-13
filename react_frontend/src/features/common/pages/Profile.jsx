@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PATHS } from "../../../app/paths";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
+import { apiClient } from "../../../services/api/client";
+import { Modal } from "../../../shared/components/Modal";
+import { Button } from "../../../shared/components/Button";
+import { FormField, Input } from "../../../shared/components/FormField";
 import {
   AVATAR_PALETTES,
   getUserAvatarPalette,
@@ -19,7 +23,7 @@ import {
 } from "lucide-react";
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [copiedKey, setCopiedKey] = useState(null);
@@ -27,9 +31,13 @@ export default function Profile() {
     getUserAvatarPalette(user),
   );
 
-  useEffect(() => {
+  // Recompute the palette when the signed-in user changes (adjust state during render,
+  // instead of an effect that renders twice).
+  const [paletteUser, setPaletteUser] = useState(user);
+  if (paletteUser !== user) {
+    setPaletteUser(user);
     setCurrentPalette(getUserAvatarPalette(user));
-  }, [user]);
+  }
 
   const formattedRole = user?.isPlatform
     ? "Platform Admin"
@@ -53,6 +61,50 @@ export default function Profile() {
     setCopiedKey(key);
     toast.success("Copied to clipboard");
     setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  // Email change (SEC-M5-06): the address only changes when the link sent to the NEW address
+  // is opened. The current password proves it is really you asking.
+  // The button appears only once the public /confirm-email page is registered
+  // (PATHS.PUBLIC.CONFIRM_EMAIL + a router entry for ConfirmEmail.jsx); until then the emailed
+  // link would lead nowhere.
+  const canChangeEmail = !user?.isPlatform && Boolean(PATHS.PUBLIC?.CONFIRM_EMAIL);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
+
+  const closeEmailModal = () => {
+    if (emailSubmitting) return;
+    setIsEmailModalOpen(false);
+    setNewEmail("");
+    setCurrentPassword("");
+    setEmailError("");
+  };
+
+  const handleRequestEmailChange = async (e) => {
+    e.preventDefault();
+    if (!newEmail.trim() || !currentPassword) {
+      setEmailError("Enter the new email address and your current password.");
+      return;
+    }
+    setEmailSubmitting(true);
+    setEmailError("");
+    try {
+      const res = await apiClient("/users/me/email-change", {
+        method: "POST",
+        body: { newEmail: newEmail.trim(), currentPassword },
+        // A failed password check must never sign the user out.
+        skipAuthRedirect: true,
+      });
+      toast.success(res?.message || `Confirmation link sent to ${newEmail.trim()}.`);
+      setEmailSubmitting(false);
+      closeEmailModal();
+    } catch (err) {
+      setEmailError(err.message || "Could not start the email change.");
+      setEmailSubmitting(false);
+    }
   };
 
   const handleSelectPalette = (palette) => {
@@ -165,8 +217,17 @@ export default function Profile() {
             </div>
             <div className="flex justify-between items-center py-2 border-t border-slate-100">
               <dt className="text-slate-500 font-medium">Email Address</dt>
-              <dd className="font-semibold text-slate-900 text-sm">
+              <dd className="flex items-center gap-2 font-semibold text-slate-900 text-sm">
                 {user?.email || "—"}
+                {canChangeEmail && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEmailModalOpen(true)}
+                    className="text-xs font-medium text-blue-700 hover:text-blue-900 px-2 py-1 rounded-md hover:bg-blue-50 transition-colors cursor-pointer"
+                  >
+                    Change
+                  </button>
+                )}
               </dd>
             </div>
             <div className="flex justify-between items-center py-2 border-t border-slate-100">
@@ -253,6 +314,45 @@ export default function Profile() {
           </dl>
         </div>
       </div>
+      <Modal
+        isOpen={isEmailModalOpen}
+        onClose={closeEmailModal}
+        title="Change email address"
+      >
+        <form onSubmit={handleRequestEmailChange} className="space-y-4">
+          <p className="text-sm text-slate-600">
+            We will email a confirmation link to the new address. Your email changes only when you
+            open that link, and you will then sign in again with the new address.
+          </p>
+          <FormField label="New email address" required>
+            <Input
+              type="email"
+              autoComplete="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              disabled={emailSubmitting}
+            />
+          </FormField>
+          <FormField label="Current password" required>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              disabled={emailSubmitting}
+            />
+          </FormField>
+          {emailError && <p className="text-xs text-red-600">{emailError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={closeEmailModal} disabled={emailSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm" disabled={emailSubmitting}>
+              {emailSubmitting ? "Sending..." : "Send confirmation link"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
