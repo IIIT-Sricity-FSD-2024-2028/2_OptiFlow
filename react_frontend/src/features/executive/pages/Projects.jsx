@@ -8,6 +8,7 @@ import { Loader } from '../../../shared/components/Loader';
 import { Pagination } from '../../../shared/components/Pagination';
 import * as projectsApi from '../../../services/api/projects';
 import * as teamsApi from '../../../services/api/teams';
+import * as executiveApi from '../../../services/api/executive';
 import {
   Briefcase,
   Users,
@@ -46,17 +47,28 @@ const formatDate = (date) =>
 export default function ExecutiveProjects() {
   const [projects, setProjects] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState('');
 
+  // Hydrate branch list once
+  useEffect(() => {
+    executiveApi.getBranches()
+      .then((res) => setBranches(normalize(res)))
+      .catch((err) => console.warn('[ExecutiveProjects] Branch fetch warning:', err.message));
+  }, []);
+
+  // Hydrate projects and teams according to selected branch
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([projectsApi.list(), teamsApi.list()])
+    const params = branchFilter ? { branchId: branchFilter } : {};
+    Promise.all([projectsApi.list(params), teamsApi.list(params)])
       .then(([projectRes, teamRes]) => {
         if (!active) return;
         setProjects(normalize(projectRes));
@@ -69,7 +81,7 @@ export default function ExecutiveProjects() {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, []);
+  }, [branchFilter]);
 
   const filteredProjects = projects.filter((p) => {
     const status = p.status === 'On_Hold' ? 'OnHold' : p.status;
@@ -149,6 +161,18 @@ export default function ExecutiveProjects() {
             className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-4 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+        {branches.length > 0 && (
+          <select
+            value={branchFilter}
+            onChange={(e) => { setBranchFilter(e.target.value); setTeamFilter(''); setCurrentPage(1); }}
+            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Branches</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        )}
         {teams.length > 0 && (
           <select
             value={teamFilter}

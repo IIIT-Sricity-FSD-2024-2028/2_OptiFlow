@@ -60,6 +60,40 @@ export async function createRoleAssignment(req, res, next) {
       throw new NotFoundError(`Role ${roleId} not found in this company`);
     }
 
+    // WHY: Sovereign Protection - Prevent non-owners from assigning elevated administrative roles
+    const normRole = normalizeRole(role.label);
+    const isElevatedRole = normRole === 'company_owner' || normRole === 'system_admin';
+    const callerNorm = normalizeRole(req.user.roleLabel || req.user.role);
+    const callerIsElevated = callerNorm === 'company_owner' || callerNorm === 'system_admin';
+
+    if (isElevatedRole && !callerIsElevated) {
+      throw new ForbiddenError('Only Company Owners can assign elevated administrative roles');
+    }
+
+    // WHY: Idempotency & DoS Prevention (MAL-04 & NORM-04) - Return existing active assignment if already allocated
+    const existingAssignment = await prisma.roleAssignment.findFirst({
+      where: {
+        companyId: req.user.companyId,
+        userId: String(userId),
+        roleId: String(roleId),
+        scopeType,
+        scopeId: String(scopeId),
+        revokedAt: null,
+      },
+      include: {
+        user: { select: { id: true, fullName: true, email: true } },
+        role: true,
+      },
+    });
+
+    if (existingAssignment) {
+      return res.status(200).json({
+        success: true,
+        message: 'Role is already assigned to this user',
+        data: existingAssignment,
+      });
+    }
+
     const assignment = await prisma.roleAssignment.create({
       data: {
         companyId: req.user.companyId,
@@ -107,6 +141,35 @@ export async function deleteRoleAssignment(req, res, next) {
 
     if (!assignment) {
       throw new NotFoundError(`Role assignment ${id} not found in this company`);
+    }
+
+    // WHY: Sovereign Protection - Prevent non-owners from revoking elevated roles,
+    // and prevent revoking the company's sole active owner leaving the tenant headless.
+    const normTargetRole = normalizeRole(assignment.role?.label);
+    const callerNorm = normalizeRole(req.user.roleLabel || req.user.role);
+    const callerIsElevated = callerNorm === 'company_owner' || callerNorm === 'system_admin';
+
+    if ((normTargetRole === 'company_owner' || normTargetRole === 'system_admin') && !callerIsElevated) {
+      throw new ForbiddenError('Only Company Owners can revoke elevated administrative roles');
+    }
+
+    if (normTargetRole === 'company_owner') {
+      const activeOwnersCount = await prisma.roleAssignment.count({
+        where: {
+          companyId: req.user.companyId,
+          role: {
+            OR: [
+              { label: ROLES.COMPANY_OWNER },
+              { name: 'company_owner' },
+              { roleTemplate: { slug: 'company_owner' } },
+            ],
+          },
+          revokedAt: null,
+        },
+      });
+      if (activeOwnersCount <= 1) {
+        throw new ForbiddenError('Cannot revoke the sole active Company Owner of the organization');
+      }
     }
 
     await prisma.roleAssignment.delete({ where: { id } });

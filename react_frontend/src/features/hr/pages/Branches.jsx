@@ -156,8 +156,9 @@ export default function HrBranches() {
 
     setIsDeleting(true);
     try {
+      const queryParam = targetTeamsCount > 0 && reassignBranchId ? `?reassignBranchId=${encodeURIComponent(reassignBranchId)}` : "";
       const payload = targetTeamsCount > 0 ? { reassignBranchId } : undefined;
-      const res = await apiClient(`/branches/${deleteTarget.id}`, {
+      const res = await apiClient(`/branches/${deleteTarget.id}${queryParam}`, {
         method: "DELETE",
         body: payload,
       });

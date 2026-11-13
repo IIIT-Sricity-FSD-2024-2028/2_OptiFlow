@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ValidationError, ConflictError } from '../utils/errors.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
@@ -139,6 +139,13 @@ export async function updateRolePermissions(req, res, next) {
       throw new NotFoundError(`Role "${id}" not found in this company`);
     }
 
+    // Protection against Baseline Role Disarmament (MAL-02)
+    if (role.isSystem) {
+      throw new ForbiddenError(
+        `System baseline role "${role.label}" is immutable and its capabilities cannot be modified`
+      );
+    }
+
     const matchedPerms = await prisma.permission.findMany({
       where: { slug: { in: permissionSlugs } },
     });
@@ -187,4 +194,76 @@ export async function updateRolePermissions(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * DELETE /roles/:id & DELETE /api/roles/:id
+ * Deletes a custom role (NORM-01). System baseline roles cannot be deleted.
+ */
+export async function deleteRole(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    const role = await prisma.role.findFirst({
+      where: {
+        id,
+        companyId: req.user.companyId,
+      },
+    });
+
+    if (!role) {
+      throw new NotFoundError(`Role "${id}" not found in this company`);
+    }
+
+    if (role.isSystem) {
+      throw new ForbiddenError(
+        `System baseline role "${role.label}" cannot be deleted`
+      );
+    }
+
+    const assignedCount = await prisma.roleAssignment.count({
+      where: { roleId: role.id },
+    });
+
+    if (assignedCount > 0) {
+      throw new ConflictError(
+        `Cannot delete role "${role.label}" because it is currently assigned to ${assignedCount} user(s). Please reassign users first.`
+      );
+    }
+
+    // Safely delete in transaction, nullifying any foreign key references in SystemAuditLog
+    await prisma.$transaction(async (tx) => {
+      await tx.systemAuditLog.updateMany({
+        where: { roleId: role.id },
+        data: { roleId: null },
+      });
+
+      await tx.rolePermission.deleteMany({
+        where: { roleId: role.id },
+      });
+
+      await tx.role.delete({
+        where: { id: role.id },
+      });
+    });
+
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        action: AUDIT_ACTIONS.DELETE,
+        performedById: req.user.id,
+        newValue: { deletedRoleLabel: role.label },
+      });
+    } catch (e) {
+      console.warn('[Audit] Role delete log failed:', e.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Custom role "${role.label}" deleted successfully`,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 

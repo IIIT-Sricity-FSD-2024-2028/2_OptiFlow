@@ -1,6 +1,11 @@
 import { apiClient } from './client';
 
-export const list = () => apiClient('/api/teams');
+export const list = (params = {}) => {
+  const query = new URLSearchParams();
+  if (params?.branchId) query.set('branchId', params.branchId);
+  const qs = query.toString();
+  return apiClient(`/api/teams${qs ? `?${qs}` : ''}`);
+};
 export const get = (id) => apiClient(`/api/teams/${id}`);
 export const create = (data) => apiClient('/api/teams', { body: data });
 export const update = (id, data) => apiClient(`/api/teams/${id}`, { method: 'PATCH', body: data });

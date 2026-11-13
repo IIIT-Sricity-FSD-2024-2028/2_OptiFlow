@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { prisma } from '../config/prisma.js';
-import { UnauthorizedError, AppError } from '../utils/errors.js';
+import { UnauthorizedError, AppError, PaymentRequiredError } from '../utils/errors.js';
 import { normalizeRole, toCanonicalRole, ROLES, ROLE_SLUGS } from '../utils/roles.js';
 
 /**
@@ -158,11 +158,17 @@ export async function authenticate(req, res, next) {
       throw new UnauthorizedError('Authentication failed: User account no longer exists');
     }
 
-    if (user.status && user.status !== 'Active') {
-      throw new UnauthorizedError(`Authentication failed: User account is ${user.status.toLowerCase()}`);
+    // WHY: Verify tokenVersion to support instantaneous server-side session revocation
+    // upon credential changes or administrative demotion/deactivation.
+    if (decoded.tokenVersion !== undefined && user.tokenVersion !== undefined) {
+      if (decoded.tokenVersion !== user.tokenVersion) {
+        throw new UnauthorizedError('Authentication failed: Session has been revoked. Please log in again.');
+      }
     }
 
-    if (user.deletedAt) {
+    // WHY: In the Prisma schema, the User model uses `isActive: Boolean` and `deactivatedAt: DateTime?`,
+    // rather than non-existent phantom properties `user.status` or `user.deletedAt`.
+    if (user.isActive === false || user.deactivatedAt !== null) {
       throw new UnauthorizedError('Authentication failed: User account has been deactivated');
     }
 
@@ -171,13 +177,15 @@ export async function authenticate(req, res, next) {
     }
 
     // TRIAL & SUBSCRIPTION CHECK ENFORCEMENT
+    // WHY: Throw PaymentRequiredError (HTTP 402) rather than UnauthorizedError (HTTP 401)
+    // to prevent frontend interceptors from wiping the JWT token and trapping the CEO in an unrecoverable /login loop.
     const activeSub = user.company?.subscriptions?.[0];
     if (activeSub) {
       if (activeSub.status === 'Trialing' && new Date() > new Date(activeSub.currentPeriodEnd)) {
-        throw new UnauthorizedError('PAYMENT_REQUIRED: Your 14-day free trial has expired. Please upgrade your plan.');
+        throw new PaymentRequiredError('PAYMENT_REQUIRED: Your 14-day free trial has expired. Please upgrade your plan.');
       }
       if (activeSub.status === 'PastDue' || activeSub.status === 'Cancelled') {
-        throw new UnauthorizedError('PAYMENT_REQUIRED: Your subscription is past due or cancelled.');
+        throw new PaymentRequiredError('PAYMENT_REQUIRED: Your subscription is past due or cancelled.');
       }
     }
 
