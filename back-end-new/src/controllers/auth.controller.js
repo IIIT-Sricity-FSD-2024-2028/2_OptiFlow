@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma.js';
 import { env } from '../config/env.js';
-import { authenticate, resolveUserRole } from '../middleware/authenticate.js';
+import { authenticate, resolveUserRole, assertTenantAccess } from '../middleware/authenticate.js';
 import {
   BadRequestError,
   UnauthorizedError,
@@ -156,17 +156,9 @@ export async function handleLogin(req, res, next) {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    if (user.status && user.status !== 'Active') {
-      throw new UnauthorizedError('User account is inactive or suspended');
-    }
-
-    if (user.deletedAt) {
-      throw new UnauthorizedError('User account has been deactivated');
-    }
-
-    if (user.company && user.company.status && user.company.status !== 'Active') {
-      throw new UnauthorizedError('Company account is inactive or suspended');
-    }
+    // Same checks the auth middleware runs on every request (deactivated user, company
+    // Active, subscription allows access), so login and later requests cannot disagree.
+    await assertTenantAccess(user);
 
     const { roleLabel, roleSlug, matchedAssignment } = resolveUserRole(user);
     const targetRoute = resolveTargetRoute(roleSlug);
