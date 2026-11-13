@@ -1,5 +1,5 @@
-import React from 'react';
-import { Table } from '../../../shared/components/Table';
+import React from "react";
+import { Table } from "../../../shared/components/Table";
 import {
   CreditCard,
   Building2,
@@ -13,12 +13,12 @@ import {
   RotateCcw,
   Sparkles,
   Inbox,
-} from 'lucide-react';
+} from "lucide-react";
 
 export function PlansTable({
   plans = [],
   loading = false,
-  activeTab = 'active',
+  activeTab = "active",
   onEdit,
   onArchive,
   onUnarchive,
@@ -34,70 +34,63 @@ export function PlansTable({
     }
     return (
       <span className="font-semibold text-slate-800 text-xs">
-        {typeof value === 'number' ? value.toLocaleString() : value}
+        {typeof value === "number" ? value.toLocaleString() : value}
       </span>
     );
   };
 
   const columns = [
     {
-      header: 'Plan Tier',
-      accessor: 'name',
+      header: "Plan Tier",
+      accessor: "name",
       render: (row) => (
         <div className="py-1">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-900 text-sm">
-              {row.name}
-            </span>
+            <span className="font-bold text-slate-900 text-sm">{row.name}</span>
             {!row.isActive && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                 Archived
               </span>
             )}
           </div>
-          <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-            ID: {row.id}
-          </div>
         </div>
       ),
     },
     {
-      header: 'Active Tenants',
-      accessor: '_count',
+      header: "Active Tenants",
+      accessor: "_count",
       render: (row) => {
         const count = row._count?.subscriptions ?? 0;
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-grey-50 text-grey-700 border border-grey-100">
-            <span>
-              {count}
-            </span>
+            <span>{count}</span>
           </span>
         );
       },
     },
     {
-      header: 'Max Users',
-      accessor: 'maxUsers',
+      header: "Max Users",
+      accessor: "maxUsers",
       render: (row) => renderLimit(row.maxUsers),
     },
     {
-      header: 'Max Branches',
-      accessor: 'maxBranches',
+      header: "Max Branches",
+      accessor: "maxBranches",
       render: (row) => renderLimit(row.maxBranches),
     },
     {
-      header: 'Process Templates',
-      accessor: 'maxActiveProcessTemplates',
+      header: "Process Templates",
+      accessor: "maxActiveProcessTemplates",
       render: (row) => renderLimit(row.maxActiveProcessTemplates),
     },
     {
-      header: 'Compliance Rules',
-      accessor: 'maxComplianceRules',
+      header: "Compliance Rules",
+      accessor: "maxComplianceRules",
       render: (row) => renderLimit(row.maxComplianceRules),
     },
     {
-      header: 'Audit Retention',
-      accessor: 'auditLogRetentionDays',
+      header: "Audit Retention",
+      accessor: "auditLogRetentionDays",
       render: (row) => (
         <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-medium">
           <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -106,8 +99,8 @@ export function PlansTable({
       ),
     },
     {
-      header: 'Actions',
-      align: 'right',
+      header: "Actions",
+      align: "right",
       render: (row) => (
         <div className="flex items-center justify-end gap-2">
           <button
@@ -147,13 +140,17 @@ export function PlansTable({
   ];
 
   if (!loading && plans.length === 0) {
-    if (activeTab === 'archived') {
+    if (activeTab === "archived") {
       return (
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs">
           <Archive className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800">No archived plans</h3>
+          <h3 className="text-base font-bold text-slate-800">
+            No archived plans
+          </h3>
           <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
-            Plans you archive will appear here. Existing tenants on archived tiers continue normal operation, but the tier is hidden from new tenant assignments.
+            Plans you archive will appear here. Existing tenants on archived
+            tiers continue normal operation, but the tier is hidden from new
+            tenant assignments.
           </p>
         </div>
       );
@@ -162,9 +159,12 @@ export function PlansTable({
     return (
       <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs">
         <CreditCard className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-        <h3 className="text-base font-bold text-slate-800">No active subscription plans defined</h3>
+        <h3 className="text-base font-bold text-slate-800">
+          No active subscription plans defined
+        </h3>
         <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
-          Create commercial tiers with custom user caps, branches, and compliance quotas for your tenant organizations.
+          Create commercial tiers with custom user caps, branches, and
+          compliance quotas for your tenant organizations.
         </p>
         {onCreatePlan && (
           <button
