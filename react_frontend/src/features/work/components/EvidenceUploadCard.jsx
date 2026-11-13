@@ -124,7 +124,26 @@ export function EvidenceUploadCard({
                         <span className="font-semibold text-blue-600">{evType}</span>
                         {date && <span>• {new Date(date).toLocaleDateString()}</span>}
                         {evidence.notes && <span className="truncate max-w-xs">• {evidence.notes}</span>}
+                        {evidence.status && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
+                              evidence.status === 'Approved'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : evidence.status === 'Rejected'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {evidence.status.replace('_', ' ')}
+                          </span>
+                        )}
                       </div>
+                      {evidence.status === 'Rejected' && evidence.rejectionReason && (
+                        <div className="mt-1 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1 flex items-start gap-1">
+                          <span className="font-bold shrink-0">Officer Feedback:</span>
+                          <span className="italic">"{evidence.rejectionReason}"</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

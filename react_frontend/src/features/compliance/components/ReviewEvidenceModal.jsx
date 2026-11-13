@@ -1,97 +1,279 @@
-import { openEvidenceFile } from '../../../shared/utils/evidenceFile';
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { apiClient } from "../../../services/api/client";
 import { useToast } from "../../../shared/components/Toast";
+import { openEvidenceFile } from "../../../shared/utils/evidenceFile";
+import { 
+  AlertTriangle, 
+  CheckCircle2, 
+  XCircle, 
+  FileText, 
+  ExternalLink,
+  Send,
+  User,
+  FolderGit2
+} from "lucide-react";
 
 export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
   const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [decision, setDecision] = useState("approve"); // "approve" | "reject"
+  const [rejectionReason, setRejectionReason] = useState("");
 
-  const handleUpdateStatus = async (newStatus) => {
+  useEffect(() => {
+    if (evidence) {
+      if (evidence.status === "Rejected") {
+        setDecision("reject");
+        setRejectionReason(evidence.rejectionReason || "");
+      } else {
+        setDecision("approve");
+        setRejectionReason("");
+      }
+    }
+  }, [evidence, isOpen]);
+
+  const handleApprove = async () => {
     if (!evidence) return;
-
     setIsSubmitting(true);
     try {
       await apiClient(`/evidence/${evidence.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: newStatus })
+        method: "PATCH",
+        body: JSON.stringify({ status: "Approved" }),
       });
-      toast.success(`Evidence marked as ${newStatus}.`);
-      onReviewed(); // Refresh the list in the parent component
-      onClose();    // Close modal
+      toast.success("Evidence validated & violation auto-resolved!");
+      if (onReviewed) onReviewed();
+      handleClose();
     } catch (err) {
-      toast.error("Failed to update status: " + err.message);
+      toast.error("Failed to approve: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleReject = async () => {
+    if (!evidence) return;
+    const trimmed = rejectionReason.trim();
+    if (trimmed.length < 10) {
+      toast.error("Please provide a rejection message of at least 10 characters so the submitter knows what to revise.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await apiClient(`/evidence/${evidence.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "Rejected",
+          rejectionReason: trimmed,
+        }),
+      });
+      toast.success("Feedback sent to team member. Deliverable flagged for revision.");
+      if (onReviewed) onReviewed();
+      handleClose();
+    } catch (err) {
+      toast.error("Failed to send rejection: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    setRejectionReason("");
+    setDecision("approve");
+    onClose();
+  };
+
   if (!evidence) return null;
+
+  const isCurrentlyRejected = evidence.status === "Rejected";
+  const isCurrentlyApproved = evidence.status === "Approved";
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
-      title="Review Evidence Submission"
+      onClose={handleClose}
+      title="Compliance Deliverable Adjudication"
       footer={
-        <div className="flex justify-between w-full">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-          <div className="flex gap-2">
+        <div className="flex justify-between items-center w-full">
+          <Button variant="secondary" onClick={handleClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+
+          {decision === "reject" ? (
             <Button
               variant="danger"
-              onClick={() => handleUpdateStatus('Rejected')}
-              disabled={isSubmitting || evidence.status === 'Rejected'}
+              onClick={handleReject}
+              disabled={isSubmitting || rejectionReason.trim().length < 10}
+              className="flex items-center gap-2"
             >
-              Reject
+              <Send size={14} />
+              {isSubmitting ? "Sending..." : isCurrentlyRejected ? "Update & Re-send Feedback" : "Reject & Send Feedback"}
             </Button>
+          ) : (
             <Button
               variant="primary"
-              onClick={() => handleUpdateStatus('Approved')}
-              disabled={isSubmitting || evidence.status === 'Approved'}
+              onClick={handleApprove}
+              disabled={isSubmitting || isCurrentlyApproved}
+              className="flex items-center gap-2"
             >
-              Approve & Resolve Violation
+              <CheckCircle2 size={14} />
+              {isSubmitting ? "Approving..." : isCurrentlyApproved ? "Already Approved" : "Approve & Clear Blocker"}
             </Button>
-          </div>
+          )}
         </div>
       }
     >
-      <div className="space-y-4 text-sm">
-        <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
-          <div>
-            <span className="font-semibold block text-gray-500 mb-1">Title</span>
-            <span className="text-gray-900">{evidence.title}</span>
+      <div className="space-y-4 text-sm text-slate-800">
+        {/* Deliverable Metadata Card */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                Deliverable Title
+              </span>
+              <h3 className="font-semibold text-slate-900 text-sm leading-snug">
+                {evidence.title}
+              </h3>
+            </div>
+            <span
+              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${
+                isCurrentlyApproved
+                  ? "bg-emerald-100 text-emerald-800"
+                  : isCurrentlyRejected
+                  ? "bg-rose-100 text-rose-800"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {isCurrentlyApproved ? "Approved" : isCurrentlyRejected ? "Rejected (Needs Revision)" : "Under Review"}
+            </span>
           </div>
-          <div>
-            <span className="font-semibold block text-gray-500 mb-1">Type</span>
-            <span className="text-gray-900">{evidence.evidenceType}</span>
+
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/70 text-xs">
+            <div>
+              <span className="text-slate-400 block font-medium mb-0.5">Submitted By</span>
+              <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                <User size={12} className="text-slate-400" />
+                <span>{evidence.user?.fullName || evidence.user?.email || "Team Submitter"}</span>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-slate-400 block font-medium mb-0.5">Associated Policy / Scope</span>
+              <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                <FolderGit2 size={12} className="text-slate-400" />
+                <span className="truncate" title={evidence.violation?.rule?.name || evidence.task?.title || "Policy Target"}>
+                  {evidence.violation?.rule?.name || evidence.task?.title || "General Governance"}
+                </span>
+              </div>
+            </div>
+
+            {evidence.notes && (
+              <div className="col-span-2 bg-white rounded-lg p-2.5 border border-slate-200/80">
+                <span className="text-[11px] font-semibold text-slate-500 block mb-0.5">Submitter Notes:</span>
+                <p className="text-xs text-slate-700 italic leading-relaxed">
+                  "{evidence.notes}"
+                </p>
+              </div>
+            )}
           </div>
-          <div className="col-span-2">
-            <span className="font-semibold block text-gray-500 mb-1">Submitter Notes</span>
-            <p className="text-gray-700 italic bg-white p-3 rounded border border-gray-200">
-              {evidence.notes || "No additional notes provided by the submitter."}
-            </p>
+
+          {/* Attached Artifact Preview / Link */}
+          {evidence.fileUrl ? (
+            <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <div>
+                  <span className="text-xs font-semibold text-blue-900 block">Attached Artifact</span>
+                  <span className="text-[11px] text-blue-700">Type: {evidence.evidenceType || "Report / Log"}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => openEvidenceFile(evidence.id)}
+                className="inline-flex items-center gap-1.5 bg-white text-blue-700 font-semibold text-xs px-3 py-1.5 rounded-md border border-blue-200 hover:bg-blue-100 transition-colors shadow-2xs cursor-pointer"
+              >
+                <span>Open File</span>
+                <ExternalLink size={12} />
+              </button>
+            </div>
+          ) : (
+            <div className="text-center p-2 text-xs text-slate-400 italic bg-white rounded-lg border border-slate-200">
+              No physical file attached to this submission.
+            </div>
+          )}
+        </div>
+
+        {/* Adjudication Decision Selector */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
+            Adjudication Decision
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDecision("approve")}
+              className={`p-3 rounded-xl border text-left transition-all flex items-start gap-2.5 ${
+                decision === "approve"
+                  ? "border-emerald-500 bg-emerald-50/80 text-emerald-950 ring-2 ring-emerald-400/30"
+                  : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+              }`}
+            >
+              <CheckCircle2 className={`w-4 h-4 mt-0.5 shrink-0 ${decision === "approve" ? "text-emerald-600" : "text-slate-400"}`} />
+              <div>
+                <span className="text-xs font-bold block">Approve Evidence</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">
+                  Validates requirement and auto-resolves any active blocker.
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDecision("reject")}
+              className={`p-3 rounded-xl border text-left transition-all flex items-start gap-2.5 ${
+                decision === "reject"
+                  ? "border-rose-500 bg-rose-50/80 text-rose-950 ring-2 ring-rose-400/30"
+                  : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+              }`}
+            >
+              <XCircle className={`w-4 h-4 mt-0.5 shrink-0 ${decision === "reject" ? "text-rose-600" : "text-slate-400"}`} />
+              <div>
+                <span className="text-xs font-bold block">Request Changes / Reject</span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">
+                  Flags deliverable as deficient and sends guidance to submitter.
+                </span>
+              </div>
+            </button>
           </div>
         </div>
 
-        {evidence.fileUrl ? (
-          <div className="border border-blue-200 bg-blue-50 p-4 rounded-lg flex justify-between items-center">
-            <div className="flex flex-col">
-              <span className="font-semibold text-blue-900">Attached Document</span>
-              <span className="text-blue-700 text-xs mt-1">Review the provided proof before approving.</span>
+        {/* Rejection Message Input Area */}
+        {decision === "reject" && (
+          <div className="space-y-2 bg-rose-50/60 border border-rose-200 rounded-xl p-3.5 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                <AlertTriangle size={14} className="text-rose-600" />
+                <span>Rejection Message & Revision Instructions *</span>
+              </label>
+              <span className="text-[11px] text-slate-500">
+                Visible to Team Member & Project Manager
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => openEvidenceFile(evidence.id)}
-              className="flex items-center gap-2 bg-white px-4 py-2 rounded-md text-blue-700 font-semibold border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm cursor-pointer"
-            >
-              View File ↗
-            </button>
-          </div>
-        ) : (
-          <div className="border border-gray-200 bg-gray-50 p-4 rounded-lg text-center text-gray-500">
-            No physical file was attached to this submission.
+
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              rows={4}
+              className="w-full bg-white border border-rose-300 rounded-lg p-3 text-xs leading-relaxed text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
+              placeholder="Explain clearly what was wrong or missing (e.g. Unmasked plain-text PII found in logs; please apply SHA-256 salted hashes and re-upload)..."
+            />
+
+            <div className="flex justify-between items-center text-[11px] text-slate-500">
+              <span>Minimum 10 characters required.</span>
+              <span className={rejectionReason.trim().length >= 10 ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
+                {rejectionReason.trim().length} / 10 min chars
+              </span>
+            </div>
           </div>
         )}
       </div>

@@ -3,9 +3,10 @@ import {
   BadRequestError,
   NotFoundError,
   ForbiddenError,
+  ConflictError,
 } from '../utils/errors.js';
 import { validateRequired } from '../utils/validation.js';
-import { normalizeRole, ROLES } from '../utils/roles.js';
+import { normalizeRole, ROLES, systemSlugOfRole } from '../utils/roles.js';
 import {
   buildProjectListWhere,
   buildTaskListWhere,
@@ -168,8 +169,7 @@ async function enrichProjectsWithManagers(projects, companyId) {
         const u = teamUserMap.get(m.userId);
         const hasPmRole = u?.roleAssignments?.some(
           (ra) =>
-            normalizeRole(ra.role?.label) === 'project_manager' ||
-            ra.role?.name === 'project_manager'
+            systemSlugOfRole(ra.role) === 'project_manager'
         );
         const isPmTitle = (u?.jobTitle || '').toLowerCase().includes('project manager');
         return (m.role === 'Project Manager' || hasPmRole || isPmTitle) && m.role !== 'Lead';
@@ -187,14 +187,12 @@ async function enrichProjectsWithManagers(projects, companyId) {
           m.role === 'Lead' ||
           u?.roleAssignments?.some(
             (ra) =>
-              normalizeRole(ra.role?.label) === 'team_lead' ||
-              ra.role?.name === 'team_lead'
+              systemSlugOfRole(ra.role) === 'team_leader'
           );
         if (isLead && u?.manager) {
           const managerIsPm = u.manager.roleAssignments?.some(
             (ra) =>
-              normalizeRole(ra.role?.label) === 'project_manager' ||
-              ra.role?.name === 'project_manager'
+              systemSlugOfRole(ra.role) === 'project_manager'
           );
           if (managerIsPm) {
             pm = {
@@ -214,8 +212,7 @@ async function enrichProjectsWithManagers(projects, companyId) {
       const creator = creatorMap.get(p.createdById);
       const isPm = creator.roleAssignments?.some(
         (ra) =>
-          normalizeRole(ra.role?.label) === 'project_manager' ||
-          ra.role?.name === 'project_manager'
+          systemSlugOfRole(ra.role) === 'project_manager'
       );
       if (isPm) {
         pm = {
@@ -443,6 +440,18 @@ export async function createProject(req, res, next) {
 
     const pmId = body.projectManagerId || body.managerId || body.pmId;
     if (pmId) {
+      // Cross-Tenant PM Spy Injection Prevention (MAL-03)
+      const pmUser = await prisma.user.findFirst({
+        where: {
+          id: String(pmId),
+          companyId: req.user.companyId,
+          isActive: true,
+        },
+      });
+      if (!pmUser) {
+        throw new BadRequestError('Assigned project manager must be an active employee in your company');
+      }
+
       const pmRole = await prisma.role.findFirst({
         where: {
           companyId: req.user.companyId,
@@ -457,7 +466,7 @@ export async function createProject(req, res, next) {
         await prisma.roleAssignment.create({
           data: {
             companyId: req.user.companyId,
-            userId: String(pmId),
+            userId: pmUser.id,
             roleId: pmRole.id,
             scopeType: 'Project',
             scopeId: newProject.id,
@@ -550,6 +559,18 @@ export async function updateProject(req, res, next) {
 
     const pmId = body.projectManagerId || body.managerId || body.pmId;
     if (pmId) {
+      // Cross-Tenant PM Spy Injection Prevention (MAL-03)
+      const pmUser = await prisma.user.findFirst({
+        where: {
+          id: String(pmId),
+          companyId: req.user.companyId,
+          isActive: true,
+        },
+      });
+      if (!pmUser) {
+        throw new BadRequestError('Assigned project manager must be an active employee in your company');
+      }
+
       const pmRole = await prisma.role.findFirst({
         where: {
           companyId: req.user.companyId,
@@ -572,13 +593,13 @@ export async function updateProject(req, res, next) {
         if (existingPmAssignment) {
           await prisma.roleAssignment.update({
             where: { id: existingPmAssignment.id },
-            data: { userId: String(pmId), roleId: pmRole.id },
+            data: { userId: pmUser.id, roleId: pmRole.id },
           });
         } else {
           await prisma.roleAssignment.create({
             data: {
               companyId: req.user.companyId,
-              userId: String(pmId),
+              userId: pmUser.id,
               roleId: pmRole.id,
               scopeType: 'Project',
               scopeId: id,
@@ -656,17 +677,45 @@ export async function deleteProject(req, res, next) {
       assertBranchManagerScope(req.user, existing.team.branchId, 'delete projects in');
     }
 
-    await prisma.project.delete({
-      where: { id },
+    // Safety checks against orphan cascading
+    const tasksCount = await prisma.task.count({ where: { projectId: id } });
+    if (tasksCount > 0) {
+      throw new ConflictError(`Cannot delete project: ${tasksCount} task(s) are associated with this project. Reassign or delete tasks first.`);
+    }
+
+    const instanceCount = await prisma.processInstance.count({ where: { projectId: id } });
+    if (instanceCount > 0) {
+      throw new ConflictError(`Cannot delete project: ${instanceCount} workflow process instance(s) are associated with this project.`);
+    }
+
+    // Transactional cleanup nullifying foreign key references in ProcessAuditLog (RAT-04)
+    await prisma.$transaction(async (tx) => {
+      await tx.processAuditLog.updateMany({
+        where: { projectId: id },
+        data: { projectId: null },
+      });
+
+      await tx.escalation.updateMany({
+        where: { projectId: id },
+        data: { projectId: null },
+      });
+
+      await tx.roleAssignment.deleteMany({
+        where: { scopeType: 'Project', scopeId: id },
+      });
+
+      await tx.project.delete({
+        where: { id },
+      });
     });
 
     // Record audit log
     try {
-      await createProcessAuditLog({companyId: req.user.companyId,
-        projectId: id,
+      await createProcessAuditLog({
+        companyId: req.user.companyId,
         action: AUDIT_ACTIONS.DELETE,
         performedById: req.user.id,
-        oldValue: { name: existing.name },
+        newValue: { deletedProjectName: existing.name, teamId: existing.teamId },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during project deletion:', auditErr.message);

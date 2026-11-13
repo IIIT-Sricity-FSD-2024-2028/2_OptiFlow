@@ -240,10 +240,19 @@ export default function PmTaskDetail() {
             <div><p className="text-xs font-semibold uppercase text-gray-500">Created by</p><p className="mt-1 text-sm text-gray-900">{task.createdBy?.fullName || '—'}</p></div>
             <div><p className="text-xs font-semibold uppercase text-gray-500">Completed</p><p className="mt-1 text-sm text-gray-900">{formatDate(task.completedAt)}</p></div>
           </div>
-          {isOverdue && (
+          {(isOverdue || complianceBlocked) && (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-              <p className="text-sm text-amber-800">This overdue task may have an active compliance violation.</p>
-              <Button variant="warning" onClick={() => setExtensionOpen(true)}>Grant deadline extension</Button>
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  {isOverdue ? 'This task is overdue.' : 'Compliance governance blocker active.'}
+                </p>
+                <p className="text-xs text-amber-700">
+                  Extending the deadline will synchronize the compliance remediation window and unfreeze governance lockouts.
+                </p>
+              </div>
+              <Button variant="warning" onClick={() => setExtensionOpen(true)}>
+                Grant deadline extension
+              </Button>
             </div>
           )}
         </div>
@@ -306,11 +315,20 @@ export default function PmTaskDetail() {
               },
               {
                 key: 'status',
-                header: 'Status',
+                header: 'Status & Feedback',
                 render: (ev) => {
                   const st = String(ev.status || '').toLowerCase();
                   const badgeStatus = st === 'approved' ? 'success' : st === 'rejected' ? 'danger' : 'warning';
-                  return <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>;
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>
+                      {st === 'rejected' && ev.rejectionReason && (
+                        <span className="text-[11px] text-rose-700 italic max-w-xs">
+                          Feedback: "{ev.rejectionReason}"
+                        </span>
+                      )}
+                    </div>
+                  );
                 },
               },
               {

@@ -20,8 +20,8 @@ export function isBranchManager(user) {
  * Resolves the effective branch filter for scoped queries
  */
 export function resolveEffectiveBranchId({ user, branchId }) {
-  if (isBranchManager(user) && user?.scopeId) {
-    return user.scopeId;
+  if (isBranchManager(user)) {
+    return user?.scopeId || '__unassigned_branch_sentinel__';
   }
   if (isCompanyOwner(user) && branchId) {
     return branchId;
@@ -240,8 +240,8 @@ export async function buildBranchViolationWhere(prisma, companyId, branchId) {
  * Resolves branch filter for executive metrics
  */
 export function resolveMetricsBranchId(user, queryBranchId) {
-  if (isBranchManager(user) && user?.scopeId) {
-    return user.scopeId;
+  if (isBranchManager(user)) {
+    return user?.scopeId || '__unassigned_branch_sentinel__';
   }
   if (isCompanyOwner(user) && queryBranchId) {
     return queryBranchId;
@@ -250,10 +250,14 @@ export function resolveMetricsBranchId(user, queryBranchId) {
 }
 
 /**
- * Ensures a Branch Manager can only act within their assigned branch scope
+ * Ensures a Branch Manager can only act within their assigned branch scope.
+ * Fails closed if the Branch Manager has no valid scope assigned (RAT-06/Security).
  */
 export function assertBranchManagerScope(user, branchId, action = 'access this resource') {
-  if (!isBranchManager(user) || !user?.scopeId) return;
+  if (!isBranchManager(user)) return;
+  if (!user?.scopeId) {
+    throw new ForbiddenError(`Branch Manager is not assigned to a valid branch scope.`);
+  }
   if (!branchId || branchId !== user.scopeId) {
     throw new ForbiddenError(`Branch Managers can only ${action} within their assigned branch.`);
   }

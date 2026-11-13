@@ -84,22 +84,49 @@ export async function getExecutiveMetrics(req, res, next) {
       totalComplianceRules,
       totalProcessTemplates,
     ] = await Promise.all([
-      prisma.user.count({ where: { companyId, isActive: true } }),
+      prisma.user.count({
+        where: effectiveBranchId
+          ? {
+              companyId,
+              isActive: true,
+              teamMembers: { some: { team: { branchId: effectiveBranchId } } },
+            }
+          : { companyId, isActive: true },
+      }),
       prisma.team.count({ where: teamFilter }),
       effectiveBranchId ? 1 : prisma.branch.count({ where: { companyId } }),
       prisma.project.count({ where: { ...projectFilter, status: 'Active' } }),
       prisma.project.count({ where: projectFilter }),
       prisma.task.count({ where: { ...taskBranchFilter, status: { in: ['Active', 'In_Review', 'Draft'] } } }),
       prisma.task.count({ where: { ...taskBranchFilter, status: 'Completed' } }),
-      prisma.escalation.count({ where: { companyId, status: 'Open' } }),
-      prisma.complianceViolation.count({ where: { companyId, status: 'Open' } }),
+      prisma.escalation.count({
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              OR: [
+                { project: { team: { branchId: effectiveBranchId } } },
+                { task: { project: { team: { branchId: effectiveBranchId } } } },
+              ],
+            }
+          : { companyId, status: 'Open' },
+      }),
+      prisma.complianceViolation.count({
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              task: { project: { team: { branchId: effectiveBranchId } } },
+            }
+          : { companyId, status: 'Open' },
+      }),
       prisma.subscription.findFirst({
-        where: { companyId, status: { in: ['Active', 'Trialing'] } },
+        where: { companyId, status: { in: ['Active', 'Trialing', 'PastDue'] } },
         include: { plan: true },
         orderBy: { currentPeriodEnd: 'desc' },
       }),
       prisma.branch.findMany({
-        where: { companyId },
+        where: effectiveBranchId ? { id: effectiveBranchId, companyId } : { companyId },
         select: {
           id: true,
           name: true,
@@ -117,7 +144,13 @@ export async function getExecutiveMetrics(req, res, next) {
         orderBy: { name: 'asc' },
       }),
       prisma.complianceViolation.findMany({
-        where: { companyId, status: 'Open' },
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              task: { project: { team: { branchId: effectiveBranchId } } },
+            }
+          : { companyId, status: 'Open' },
         select: {
           id: true,
           severity: true,
@@ -128,7 +161,16 @@ export async function getExecutiveMetrics(req, res, next) {
         orderBy: { detectedAt: 'desc' },
       }),
       prisma.escalation.findMany({
-        where: { companyId, status: 'Open' },
+        where: effectiveBranchId
+          ? {
+              companyId,
+              status: 'Open',
+              OR: [
+                { project: { team: { branchId: effectiveBranchId } } },
+                { task: { project: { team: { branchId: effectiveBranchId } } } },
+              ],
+            }
+          : { companyId, status: 'Open' },
         select: {
           id: true,
           title: true,

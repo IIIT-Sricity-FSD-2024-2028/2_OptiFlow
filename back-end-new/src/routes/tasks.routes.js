@@ -37,7 +37,7 @@ router.post(
 router.patch(
   ['/tasks/:id', '/api/tasks/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'project_manager', 'branch_manager', 'team_leader', 'team_lead', 'team_member'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.PROJECT_MANAGER, ROLES.BRANCH_MANAGER, ROLES.TEAM_LEAD, 'project_manager', 'branch_manager', 'team_leader', 'team_lead'),
   updateTask
 );
 router.delete(

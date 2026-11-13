@@ -3,11 +3,21 @@ import { requireRoles } from '../middleware/authorize.js';
 import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
+import { isBranchManager } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 export async function getBootstrapState(req, res, next) {
   try {
     const companyId = req.user.companyId;
+
+    // Corporate Topology Scoping (RAT-06)
+    const branchWhere = isBranchManager(req.user)
+      ? { id: req.user.scopeId || '__unassigned_branch__', companyId }
+      : { companyId };
+
+    const teamWhere = isBranchManager(req.user)
+      ? { branchId: req.user.scopeId || '__unassigned_branch__', branch: { companyId } }
+      : { branch: { companyId } };
 
     const [user, branches, teams, roles, unreadNotificationsCount] = await Promise.all([
       prisma.user.findUnique({
@@ -18,12 +28,12 @@ export async function getBootstrapState(req, res, next) {
         },
       }),
       prisma.branch.findMany({
-        where: { companyId },
+        where: branchWhere,
         select: { id: true, name: true, code: true },
         orderBy: { name: 'asc' },
       }),
       prisma.team.findMany({
-        where: { branch: { companyId } },
+        where: teamWhere,
         select: { id: true, name: true, branchId: true },
         orderBy: { name: 'asc' },
       }),

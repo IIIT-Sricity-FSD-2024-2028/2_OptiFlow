@@ -81,17 +81,23 @@ export default function HrUserDetail() {
         apiClient("/users").catch(() => []),
       ]);
 
-      if (!userData) {
+      const rawUser = userData?.data || userData;
+      if (!rawUser || !rawUser.id) {
         throw new Error("Employee record could not be found.");
       }
 
-      setEmployee(userData);
-      setAllUsers(Array.isArray(usersList) ? usersList : []);
+      setEmployee(rawUser);
+      const rawUsersList = Array.isArray(usersList?.data)
+        ? usersList.data
+        : Array.isArray(usersList)
+        ? usersList
+        : [];
+      setAllUsers(rawUsersList);
 
       // Pre-fill edit modal form
-      setEditFullName(userData.fullName || "");
-      setEditJobTitle(userData.jobTitle || "");
-      setEditManagerId(userData.managerUserId || "");
+      setEditFullName(rawUser.fullName || "");
+      setEditJobTitle(rawUser.jobTitle || "");
+      setEditManagerId(rawUser.managerUserId || "");
     } catch (err) {
       console.error("[HrUserDetail] Failed to load employee details:", err);
       setError(err.message || "Failed to load employee profile.");
@@ -104,6 +110,23 @@ export default function HrUserDetail() {
   useEffect(() => {
     fetchEmployeeData();
   }, [fetchEmployeeData]);
+
+  // Memoized set of all direct and indirect subordinate IDs to prevent reporting loops (Task 9)
+  const subordinateIds = useMemo(() => {
+    if (!employee?.id || !Array.isArray(allUsers)) return new Set();
+    const subs = new Set([employee.id]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const u of allUsers) {
+        if (u.managerUserId && subs.has(u.managerUserId) && !subs.has(u.id)) {
+          subs.add(u.id);
+          added = true;
+        }
+      }
+    }
+    return subs;
+  }, [employee?.id, allUsers]);
 
   // 2. EDIT PROFILE HANDLER
   const handleUpdateProfile = async (e) => {
@@ -295,31 +318,53 @@ export default function HrUserDetail() {
           </div>
 
           {/* Zero-Clutter Administrative Actions */}
-          {canManageUsers && (
-            <div className="flex items-center gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setEditFullName(employee.fullName || "");
-                  setEditJobTitle(employee.jobTitle || "");
-                  setEditManagerId(employee.managerUserId || "");
-                  setEditError("");
-                  setIsEditModalOpen(true);
-                }}
-              >
-                Edit Profile
-              </Button>
+          {canManageUsers && (() => {
+            const isOwnerTarget =
+              employee.is_owner ||
+              employee.isOwner ||
+              employee.roleAssignments?.some(
+                (ra) =>
+                  ra.role?.name === "company_owner" ||
+                  ra.role?.label?.toLowerCase().includes("owner")
+              ) ||
+              employee.roles?.some(
+                (r) =>
+                  r.name === "company_owner" ||
+                  r.role?.name === "company_owner" ||
+                  r.label?.toLowerCase().includes("owner")
+              );
 
-              {employee.id !== currentUser?.id && (
+            // Subordinates (HR/SysAdmin) cannot edit or deactivate the Sovereign Company Owner
+            if (isOwnerTarget && currentUser?.role !== "company_owner") {
+              return null;
+            }
+
+            return (
+              <div className="flex items-center gap-3">
                 <Button
-                  variant={employee.isActive !== false ? "danger" : "primary"}
-                  onClick={() => setIsDeactivateOpen(true)}
+                  variant="secondary"
+                  onClick={() => {
+                    setEditFullName(employee.fullName || "");
+                    setEditJobTitle(employee.jobTitle || "");
+                    setEditManagerId(employee.managerUserId || "");
+                    setEditError("");
+                    setIsEditModalOpen(true);
+                  }}
                 >
-                  {employee.isActive !== false ? "Deactivate Account" : "Reactivate Account"}
+                  Edit Profile
                 </Button>
-              )}
-            </div>
-          )}
+
+                {employee.id !== currentUser?.id && (
+                  <Button
+                    variant={employee.isActive !== false ? "danger" : "primary"}
+                    onClick={() => setIsDeactivateOpen(true)}
+                  >
+                    {employee.isActive !== false ? "Deactivate Account" : "Reactivate Account"}
+                  </Button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -741,7 +786,7 @@ export default function HrUserDetail() {
             >
               <option value="">None (Top-Level Executive / Unassigned)</option>
               {allUsers
-                .filter((u) => u.id !== employee.id && u.isActive !== false)
+                .filter((u) => !subordinateIds.has(u.id) && u.isActive !== false)
                 .map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.fullName} ({u.jobTitle || u.email})

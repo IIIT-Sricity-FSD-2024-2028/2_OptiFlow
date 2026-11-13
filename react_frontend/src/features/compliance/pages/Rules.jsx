@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PATHS } from "../../../app/paths";
 import { apiClient } from "../../../services/api/client";
+import { useAuth } from "../../../context/AuthContext";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Modal } from "../../../shared/components/Modal";
 import { Pagination } from "../../../shared/components/Pagination";
 import { useToast } from "../../../shared/components/Toast";
+import { ManageRuleScopesModal } from "../components/ManageRuleScopesModal";
 import {
   Plus,
   Loader2,
@@ -17,29 +19,51 @@ import {
   Link2,
   Power,
   PowerOff,
+  Clock,
+  ShieldAlert,
+  UserCheck,
+  Layers,
+  Building2,
+  FolderGit2,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
 
+const DEFAULT_SLA_BY_SEVERITY = {
+  Critical: 4,
+  High: 24,
+  Medium: 72,
+  Low: 168,
+};
+
 export default function ComplianceRules() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeCategoryId = searchParams.get("categoryId") || "ALL";
   const [activeStatus, setActiveStatus] = useState("ALL"); // "ALL" | "ACTIVE" | "INACTIVE"
+  const [scopeFilter, setScopeFilter] = useState("MyRules"); // "MyRules" | "All"
 
   const [rules, setRules] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Modal states
+  const [selectedRuleForScopes, setSelectedRuleForScopes] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState(null);
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     severity: "Medium",
     categoryId: "",
+    assignedOfficerId: "",
+    slaHours: 72,
     isActive: true,
     scopeType: "Company",
   });
@@ -47,9 +71,11 @@ export default function ComplianceRules() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [rulesResponse, categoriesResponse] = await Promise.all([
+      const [rulesResponse, categoriesResponse, usersResponse, projectsResponse] = await Promise.all([
         apiClient("/compliance-rules").catch(() => []),
         apiClient("/compliance-categories").catch(() => []),
+        apiClient("/users").catch(() => []),
+        apiClient("/projects").catch(() => []),
       ]);
 
       setRules(Array.isArray(rulesResponse) ? rulesResponse : []);
@@ -57,6 +83,14 @@ export default function ComplianceRules() {
         ? categoriesResponse
         : categoriesResponse?.data || [];
       setCategories(catList);
+      const uList = Array.isArray(usersResponse)
+        ? usersResponse
+        : usersResponse?.data || [];
+      setUsers(uList);
+      const pList = Array.isArray(projectsResponse)
+        ? projectsResponse
+        : projectsResponse?.data || [];
+      setProjects(pList);
     } catch (err) {
       console.error("Failed to load compliance rules and categories:", err);
     } finally {
@@ -68,13 +102,44 @@ export default function ComplianceRules() {
     fetchData();
   }, []);
 
+  // 🟢 DYNAMIC CATEGORIES: Automatically reflects whether we are in "My Assigned Rules" or "All Rules"
+  const dynamicCategories = useMemo(() => {
+    if (scopeFilter === "MyRules") {
+      const myCats = categories.filter((c) => (c.ownerId || c.owner?.id) === user?.id);
+      return myCats.length > 0 ? myCats : categories;
+    }
+    return categories;
+  }, [categories, scopeFilter, user?.id]);
+
+  // If activeCategoryId is not in dynamicCategories, reset to ALL
+  useEffect(() => {
+    if (activeCategoryId !== "ALL") {
+      const exists = dynamicCategories.some((c) => c.id === activeCategoryId);
+      if (!exists) {
+        setSearchParams({});
+      }
+    }
+  }, [dynamicCategories, activeCategoryId, setSearchParams]);
+
+  // Project map for resolving scope IDs to readable names
+  const projectMap = useMemo(() => {
+    const map = new Map();
+    projects.forEach((p) => map.set(String(p.id), p.name));
+    return map;
+  }, [projects]);
+
   const handleOpenCreate = () => {
     setEditingRuleId(null);
+    const myCats = categories.filter((c) => (c.ownerId || c.owner?.id) === user?.id);
+    const defaultCat = myCats[0]?.id || categories[0]?.id || "";
+
     setFormData({
       name: "",
       description: "",
       severity: "Medium",
-      categoryId: activeCategoryId !== "ALL" ? activeCategoryId : "",
+      categoryId: activeCategoryId !== "ALL" ? activeCategoryId : defaultCat,
+      assignedOfficerId: user?.id || "",
+      slaHours: DEFAULT_SLA_BY_SEVERITY["Medium"] || 72,
       isActive: true,
       scopeType: "Company",
     });
@@ -93,17 +158,28 @@ export default function ComplianceRules() {
       description: rule.description || "",
       severity: rule.severity || "Medium",
       categoryId: rule.categoryId || rule.category?.id || "",
+      assignedOfficerId: rule.assignedOfficerId || rule.assignedOfficer?.id || "",
+      slaHours: rule.slaHours ?? DEFAULT_SLA_BY_SEVERITY[rule.severity] ?? 72,
       isActive: rule.isActive,
       scopeType: existingBinding,
     });
     setIsOpen(true);
   };
 
+  const handleSeverityChange = (e) => {
+    const sev = e.target.value;
+    const autoSla = DEFAULT_SLA_BY_SEVERITY[sev] || 72;
+    setFormData((prev) => ({
+      ...prev,
+      severity: sev,
+      slaHours: autoSla,
+    }));
+  };
+
   const handleToggleActive = async (rule) => {
     const newStatus = !rule.isActive;
     const previousRules = [...rules];
 
-    // Optimistic UI update
     setRules(
       rules.map((r) => (r.id === rule.id ? { ...r, isActive: newStatus } : r))
     );
@@ -147,7 +223,6 @@ export default function ComplianceRules() {
 
     try {
       if (editingRuleId) {
-        // 1. Update the Rule (supports categoryId)
         await apiClient(`/compliance-rules/${editingRuleId}`, {
           method: "PATCH",
           body: JSON.stringify({
@@ -155,11 +230,12 @@ export default function ComplianceRules() {
             description: formData.description,
             severity: formData.severity,
             categoryId: formData.categoryId || null,
+            assignedOfficerId: formData.assignedOfficerId || null,
+            slaHours: Number(formData.slaHours) || 72,
             isActive: formData.isActive,
           }),
         });
       } else {
-        // 1. Create the Rule (supports categoryId)
         const newRule = await apiClient("/compliance-rules", {
           method: "POST",
           body: JSON.stringify({
@@ -167,11 +243,12 @@ export default function ComplianceRules() {
             description: formData.description,
             severity: formData.severity,
             categoryId: formData.categoryId || null,
+            assignedOfficerId: formData.assignedOfficerId || null,
+            slaHours: Number(formData.slaHours) || 72,
             isActive: formData.isActive,
           }),
         });
 
-        // 2. Immediately Create the Binding so the engine evaluates it
         await apiClient("/compliance-bindings", {
           method: "POST",
           body: JSON.stringify({
@@ -189,41 +266,64 @@ export default function ComplianceRules() {
     }
   };
 
-  const filteredRules = rules.filter((r) => {
-    const matchesCategory =
-      activeCategoryId === "ALL" ||
-      r.categoryId === activeCategoryId ||
-      r.category?.id === activeCategoryId;
+  const filteredRules = useMemo(() => {
+    return rules.filter((r) => {
+      // 1. Scope filter: MyRules vs All
+      if (scopeFilter === "MyRules") {
+        const officerId = r.assignedOfficerId || r.assignedOfficer?.id || r.category?.ownerId;
+        if (officerId && officerId !== user?.id) {
+          return false;
+        }
+      }
 
-    const matchesStatus =
-      activeStatus === "ALL" ||
-      (activeStatus === "ACTIVE" && r.isActive) ||
-      (activeStatus === "INACTIVE" && !r.isActive);
+      // 2. Category filter
+      const matchesCategory =
+        activeCategoryId === "ALL" ||
+        r.categoryId === activeCategoryId ||
+        r.category?.id === activeCategoryId;
 
-    return matchesCategory && matchesStatus;
-  });
+      // 3. Status filter
+      const matchesStatus =
+        activeStatus === "ALL" ||
+        (activeStatus === "ACTIVE" && r.isActive) ||
+        (activeStatus === "INACTIVE" && !r.isActive);
+
+      return matchesCategory && matchesStatus;
+    });
+  }, [rules, scopeFilter, activeCategoryId, activeStatus, user?.id]);
 
   const paginatedRules = filteredRules.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
 
+  const myRulesCount = rules.filter((r) => {
+    const officerId = r.assignedOfficerId || r.assignedOfficer?.id || r.category?.ownerId;
+    return !officerId || officerId === user?.id;
+  }).length;
+
+  // Essential columns without unnecessary column bloat
   const columns = [
     {
-      header: "RULE NAME",
+      header: "RULE NAME & DESCRIPTION",
       accessor: "name",
       render: (row) => (
-        <span
-          onClick={() => navigate(`/compliance/rules/${row.id}`)}
-          className="font-semibold text-[13px] text-blue-600 hover:text-blue-800 cursor-pointer"
-        >
-          {row.name}
-        </span>
+        <div className="flex flex-col max-w-[220px]">
+          <span
+            onClick={() => navigate(`/compliance/rules/${row.id}`)}
+            className="font-semibold text-[13px] text-blue-600 hover:text-blue-800 cursor-pointer truncate"
+            title={row.name}
+          >
+            {row.name}
+          </span>
+          <span className="text-xs text-slate-500 line-clamp-1 mt-0.5" title={row.description}>
+            {row.description || "No description provided"}
+          </span>
+        </div>
       ),
     },
-    { header: "DESCRIPTION", accessor: "description" },
     {
-      header: "CATEGORY",
+      header: "REGULATORY DOMAIN",
       accessor: "category",
       render: (row) => {
         const catName = row.category?.name;
@@ -240,8 +340,7 @@ export default function ComplianceRules() {
                 categoryName: catName,
               });
             }}
-            className="text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition-colors"
-            title="Filter by this category"
+            className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition-colors cursor-pointer text-left"
           >
             {catName}
           </button>
@@ -249,34 +348,102 @@ export default function ComplianceRules() {
       },
     },
     {
-      header: "SEVERITY",
-      accessor: "severity",
-      render: (row) => (
-        <Badge
-          status={
-            row.severity === "High" || row.severity === "Critical"
-              ? "danger"
-              : row.severity === "Medium"
-                ? "warning"
-                : "info"
-          }
-        >
-          {row.severity}
-        </Badge>
-      ),
+      header: "ENFORCED SCOPES",
+      accessor: "bindings",
+      render: (row) => {
+        const bindingsList = row.bindings || [];
+        if (bindingsList.length === 0) {
+          return (
+            <button
+              onClick={() => setSelectedRuleForScopes(row)}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 font-medium transition-colors cursor-pointer"
+              title="Click to attach an enforcement target"
+            >
+              <Plus size={11} />
+              <span>Bind Scope</span>
+            </button>
+          );
+        }
+
+        const firstBinding = bindingsList[0];
+        let label = "Company-Wide (All)";
+        if (firstBinding.scopeType === "Project") {
+          label = projectMap.get(firstBinding.scopeId) || `Project #${firstBinding.scopeId.substring(0, 8)}`;
+        } else if (firstBinding.scopeType === "Team") {
+          label = `Team #${firstBinding.scopeId.substring(0, 8)}`;
+        }
+
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setSelectedRuleForScopes(row)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium cursor-pointer transition-colors ${
+                firstBinding.scopeType === "Company"
+                  ? "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                  : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+              }`}
+              title="Click to manage policy scopes"
+            >
+              {firstBinding.scopeType === "Company" ? <Building2 size={11} className="text-slate-500" /> : <FolderGit2 size={11} className="text-blue-500" />}
+              <span className="truncate max-w-[120px]">{label}</span>
+            </button>
+
+            {bindingsList.length > 1 && (
+              <button
+                onClick={() => setSelectedRuleForScopes(row)}
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer"
+                title="View all attached scopes"
+              >
+                +{bindingsList.length - 1}
+              </button>
+            )}
+          </div>
+        );
+      },
     },
     {
-      header: "SCOPE",
-      accessor: "scope",
+      header: "OWNING OFFICER",
+      accessor: "officer",
       render: (row) => {
-        const binding =
-          row.bindings && row.bindings.length > 0
-            ? row.bindings[0].scopeType
-            : "None";
+        const officer = row.assignedOfficer || row.category?.owner;
+        const isMe = officer?.id === user?.id;
+        return officer ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-slate-700 truncate max-w-[120px]">
+              {officer.fullName || officer.email}
+            </span>
+            {isMe && (
+              <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.2 rounded-full">
+                You
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400 italic">Global Org</span>
+        );
+      },
+    },
+    {
+      header: "SEVERITY & SLA",
+      accessor: "severity",
+      render: (row) => {
+        const colors = {
+          Critical: "danger",
+          High: "warning",
+          Medium: "default",
+          Low: "info",
+        };
+        const sla = row.slaHours ?? DEFAULT_SLA_BY_SEVERITY[row.severity] ?? 72;
         return (
-          <Badge status={binding !== "None" ? "info" : "default"}>
-            {binding}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge status={colors[row.severity] || "default"}>
+              {row.severity}
+            </Badge>
+            <span className="text-[11px] text-slate-500 font-mono flex items-center gap-0.5">
+              <Clock size={11} className="text-slate-400" />
+              {sla}h
+            </span>
+          </div>
         );
       },
     },
@@ -284,54 +451,52 @@ export default function ComplianceRules() {
       header: "STATUS",
       accessor: "isActive",
       render: (row) => (
-        <span
-          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-            row.isActive
-              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              : "bg-slate-100 text-slate-600 border border-slate-200"
-          }`}
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              row.isActive ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
-            }`}
-          />
-          {row.isActive ? "Active" : "Deactivated"}
-        </span>
+        <Badge status={row.isActive ? "success" : "default"}>
+          {row.isActive ? "Active" : "Inactive"}
+        </Badge>
       ),
     },
     {
       header: "ACTIONS",
       accessor: "actions",
       render: (row) => (
-        <div className="flex items-center gap-1.5">
-          {/* Quick Activate / Deactivate Toggle */}
-          <button
-            type="button"
-            onClick={() => handleToggleActive(row)}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              row.isActive
-                ? "text-emerald-600 hover:text-amber-600 hover:bg-amber-50"
-                : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-            }`}
-            title={
-              row.isActive
-                ? "Deactivate Rule (Temporarily pause evaluation)"
-                : "Activate Rule (Resume compliance enforcement)"
-            }
+        <div className="flex items-center gap-1">
+          {/* Compact Icon for Scope Management */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedRuleForScopes(row)}
+            title="Manage Enforced Scopes"
+            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5"
           >
-            {row.isActive ? <Power size={15} /> : <PowerOff size={15} />}
-          </button>
+            <Link2 size={15} />
+          </Button>
+
+          {/* Toggle Power */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleToggleActive(row)}
+            title={row.isActive ? "Deactivate Rule" : "Activate Rule"}
+            className={`p-1.5 ${
+              row.isActive
+                ? "text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+            }`}
+          >
+            {row.isActive ? <PowerOff size={15} /> : <Power size={15} />}
+          </Button>
 
           {/* Edit Rule */}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => handleOpenEdit(row)}
-            className="text-slate-500 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
             title="Edit Rule"
+            className="p-1.5 text-slate-500 hover:text-slate-800"
           >
             <Edit2 size={15} />
-          </button>
+          </Button>
         </div>
       ),
     },
@@ -339,184 +504,118 @@ export default function ComplianceRules() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
-  const activeCount = rules.filter((r) => r.isActive).length;
-  const inactiveCount = rules.filter((r) => !r.isActive).length;
-
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
-      {/* Top Header */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Rules & Policy Governance
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Configure automated policy criteria, regulatory categories, and
-            scope bindings.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Compliance Rules Engine</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Configure automated policy constraints, SLA thresholds, and attach scope boundaries to projects.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            className="inline-flex items-center gap-1.5 shadow-xs"
-            onClick={handleOpenCreate}
-          >
-            <Plus size={15} />
-            <span>Create New Rule</span>
-          </Button>
-        </div>
-      </header>
-
-      {/* Policy Domain Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-        <Link
-          to={PATHS.COMPLIANCE.RULES}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow-xs"
-        >
-          <BookOpen size={14} />
-          <span>Rules ({rules.length})</span>
-        </Link>
-        <Link
-          to={PATHS.COMPLIANCE.CATEGORIES}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          <Tags size={14} className="text-slate-400" />
-          <span>Regulatory Categories ({categories.length})</span>
-        </Link>
-        <Link
-          to={PATHS.COMPLIANCE.BINDINGS}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          <Link2 size={14} className="text-slate-400" />
-          <span>Scope Bindings</span>
-        </Link>
+        <Button variant="primary" onClick={handleOpenCreate} className="flex items-center gap-1.5 self-start">
+          <Plus size={16} />
+          <span>New Compliance Rule</span>
+        </Button>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Category & Status Filter Toolbar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border-b border-slate-200 bg-slate-50/60">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Category Select */}
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">
-                Category:
-              </span>
-              <select
-                value={activeCategoryId}
-                onChange={(e) => {
-                  setCurrentPage(1);
-                  if (e.target.value === "ALL") {
-                    const newParams = new URLSearchParams(searchParams);
-                    newParams.delete("categoryId");
-                    newParams.delete("categoryName");
-                    setSearchParams(newParams);
-                  } else {
-                    const cat = categories.find((c) => c.id === e.target.value);
-                    setSearchParams({
-                      categoryId: e.target.value,
-                      categoryName: cat ? cat.name : "",
-                    });
-                  }
-                }}
-                className="border border-slate-300 rounded-md px-3 py-1.5 text-xs bg-white text-gray-700 outline-none focus:border-blue-500 font-medium"
-              >
-                <option value="ALL">All Categories ({rules.length})</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+      {/* Scope and Dynamic Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-3">
+        {/* Rules Ownership Toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setScopeFilter("MyRules");
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              scopeFilter === "MyRules"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            <UserCheck size={14} />
+            <span>My Assigned Rules ({myRulesCount})</span>
+          </button>
 
-              {activeCategoryId !== "ALL" && (
-                <button
-                  onClick={() => {
-                    setCurrentPage(1);
-                    const newParams = new URLSearchParams(searchParams);
-                    newParams.delete("categoryId");
-                    newParams.delete("categoryName");
-                    setSearchParams(newParams);
-                  }}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {/* Status Filter Pills */}
-            <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-lg">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveStatus("ALL");
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  activeStatus === "ALL"
-                    ? "bg-white text-slate-800 shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                All ({rules.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveStatus("ACTIVE");
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  activeStatus === "ACTIVE"
-                    ? "bg-white text-emerald-700 shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Active ({activeCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveStatus("INACTIVE");
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  activeStatus === "INACTIVE"
-                    ? "bg-white text-slate-800 shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Deactivated ({inactiveCount})
-              </button>
-            </div>
-          </div>
-
-          <div className="text-xs text-gray-500">
-            Showing{" "}
-            <span className="font-semibold text-gray-700">
-              {filteredRules.length}
-            </span>{" "}
-            of{" "}
-            <span className="font-semibold text-gray-700">{rules.length}</span>{" "}
-            policies
-          </div>
+          <button
+            onClick={() => {
+              setScopeFilter("All");
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              scopeFilter === "All"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            <Layers size={14} />
+            <span>All Organization Rules ({rules.length})</span>
+          </button>
         </div>
 
+        {/* Dynamic Category & Status Dropdowns */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Automatically Dynamic Category Filter */}
+          <select
+            value={activeCategoryId}
+            onChange={(e) => setSearchParams(e.target.value === "ALL" ? {} : { categoryId: e.target.value })}
+            className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="ALL">
+              {scopeFilter === "MyRules" ? "All My Domains" : "All Company Domains"}
+            </option>
+            {dynamicCategories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={activeStatus}
+            onChange={(e) => setActiveStatus(e.target.value)}
+            className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="ALL">All Status</option>
+            <option value="ACTIVE">Active Only</option>
+            <option value="INACTIVE">Inactive Only</option>
+          </select>
+
+          <Link
+            to={PATHS.COMPLIANCE.CATEGORIES}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <Tags size={13} className="text-slate-400" />
+            <span>Domains</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Rules Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-900">
+            {scopeFilter === "MyRules" ? "Rules in Your Regulatory Domain" : "All Organization Rules"} ({filteredRules.length})
+          </h2>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+            {filteredRules.length} Rules Enforcing
+          </span>
+        </div>
         <div className="p-0">
           <Table
             columns={columns}
             data={paginatedRules}
             emptyMessage={
-              activeStatus !== "ALL" || activeCategoryId !== "ALL"
-                ? "No compliance rules found matching the selected filters."
-                : "No compliance rules found. Create one to start scanning."
+              scopeFilter === "MyRules"
+                ? "No rules assigned to your regulatory domain. Switch to All Organization Rules to view or assign rules."
+                : "No compliance rules found matching the selected criteria."
             }
           />
         </div>
@@ -530,19 +629,26 @@ export default function ComplianceRules() {
         </div>
       </div>
 
+      {/* Inline Scope Management Modal */}
+      <ManageRuleScopesModal
+        isOpen={Boolean(selectedRuleForScopes)}
+        onClose={() => setSelectedRuleForScopes(null)}
+        rule={selectedRuleForScopes}
+        onUpdated={fetchData}
+      />
+
+      {/* Create / Edit Rule Modal */}
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        title={
-          editingRuleId ? "Edit Compliance Rule" : "Create New Compliance Rule"
-        }
+        title={editingRuleId ? "Edit Compliance Rule" : "Create Compliance Rule"}
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSaveRule}>
-              {editingRuleId ? "Save Changes" : "Save Rule"}
+              {editingRuleId ? "Save Changes" : "Create Rule"}
             </Button>
           </>
         }
@@ -555,45 +661,28 @@ export default function ComplianceRules() {
             <input
               type="text"
               required
+              placeholder="e.g. Mandatory 2-Reviewer Pull Request Policy"
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-slate-700">
-              Description *
-            </label>
-            <textarea
-              required
-              rows={3}
-              className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-slate-700">
-                Category
+                Regulatory Domain / Category *
               </label>
               <select
-                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                value={formData.categoryId || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, categoryId: e.target.value })
-                }
+                required
+                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white font-medium text-slate-800"
+                value={formData.categoryId}
+                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
               >
-                <option value="">-- No Category (Unassigned) --</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
+                <option value="">-- Select Category --</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.ownerId === user?.id ? "(Your Domain)" : ""}
                   </option>
                 ))}
               </select>
@@ -601,47 +690,66 @@ export default function ComplianceRules() {
 
             <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-slate-700">
-                Severity
+                Assigned Compliance Officer
               </label>
               <select
-                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
-                value={formData.severity}
-                onChange={(e) =>
-                  setFormData({ ...formData, severity: e.target.value })
-                }
+                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white font-medium text-slate-800"
+                value={formData.assignedOfficerId}
+                onChange={(e) => setFormData({ ...formData, assignedOfficerId: e.target.value })}
               >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Critical">Critical</option>
+                <option value="">-- Category Default --</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.fullName || u.email} {u.id === user?.id ? "(You)" : ""}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-2 p-3 bg-gray-50 border border-gray-100 rounded-lg">
-            <div className="flex flex-col">
-              <label
-                htmlFor="isActive"
-                className="text-sm font-semibold text-slate-700"
-              >
-                Rule is Active
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-slate-700">
+                Severity Level
               </label>
-              <span className="text-xs text-gray-500">
-                Enable or disable this rule
-              </span>
+              <select
+                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                value={formData.severity}
+                onChange={handleSeverityChange}
+              >
+                <option value="Critical">Critical (4h SLA)</option>
+                <option value="High">High (24h SLA)</option>
+                <option value="Medium">Medium (72h SLA)</option>
+                <option value="Low">Low (168h SLA)</option>
+              </select>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-slate-700">
+                Remediation SLA (Hours)
+              </label>
               <input
-                type="checkbox"
-                id="isActive"
-                checked={formData.isActive}
-                onChange={(e) =>
-                  setFormData({ ...formData, isActive: e.target.checked })
-                }
-                className="sr-only peer"
+                type="number"
+                min="1"
+                max="720"
+                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                value={formData.slaHours}
+                onChange={(e) => setFormData({ ...formData, slaHours: Number(e.target.value) })}
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-slate-700">
+              Description & Remediation Guidance
             </label>
+            <textarea
+              rows={3}
+              placeholder="What this rule enforces and what evidence or action resolves it..."
+              className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            />
           </div>
 
           <button type="submit" className="hidden">

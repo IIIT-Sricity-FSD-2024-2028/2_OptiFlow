@@ -6,7 +6,7 @@ import {
   ConflictError,
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
-import { hasRole, normalizeRole, ROLES } from '../utils/roles.js';
+import { hasRole, normalizeRole, ROLES, systemSlugOfRole } from '../utils/roles.js';
 import {
   buildTaskListWhere,
   buildSubtaskListWhere,
@@ -315,9 +315,7 @@ export async function createTask(req, res, next) {
 
       const hasTlRole = candidateUser.roleAssignments.some(
         (ra) =>
-          normalizeRole(ra.role?.label) === 'team_lead' ||
-          ra.role?.name === 'team_lead' ||
-          ra.role?.roleTemplate?.slug === 'team_lead'
+          systemSlugOfRole(ra.role) === 'team_leader'
       );
       const isTeamLeadInTeam = candidateUser.teamMembers.some((tm) => /lead/i.test(tm.role || ''));
 
@@ -425,6 +423,18 @@ export async function updateTask(req, res, next) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');
       updateData.status = body.status;
       if (body.status === 'Completed') {
+        const openSubtasksCount = await prisma.subtask.count({
+          where: {
+            taskId: id,
+            status: { not: 'Completed' },
+            deletedAt: null,
+          },
+        });
+        if (openSubtasksCount > 0) {
+          throw new BadRequestError(
+            `Cannot mark task as Completed: ${openSubtasksCount} subtask(s) are still pending completion or review.`
+          );
+        }
         updateData.completedAt = new Date();
       }
     }

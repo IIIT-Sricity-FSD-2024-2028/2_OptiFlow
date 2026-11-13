@@ -554,31 +554,46 @@ export default function HrUsers() {
       key: "actions",
       className: "w-[50px] text-center",
       align: "center",
-      render: (row) => (
-        <div className="flex items-center justify-center opacity-75 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-          {canManage && row.id !== currentUser?.id && (
-            row.isActive !== false ? (
-              <button
-                type="button"
-                onClick={() => setDeactivateTarget(row)}
-                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                title="Deactivate Account"
-              >
-                <Ban className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setDeactivateTarget(row)}
-                className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"
-                title="Activate Account"
-              >
-                <UserCheck className="w-4 h-4" />
-              </button>
-            )
-          )}
-        </div>
-      ),
+      render: (row) => {
+        // WHY: Zero-Clutter Hard Action Suppression & Sovereign Protection:
+        // Subordinate HR administrators cannot deactivate or modify the Sovereign Company Owner / CEO.
+        const isOwnerTarget =
+          row.is_owner ||
+          row.isOwner ||
+          row.roleAssignments?.some(
+            (ra) =>
+              ra.role?.name === "company_owner" ||
+              ra.role?.label?.toLowerCase().includes("owner")
+          );
+
+        if (isOwnerTarget) return null;
+
+        return (
+          <div className="flex items-center justify-center opacity-75 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+            {canManage && row.id !== currentUser?.id && (
+              row.isActive !== false ? (
+                <button
+                  type="button"
+                  onClick={() => setDeactivateTarget(row)}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                  title="Deactivate Account"
+                >
+                  <Ban className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setDeactivateTarget(row)}
+                  className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"
+                  title="Activate Account"
+                >
+                  <UserCheck className="w-4 h-4" />
+                </button>
+              )
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -666,18 +681,26 @@ export default function HrUsers() {
             key: "actions",
             className: "w-[50px] text-center",
             align: "center",
-            render: (row) => (
-              <div className="flex items-center justify-center opacity-75 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={() => setRevokeTarget(row)}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                  title="Revoke Role Assignment"
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                </button>
-              </div>
-            ),
+            render: (row) => {
+              // WHY: Sovereign Protection: HR cannot revoke company owner role
+              const isOwnerRole =
+                row.role?.name === "company_owner" ||
+                row.role?.label?.toLowerCase().includes("owner");
+              if (isOwnerRole) return null;
+
+              return (
+                <div className="flex items-center justify-center opacity-75 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setRevokeTarget(row)}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                    title="Revoke Role Assignment"
+                  >
+                    <ShieldAlert className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            },
           },
         ]
       : []),
