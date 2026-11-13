@@ -1,3 +1,4 @@
+import { openEvidenceFile } from '../../../shared/utils/evidenceFile';
 import React, { useRef, useState } from 'react';
 import { Button } from '../../../shared/components/Button';
 import { FileText, ExternalLink, Trash2, UploadCloud } from 'lucide-react';
@@ -129,19 +130,18 @@ export function EvidenceUploadCard({
 
                   <div className="flex items-center gap-2 shrink-0">
                     {fileUrl && (() => {
-                      const token = sessionStorage.getItem('authToken') || '';
                       const isExternalUrl = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
-                      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
-                      const viewUrl = isExternalUrl
-                        ? fileUrl
-                        : (evidence.id ? `${apiBase}/api/evidence/${evidence.id}/file?token=${encodeURIComponent(token)}` : fileUrl);
+                      const linkClass = 'text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1';
+                      if (!isExternalUrl && evidence.id) {
+                        return (
+                          <button type="button" onClick={() => openEvidenceFile(evidence.id)} className={`${linkClass} cursor-pointer`}>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>View</span>
+                          </button>
+                        );
+                      }
                       return (
-                        <a
-                          href={viewUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
-                        >
+                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
                           <ExternalLink className="w-3.5 h-3.5" />
                           <span>View</span>
                         </a>

@@ -19,39 +19,38 @@ const canReadRoles = requireRoles(
   ROLES.COMPANY_OWNER,
   ROLES.SYSTEM_ADMIN,
   ROLES.BRANCH_MANAGER,
-  ROLES.ACCESS_GOVERNANCE,
-  'superuser'
+  ROLES.ACCESS_GOVERNANCE
 );
 router.get(['/roles', '/api/roles'], authenticate, canReadRoles, listRoles);
 router.get(['/roles/:id', '/api/roles/:id'], authenticate, canReadRoles, getRoleById);
 router.post(
   ['/roles', '/api/roles'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
   createCustomRole
 );
 router.patch(
   ['/roles/:id', '/api/roles/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
   updateRole
 );
 router.delete(
   ['/roles/:id', '/api/roles/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
   deleteRole
 );
 router.put(
   ['/roles/:id/permissions', '/api/roles/:id/permissions'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
   updateRolePermissions
 );
 router.patch(
   ['/roles/:id/permissions', '/api/roles/:id/permissions'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'hr_manager', ROLES.SUPERUSER),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
   updateRolePermissions
 );
 

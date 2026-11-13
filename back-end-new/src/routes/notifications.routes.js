@@ -22,7 +22,6 @@ router.post(
     ROLES.PROJECT_MANAGER,
     ROLES.TEAM_LEAD,
     ROLES.COMPLIANCE_OFFICER,
-    'superuser',
     'project_manager',
     'team_leader',
     'team_lead',

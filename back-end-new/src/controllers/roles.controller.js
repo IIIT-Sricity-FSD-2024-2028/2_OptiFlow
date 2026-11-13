@@ -2,7 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { requireRoles } from '../middleware/authorize.js';
 import { NotFoundError, BadRequestError, ForbiddenError, ValidationError } from '../utils/errors.js';
 import { validateRequired, validateEmail } from '../utils/validation.js';
-import { ROLES, normalizeRole } from '../utils/roles.js';
+import { ROLES, normalizeRole, isReservedRoleName } from '../utils/roles.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 export async function listRoles(req, res, next) {
@@ -65,6 +65,9 @@ export async function createCustomRole(req, res, next) {
   try {
     const { label, description, permissionSlugs = [] } = req.body;
     validateRequired({ label }, ['label']);
+    if (isReservedRoleName(label)) {
+      throw new BadRequestError(`"${label.trim()}" is reserved for a built-in role. Choose a different name.`);
+    }
 
     const existing = await prisma.role.findFirst({
       where: { companyId: req.user.companyId, label: label.trim() },
@@ -151,6 +154,9 @@ export async function updateRole(req, res, next) {
         throw new ForbiddenError('The label of a system role cannot be changed');
       }
       if (label !== role.label) {
+        if (isReservedRoleName(label)) {
+          throw new BadRequestError(`"${label}" is reserved for a built-in role. Choose a different name.`);
+        }
         const clash = await prisma.role.findFirst({
           where: { companyId: req.user.companyId, label, NOT: { id } },
         });

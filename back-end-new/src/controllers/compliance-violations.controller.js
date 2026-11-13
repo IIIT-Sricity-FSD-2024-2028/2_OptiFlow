@@ -86,7 +86,7 @@ async function hydrateViolations(violations) {
  */
 async function buildViolationReadWhere(req) {
   const where = { companyId: req.user.companyId };
-  const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+  const role = normalizeRole(req.user?.role);
   if (role === 'team_member' || role === 'member') {
     const myTasks = await prisma.task.findMany({
       where: { companyId: req.user.companyId, assignedToId: req.user.id },

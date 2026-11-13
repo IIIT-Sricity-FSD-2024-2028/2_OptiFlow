@@ -16,7 +16,7 @@ import {
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 async function getProjectListWhere(req, branchId) {
-  const role = normalizeRole(req.user.role || req.user.roleLabel);
+  const role = normalizeRole(req.user.role);
   let assignedProjectIds = [];
 
   if (role === 'project_manager' || role === 'pm') {

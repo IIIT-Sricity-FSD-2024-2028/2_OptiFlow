@@ -3,79 +3,9 @@ import { env } from '../config/env.js';
 import { prisma } from '../config/prisma.js';
 import { UnauthorizedError, ForbiddenError, AppError, PaymentRequiredError, withCode } from '../utils/errors.js';
 import { getCompanyAuthState, getCompanyEntitlement } from '../utils/companyAuthCache.js';
-import { normalizeRole, toCanonicalRole, ROLES, ROLE_SLUGS } from '../utils/roles.js';
+import { resolveUserRole } from '../utils/roles.js';
 
-/**
- * Resolves canonical role label and slug from a user's role assignments
- */
-export function resolveUserRole(user) {
-  let roleLabel = 'Team Member';
-  let roleSlug = 'team_member';
-  let matchedAssignment = null;
-
-  if (user?.roleAssignments && user.roleAssignments.length > 0) {
-    const assignments = user.roleAssignments;
-
-    const findByPattern = (predicate) =>
-      assignments.find((ra) => ra.role && predicate((ra.role.label || '').toLowerCase()));
-
-    const ownerRa = findByPattern(
-      (l) =>
-        l.includes('owner') ||
-        l.includes('ceo') ||
-        l.includes('cto') ||
-        l.includes('coo') ||
-        l.includes('superuser')
-    );
-    const systemAdminRa = findByPattern((l) => l.includes('system admin') || l.includes('system_admin'));
-    const branchManagerRa = findByPattern((l) => l.includes('branch manager'));
-    const hrRa = findByPattern((l) => l.includes('governance') || l.includes('hr'));
-    const processRa = findByPattern((l) => l.includes('process'));
-    const complianceRa = findByPattern((l) => l.includes('compliance'));
-    const pmRa = findByPattern((l) => l.includes('project') || (l.includes('pm') && !l.includes('compliance')));
-    const tlRa = findByPattern((l) => l.includes('lead') || l.includes(' tl'));
-
-    matchedAssignment =
-      systemAdminRa ||
-      ownerRa ||
-      branchManagerRa ||
-      hrRa ||
-      processRa ||
-      complianceRa ||
-      pmRa ||
-      tlRa ||
-      assignments[0];
-
-    if (matchedAssignment?.role?.label) {
-      roleLabel = matchedAssignment.role.label;
-    }
-  }
-
-  const norm = normalizeRole(roleLabel);
-  if (ROLE_SLUGS[norm]) {
-    if (norm === 'access_governance') { roleSlug = 'hr_manager'; } else if (norm === 'pm') { roleSlug = 'project_manager'; } else if (norm === 'team_lead') { roleSlug = 'team_leader'; } else { roleSlug = norm; }
-  } else if (norm.includes('owner') || norm.includes('ceo')) {
-    roleSlug = 'company_owner';
-  } else if (norm.includes('branch_manager')) {
-    roleSlug = 'branch_manager';
-  } else if (norm.includes('governance') || norm.includes('hr')) {
-    roleSlug = 'hr_manager';
-  } else if (norm.includes('process')) {
-    roleSlug = 'process_admin';
-  } else if (norm.includes('compliance')) {
-    roleSlug = 'compliance_officer';
-  } else if (norm.includes('project') || norm.includes('pm')) {
-    roleSlug = 'project_manager';
-  } else if (norm.includes('lead') || norm.includes('leader')) {
-    roleSlug = 'team_leader';
-  } else if (norm.includes('system_admin')) {
-    roleSlug = 'system_admin';
-  } else {
-    roleSlug = 'team_member';
-  }
-
-  return { roleLabel, roleSlug, matchedAssignment };
-}
+export { resolveUserRole };
 
 /**
  * Checks that a tenant user and their company may hold a session right now.
@@ -128,12 +58,10 @@ const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([
 export async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
-    let token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : null;
-
-    // Used by <a href> file downloads (evidence files) that cannot set headers.
-    if (!token && req.query?.token) {
-      token = String(req.query.token).trim();
-    }
+    // The token is accepted only in the Authorization header. A token in the URL would end up in
+    // browser history, server and proxy logs and Referer headers (SEC-M2-09). Pages that open protected
+    // files fetch them with the header instead (react_frontend/src/shared/utils/evidenceFile.js).
+    const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : null;
 
     if (!token) {
       throw new UnauthorizedError('Authentication required: Bearer token is missing');
@@ -196,7 +124,8 @@ export async function authenticate(req, res, next) {
       where: { id: String(userId) },
       include: {
         roleAssignments: {
-          include: { role: true },
+          where: { revokedAt: null },
+          include: { role: { include: { roleTemplate: { select: { slug: true } } } } },
           orderBy: { grantedAt: 'desc' },
         },
       },

@@ -15,7 +15,7 @@ const router = Router();
 router.get(
   ['/role-assignments', '/api/role-assignments'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE, 'superuser'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.ACCESS_GOVERNANCE),
   listRoleAssignments
 );
 router.post(

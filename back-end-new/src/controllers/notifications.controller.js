@@ -34,7 +34,7 @@ export async function listNotifications(req, res, next) {
       // If caller is not owner/admin/lead and trying to view another user's notifications
       if (
         req.user.id !== String(userId) &&
-        !['company_owner', 'system_admin', 'superuser', 'project_manager', 'team_leader', 'compliance_officer'].includes(req.user.role)
+        !['company_owner', 'system_admin', 'project_manager', 'team_leader', 'compliance_officer'].includes(req.user.role)
       ) {
         throw new ForbiddenError('You can only view your own notifications');
       }
@@ -52,7 +52,7 @@ export async function listNotifications(req, res, next) {
 
     // If no userId query param:
     // If regular member, default to own notifications
-    const isPrivileged = ['company_owner', 'system_admin', 'superuser', 'project_manager', 'team_leader', 'compliance_officer', 'hr_manager'].includes(req.user.role);
+    const isPrivileged = ['company_owner', 'system_admin', 'project_manager', 'team_leader', 'compliance_officer', 'hr_manager'].includes(req.user.role);
 
     const notifications = await prisma.notification.findMany({
       where: isPrivileged
@@ -133,7 +133,7 @@ export async function markNotificationAsRead(req, res, next) {
     // Caller can mark own notification or privileged role
     if (
       notification.userId !== req.user.id &&
-      !['company_owner', 'system_admin', 'superuser'].includes(req.user.role)
+      !['company_owner', 'system_admin'].includes(req.user.role)
     ) {
       throw new ForbiddenError('You can only modify your own notifications');
     }
@@ -173,7 +173,7 @@ export async function markAllNotificationsAsRead(req, res, next) {
 
     if (
       String(targetUserId) !== req.user.id &&
-      !['company_owner', 'system_admin', 'superuser'].includes(req.user.role)
+      !['company_owner', 'system_admin'].includes(req.user.role)
     ) {
       throw new ForbiddenError('You can only mark your own notifications as read');
     }
@@ -212,7 +212,7 @@ export async function deleteNotification(req, res, next) {
 
     if (
       notification.userId !== req.user.id &&
-      !['company_owner', 'system_admin', 'superuser'].includes(req.user.role)
+      !['company_owner', 'system_admin'].includes(req.user.role)
     ) {
       throw new ForbiddenError('You can only delete your own notifications');
     }

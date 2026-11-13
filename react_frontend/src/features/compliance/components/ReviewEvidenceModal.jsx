@@ -1,3 +1,4 @@
+import { openEvidenceFile } from '../../../shared/utils/evidenceFile';
 import React, { useState } from "react";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
@@ -80,14 +81,13 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
               <span className="font-semibold text-blue-900">Attached Document</span>
               <span className="text-blue-700 text-xs mt-1">Review the provided proof before approving.</span>
             </div>
-            <a
-              href={`${import.meta.env.VITE_API_URL || 'http://localhost:5500'}/api/evidence/${evidence.id}/file?token=${encodeURIComponent(sessionStorage.getItem('authToken') || '')}`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 bg-white px-4 py-2 rounded-md text-blue-700 font-semibold border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm"
+            <button
+              type="button"
+              onClick={() => openEvidenceFile(evidence.id)}
+              className="flex items-center gap-2 bg-white px-4 py-2 rounded-md text-blue-700 font-semibold border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm cursor-pointer"
             >
               View File ↗
-            </a>
+            </button>
           </div>
         ) : (
           <div className="border border-gray-200 bg-gray-50 p-4 rounded-lg text-center text-gray-500">

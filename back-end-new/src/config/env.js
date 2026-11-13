@@ -55,6 +55,12 @@ export const env = {
   // Days a PastDue (or Active-past-period-end) subscription keeps working before access is blocked
   SUBSCRIPTION_GRACE_DAYS: parseInt(process.env.SUBSCRIPTION_GRACE_DAYS || '7', 10),
 
+  // Brute-force protection on sign-in, registration, set-password and change-password.
+  // AUTH_RATE_LIMIT_MAX = failed attempts allowed per account+IP per 15 minutes (other limits derive from it).
+  // Set RATE_LIMIT_ENABLED=false only for load tests or local scripts.
+  RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED !== 'false',
+  AUTH_RATE_LIMIT_MAX: Math.max(1, parseInt(process.env.AUTH_RATE_LIMIT_MAX || '10', 10)),
+
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: (process.env.NODE_ENV || 'development') === 'development',
   isTest: process.env.NODE_ENV === 'test',

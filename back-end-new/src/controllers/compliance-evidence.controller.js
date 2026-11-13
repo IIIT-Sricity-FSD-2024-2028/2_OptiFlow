@@ -28,7 +28,7 @@ const EVIDENCE_LIST_INCLUDE = {
 
 export async function listEvidence(req, res, next) {
   try {
-    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const role = normalizeRole(req.user?.role);
     const where = { companyId: req.user.companyId };
 
     // Role-based scope enforcement
@@ -163,7 +163,7 @@ export async function updateEvidence(req, res, next) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
-    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const role = normalizeRole(req.user?.role);
     const isMember = role === 'team_member' || role === 'member';
 
     if (isMember) {
@@ -341,7 +341,7 @@ export async function deleteEvidence(req, res, next) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
-    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
+    const role = normalizeRole(req.user?.role);
     const isMember = role === 'team_member' || role === 'member';
 
     if (isMember) {

@@ -340,6 +340,15 @@ async function main() {
 
   // Beta LLC Tenant for Multi-Tenant Isolation Verification
   const betaLlc = await prisma.company.create({ data: { legalName: "Beta LLC", status: "Active" } });
+  await prisma.subscription.create({
+    data: {
+      companyId: betaLlc.id,
+      planId: proPlan.id,
+      billingCycle: "Monthly",
+      status: SubscriptionStatus.Active,
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
   const rBetaOwner = await prisma.role.create({ data: { companyId: betaLlc.id, roleTemplateId: tCompanyOwner.id, label: "Company Owner", name: "company_owner", isSystem: true } });
   const rBetaMember = await prisma.role.create({ data: { companyId: betaLlc.id, roleTemplateId: tTeamMember.id, label: "Team Member", name: "team_member", isSystem: true } });
 

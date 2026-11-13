@@ -406,7 +406,7 @@ export async function updateTask(req, res, next) {
       throw new ForbiddenError('Parent tasks remain assigned to the project Team Lead; assign work through subtasks');
     }
 
-    const role = normalizeRole(req.user?.roleLabel || req.user?.role);
+    const role = normalizeRole(req.user?.role);
     const isMember = role === 'team_member' || role === 'member';
 
     // Governance: Team members can submit work (In_Review) or report blockers (Blocked), but cannot tamper with parent task configurations or complete tasks directly
@@ -440,7 +440,7 @@ export async function updateTask(req, res, next) {
       ? body.deadlineExtensionReason.trim()
       : '';
     if (body.deadlineExtensionReason !== undefined) {
-      if (!hasRole(req.user.roleLabel || req.user.role, [ROLES.PROJECT_MANAGER])) {
+      if (!hasRole(req.user.role, [ROLES.PROJECT_MANAGER])) {
         throw new ForbiddenError('Only Project Managers can grant deadline extensions');
       }
       if (
@@ -463,7 +463,7 @@ export async function updateTask(req, res, next) {
     // 🔴 THE INTERCEPTOR: Evaluate Compliance Before Saving
     // PM final-approval: skip compliance gate when PM explicitly approves
     const isPmApproval = body.pmApproval === true
-      && hasRole(req.user.roleLabel || req.user.role, [ROLES.PROJECT_MANAGER]);
+      && hasRole(req.user.role, [ROLES.PROJECT_MANAGER]);
     if (updateData.status && updateData.status !== existing.status && !isPmApproval) {
       const evaluation = await evaluateTaskTransition(id, existing, updateData);
 
@@ -824,7 +824,7 @@ export async function createSubtask(req, res, next) {
       }
 
       if (
-        hasRole(req.user.roleLabel || req.user.role, [ROLES.TEAM_LEAD]) &&
+        hasRole(req.user.role, [ROLES.TEAM_LEAD]) &&
         assignee.id !== req.user.id &&
         assignee.managerUserId !== req.user.id
       ) {

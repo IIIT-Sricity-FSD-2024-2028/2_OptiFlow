@@ -1,3 +1,4 @@
+import { openEvidenceFile } from '../../../../shared/utils/evidenceFile';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
@@ -291,13 +292,10 @@ export default function MemberEvidence() {
                       </td>
                       <td className="py-4 px-6 text-right whitespace-nowrap space-x-2">
                         {fileUrl && (() => {
-                          const token = sessionStorage.getItem('authToken') || '';
                           const isExternalUrl = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
-                          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
-                          const viewUrl = isExternalUrl ? fileUrl : `${apiBase}/api/evidence/${ev.id}/file?token=${encodeURIComponent(token)}`;
-                          return (
+                          return isExternalUrl ? (
                             <a
-                              href={viewUrl}
+                              href={fileUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex p-1 text-slate-400 hover:text-blue-600 transition-colors"
@@ -305,6 +303,15 @@ export default function MemberEvidence() {
                             >
                               <ExternalLink className="w-4 h-4" />
                             </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openEvidenceFile(ev.id)}
+                              className="inline-flex p-1 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                              title="Open File"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
                           );
                         })()}
                         <button

@@ -1007,7 +1007,7 @@ export async function actionStep(req, res, next) {
 
     // Role check: If step assigned to another user, regular Team Member cannot action it.
     // If step is unassigned, only managers/admins can action it.
-    const isOwnerOrManager = hasRole(req.user.roleLabel || req.user.role, [
+    const isOwnerOrManager = hasRole(req.user.role, [
       ...PROCESS_MANAGER_ROLES,
       ROLES.PLATFORM_ADMIN,
     ]);

@@ -21,8 +21,7 @@ const canReadAudit = requireRoles(
   ROLES.BRANCH_MANAGER,
   ROLES.ACCESS_GOVERNANCE,
   ROLES.PROCESS_ADMIN,
-  ROLES.COMPLIANCE_OFFICER,
-  'superuser'
+  ROLES.COMPLIANCE_OFFICER
 );
 
 // Audit Logs Routes

@@ -10,6 +10,7 @@ import {
   ConflictError,
   ValidationError,
   AppError,
+  withCode,
 } from '../utils/errors.js';
 import {
   validateRequired,
@@ -116,12 +117,27 @@ export async function handleLogin(req, res, next) {
     // --------------------------------------------
 
     // If not a platform admin, proceed with standard tenant user login
+    // Emails are globally unique (case-insensitive index users_email_lower_key). If older data still
+    // holds the same address in two companies we refuse to guess which tenant the person means.
+    const matches = await prisma.user.findMany({
+      where: { email: { equals: email.trim(), mode: 'insensitive' } },
+      take: 2,
+      select: { id: true },
+    });
+    if (matches.length > 1) {
+      throw withCode(
+        new ConflictError('This email address is linked to more than one account. Please contact support.'),
+        'ACCOUNT_AMBIGUOUS',
+      );
+    }
+
     const user = await prisma.user.findFirst({
       where: { email: { equals: email.trim(), mode: 'insensitive' } },
       include: {
         company: true,
         roleAssignments: {
-          include: { role: true },
+          where: { revokedAt: null },
+          include: { role: { include: { roleTemplate: { select: { slug: true } } } } },
           orderBy: { grantedAt: 'desc' },
         },
         teamMembers: {

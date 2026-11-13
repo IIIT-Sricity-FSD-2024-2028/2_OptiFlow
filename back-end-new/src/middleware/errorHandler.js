@@ -47,8 +47,10 @@ export function errorHandler(err, req, res, next) {
         statusCode = 409;
         const target = Array.isArray(err.meta?.target)
           ? err.meta.target.join(', ')
-          : 'field';
-        message = `Unique constraint violation: record with this ${target} already exists`;
+          : String(err.meta?.target || 'field');
+        message = /email/i.test(`${target} ${err.message || ''} ${JSON.stringify(err.meta || {})}`)
+          ? 'A user with this email address already exists'
+          : `Unique constraint violation: record with this ${target} already exists`;
         break;
       }
       case 'P2025': {

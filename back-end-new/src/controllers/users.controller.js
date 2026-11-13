@@ -209,8 +209,7 @@ export async function createUser(req, res, next) {
       targetRole = roles.find(
         (r) =>
           r.id === requestedRole ||
-          normalizeRole(r.label) === normReq ||
-          (normReq === 'superuser' && normalizeRole(r.label) === 'company_owner')
+          normalizeRole(r.label) === normReq
       );
 
       if (!targetRole) {
@@ -223,7 +222,7 @@ export async function createUser(req, res, next) {
         normalizeRole(targetRole.label) === 'system_admin';
 
       const callerIsPrivileged =
-        hasRole(req.user.roleLabel || req.user.role, [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN]);
+        hasRole(req.user.role, [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN]);
 
       if (isTargetPrivileged && !callerIsPrivileged) {
         throw new ForbiddenError('You do not have permission to assign elevated administrative roles');
@@ -333,14 +332,10 @@ export async function updateUser(req, res, next) {
     }
 
     const isSelf = req.user.id === id;
-    const isAdmin = hasRole(req.user.roleLabel || req.user.role, [
+    const isAdmin = hasRole(req.user.role, [
       ROLES.COMPANY_OWNER,
       ROLES.SYSTEM_ADMIN,
       ROLES.ACCESS_GOVERNANCE,
-      ROLES.HR_MANAGER,
-      'hr_manager',
-      ROLES.SUPERUSER,
-      'superuser',
     ]);
 
     if (!isSelf && !isAdmin) {
@@ -429,7 +424,7 @@ export async function updateUser(req, res, next) {
         normalizeRole(targetRole.label) === 'system_admin';
 
       const callerIsPrivileged =
-        hasRole(req.user.roleLabel || req.user.role, [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN]);
+        hasRole(req.user.role, [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN]);
 
       if (isTargetPrivileged && !callerIsPrivileged) {
         throw new ForbiddenError('You do not have permission to assign elevated administrative roles');

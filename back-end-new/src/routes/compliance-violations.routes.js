@@ -18,19 +18,19 @@ router.get(['/compliance-violations/:id', '/api/compliance-violations/:id'], aut
 router.post(
   ['/compliance-violations', '/api/compliance-violations'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'superuser', 'compliance_officer'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   createComplianceViolation
 );
 router.patch(
   ['/compliance-violations/:id', '/api/compliance-violations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, 'superuser', 'compliance_officer', 'project_manager'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, 'compliance_officer', 'project_manager'),
   updateComplianceViolation
 );
 router.delete(
   ['/compliance-violations/:id', '/api/compliance-violations/:id'],
   authenticate,
-  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, 'superuser'),
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN),
   deleteComplianceViolation
 );
 
