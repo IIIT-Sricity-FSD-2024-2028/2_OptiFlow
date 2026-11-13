@@ -334,15 +334,6 @@ export default function HrUserDetail() {
                   r.label?.toLowerCase().includes("owner")
               );
 
-            console.log("[UserDetail Sovereign Check]", {
-              isOwnerTarget,
-              currentUserRole: currentUser?.role,
-              employeeRoleAssignments: employee?.roleAssignments,
-              employeeRoles: employee?.roles,
-              employeeIsOwner: employee?.is_owner,
-              employeeId: employee?.id
-            });
-
             // Subordinates (HR/SysAdmin) cannot edit or deactivate the Sovereign Company Owner
             if (isOwnerTarget && currentUser?.role !== "company_owner") {
               return null;
