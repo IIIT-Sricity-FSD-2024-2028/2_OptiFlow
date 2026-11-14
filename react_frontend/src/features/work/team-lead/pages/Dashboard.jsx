@@ -13,20 +13,20 @@ import {
   
   Input,
   Select,
+  Textarea,
 } from '../../../../shared/components/FormField';
 import { Modal } from '../../../../shared/components/Modal';
 import { Toast } from '../../../../shared/components/Toast';
-import { ConfirmDialog } from '../../../../shared/components/ConfirmDialog';
 import { EscalationForm } from '../../components/EscalationForm';
 import { SubtaskList } from '../../components/SubtaskList';
 
 import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
 import * as escalationsApi from '../../../../services/api/escalations';
-import * as notificationsApi from '../../../../services/api/notifications';
 import * as usersApi from '../../../../services/api/users';
 import * as projectsApi from '../../../../services/api/projects';
 import { useAuth } from '../../../../context/AuthContext';
+import { todayInput, deadlineInput } from '../../utils/dateLimits';
 
 export default function TeamLeadDashboard() {
   const { user } = useAuth();
@@ -57,11 +57,12 @@ export default function TeamLeadDashboard() {
   const [subtaskError, setSubtaskError] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [reviewTab, setReviewTab] = useState('tasks'); // 'tasks' | 'subtasks' | 'extensions'
+  const [sendBackSubtask, setSendBackSubtask] = useState(null);
+  const [sendBackReason, setSendBackReason] = useState('');
+  const [sendBackError, setSendBackError] = useState('');
+  const [sendingBack, setSendingBack] = useState(false);
 
 
-  const [isApproveConfirmOpen, setApproveConfirmOpen] = useState(false);
-  const [isRejectConfirmOpen, setRejectConfirmOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
 
 
   const [toast, setToast] = useState({
@@ -257,99 +258,6 @@ export default function TeamLeadDashboard() {
   const formatStatus = (status) =>
     String(status || 'Unknown').replace(/_/g, ' ');
 
-  const openApproveConfirm = (task) => {
-    setSelectedTask(task);
-    setApproveConfirmOpen(true);
-  };
-
-  const handleApprove = async () => {
-    if (!selectedTask) return;
-
-    try {
-      await tasksApi.update(selectedTask.id, {
-        status: 'Completed',
-      });
-
-      setTasks((previousTasks) =>
-        previousTasks.map((task) =>
-          task.id === selectedTask.id
-            ? {
-                ...task,
-                status: 'Completed',
-              }
-            : task
-        )
-      );
-
-      showToast(
-        'success',
-        'Task approved successfully.'
-      );
-    } catch (error) {
-      console.error('Approve task failed:', error);
-      const errMsg = error.message || '';
-      if (errMsg.includes('COMPLIANCE_BLOCK') || errMsg.includes('blocked by active compliance')) {
-        showToast(
-          'error',
-          'Approval blocked: Mandatory compliance evidence must be approved before completion.'
-        );
-      } else {
-        showToast(
-          'error',
-          errMsg || 'Failed to approve task.'
-        );
-      }
-    } finally {
-      setApproveConfirmOpen(false);
-      setSelectedTask(null);
-    }
-  };
-
-  // ---------------------------------------------------------------------------
-  // Reject / request changes
-  // ---------------------------------------------------------------------------
-
-  const openRejectConfirm = (task) => {
-    setSelectedTask(task);
-    setRejectConfirmOpen(true);
-  };
-
-  const handleReject = async () => {
-    if (!selectedTask) return;
-
-    try {
-      await tasksApi.update(selectedTask.id, {
-        status: 'Active',
-      });
-
-      setTasks((previousTasks) =>
-        previousTasks.map((task) =>
-          task.id === selectedTask.id
-            ? {
-                ...task,
-                status: 'Active',
-              }
-            : task
-        )
-      );
-
-      showToast(
-        'success',
-        'Task sent back for changes.'
-      );
-    } catch (error) {
-      console.error('Reject task failed:', error);
-
-      showToast(
-        'error',
-        'Failed to reject task.'
-      );
-    } finally {
-      setRejectConfirmOpen(false);
-      setSelectedTask(null);
-    }
-  };
-
   // ---------------------------------------------------------------------------
   // Subtask
   // ---------------------------------------------------------------------------
@@ -478,27 +386,33 @@ export default function TeamLeadDashboard() {
             : t
         )
       );
-      // Notify the assignee
-      const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
-      if (assigneeId) {
-        try {
-          await notificationsApi.create({
-            userId: assigneeId,
-            title: 'Subtask Approved',
-            message: `Your subtask "${subtask.title}" has been approved by your Team Lead.`,
-            type: 'success',
-          });
-        } catch (_) { /* non-critical */ }
-      }
       showToast('success', `Subtask "${subtask.title}" approved.`);
-    } catch (err) {
+    } catch {
       showToast('error', 'Failed to approve subtask.');
     }
   };
 
-  const handleRejectSubtask = async (subtask) => {
+  const openSendBack = (subtask) => {
+    setSendBackSubtask(subtask);
+    setSendBackReason('');
+    setSendBackError('');
+  };
+
+  const closeSendBack = () => {
+    if (!sendingBack) setSendBackSubtask(null);
+  };
+
+  const handleRejectSubtask = async () => {
+    const subtask = sendBackSubtask;
+    const reason = sendBackReason.trim();
+    if (!subtask) return;
+    if (!reason) {
+      setSendBackError('Tell the team member why the subtask is being sent back.');
+      return;
+    }
+    setSendingBack(true);
     try {
-      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Active' });
+      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Active', reviewComment: reason });
       setTasks((prev) =>
         prev.map((t) =>
           t.id === subtask._parentTask?.id
@@ -506,28 +420,19 @@ export default function TeamLeadDashboard() {
                 ...t,
                 subtasks: (t.subtasks || []).map((st) =>
                   (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
-                    ? { ...st, status: 'Active' }
+                    ? { ...st, status: 'Active', reviewComment: reason }
                     : st
                 ),
               }
             : t
         )
       );
-      // Notify the assignee
-      const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
-      if (assigneeId) {
-        try {
-          await notificationsApi.create({
-            userId: assigneeId,
-            title: 'Subtask Sent Back',
-            message: `Your subtask "${subtask.title}" was sent back for revision by your Team Lead. Please check and resubmit.`,
-            type: 'warning',
-          });
-        } catch (_) { /* non-critical */ }
-      }
-      showToast('success', 'Subtask sent back to In Progress.');
+      setSendBackSubtask(null);
+      showToast('success', 'Subtask sent back with your comment.');
     } catch (err) {
-      showToast('error', 'Failed to reject subtask.');
+      setSendBackError(err.message || 'Failed to send the subtask back.');
+    } finally {
+      setSendingBack(false);
     }
   };
 
@@ -538,25 +443,11 @@ export default function TeamLeadDashboard() {
       setEscalations((prev) =>
         prev.map((e) => (e.id === ext.id ? { ...e, status: newStatus } : e))
       );
-      // Notify the requesting team member
-      const reportedById = ext.reportedBy?.id || ext.reportedById;
-      if (reportedById) {
-        try {
-          await notificationsApi.create({
-            userId: reportedById,
-            title: approved ? 'Extension Request Approved' : 'Extension Request Rejected',
-            message: approved
-              ? `Your deadline extension request ("${ext.title}") has been approved by your Team Lead.`
-              : `Your deadline extension request ("${ext.title}") was not approved. Please discuss with your Team Lead.`,
-            type: approved ? 'success' : 'warning',
-          });
-        } catch (_) { /* non-critical */ }
-      }
       showToast(
         approved ? 'success' : 'info',
         approved ? 'Extension approved & member notified.' : 'Extension rejected & member notified.'
       );
-    } catch (err) {
+    } catch {
       showToast('error', 'Failed to update extension request.');
     }
   };
@@ -775,8 +666,8 @@ export default function TeamLeadDashboard() {
 
                             <p className="text-xs text-gray-500 mt-1">
                               {task.assigneeName ||
-                                task.assignee?.fullName ||
-                                task.assignee ||
+                                task.assignedTo?.fullName ||
+                                task.assignedTo?.email ||
                                 'Unassigned'}{' '}
                               · Due{' '}
                               {formatDate(task.dueDate || task.deadline)}
@@ -1009,7 +900,7 @@ export default function TeamLeadDashboard() {
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{task.title}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Submitted by <strong>{task.assigneeName || task.assignee || 'Unknown'}</strong>
+                        Submitted by <strong>{task.assigneeName || task.assignedTo?.fullName || task.assignedTo?.email || 'Unknown'}</strong>
                       </p>
                       {task.notes && (
                         <p className="text-xs text-gray-400 mt-1 italic truncate max-w-md">&ldquo;{task.notes}&rdquo;</p>
@@ -1017,8 +908,8 @@ export default function TeamLeadDashboard() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <Badge status={getBadgeStatus(task.status)}>{formatStatus(task.status)}</Badge>
-                      <Button variant="primary" onClick={() => openApproveConfirm(task)}>Approve</Button>
-                      <Button variant="danger" onClick={() => openRejectConfirm(task)}>Reject</Button>
+                      {/* Parent tasks in review wait for the Project Manager (D-S5). */}
+                      <span className="text-xs text-gray-500">Awaiting PM approval</span>
                       {!task.isSubtask && !task.parentId && (
                         <Button variant="outline" onClick={() => openSubtaskModal(task.id)}>Break down</Button>
                       )}
@@ -1055,7 +946,7 @@ export default function TeamLeadDashboard() {
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <Badge status="info">In Review</Badge>
                         <Button variant="primary" onClick={() => handleApproveSubtask(subtask)}>Approve</Button>
-                        <Button variant="danger" onClick={() => handleRejectSubtask(subtask)}>Send Back</Button>
+                        <Button variant="danger" onClick={() => openSendBack(subtask)}>Send Back</Button>
                       </div>
                     </div>
                   );
@@ -1319,6 +1210,8 @@ export default function TeamLeadDashboard() {
           <FormField label="Deadline">
             <Input
               type="date"
+              min={todayInput()}
+              max={deadlineInput(tasks.find((task) => String(task.id) === String(selectedParentTaskId))?.dueDate)}
               value={subtaskDeadline}
               onChange={(event) =>
                 setSubtaskDeadline(
@@ -1331,41 +1224,45 @@ export default function TeamLeadDashboard() {
         </div>
       </Modal>
 
-      {/* Approve confirmation */}
+      {/* Send back subtask modal */}
 
-      <ConfirmDialog
-        isOpen={isApproveConfirmOpen}
-        title="Approve Task"
-        message={
-          selectedTask
-            ? `Are you sure you want to approve "${selectedTask.title}"?`
-            : 'Are you sure you want to approve this task?'
+      <Modal
+        isOpen={Boolean(sendBackSubtask)}
+        onClose={closeSendBack}
+        title="Send subtask back"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={closeSendBack} disabled={sendingBack}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleRejectSubtask} disabled={sendingBack || !sendBackReason.trim()}>
+              {sendingBack ? 'Sending…' : 'Send back'}
+            </Button>
+          </div>
         }
-        confirmText="Yes, Approve"
-        onConfirm={handleApprove}
-        onCancel={() => {
-          setApproveConfirmOpen(false);
-          setSelectedTask(null);
-        }}
-      />
-
-      {/* Reject confirmation */}
-
-      <ConfirmDialog
-        isOpen={isRejectConfirmOpen}
-        title="Request Changes"
-        message={
-          selectedTask
-            ? `Send "${selectedTask.title}" back to In Progress?`
-            : 'Are you sure you want to request changes?'
-        }
-        confirmText="Yes, Request Changes"
-        onConfirm={handleReject}
-        onCancel={() => {
-          setRejectConfirmOpen(false);
-          setSelectedTask(null);
-        }}
-      />
+      >
+        <div className="space-y-4">
+          {sendBackError && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+              {sendBackError}
+            </div>
+          )}
+          <p className="text-sm text-gray-500">
+            <strong>{sendBackSubtask?.title}</strong>
+            {sendBackSubtask?.assignedToName && <> · {sendBackSubtask.assignedToName}</>} will see this comment on their task.
+          </p>
+          <FormField label="Reason for sending back" required>
+            <Textarea
+              rows={4}
+              maxLength={1000}
+              value={sendBackReason}
+              onChange={(event) => setSendBackReason(event.target.value)}
+              placeholder="What needs to change before you can approve it?"
+              disabled={sendingBack}
+            />
+          </FormField>
+        </div>
+      </Modal>
 
       {/* Toast */}
 

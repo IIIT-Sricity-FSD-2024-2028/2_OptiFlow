@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
@@ -13,8 +13,10 @@ import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as usersApi from '../../../../services/api/users';
+import * as projectsApi from '../../../../services/api/projects';
 import * as evidenceApi from '../../../../services/api/evidence';
 import * as complianceApi from '../../../../services/api/compliance';
+import { todayInput, tomorrowInput, deadlineInput } from '../../utils/dateLimits';
 
 const BLOCKER_TYPES = ['Missing Information / Data', 'System Issue / Bug', 'Dependency Delay', 'Access / permission', 'Other'];
 const EVIDENCE_TYPES = ['Document', 'Screenshot', 'Image', 'Report', 'Archive', 'Other'];
@@ -26,14 +28,13 @@ const toStr = (val, fb = '—') => {
   if (typeof val === 'object') return val.fullName || val.name || val.label || val.title || fb;
   return String(val) || fb;
 };
-const fmt = (s) => String(s || 'Unknown').replace(/_/g, ' ');
 
 export default function TeamLeadTaskDetail() {
   const { id: taskId } = useParams();
   const { user } = useAuth();
   const [task, setTask] = useState(null);
   const [compliance, setCompliance] = useState({ hasRules: false, evidenceBlocked: false });
-  const [complianceLoading, setComplianceLoading] = useState(true);
+  const [complianceReload, setComplianceReload] = useState(0);
   const [taskEvidence, setTaskEvidence] = useState([]);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
   const [subtasks, setSubtasks] = useState([]);
@@ -62,93 +63,73 @@ export default function TeamLeadTaskDetail() {
   const [subtaskError, setSubtaskError] = useState('');
 
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
+  const toastTimer = useRef(null);
   const showToast = (type, message) => {
+    clearTimeout(toastTimer.current);
     setToast({ visible: true, type, message });
-    setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
+    toastTimer.current = setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
   };
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   useEffect(() => {
     if (!taskId) return;
     let active = true;
     Promise.all([tasksApi.get(taskId).catch(() => null), usersApi.list().catch(() => [])])
-      .then(([taskRes, membersRes]) => {
+      .then(async ([taskRes, membersRes]) => {
         if (!active) return;
         const t = taskRes?.data || taskRes;
         if (!t) { setNotFound(true); return; }
         setTask(t);
         setSubtasks(Array.isArray(t.subtasks) ? t.subtasks : []);
         const membersData = Array.isArray(membersRes) ? membersRes : membersRes?.data || [];
-        setMembers(membersData.filter(member => member.managerUserId === user.id));
+        // Assignable: direct reports plus members of the project's team.
+        const projectId = t.projectId || t.project?.id;
+        const projectRes = projectId ? await projectsApi.get(projectId).catch(() => null) : null;
+        if (!active) return;
+        const teamUserIds = new Set(
+          (projectRes?.team?.teamMembers || []).map((m) => String(m.userId || m.user?.id))
+        );
+        setMembers(membersData.filter((member) => (
+          String(member.id) !== String(user.id)
+          && (String(member.managerUserId) === String(user.id) || teamUserIds.has(String(member.id)))
+        )));
       })
       .catch(() => active && showToast('error', 'Failed to load task.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [taskId, user.id]);
 
+  // Compliance state comes from the server: open violations recorded for this
+  // task (the backend decides what blocks a transition).
   useEffect(() => {
-    if (!task) return undefined;
+    if (!taskId) return undefined;
     let active = true;
     Promise.all([
-      complianceApi.getBindings(),
-      complianceApi.getViolations(),
-      evidenceApi.getEvidenceList(),
-    ]).then(([bindingResponse, violationResponse, evidenceResponse]) => {
+      complianceApi.getViolations().catch(() => null),
+      evidenceApi.getEvidenceList().catch(() => null),
+    ]).then(([violationResponse, evidenceResponse]) => {
       if (!active) return;
-      const bindings = Array.isArray(bindingResponse) ? bindingResponse : bindingResponse?.data || [];
-      const violations = Array.isArray(violationResponse) ? violationResponse : violationResponse?.data || [];
-      const evidence = Array.isArray(evidenceResponse) ? evidenceResponse : evidenceResponse?.data || [];
-      const projectId = task.projectId || task.project?.id;
-      const teamId = task.project?.teamId || task.project?.team?.id;
-      const branchId = task.project?.team?.branchId;
-      const companyId = task.companyId;
-
-      const relevantBindings = bindings.filter((binding) => {
-        if (binding.rule?.isActive === false) return false;
-        if (binding.scopeType === 'Task' && String(binding.scopeId) === String(taskId)) return true;
-        if (binding.scopeType === 'Project' && String(binding.scopeId) === String(projectId)) return true;
-        if (binding.scopeType === 'Team' && String(binding.scopeId) === String(teamId)) return true;
-        if (binding.scopeType === 'Branch' && String(binding.scopeId) === String(branchId)) return true;
-        if (binding.scopeType === 'Company' && String(binding.scopeId) === String(companyId)) return true;
-        return false;
-      });
-
-      const activeViolations = violations.filter((violation) => (
-        ['Open', 'Under_Review'].includes(violation.status)
-        && ((violation.entityType === 'Task' && String(violation.entityId) === String(taskId))
-          || (violation.entityType === 'Project' && String(violation.entityId) === String(projectId)))
-      ));
-
-      const evidenceRules = [
-        ...relevantBindings.map((binding) => binding.rule),
-        ...activeViolations.map((violation) => violation.rule),
-      ].filter((rule) => {
-        if (!rule?.criteria) return false;
-        const trigger = rule.criteria.trigger;
-        const req = rule.criteria.requirement;
-        return req?.type === 'EVIDENCE_REQUIRED' || (trigger?.field === 'status' && trigger?.transitionTo === 'Completed');
-      });
-
-      const hasApprovedEvidence = evidence.some((item) => (
-        String(item.taskId || item.task_id || item.task?.id) === String(taskId)
-        && String(item.status).toLowerCase() === 'approved'
-      ));
-
-      const matchedEvidence = evidence.filter((item) => (
-        String(item.taskId || item.task_id || item.task?.id) === String(taskId)
-      ));
-      setTaskEvidence(matchedEvidence);
-
-      setCompliance({
-        hasRules: relevantBindings.length > 0 || activeViolations.length > 0,
-        evidenceBlocked: (evidenceRules.length > 0 || activeViolations.length > 0) && !hasApprovedEvidence,
-      });
-    }).catch((error) => {
-      if (active) showToast('error', error.message || 'Failed to load compliance status.');
-    }).finally(() => {
-      if (active) setComplianceLoading(false);
+      if (evidenceResponse) {
+        const evidence = Array.isArray(evidenceResponse) ? evidenceResponse : evidenceResponse?.data || [];
+        setTaskEvidence(evidence.filter((item) => (
+          String(item.taskId || item.task_id || item.task?.id) === String(taskId)
+        )));
+      }
+      if (violationResponse) {
+        const violations = Array.isArray(violationResponse) ? violationResponse : violationResponse?.data || [];
+        const openViolations = violations.filter((violation) => (
+          ['Open', 'Under_Review'].includes(violation.status)
+          && violation.entityType === 'Task'
+          && String(violation.entityId) === String(taskId)
+        ));
+        setCompliance({ hasRules: openViolations.length > 0, evidenceBlocked: openViolations.length > 0 });
+      }
+      if (!violationResponse || !evidenceResponse) {
+        showToast('error', 'Some compliance details could not be loaded.');
+      }
     });
     return () => { active = false; };
-  }, [task, taskId]);
+  }, [taskId, complianceReload]);
 
   const handleDeleteEvidence = async (evId) => {
     try {
@@ -160,31 +141,8 @@ export default function TeamLeadTaskDetail() {
     }
   };
 
-  const patchTask = async (patch) => {
-    try {
-      await tasksApi.update(taskId, patch);
-      setTask(prev => ({ ...prev, ...patch }));
-      return true;
-    } catch (error) {
-      showToast('error', error.message || 'Update failed.');
-      return false;
-    }
-  };
-
-  const handleApprove = async () => {
-    if (await patchTask({ status: 'Completed' })) showToast('success', 'Task approved.');
-  };
-  const handleReject = async () => {
-    if (await patchTask({ status: 'Active' })) showToast('success', 'Sent back for changes.');
-  };
-
   const handleSubmitWork = async (e) => {
     e?.preventDefault();
-    if (!submitNotes.trim()) {
-      showToast('error', 'Please provide a completion summary or handover notes.');
-      return;
-    }
-
     if (compliance.evidenceBlocked && taskEvidence.length === 0 && !submitFile) {
       showToast('error', 'Compliance requires an evidence deliverable. Please attach a document.');
       return;
@@ -198,24 +156,28 @@ export default function TeamLeadTaskDetail() {
           taskId: String(taskId),
           title,
           evidenceType: submitFileType,
-          notes: submitNotes.trim(),
+          notes: submitNotes.trim() || undefined,
           fileUrl: submitFile.name,
           userId: user?.id,
         });
-        const createdId = res?.data?.id || res?.id;
-        if (createdId) {
-          await evidenceApi.uploadFile(createdId, submitFile);
+        const created = res?.data || res;
+        try {
+          await evidenceApi.uploadFile(created.id, submitFile);
+        } catch (uploadError) {
+          // Do not leave an evidence row that points at no file.
+          await evidenceApi.remove(created.id).catch(() => {});
+          throw uploadError;
         }
-        const newEv = res?.data || res;
-        setTaskEvidence((prev) => [newEv, ...prev]);
-        setCompliance((prev) => ({ ...prev, evidenceBlocked: false }));
+        setTaskEvidence((prev) => [created, ...prev]);
       }
 
-      await tasksApi.update(taskId, {
+      // Handover notes go to the PM with the review notification (and the audit log).
+      const updated = await tasksApi.update(taskId, {
         status: 'In_Review',
-        notes: submitNotes.trim(),
+        submissionNote: submitNotes.trim() || undefined,
       });
-      setTask((prev) => ({ ...prev, status: 'In_Review', notes: submitNotes.trim() }));
+      setTask((prev) => ({ ...prev, ...(updated?.data || updated) }));
+      setComplianceReload((n) => n + 1);
       showToast('success', 'Work and deliverables submitted to Project Manager for review!');
       setSubmitOpen(false);
       setSubmitNotes('');
@@ -223,6 +185,7 @@ export default function TeamLeadTaskDetail() {
       setSubmitFileTitle('');
     } catch (err) {
       showToast('error', err.message || 'Failed to submit work.');
+      setComplianceReload((n) => n + 1);
     } finally {
       setSubmittingWork(false);
     }
@@ -277,21 +240,15 @@ export default function TeamLeadTaskDetail() {
       const res = await subtasksApi.create({
         taskId: taskId,
         title: stForm.title.trim(),
-        assignedTo: stForm.assignee || undefined,
         assignedToId: stForm.assignee || undefined,
         dueDate: stForm.due || undefined,
-        isSubtask: true,
         status: 'Active'
       });
-      const created = res?.data || res || { id: Date.now(), ...stForm };
+      const created = res?.data || res;
+      if (!created?.id) throw new Error('Subtask was not saved. Please reload and try again.');
       const assigneeName = assignedMember?.fullName || assignedMember?.name ||
-        (String(stForm.assignee) === String(user.id) ? user.fullName : stForm.assignee);
-      const subtaskItem = {
-        ...created,
-        assignedTo: assigneeName,
-        assignedToName: assigneeName,
-      };
-      setSubtasks(prev => [...prev, subtaskItem]);
+        (String(stForm.assignee) === String(user.id) ? user.fullName : undefined);
+      setSubtasks(prev => [...prev, { ...created, assignedToName: assigneeName }]);
       showToast('success', 'Subtask created.');
       setSubtaskOpen(false); setSubtaskError(''); setStForm({ title: '', assignee: '', due: '' });
     } catch (error) {
@@ -302,16 +259,16 @@ export default function TeamLeadTaskDetail() {
 
   const handleToggleSubtask = async (subtaskId, markComplete) => {
     if (!subtaskId) return;
-    const target = subtasks.find((st) => (st.id || st.subtaskId) === subtaskId);
+    const sameId = (st) => String(st.id || st.subtaskId) === String(subtaskId);
+    const target = subtasks.find(sameId);
     const assignedId = target?.assignedToId || target?.assignedTo?.id;
     if (assignedId && String(assignedId) !== String(user.id)) return; // only TL's own subtasks
     const newStatus = markComplete ? 'Completed' : 'Active';
     try {
-      await subtasksApi.update(subtaskId, { status: newStatus });
+      const res = await subtasksApi.update(subtaskId, { status: newStatus });
+      const saved = res?.data || res;
       setSubtasks((prev) =>
-        prev.map((st) =>
-          (st.id || st.subtaskId) === subtaskId ? { ...st, status: newStatus } : st
-        )
+        prev.map((st) => (sameId(st) ? { ...st, ...saved } : st))
       );
       showToast('success', markComplete ? 'Subtask marked complete.' : 'Subtask reopened.');
     } catch (err) {
@@ -332,7 +289,6 @@ export default function TeamLeadTaskDetail() {
     </div>
   );
 
-  const isInReview = ['In_Review', 'Pending_TL_Review'].includes(task.status);
   const currentStage = STAGE_MAP[task.status] ?? 1;
 
   return (
@@ -368,19 +324,6 @@ export default function TeamLeadTaskDetail() {
           <TaskDetailPanel
             task={task}
             onClose={() => window.history.back()}
-            headerActions={isInReview ? (
-              <div className="flex gap-2 shrink-0">
-                <Button variant="outline" onClick={handleReject}>Request Changes</Button>
-                <Button
-                  variant="primary"
-                  onClick={handleApprove}
-                  disabled={complianceLoading || compliance.evidenceBlocked}
-                  title={compliance.evidenceBlocked ? 'Evidence must be approved first.' : undefined}
-                >
-                  Approve
-                </Button>
-              </div>
-            ) : null}
           >
             <div className="flex justify-end -mb-4 relative z-10 pr-2">
               <Button variant="outline" onClick={() => { setSubtaskError(''); setSubtaskOpen(true); }}>+ Add Subtask</Button>
@@ -409,7 +352,7 @@ export default function TeamLeadTaskDetail() {
                   <Button
                     variant="primary"
                     onClick={() => {
-                      setSubmitNotes(task.notes || '');
+                      setSubmitNotes('');
                       setSubmitFile(null);
                       setSubmitFileTitle('');
                       setSubmitOpen(true);
@@ -482,7 +425,7 @@ export default function TeamLeadTaskDetail() {
           <Button
             variant="primary"
             onClick={handleSubmitWork}
-            disabled={submittingWork || !submitNotes.trim() || (compliance.evidenceBlocked && taskEvidence.length === 0 && !submitFile)}
+            disabled={submittingWork || (compliance.evidenceBlocked && taskEvidence.length === 0 && !submitFile)}
           >
             {submittingWork ? 'Submitting…' : 'Confirm & Submit to PM'}
           </Button>
@@ -552,13 +495,12 @@ export default function TeamLeadTaskDetail() {
           )}
 
           {/* Completion Summary */}
-          <FormField label="Handover Summary & Completion Notes" required>
+          <FormField label="Handover Notes (saved with the attached deliverable)">
             <Textarea
               rows={4}
               placeholder="Describe deliverables completed, links to documents, test results, or next steps..."
               value={submitNotes}
               onChange={(e) => setSubmitNotes(e.target.value)}
-              required
             />
           </FormField>
         </div>
@@ -603,7 +545,7 @@ export default function TeamLeadTaskDetail() {
       >
         <div className="space-y-4">
           <FormField label="New Deadline" required>
-            <Input type="date" value={extDate} onChange={(e) => setExtDate(e.target.value)} />
+            <Input type="date" min={tomorrowInput()} value={extDate} onChange={(e) => setExtDate(e.target.value)} />
           </FormField>
           <FormField label="Reason" required>
             <Textarea
@@ -642,7 +584,7 @@ export default function TeamLeadTaskDetail() {
             </Select>
           </FormField>
           <FormField label="Deadline">
-            <Input type="date" value={stForm.due} onChange={e => setStForm(f => ({ ...f, due: e.target.value }))} />
+            <Input type="date" min={todayInput()} max={deadlineInput(task.dueDate)} value={stForm.due} onChange={e => setStForm(f => ({ ...f, due: e.target.value }))} />
           </FormField>
         </div>
       </Modal>
@@ -653,7 +595,8 @@ export default function TeamLeadTaskDetail() {
         taskId={taskId}
         onSuccess={(newEv) => {
           setTaskEvidence((prev) => [newEv, ...prev]);
-          setCompliance((prev) => ({ ...prev, evidenceBlocked: false }));
+          // Evidence starts Pending; re-read compliance instead of unblocking locally.
+          setComplianceReload((n) => n + 1);
         }}
       />
 
