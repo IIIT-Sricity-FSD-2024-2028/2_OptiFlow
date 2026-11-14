@@ -1,10 +1,10 @@
 import { openEvidenceFile } from '../../../shared/utils/evidenceFile';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '../../../shared/components/Button';
 import { FileText, ExternalLink, Trash2, UploadCloud } from 'lucide-react';
 
+// Props are frozen (PRE-M3-04): callers still pass `taskId`; this card does not need it.
 export function EvidenceUploadCard({
-  taskId,
   evidenceList = [],
   readOnly = false,
   required = false,
