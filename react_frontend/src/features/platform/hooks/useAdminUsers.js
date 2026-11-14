@@ -36,12 +36,12 @@ export function useAdminUsers(initialPageSize = 10) {
       if (statusFilter && statusFilter !== 'All') params.append('status', statusFilter);
 
       const res = await apiClient(`/api/platform/admin-users?${params.toString()}`);
-      const items = res?.items || (Array.isArray(res) ? res : []);
+      const items = res?.items || [];
       const totalCount = res?.total ?? items.length;
       setAdmins(items);
       setTotal(totalCount);
 
-      const summaryData = res?.summary || res?.data?.summary;
+      const summaryData = res?.summary;
       if (summaryData && (summaryData.total > 0 || summaryData.active > 0 || summaryData.inactive > 0)) {
         setSummary(summaryData);
       } else if (items.length > 0) {

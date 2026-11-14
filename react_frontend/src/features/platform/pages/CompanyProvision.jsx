@@ -30,7 +30,7 @@ export default function CompanyProvision() {
       try {
         setLoadingPlans(true);
         const res = await apiClient('/api/platform/plans?isActive=true');
-        const activePlans = Array.isArray(res) ? res : res?.items || [];
+        const activePlans = res?.items || [];
         setPlans(activePlans);
         if (activePlans.length > 0) {
           setForm((prev) => ({ ...prev, planId: activePlans[0].id }));

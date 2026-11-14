@@ -17,7 +17,7 @@ export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm
       setReason('');
       setFormError(null);
       apiClient('/api/platform/plans')
-        .then((res) => setPlans((res || []).filter((p) => p.isActive !== false)))
+        .then((res) => setPlans((res?.items || []).filter((p) => p.isActive !== false)))
         .catch((err) => {
           console.error('Failed to load active plans:', err);
           setFormError('Failed to load active plans.');
