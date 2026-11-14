@@ -1026,7 +1026,13 @@ export async function createPlan(req, res, next) {
       return plan;
     });
 
-    created(res, newPlan, "Plan created successfully");
+    // Same shape as GET /platform/plans items (they carry `_count`), so a client store can upsert
+    // this response directly. A plan that was just created has no subscriptions yet.
+    created(
+      res,
+      { ...newPlan, _count: { subscriptions: 0 } },
+      "Plan created successfully",
+    );
   } catch (err) {
     next(err);
   }
@@ -1083,7 +1089,15 @@ export async function updatePlan(req, res, next) {
       return result;
     });
 
-    ok(res, updated, "Plan updated successfully");
+    // Same shape as GET /platform/plans items (they carry `_count`).
+    const subscriptions = await prisma.subscription.count({
+      where: { planId: id },
+    });
+    ok(
+      res,
+      { ...updated, _count: { subscriptions } },
+      "Plan updated successfully",
+    );
   } catch (err) {
     next(err);
   }
