@@ -3,15 +3,16 @@ import { Link, useParams } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { Badge } from '../../../../shared/components/Badge';
 import { EmptyState } from '../../../../shared/components/EmptyState';
-import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
+import { FormField, Select } from '../../../../shared/components/FormField';
 import { Loader } from '../../../../shared/components/Loader';
 import { Button } from '../../../../shared/components/Button';
-import { Modal } from '../../../../shared/components/Modal';
 import { Pagination } from '../../../../shared/components/Pagination';
 import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
+import { ComplianceOverviewModal, CreateProjectTaskModal, TaskReviewDrawer } from '../components/ProjectDetailPanels';
+import { formatDate } from '../components/formatDate';
 
 const STATUSES = ['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'];
 const normalize = (response) => response?.data || response;
@@ -194,9 +195,6 @@ export default function PmProjectDetail() {
       && (teamLeadIds.includes(user.id) || teamLeadIds.includes(user.managerUserId))
       && (teamLeadIds.includes(user.id) || assignedUserIds.some((id) => String(id) === String(user.id)))
     ));
-  const formatDate = (date) => date
-    ? new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-    : '—';
 
   const createTask = async (event) => {
     event.preventDefault();
@@ -229,7 +227,8 @@ export default function PmProjectDetail() {
 
   const handleMarkTaskComplete = async (task) => {
     try {
-      await tasksApi.update(task.id, { status: 'Completed', pmApproval: true });
+      // Not a review approval: compliance rules apply (pmApproval is only for In_Review tasks).
+      await tasksApi.update(task.id, { status: 'Completed' });
       const response = await projectsApi.get(id);
       setProject(normalize(response));
       setSelectedTask((prev) => prev ? { ...prev, status: 'Completed' } : null);
@@ -481,117 +480,15 @@ export default function PmProjectDetail() {
         </aside>
       </section>
 
-      <Modal
+      <ComplianceOverviewModal
         isOpen={complianceOpen}
         onClose={() => setComplianceOpen(false)}
-        title={`Compliance Overview — ${project.name}`}
-      >
-        <div className="space-y-4">
-          {/* Tab Switcher */}
-          <div className="flex border-b border-slate-200">
-            <button
-              type="button"
-              onClick={() => setComplianceTab('rules')}
-              className={`pb-2.5 px-4 text-sm font-semibold border-b-2 transition-colors ${
-                complianceTab === 'rules'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Bound Rules ({projectApplicableRules.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setComplianceTab('violations')}
-              className={`pb-2.5 px-4 text-sm font-semibold border-b-2 transition-colors ${
-                complianceTab === 'violations'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Active Violations ({activeProjectViolations.length})
-            </button>
-          </div>
-
-          {/* Tab 1: Bound Rules */}
-          {complianceTab === 'rules' && (
-            <div className="space-y-3">
-              {projectApplicableRules.length === 0 ? (
-                <p className="text-sm text-slate-500 py-4 text-center">
-                  No active compliance rules are bound to this project or its team hierarchy.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-                  {projectApplicableRules.map((rule) => {
-                    const req = rule.criteria?.requirement;
-                    const trigger = rule.criteria?.trigger;
-                    return (
-                      <div key={rule.id} className="py-3 first:pt-0 last:pb-0 space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-bold text-slate-900">{rule.name}</p>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <Badge status={rule.scopeType === 'Company' ? 'default' : 'info'}>
-                              {rule.scopeType || 'Project'} Scope
-                            </Badge>
-                            <Badge status={rule.severity === 'Critical' || rule.severity === 'High' ? 'danger' : 'warning'}>
-                              {rule.severity || 'Medium'}
-                            </Badge>
-                          </div>
-                        </div>
-                        {rule.description && (
-                          <p className="text-xs text-slate-600">{rule.description}</p>
-                        )}
-                        {req && (
-                          <div className="mt-1 rounded bg-slate-50 p-2 text-xs text-slate-700">
-                            <span className="font-semibold text-slate-900">Enforcement: </span>
-                            {req.type === 'EVIDENCE_REQUIRED' && trigger
-                              ? `Requires approved evidence before transition to "${trigger.transitionTo || 'Completed'}"`
-                              : rule.name}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tab 2: Active Violations */}
-          {complianceTab === 'violations' && (
-            <div>
-              {activeProjectViolations.length === 0 ? (
-                <p className="text-sm text-slate-600 py-4 text-center">
-                  This project has no active compliance violations. All rules are satisfied.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-                  {activeProjectViolations.map((violation) => (
-                    <div key={violation.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                      <div>
-                        <p className="font-semibold text-slate-900">{violation.rule?.name || 'Compliance violation'}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {violation.entityType === 'Task' ? violation.entityName || 'Task' : project.name}
-                          {' · '}{String(violation.status).replace(/_/g, ' ')}
-                        </p>
-                      </div>
-                      {violation.entityType === 'Task' && (
-                        <Link
-                          to={PATHS.PM.TASK_DETAIL.replace(':id', violation.entityId)}
-                          className="shrink-0 text-sm font-semibold text-blue-600 hover:text-blue-700"
-                          onClick={() => setComplianceOpen(false)}
-                        >
-                          View task →
-                        </Link>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </Modal>
+        projectName={project.name}
+        activeTab={complianceTab}
+        onTabChange={setComplianceTab}
+        rules={projectApplicableRules}
+        violations={activeProjectViolations}
+      />
 
       {/* Review Queue */}
       {reviewQueueTasks.length > 0 && (
@@ -624,123 +521,22 @@ export default function PmProjectDetail() {
         </section>
       )}
 
-      <Modal
+      <CreateProjectTaskModal
         isOpen={createTaskOpen}
         onClose={() => setCreateTaskOpen(false)}
-        title="+ Create Task"
-        footer={(
-          <>
-            <Button variant="secondary" onClick={() => setCreateTaskOpen(false)} disabled={savingTask}>Cancel</Button>
-            <Button onClick={createTask} disabled={savingTask}>{savingTask ? 'Creating…' : 'Add Task'}</Button>
-          </>
-        )}
-      >
-        <form onSubmit={createTask} className="space-y-4">
-          {taskError && <p className="text-sm text-red-600" role="alert">{taskError}</p>}
-          <FormField label="Task name" required>
-            <Input value={taskForm.title} onChange={(event) => setTaskForm({ ...taskForm, title: event.target.value })} disabled={savingTask} />
-          </FormField>
-          <FormField label="Description">
-            <Textarea value={taskForm.description} onChange={(event) => setTaskForm({ ...taskForm, description: event.target.value })} disabled={savingTask} />
-          </FormField>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 sm:col-span-2">
-              This task will be assigned to the project Team Lead automatically.
-            </div>
-            <FormField label="Priority">
-              <Select value={taskForm.priority} onChange={(event) => setTaskForm({ ...taskForm, priority: event.target.value })} disabled={savingTask}>
-                {['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-              </Select>
-            </FormField>
-            <FormField label="Estimated hours">
-              <Input type="number" min="0" step="0.5" value={taskForm.estimatedHours} onChange={(event) => setTaskForm({ ...taskForm, estimatedHours: event.target.value })} disabled={savingTask} />
-            </FormField>
-            <FormField label="Deadline">
-              <Input type="date" value={taskForm.dueDate} onChange={(event) => setTaskForm({ ...taskForm, dueDate: event.target.value })} disabled={savingTask} />
-            </FormField>
-          </div>
-        </form>
-      </Modal>
+        onSubmit={createTask}
+        saving={savingTask}
+        error={taskError}
+        form={taskForm}
+        onFormChange={setTaskForm}
+      />
 
-      {selectedTask && (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-40 bg-slate-900/40"
-            aria-label="Close task details"
-            onClick={() => setSelectedTask(null)}
-          />
-          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col bg-white shadow-2xl">
-            <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-5">
-              <div>
-                <h2 className="text-lg font-extrabold text-slate-900">Task Review</h2>
-                <p className="mt-1 text-xs font-semibold text-slate-500">ID: T-{selectedTask.id.slice(0, 8)}</p>
-              </div>
-              <button type="button" onClick={() => setSelectedTask(null)} className="rounded-full bg-slate-200 px-2.5 py-1 text-lg text-slate-600" aria-label="Close">×</button>
-            </header>
-            <div className="flex-1 space-y-6 overflow-y-auto p-6">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900">{selectedTask.title}</h3>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedTask.description || 'No task description provided.'}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</p>
-                  <Badge status={selectedTask.status === 'Completed' ? 'success' : selectedTask.status === 'In_Review' ? 'info' : 'default'}>{(selectedTask.status || 'Draft').replace(/_/g, ' ')}</Badge>
-                </div>
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Priority</p>
-                  <p className="text-sm font-semibold text-slate-900">{selectedTask.priority || 'Medium'}</p>
-                </div>
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Assigned to</p>
-                  <p className="text-sm font-semibold text-slate-900">{selectedTask.assignedTo?.fullName || selectedTask.assignedTo?.email || 'Unassigned'}</p>
-                </div>
-                <div className="rounded-lg bg-slate-100 p-4">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Deadline</p>
-                  <p className="text-sm font-semibold text-slate-900">{formatDate(selectedTask.dueDate)}</p>
-                </div>
-              </div>
-              <section>
-                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Checklist / Subtasks</h3>
-                {selectedTask.subtasks?.length ? selectedTask.subtasks.map((subtask) => (
-                  <div key={subtask.id} className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
-                    <span className={`text-sm ${subtask.status === 'Completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{subtask.title}</span>
-                    <Badge>{(subtask.status || 'Draft').replace(/_/g, ' ')}</Badge>
-                  </div>
-                )) : <p className="text-sm text-slate-500">No subtasks found for this task.</p>}
-              </section>
-            </div>
-            <footer className="flex justify-between border-t border-slate-200 p-4 gap-2">
-              {selectedTask.status !== 'Completed' && (
-                <>
-                  {selectedTask.status === 'In_Review' || selectedTask.status === 'Pending_TL_Review' ? (
-                    <Button
-                      variant="primary"
-                      onClick={() => handleApproveTask(selectedTask)}
-                      className="flex-1"
-                    >
-                      ✓ Approve & Mark Complete
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleMarkTaskComplete(selectedTask)}
-                      className="flex-1"
-                    >
-                      Mark as Complete
-                    </Button>
-                  )}
-                </>
-              )}
-              {selectedTask.status === 'Completed' && (
-                <span className="flex-1 text-center text-sm font-semibold text-emerald-600">✓ Task Completed</span>
-              )}
-              <Button variant="secondary" onClick={() => setSelectedTask(null)}>Close</Button>
-            </footer>
-          </aside>
-        </>
-      )}
+      <TaskReviewDrawer
+        task={selectedTask}
+        onClose={() => setSelectedTask(null)}
+        onApprove={handleApproveTask}
+        onMarkComplete={handleMarkTaskComplete}
+      />
     </div>
   );
 }
