@@ -4,7 +4,7 @@ import { Button } from '../../../../../shared/components/Button';
 import { FormField, Textarea, Input } from '../../../../../shared/components/FormField';
 import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../shared/components/Toast';
-import * as tasksApi from '../../../../../services/api/tasks';
+import * as subtasksApi from '../../../../../services/api/subtasks';
 import * as evidenceApi from '../../../../../services/api/evidence';
 import { Upload, FileText, X, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
@@ -13,6 +13,7 @@ export function SubmitWorkModal({
   onClose,
   taskId,
   taskTitle = 'Task',
+  subtaskIds = [],
   isEvidenceRequired = false,
   complianceRuleName = '',
   existingEvidenceCount = 0,
@@ -52,6 +53,10 @@ export function SubmitWorkModal({
       toast.warning('Please provide a brief summary of completed work.');
       return;
     }
+    if (subtaskIds.length === 0) {
+      toast.warning('You have no open subtasks to submit on this task.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -76,21 +81,31 @@ export function SubmitWorkModal({
         }
       }
 
-      // 2. Transition task to In_Review for Team Lead
-      await tasksApi.update(taskId, {
-        status: 'In_Review',
-      });
-
-      toast.success(
-        selectedFile
-          ? 'Work submitted for review and deliverable artifact uploaded!'
-          : 'Work submitted to your team leader for review!'
+      // 2. Send the member's own open subtasks to In_Review. The parent task belongs to
+      //    the Team Lead, who submits it to the PM once all subtasks are approved.
+      const results = await Promise.allSettled(
+        subtaskIds.map((id) => subtasksApi.update(id, { status: 'In_Review' }))
       );
+      const submittedIds = subtaskIds.filter((_, index) => results[index].status === 'fulfilled');
+      const failedCount = subtaskIds.length - submittedIds.length;
+      if (submittedIds.length === 0) {
+        throw results.find((result) => result.status === 'rejected')?.reason || new Error('Submission failed.');
+      }
+
+      if (failedCount > 0) {
+        toast.warning(`${submittedIds.length} subtask(s) submitted; ${failedCount} could not be submitted.`);
+      } else {
+        toast.success(
+          selectedFile
+            ? 'Work submitted for review and deliverable artifact uploaded!'
+            : 'Work submitted to your team leader for review!'
+        );
+      }
 
       setSubmitNotes('');
       setSelectedFile(null);
       setDocTitle('');
-      onSuccess?.(createdEvidence);
+      onSuccess?.(createdEvidence, submittedIds);
       onClose();
     } catch (err) {
       console.error(err);

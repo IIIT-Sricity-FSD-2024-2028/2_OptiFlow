@@ -46,7 +46,7 @@ export function SubtaskList({
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
             {onSubmitSubtask
-              ? 'Complete a subtask then click Submit → to send it for Team Lead review'
+              ? 'When a subtask is done, click Submit for review. Your Team Lead approves it.'
               : `${subtasks.length} subtask(s) defined`}
           </p>
         </div>
@@ -62,12 +62,11 @@ export function SubtaskList({
               const status = String(subtask.status || '').toLowerCase();
               const isCompleted = status.includes('complete');
               const isInReview = ['in_review', 'pending_tl_review'].includes(status);
-              // Only show Submit if member just checked it (Completed) but hasn't submitted yet
-              // After TL approves it stays Completed — but we use a heuristic: if it was ever
-              // set to In_Review and came back as Completed it was approved, so don't show Submit
-              // The simplest fix: only show Submit when status is exactly 'Completed' (not in_review, not 'approved')
-              // Hide it once it's 'In_Review' (submitted) — TL will change it to Completed on approve
-              const canSubmit = isCompleted && !isInReview && !submittedSubtaskIds.has(subId);
+              // One-step submit: the assignee sends an open subtask to In_Review; only the
+              // Team Lead or PM can mark it Completed (or send it back to Active).
+              const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
+              const isMine = !currentUserId || String(assigneeId) === String(currentUserId);
+              const canSubmit = isMine && !isCompleted && !isInReview && !submittedSubtaskIds.has(subId);
 
               return (
                 <li key={subId} className="py-3 flex items-start gap-3">
@@ -96,6 +95,15 @@ export function SubtaskList({
                       </div>
                     );
                   })()}
+                  {!onStatusToggle && onSubmitSubtask && (
+                    <div className="mt-0.5">
+                      {isCompleted || isInReview ? (
+                        <CheckCircle2 className={`w-4 h-4 ${isCompleted ? 'text-emerald-600' : 'text-purple-500'}`} />
+                      ) : (
+                        <Circle className="w-4 h-4 text-slate-300" />
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex-1 min-w-0">
                     <p
@@ -113,6 +121,12 @@ export function SubtaskList({
                           : subtask.assignedTo || subtask.assignedToName}
                       </p>
                     )}
+                    {subtask.reviewComment && !isCompleted && !isInReview && (
+                      <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900" role="note">
+                        <span className="font-semibold">Sent back for changes: </span>
+                        <span className="whitespace-pre-wrap">{subtask.reviewComment}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -123,9 +137,9 @@ export function SubtaskList({
                         type="button"
                         onClick={() => onSubmitSubtask(subId)}
                         className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors whitespace-nowrap"
-                        title="Submit this subtask to Team Lead for review"
+                        title="Send this subtask to your Team Lead for review"
                       >
-                        Submit →
+                        Submit for review
                       </button>
                     )}
                     {isInReview && (
