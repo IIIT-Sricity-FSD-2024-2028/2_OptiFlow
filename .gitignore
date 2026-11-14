@@ -1,0 +1,17 @@
+# Node dependencies (all project folders)
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/build/
+**/.next/
+
+# Environment files
+.env
+.env.*
+
+# Logs
+*.log
+
+# Cache
+.cache/

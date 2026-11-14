@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listTemplates, createTemplate, deleteTemplate } from '../../../services/api/process';
+import { PATHS } from '../../../app/paths';
 import { Table } from '../../../shared/components/Table';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
@@ -89,7 +90,7 @@ export default function ProcessAdminTemplates() {
 
       const templateId = res?.id || res?.data?.id;
       if (templateId) {
-        navigate(`/process-admin/templates/${templateId}`);
+        navigate(PATHS.PROCESS_ADMIN.TEMPLATE_DETAIL.replace(':id', templateId));
       } else {
         fetchTemplates();
       }
@@ -127,7 +128,7 @@ export default function ProcessAdminTemplates() {
       render: (row) => (
         <div>
           <div className="font-semibold text-slate-900">{row.name}</div>
-          <div className="text-xs text-slate-500">v{row.version || 1} • {row.instances?.length || 0} instance(s) run</div>
+          <div className="text-xs text-slate-500">v{row.version || 1} • {row.instances?.length ?? row._count?.instances ?? 0} instance(s) run</div>
         </div>
       ),
     },
@@ -163,15 +164,15 @@ export default function ProcessAdminTemplates() {
           <Button
             variant="secondary"
             className="text-xs py-1 px-2.5"
-            onClick={() => navigate(`/process-admin/templates/${row.id}`)}
+            onClick={() => navigate(PATHS.PROCESS_ADMIN.TEMPLATE_DETAIL.replace(':id', row.id))}
           >
             Step Builder
           </Button>
           <Button
             variant="danger"
             className="text-xs py-1 px-2.5"
-            disabled={(row.instances?.length || 0) > 0}
-            title={(row.instances?.length || 0) > 0 ? 'Cannot delete a template with run instances' : 'Delete template'}
+            disabled={(row.instances?.length ?? row._count?.instances ?? 0) > 0}
+            title={(row.instances?.length ?? row._count?.instances ?? 0) > 0 ? 'Cannot delete a template with run instances' : 'Delete template'}
             onClick={() => setTemplateToDelete(row)}
           >
             Delete

@@ -20,6 +20,7 @@ import {
   ProjectStatus,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { seedProcessModule } from "./seeds/process.ts";
 
 const prisma = new PrismaClient();
 
@@ -491,6 +492,8 @@ async function main() {
     where: { id: processInstance.id },
     data: { currentStepId: instStep.id },
   });
+
+  await seedProcessModule(prisma, acmeCorp.id, userAlice.id, userDavid.id, project.id);
 
   const categorySecurity = await prisma.complianceCategory.create({
     data: { companyId: acmeCorp.id, name: "IT Security Controls", description: "Identity, credentialing, and infrastructure security requirements.", ownerId: userAlice.id },

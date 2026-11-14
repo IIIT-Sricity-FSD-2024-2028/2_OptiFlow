@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
 import { useToast } from '../../../../shared/components/Toast';
@@ -7,6 +7,8 @@ import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { SubtaskList } from '../../components/SubtaskList';
+import TaskHeader from '../components/TaskHeader';
+import TaskComplianceCard from '../components/TaskComplianceCard';
 import { EvidenceUploadCard } from '../../components/EvidenceUploadCard';
 import { StatusBadge, PriorityBadge } from '../../components/StatusBadge';
 import {
@@ -237,366 +239,38 @@ export default function MemberTaskDetail() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
-      {/* Breadcrumb & Navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-          <Link to={PATHS.MEMBER.DASHBOARD} className="hover:text-blue-600 transition-colors">
-            Dashboard
-          </Link>
-          <span>›</span>
-          <Link to={PATHS.MEMBER.TASKS} className="hover:text-blue-600 transition-colors">
-            My Tasks
-          </Link>
-          <span>›</span>
-          <span className="text-slate-800 font-semibold truncate max-w-xs">{task.title}</span>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => navigate(PATHS.MEMBER.TASKS)}
-          className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to tasks</span>
-        </button>
-      </div>
-
-      {/* Main Task Header Card */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                TASK-{String(task.id || taskId).slice(0, 8)}
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
-                {project?.name || 'General Process'}
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="text-xs text-slate-500 font-medium">
-                Assigned by <strong className="text-slate-800">{managerName}</strong>
-              </span>
-            </div>
-
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-snug">
-              {task.title}
-            </h1>
-
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
-              <div className="flex items-center gap-1.5 font-medium">
-                <Calendar className="w-4 h-4 text-slate-400" />
-                <span>
-                  Due:{' '}
-                  <strong className={isOverdue ? 'text-rose-600' : 'text-slate-700'}>
-                    {dueDate ? new Date(dueDate).toLocaleDateString() : 'No deadline'}
-                  </strong>
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-4 h-4 text-slate-400" />
-                <span>
-                  Estimated:{' '}
-                  <strong className="text-slate-700">
-                    {task.estimatedHours || task.estimated_hours || 0} hrs
-                  </strong>
-                </span>
-              </div>
-
-              <PriorityBadge priority={task.priority} />
-              <StatusBadge status={task.status} isOverdue={isOverdue} />
-              {isLockedOut ? (
-                <span
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse"
-                  title="Compliance SLA expired. Remediation lockout active."
-                >
-                  <AlertOctagon className="w-3.5 h-3.5 text-rose-600" />
-                  Governance Lockout
-                </span>
-              ) : isEvidenceRequired ? (
-                <span
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
-                  title={`Mandated by compliance rule: ${complianceRule?.name || 'Evidence Policy'}`}
-                >
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                  Evidence Required
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200/80">
-                  <Check className="w-3 h-3 text-slate-400" />
-                  Evidence Optional
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Member Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            {!isCompleted && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsExtensionModalOpen(true)}
-                  className="text-xs font-semibold"
-                >
-                  Request Extension
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsBlockerModalOpen(true)}
-                  className="text-xs font-semibold text-rose-700 border-rose-200 hover:bg-rose-50"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600 mr-1.5" />
-                  Report Blocker
-                </Button>
-
-                {isPendingReview ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled
-                    className="text-xs font-semibold opacity-75 cursor-not-allowed bg-purple-600 hover:bg-purple-600"
-                  >
-                    <Clock className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    Under Review by Lead
-                  </Button>
-                ) : isLockedOut ? (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled
-                    className="text-xs font-semibold opacity-90 cursor-not-allowed bg-rose-600 hover:bg-rose-600 flex items-center gap-1.5"
-                    title="Remediation deadline expired. Task completion locked by Compliance Governance."
-                  >
-                    <AlertOctagon className="w-3.5 h-3.5" />
-                    Locked by Compliance
-                  </Button>
-                ) : (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setIsSubmitModalOpen(true)}
-                    className="text-xs font-semibold flex items-center gap-1.5 shadow-xs"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Submit Work for Review
-                  </Button>
-                )}
-              </>
-            )}
-
-            {isCompleted && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-                <CheckCircle2 className="w-4 h-4" />
-                Task Completed & Approved
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Stepper Progress Bar */}
-        <div className="mt-8 pt-6 border-t border-slate-100">
-          <div className="flex items-center justify-between max-w-xl mx-auto">
-            {stages.map((stg, i) => (
-              <React.Fragment key={stg.label}>
-                <div className="flex flex-col items-center text-center">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                      stg.done
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-400 border border-slate-200'
-                    }`}
-                  >
-                    {stg.done ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
-                  </div>
-                  <span
-                    className={`text-[11px] font-semibold mt-1.5 ${
-                      stg.done ? 'text-slate-900' : 'text-slate-400'
-                    }`}
-                  >
-                    {stg.label}
-                  </span>
-                </div>
-                {i < stages.length - 1 && (
-                  <div
-                    className={`flex-1 h-0.5 mx-2 -mt-4 transition-all ${
-                      stages[i + 1].done ? 'bg-blue-600' : 'bg-slate-200'
-                    }`}
-                  />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Decomposed Header Section */}
+      <TaskHeader
+        task={task}
+        taskId={taskId}
+        project={project}
+        managerName={managerName}
+        dueDate={dueDate}
+        isOverdue={isOverdue}
+        isCompleted={isCompleted}
+        isPendingReview={isPendingReview}
+        isLockedOut={isLockedOut}
+        isEvidenceRequired={isEvidenceRequired}
+        complianceRule={complianceRule}
+        stages={stages}
+        onOpenExtensionModal={() => setIsExtensionModalOpen(true)}
+        onOpenBlockerModal={() => setIsBlockerModalOpen(true)}
+        onOpenSubmitModal={() => setIsSubmitModalOpen(true)}
+      />
 
       {/* Main Content Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
           {/* Compliance Governance & Remediation Card */}
-          {(primaryViolation || isEvidenceRequired || latestRejectedEvidence) && (
-            <div
-              className={`rounded-2xl p-6 border shadow-xs transition-all ${
-                isLockedOut
-                  ? 'bg-rose-50/90 border-rose-300 ring-1 ring-rose-200'
-                  : primaryViolation
-                  ? 'bg-amber-50/80 border-amber-300'
-                  : 'bg-blue-50/70 border-blue-200'
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div className="flex items-start gap-3.5">
-                  <div
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                      isLockedOut
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : primaryViolation
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-blue-600 text-white'
-                    }`}
-                  >
-                    {isLockedOut ? <AlertOctagon size={24} /> : <ShieldAlert size={24} />}
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          isLockedOut
-                            ? 'bg-rose-200 text-rose-900'
-                            : primaryViolation
-                            ? 'bg-amber-200 text-amber-900'
-                            : 'bg-blue-200 text-blue-900'
-                        }`}
-                      >
-                        {isLockedOut
-                          ? '🚨 Governance Lockout Engaged'
-                          : primaryViolation
-                          ? '⚠️ Remediation SLA Active'
-                          : '🛡️ Evidence Policy Active'}
-                      </span>
-                      {primaryViolation?.severity && (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/80 border border-slate-200 text-slate-700">
-                          Severity: {primaryViolation.severity}
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-900">
-                      {primaryViolation?.rule?.name || complianceRule?.name || 'Deliverable Compliance Policy'}
-                    </h3>
-                    <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-                      {primaryViolation?.description ||
-                        complianceRule?.description ||
-                        'This deliverable requires formal regulatory documentation and audit evidence prior to completion.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex sm:flex-col items-end gap-2 shrink-0">
-                  <Button
-                    variant={isLockedOut ? 'danger' : 'primary'}
-                    size="sm"
-                    onClick={() => setIsEvidenceModalOpen(true)}
-                    className="text-xs font-semibold shadow-xs flex items-center gap-1.5"
-                  >
-                    <Send size={13} />
-                    <span>Upload Remediation Evidence</span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Rejection Alert Banner if officer rejected previous upload */}
-              {latestRejectedEvidence && (
-                <div className="mt-4 p-3.5 bg-rose-100 border border-rose-300 rounded-xl text-xs text-rose-900 flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">Prior Submission Rejected by Compliance Officer: </span>
-                    <span>"{latestRejectedEvidence.rejectionReason}"</span>
-                    <p className="mt-1 text-[11px] text-rose-700">
-                      Please resolve the feedback above and submit revised documentation.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Metadata Grid: Officer Contact, SLA Countdown, Policy Scope */}
-              <div className="mt-4 pt-4 border-t border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                <div>
-                  <span className="text-slate-500 font-medium block">Assigned Compliance Officer:</span>
-                  <div className="mt-0.5 font-bold text-slate-900 flex items-center gap-1">
-                    <UserCheck size={13} className="text-blue-600" />
-                    <span>
-                      {primaryViolation?.assignedOfficer?.fullName ||
-                        primaryViolation?.rule?.assignedOfficer?.fullName ||
-                        'Compliance Governance Office'}
-                    </span>
-                  </div>
-                  <a
-                    href={`mailto:${
-                      primaryViolation?.assignedOfficer?.email ||
-                      primaryViolation?.rule?.assignedOfficer?.email ||
-                      'compliance@optiflow.io'
-                    }`}
-                    className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5"
-                  >
-                    <Mail size={11} />
-                    <span>
-                      {primaryViolation?.assignedOfficer?.email ||
-                        primaryViolation?.rule?.assignedOfficer?.email ||
-                        'compliance@optiflow.io'}
-                    </span>
-                  </a>
-                </div>
-
-                <div>
-                  <span className="text-slate-500 font-medium block">Remediation SLA Deadline:</span>
-                  {primaryViolation?.dueDate ? (
-                    <div className="mt-0.5">
-                      <span
-                        className={`font-bold flex items-center gap-1 ${
-                          isLockedOut ? 'text-rose-700' : 'text-slate-900'
-                        }`}
-                      >
-                        <Clock size={13} className={isLockedOut ? 'text-rose-600' : 'text-amber-600'} />
-                        <span>{new Date(primaryViolation.dueDate).toLocaleString()}</span>
-                      </span>
-                      <span
-                        className={`text-[11px] font-semibold ${
-                          isLockedOut ? 'text-rose-600' : 'text-amber-700'
-                        }`}
-                      >
-                        {isLockedOut
-                          ? '⛔ Deadline Breached (Lockout active)'
-                          : getSlaTimeRemaining(primaryViolation.dueDate)?.text || 'Pending evaluation'}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="font-semibold text-slate-700 mt-0.5 block">Standard SLA Window</span>
-                  )}
-                </div>
-
-                <div>
-                  <span className="text-slate-500 font-medium block">Resolution Actions:</span>
-                  <p className="mt-0.5 text-[11px] text-slate-600 leading-normal">
-                    {isLockedOut ? (
-                      <>
-                        1. Upload remediation evidence.<br />
-                        2. Contact officer for Fast-Track Waiver.<br />
-                        3. Request PM deadline extension.
-                      </>
-                    ) : (
-                      <>
-                        Submit evidence before deadline to maintain continuous task workflow.
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+          <TaskComplianceCard
+            primaryViolation={primaryViolation}
+            isEvidenceRequired={isEvidenceRequired}
+            latestRejectedEvidence={latestRejectedEvidence}
+            isLockedOut={isLockedOut}
+            complianceRule={complianceRule}
+            getSlaTimeRemaining={getSlaTimeRemaining}
+            onOpenEvidenceModal={() => setIsEvidenceModalOpen(true)}
+          />
 
           {/* Deliverable Scope */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">

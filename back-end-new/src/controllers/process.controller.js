@@ -5,9 +5,10 @@ import {
   ForbiddenError,
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
-import { ROLES, hasRole } from '../utils/roles.js';
+import { ROLES, hasRole, normalizeRole } from '../utils/roles.js';
 import { assertWithinPlanLimit } from '../utils/planLimits.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { evaluateTaskTransition } from '../services/compliance.service.js';
 
 
 const ALLOWED_STEP_TYPES = ['Approval', 'Input_Required', 'Automated_Task'];
@@ -28,6 +29,42 @@ export const PROCESS_ADMIN_ROLES = [
 ];
 
 // ============================================================================
+// SHARED RESOURCE INCLUDES (PRE-M4-01 / BD11)
+// ============================================================================
+
+export const PROCESS_TEMPLATE_INCLUDE = {
+  steps: {
+    orderBy: { stepOrder: 'asc' },
+    include: { onRejectGotoStep: true },
+  },
+  instances: {
+    select: { id: true, status: true, title: true, createdAt: true },
+  },
+  _count: {
+    select: { instances: true, steps: true },
+  },
+};
+
+export const PROCESS_INSTANCE_INCLUDE = {
+  template: { select: { id: true, name: true, version: true } },
+  project: { select: { id: true, name: true } },
+  steps: {
+    include: {
+      templateStep: { include: { onRejectGotoStep: true } },
+      assignedTo: { select: { id: true, fullName: true, email: true } },
+      actionedBy: { select: { id: true, fullName: true, email: true } },
+    },
+    orderBy: { templateStep: { stepOrder: 'asc' } },
+  },
+};
+
+export const PROCESS_STEP_INCLUDE = {
+  templateStep: { include: { onRejectGotoStep: true } },
+  assignedTo: { select: { id: true, fullName: true, email: true } },
+  actionedBy: { select: { id: true, fullName: true, email: true } },
+};
+
+// ============================================================================
 // 1. PROCESS TEMPLATES ENDPOINTS
 // ============================================================================
 
@@ -39,13 +76,7 @@ export async function listTemplates(req, res, next) {
   try {
     const templates = await prisma.processTemplate.findMany({
       where: { companyId: req.user.companyId },
-      include: {
-        steps: {
-          orderBy: { stepOrder: 'asc' },
-          include: { onRejectGotoStep: true },
-        },
-        instances: true,
-      },
+      include: PROCESS_TEMPLATE_INCLUDE,
       orderBy: { name: 'asc' },
     });
 
@@ -69,13 +100,7 @@ export async function getTemplate(req, res, next) {
         id: req.params.id,
         companyId: req.user.companyId,
       },
-      include: {
-        steps: {
-          orderBy: { stepOrder: 'asc' },
-          include: { onRejectGotoStep: true },
-        },
-        instances: true,
-      },
+      include: PROCESS_TEMPLATE_INCLUDE,
     });
 
     if (!template) {
@@ -106,23 +131,38 @@ export async function createTemplate(req, res, next) {
 
     const formattedSteps = Array.isArray(steps)
       ? steps.map((s, index) => {
+          const currentOrder = s.stepOrder ?? index + 1;
           if (typeof s === 'string') {
             return {
               companyId: req.user.companyId,
-              stepOrder: index + 1,
+              stepOrder: currentOrder,
               name: s,
               stepType: 'Automated_Task',
+              onRejectGotoStepId: null,
+              onRejectGotoStepOrder: null,
             };
           }
           if (s.stepType) {
             validateEnum(s.stepType, ALLOWED_STEP_TYPES, `steps[${index}].stepType`);
           }
+
+          // SEC-M4-07: Validate onRejectGotoStepOrder points to an earlier step
+          if (s.onRejectGotoStepOrder !== undefined && s.onRejectGotoStepOrder !== null) {
+            const targetOrder = Number(s.onRejectGotoStepOrder);
+            if (targetOrder >= currentOrder) {
+              throw new BadRequestError(
+                `Reject loopback target step order (${targetOrder}) on step "${s.name || index + 1}" must precede current step order (${currentOrder})`
+              );
+            }
+          }
+
           return {
             companyId: req.user.companyId,
-            stepOrder: s.stepOrder ?? index + 1,
+            stepOrder: currentOrder,
             name: s.name || `Step ${index + 1}`,
             stepType: s.stepType || 'Automated_Task',
             onRejectGotoStepId: s.onRejectGotoStepId ?? null,
+            onRejectGotoStepOrder: s.onRejectGotoStepOrder ?? null,
           };
         })
       : [];
@@ -131,28 +171,53 @@ export async function createTemplate(req, res, next) {
       await assertWithinPlanLimit(req.user.companyId, 'activeProcessTemplates');
     }
 
-    const created = await prisma.processTemplate.create({
-      data: {
-        companyId: req.user.companyId,
-        name: name.trim(),
-        version: version ? Number(version) : 1,
-        isActive: isActive !== undefined ? Boolean(isActive) : true,
-        createdById: req.user.id,
-        steps:
-          formattedSteps.length > 0
-            ? {
-                create: formattedSteps,
-              }
-            : undefined,
-      },
-      include: {
-        steps: {
-          orderBy: { stepOrder: 'asc' },
-          include: { onRejectGotoStep: true },
+    const created = await prisma.$transaction(async (tx) => {
+      const template = await tx.processTemplate.create({
+        data: {
+          companyId: req.user.companyId,
+          name: name.trim(),
+          version: version ? Number(version) : 1,
+          isActive: isActive !== undefined ? Boolean(isActive) : true,
+          createdById: req.user.id,
         },
-        instances: true,
-      },
-    });
+      });
+
+      if (formattedSteps.length > 0) {
+        const stepOrderMap = new Map();
+        for (const s of formattedSteps) {
+          const step = await tx.processTemplateStep.create({
+            data: {
+              companyId: req.user.companyId,
+              templateId: template.id,
+              stepOrder: s.stepOrder,
+              name: s.name,
+              stepType: s.stepType,
+              onRejectGotoStepId: null,
+            },
+          });
+          stepOrderMap.set(s.stepOrder, step.id);
+        }
+
+        // Phase 2: Link loopbacks by stepOrder
+        for (const s of formattedSteps) {
+          if (s.onRejectGotoStepOrder) {
+            const targetStepId = stepOrderMap.get(Number(s.onRejectGotoStepOrder));
+            if (targetStepId) {
+              const currentStepId = stepOrderMap.get(s.stepOrder);
+              await tx.processTemplateStep.update({
+                where: { id: currentStepId },
+                data: { onRejectGotoStepId: targetStepId },
+              });
+            }
+          }
+        }
+      }
+
+      return tx.processTemplate.findUnique({
+        where: { id: template.id },
+        include: PROCESS_TEMPLATE_INCLUDE,
+      });
+    }, { timeout: 15000, maxWait: 5000 });
 
     try {
       await createProcessAuditLog({
@@ -201,6 +266,40 @@ export async function updateTemplate(req, res, next) {
       await assertWithinPlanLimit(req.user.companyId, 'activeProcessTemplates');
     }
 
+    // SEC-M4-04 & SEC-M4-07: Validate step constraints before starting transaction
+    if (Array.isArray(steps)) {
+      const activeInstancesCount = await prisma.processInstance.count({
+        where: {
+          templateId: req.params.id,
+          companyId: req.user.companyId,
+          status: 'Active',
+        },
+      });
+      if (activeInstancesCount > 0) {
+        throw new BadRequestError(
+          `Cannot modify steps on process template "${existing.name}": ${activeInstancesCount} active process instance(s) are currently running. Complete or cancel active instances first, or create a new template version.`
+        );
+      }
+
+      for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        if (typeof s === 'object' && s !== null) {
+          if (s.stepType) {
+            validateEnum(s.stepType, ALLOWED_STEP_TYPES, `steps[${i}].stepType`);
+          }
+          const currentOrder = s.stepOrder ?? (i + 1);
+          if (s.onRejectGotoStepOrder !== undefined && s.onRejectGotoStepOrder !== null) {
+            const targetOrder = Number(s.onRejectGotoStepOrder);
+            if (targetOrder >= currentOrder) {
+              throw new BadRequestError(
+                `Reject loopback target step order (${targetOrder}) on step "${s.name || i + 1}" must precede current step order (${currentOrder})`
+              );
+            }
+          }
+        }
+      }
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       if (Array.isArray(steps)) {
         const existingSteps = await tx.processTemplateStep.findMany({
@@ -216,9 +315,6 @@ export async function updateTemplate(req, res, next) {
               name: s,
               stepType: 'Automated_Task',
             };
-          }
-          if (s.stepType) {
-            validateEnum(s.stepType, ALLOWED_STEP_TYPES, `steps[${index}].stepType`);
           }
           return {
             id: s.id,
@@ -306,13 +402,21 @@ export async function updateTemplate(req, res, next) {
             targetDbId = stepIdMap.get(`order-${s.onRejectGotoStepOrder}`);
           }
 
-          if (targetDbId && targetDbId !== currentDbId) {
-            try {
+          if (targetDbId) {
+            const targetStep = await tx.processTemplateStep.findFirst({
+              where: { id: targetDbId, templateId: req.params.id },
+            });
+            if (targetStep) {
+              if (targetStep.stepOrder >= s.stepOrder) {
+                throw new BadRequestError(
+                  `Reject loopback target step "${targetStep.name}" (order ${targetStep.stepOrder}) must precede current step "${s.name}" (order ${s.stepOrder})`
+                );
+              }
               await tx.processTemplateStep.update({
                 where: { id: currentDbId },
                 data: { onRejectGotoStepId: targetDbId },
               });
-            } catch (_) {}
+            }
           }
         }
       }
@@ -324,15 +428,9 @@ export async function updateTemplate(req, res, next) {
           ...(version !== undefined ? { version: Number(version) } : {}),
           ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
         },
-        include: {
-          steps: {
-            orderBy: { stepOrder: 'asc' },
-            include: { onRejectGotoStep: true },
-          },
-          instances: true,
-        },
+        include: PROCESS_TEMPLATE_INCLUDE,
       });
-    });
+    }, { timeout: 15000, maxWait: 5000 });
 
     try {
       await createProcessAuditLog({
@@ -384,9 +482,16 @@ export async function deleteTemplate(req, res, next) {
       );
     }
 
-    await prisma.processTemplate.delete({
-      where: { id: req.params.id },
-    });
+    await prisma.$transaction(async (tx) => {
+      // Break self-referencing step loopback FKs to prevent Postgres foreign key constraint errors
+      await tx.processTemplateStep.updateMany({
+        where: { templateId: req.params.id },
+        data: { onRejectGotoStepId: null },
+      });
+      await tx.processTemplate.delete({
+        where: { id: req.params.id },
+      });
+    }, { timeout: 15000, maxWait: 5000 });
 
     try {
       await createProcessAuditLog({
@@ -456,11 +561,45 @@ export async function addTemplateStep(req, res, next) {
       throw new NotFoundError(`Process template ${req.params.id} not found`);
     }
 
+    // SEC-M4-04: Block step additions when active instances exist
+    const activeInstancesCount = await prisma.processInstance.count({
+      where: {
+        templateId: req.params.id,
+        companyId: req.user.companyId,
+        status: 'Active',
+      },
+    });
+    if (activeInstancesCount > 0) {
+      throw new BadRequestError(
+        `Cannot add steps to process template "${template.name}": ${activeInstancesCount} active process instance(s) are currently running. Complete or cancel active instances first, or create a new template version.`
+      );
+    }
+
     validateRequired(req.body, ['name', 'stepOrder']);
     validateNumber(req.body.stepOrder, 'stepOrder');
+    const stepOrder = Number(req.body.stepOrder);
 
     if (req.body.stepType) {
       validateEnum(req.body.stepType, ALLOWED_STEP_TYPES, 'stepType');
+    }
+
+    // SEC-M4-07: Validate reject loopback target precedes current step
+    let onRejectGotoStepId = req.body.onRejectGotoStepId ?? null;
+    if (onRejectGotoStepId) {
+      const targetStep = await prisma.processTemplateStep.findFirst({
+        where: {
+          id: onRejectGotoStepId,
+          templateId: req.params.id,
+        },
+      });
+      if (!targetStep) {
+        throw new NotFoundError(`Target reject step ${onRejectGotoStepId} not found`);
+      }
+      if (targetStep.stepOrder >= stepOrder) {
+        throw new BadRequestError(
+          `Reject loopback target step "${targetStep.name}" (order ${targetStep.stepOrder}) must precede current step (order ${stepOrder})`
+        );
+      }
     }
 
     const step = await prisma.processTemplateStep.create({
@@ -468,9 +607,9 @@ export async function addTemplateStep(req, res, next) {
         companyId: req.user.companyId,
         templateId: req.params.id,
         name: req.body.name.trim(),
-        stepOrder: Number(req.body.stepOrder),
+        stepOrder,
         stepType: req.body.stepType || 'Automated_Task',
-        onRejectGotoStepId: req.body.onRejectGotoStepId ?? null,
+        onRejectGotoStepId,
       },
       include: { onRejectGotoStep: true },
     });
@@ -496,24 +635,33 @@ export async function listInstances(req, res, next) {
   try {
     const { templateId, projectId } = req.query;
 
+    const isPrivileged = hasRole(req.user.role, [
+      ...PROCESS_MANAGER_ROLES,
+      ROLES.PLATFORM_ADMIN,
+      'company_owner',
+      'system_admin',
+      'process_admin',
+      'project_manager',
+    ]);
+
+    const where = {
+      companyId: req.user.companyId,
+      ...(templateId ? { templateId: String(templateId) } : {}),
+      ...(projectId ? { projectId: String(projectId) } : {}),
+    };
+
+    // SEC-M4-08: Apply X2 scoping rule for regular team members
+    if (!isPrivileged) {
+      where.OR = [
+        { initiatedById: req.user.id },
+        { steps: { some: { assignedToId: req.user.id } } },
+        { steps: { some: { actionedById: req.user.id } } },
+      ];
+    }
+
     const instances = await prisma.processInstance.findMany({
-      where: {
-        companyId: req.user.companyId,
-        ...(templateId ? { templateId: String(templateId) } : {}),
-        ...(projectId ? { projectId: String(projectId) } : {}),
-      },
-      include: {
-        template: { select: { id: true, name: true, version: true } },
-        project: { select: { id: true, name: true } },
-        steps: {
-          include: {
-            templateStep: true,
-            assignedTo: { select: { id: true, fullName: true, email: true } },
-            actionedBy: { select: { id: true, fullName: true, email: true } },
-          },
-          orderBy: { templateStep: { stepOrder: 'asc' } },
-        },
-      },
+      where,
+      include: PROCESS_INSTANCE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -532,23 +680,32 @@ export async function listInstances(req, res, next) {
  */
 export async function getInstance(req, res, next) {
   try {
+    const isPrivileged = hasRole(req.user.role, [
+      ...PROCESS_MANAGER_ROLES,
+      ROLES.PLATFORM_ADMIN,
+      'company_owner',
+      'system_admin',
+      'process_admin',
+      'project_manager',
+    ]);
+
+    const where = {
+      id: req.params.id,
+      companyId: req.user.companyId,
+    };
+
+    // SEC-M4-08: Apply X2 scoping rule for regular team members
+    if (!isPrivileged) {
+      where.OR = [
+        { initiatedById: req.user.id },
+        { steps: { some: { assignedToId: req.user.id } } },
+        { steps: { some: { actionedById: req.user.id } } },
+      ];
+    }
+
     const instance = await prisma.processInstance.findFirst({
-      where: {
-        id: req.params.id,
-        companyId: req.user.companyId,
-      },
-      include: {
-        template: { select: { id: true, name: true, version: true } },
-        project: { select: { id: true, name: true } },
-        steps: {
-          include: {
-            templateStep: true,
-            assignedTo: { select: { id: true, fullName: true, email: true } },
-            actionedBy: { select: { id: true, fullName: true, email: true } },
-          },
-          orderBy: { templateStep: { stepOrder: 'asc' } },
-        },
-      },
+      where,
+      include: PROCESS_INSTANCE_INCLUDE,
     });
 
     if (!instance) {
@@ -663,37 +820,15 @@ export async function createInstance(req, res, next) {
             currentStepId: firstStepId,
             status: 'Active',
           },
-          include: {
-            template: { select: { id: true, name: true, version: true } },
-            project: { select: { id: true, name: true } },
-            steps: {
-              include: {
-                templateStep: true,
-                assignedTo: { select: { id: true, fullName: true, email: true } },
-                actionedBy: { select: { id: true, fullName: true, email: true } },
-              },
-              orderBy: { templateStep: { stepOrder: 'asc' } },
-            },
-          },
+          include: PROCESS_INSTANCE_INCLUDE,
         });
       }
 
       return tx.processInstance.findUnique({
         where: { id: instance.id },
-        include: {
-          template: { select: { id: true, name: true, version: true } },
-          project: { select: { id: true, name: true } },
-          steps: {
-            include: {
-              templateStep: true,
-              assignedTo: { select: { id: true, fullName: true, email: true } },
-              actionedBy: { select: { id: true, fullName: true, email: true } },
-            },
-            orderBy: { templateStep: { stepOrder: 'asc' } },
-          },
-        },
+        include: PROCESS_INSTANCE_INCLUDE,
       });
-    });
+    }, { timeout: 15000, maxWait: 5000 });
 
     try {
       await createSystemAuditLog({
@@ -737,6 +872,43 @@ export async function updateInstance(req, res, next) {
       validateEnum(status, ALLOWED_INSTANCE_STATUSES, 'status');
     }
 
+    // SEC-M4-06: Valid status transitions enforcement
+    if (status && status !== existing.status) {
+      const TERMINAL_STATUSES = ['Completed', 'Cancelled', 'Rejected'];
+      if (TERMINAL_STATUSES.includes(existing.status)) {
+        throw new BadRequestError(`Cannot change status of an instance with terminal status "${existing.status}"`);
+      }
+
+      if (status === 'Completed') {
+        const pendingStepsCount = await prisma.processInstanceStep.count({
+          where: {
+            processInstanceId: existing.id,
+            status: 'Pending',
+          },
+        });
+        if (pendingStepsCount > 0) {
+          throw new BadRequestError(
+            `Cannot mark process instance as Completed manually: ${pendingStepsCount} step(s) are still Pending`
+          );
+        }
+      }
+
+      const validTransitions = {
+        Draft: ['Active', 'Cancelled'],
+        Active: ['Cancelled', 'Completed'],
+        Completed: [],
+        Cancelled: [],
+        Rejected: [],
+      };
+
+      const allowedNext = validTransitions[existing.status] || [];
+      if (!allowedNext.includes(status)) {
+        throw new BadRequestError(
+          `Invalid status transition from "${existing.status}" to "${status}". Allowed next statuses: ${allowedNext.join(', ') || 'none (terminal)'}`
+        );
+      }
+    }
+
     if (projectId) {
       const project = await prisma.project.findFirst({
         where: { id: projectId, companyId: req.user.companyId },
@@ -749,8 +921,6 @@ export async function updateInstance(req, res, next) {
     const completedAt =
       status === 'Completed' || status === 'Cancelled' || status === 'Rejected'
         ? new Date()
-        : status === 'Active'
-        ? null
         : existing.completedAt;
 
     const updated = await prisma.processInstance.update({
@@ -759,18 +929,7 @@ export async function updateInstance(req, res, next) {
         ...(status ? { status, completedAt } : {}),
         ...(projectId !== undefined ? { projectId } : {}),
       },
-      include: {
-        template: { select: { id: true, name: true, version: true } },
-        project: { select: { id: true, name: true } },
-        steps: {
-          include: {
-            templateStep: true,
-            assignedTo: { select: { id: true, fullName: true, email: true } },
-            actionedBy: { select: { id: true, fullName: true, email: true } },
-          },
-          orderBy: { templateStep: { stepOrder: 'asc' } },
-        },
-      },
+      include: PROCESS_INSTANCE_INCLUDE,
     });
 
     try {
@@ -811,13 +970,30 @@ export async function deleteInstance(req, res, next) {
       throw new NotFoundError(`Process instance ${req.params.id} not found`);
     }
 
-    await prisma.processInstanceStep.deleteMany({
-      where: { processInstanceId: req.params.id },
-    });
+    await prisma.$transaction(async (tx) => {
+      // Find all step IDs in this instance
+      const steps = await tx.processInstanceStep.findMany({
+        where: { processInstanceId: req.params.id },
+        select: { id: true },
+      });
+      const stepIds = steps.map((s) => s.id);
 
-    await prisma.processInstance.delete({
-      where: { id: req.params.id },
-    });
+      // Unlink any tasks created from these steps to prevent dangling references
+      if (stepIds.length > 0) {
+        await tx.task.updateMany({
+          where: { processInstanceStepId: { in: stepIds } },
+          data: { processInstanceStepId: null },
+        });
+      }
+
+      await tx.processInstanceStep.deleteMany({
+        where: { processInstanceId: req.params.id },
+      });
+
+      await tx.processInstance.delete({
+        where: { id: req.params.id },
+      });
+    }, { timeout: 15000, maxWait: 5000 });
 
     try {
       await createSystemAuditLog({
@@ -852,16 +1028,34 @@ export async function listSteps(req, res, next) {
   try {
     const { processInstanceId } = req.query;
 
+    const isPrivileged = hasRole(req.user.role, [
+      ...PROCESS_MANAGER_ROLES,
+      ROLES.PLATFORM_ADMIN,
+      'company_owner',
+      'system_admin',
+      'process_admin',
+      'project_manager',
+    ]);
+
+    const instanceWhere = {
+      companyId: req.user.companyId,
+    };
+
+    // SEC-M4-08: Scope steps to accessible instances for members
+    if (!isPrivileged) {
+      instanceWhere.OR = [
+        { initiatedById: req.user.id },
+        { steps: { some: { assignedToId: req.user.id } } },
+        { steps: { some: { actionedById: req.user.id } } },
+      ];
+    }
+
     const steps = await prisma.processInstanceStep.findMany({
       where: {
-        processInstance: { companyId: req.user.companyId },
+        processInstance: instanceWhere,
         ...(processInstanceId ? { processInstanceId: String(processInstanceId) } : {}),
       },
-      include: {
-        templateStep: { include: { onRejectGotoStep: true } },
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        actionedBy: { select: { id: true, fullName: true, email: true } },
-      },
+      include: PROCESS_STEP_INCLUDE,
       orderBy: { templateStep: { stepOrder: 'asc' } },
     });
 
@@ -879,17 +1073,34 @@ export async function listSteps(req, res, next) {
  */
 export async function getStep(req, res, next) {
   try {
+    const isPrivileged = hasRole(req.user.role, [
+      ...PROCESS_MANAGER_ROLES,
+      ROLES.PLATFORM_ADMIN,
+      'company_owner',
+      'system_admin',
+      'process_admin',
+      'project_manager',
+    ]);
+
+    const instanceWhere = {
+      companyId: req.user.companyId,
+    };
+
+    // SEC-M4-08: Scope step to accessible instances for members
+    if (!isPrivileged) {
+      instanceWhere.OR = [
+        { initiatedById: req.user.id },
+        { steps: { some: { assignedToId: req.user.id } } },
+        { steps: { some: { actionedById: req.user.id } } },
+      ];
+    }
+
     const step = await prisma.processInstanceStep.findFirst({
       where: {
         id: req.params.id,
-        processInstance: { companyId: req.user.companyId },
+        processInstance: instanceWhere,
       },
-      include: {
-        templateStep: { include: { onRejectGotoStep: true } },
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        actionedBy: { select: { id: true, fullName: true, email: true } },
-        processInstance: true,
-      },
+      include: PROCESS_STEP_INCLUDE,
     });
 
     if (!step) {
@@ -920,6 +1131,11 @@ export async function createStep(req, res, next) {
       throw new NotFoundError(`Process instance ${processInstanceId} not found`);
     }
 
+    const TERMINAL_STATUSES = ['Completed', 'Cancelled', 'Rejected'];
+    if (TERMINAL_STATUSES.includes(instance.status)) {
+      throw new BadRequestError(`Cannot add steps to an instance with terminal status "${instance.status}"`);
+    }
+
     const templateStep = await prisma.processTemplateStep.findFirst({
       where: { id: templateStepId, templateId: instance.templateId },
     });
@@ -948,10 +1164,7 @@ export async function createStep(req, res, next) {
         assignedToId: assignedToId ?? null,
         status: status || 'Pending',
       },
-      include: {
-        templateStep: true,
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-      },
+      include: PROCESS_STEP_INCLUDE,
     });
 
     res.status(201).json({
@@ -996,8 +1209,24 @@ export async function actionStep(req, res, next) {
       throw new BadRequestError(`Step has already been actioned (status: ${currentStep.status})`);
     }
 
-    // Guard: Enforce sequence - only current active step can be actioned
-    if (currentStep.processInstance.currentStepId && currentStep.id !== currentStep.processInstance.currentStepId) {
+    // SEC-M4-05: Enforce sequence guard even when currentStepId is null
+    let activeStepId = currentStep.processInstance.currentStepId;
+    if (!activeStepId) {
+      const firstPending = await prisma.processInstanceStep.findFirst({
+        where: {
+          processInstanceId: currentStep.processInstanceId,
+          status: 'Pending',
+        },
+        include: { templateStep: true },
+        orderBy: { templateStep: { stepOrder: 'asc' } },
+      });
+      if (!firstPending) {
+        throw new BadRequestError('No pending steps remain in this process instance');
+      }
+      activeStepId = firstPending.id;
+    }
+
+    if (currentStep.id !== activeStepId) {
       throw new BadRequestError('Only the current active step in the workflow can be actioned');
     }
 
@@ -1031,28 +1260,63 @@ export async function actionStep(req, res, next) {
 
     const newStatus = status || currentStep.status;
 
+    // SEC-M4-03: Evaluate compliance before marking linked tasks Completed
+    if (newStatus === 'Approved') {
+      const linkedTasks = await prisma.task.findMany({
+        where: {
+          processInstanceStepId: currentStep.id,
+          companyId: req.user.companyId,
+          deletedAt: null,
+        },
+        include: {
+          project: {
+            include: { team: true },
+          },
+        },
+      });
+
+      for (const linkedTask of linkedTasks) {
+        const complianceCheck = await evaluateTaskTransition(linkedTask.id, linkedTask, { status: 'Completed' });
+        if (!complianceCheck.allowed) {
+          const failedRuleNames = (complianceCheck.failedRules || []).map((r) => r.name).join(', ');
+          throw new ForbiddenError(
+            `Cannot approve step: Linked task "${linkedTask.title}" failed compliance evaluation (${failedRuleNames || 'active compliance blocker'}). Required evidence or sign-off is missing.`
+          );
+        }
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
-      const updatedStep = await tx.processInstanceStep.update({
-        where: { id: req.params.id },
+      // SEC-M4-02: Atomic conditional update inside transaction to prevent double approval
+      const updateResult = await tx.processInstanceStep.updateMany({
+        where: {
+          id: req.params.id,
+          status: 'Pending',
+        },
         data: {
           status: newStatus,
           actionedById: req.user.id,
           actionedAt: new Date(),
           ...(assignedToId !== undefined ? { assignedToId } : {}),
         },
-        include: {
-          templateStep: { include: { onRejectGotoStep: true } },
-          assignedTo: { select: { id: true, fullName: true, email: true } },
-          actionedBy: { select: { id: true, fullName: true, email: true } },
-        },
       });
 
-      // Synchronize linked Project Task if one exists
+      if (updateResult.count === 0) {
+        throw new BadRequestError('Step has already been actioned or is no longer pending');
+      }
+
+      const updatedStep = await tx.processInstanceStep.findUnique({
+        where: { id: req.params.id },
+        include: PROCESS_STEP_INCLUDE,
+      });
+
+      // Synchronize linked Project Tasks
       if (newStatus === 'Approved') {
         await tx.task.updateMany({
           where: {
             processInstanceStepId: currentStep.id,
             companyId: req.user.companyId,
+            deletedAt: null,
           },
           data: {
             status: 'Completed',
@@ -1064,6 +1328,7 @@ export async function actionStep(req, res, next) {
           where: {
             processInstanceStepId: currentStep.id,
             companyId: req.user.companyId,
+            deletedAt: null,
           },
           data: {
             status: 'Blocked',
@@ -1168,7 +1433,7 @@ export async function actionStep(req, res, next) {
       }
 
       return updatedStep;
-    });
+    }, { timeout: 15000, maxWait: 5000 });
 
     try {
       await createSystemAuditLog({

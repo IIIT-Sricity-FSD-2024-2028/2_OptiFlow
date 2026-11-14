@@ -59,6 +59,10 @@ export default function ProcessAdminTemplateDetail() {
     }
   }, [id]);
 
+  const hasActiveInstances = Boolean(
+    (template?.instances || []).some((i) => i.status === 'Active')
+  );
+
   const handleAddStep = () => {
     const newStepIndex = steps.length;
     setSteps((prev) => [
@@ -105,7 +109,17 @@ export default function ProcessAdminTemplateDetail() {
       updated[index] = updated[targetIndex];
       updated[targetIndex] = temp;
 
-      return updated.map((s, idx) => ({ ...s, stepOrder: idx + 1 }));
+      return updated.map((s, idx) => {
+        let validLoopbackId = s.onRejectGotoStepId;
+        if (validLoopbackId) {
+          const target = updated.find((item) => item.id === validLoopbackId);
+          const targetIdx = target ? updated.indexOf(target) : -1;
+          if (targetIdx >= idx || targetIdx === -1) {
+            validLoopbackId = null;
+          }
+        }
+        return { ...s, stepOrder: idx + 1, onRejectGotoStepId: validLoopbackId };
+      });
     });
   };
 
@@ -130,7 +144,7 @@ export default function ProcessAdminTemplateDetail() {
           name: s.name.trim() || `Step ${idx + 1}`,
           stepOrder: idx + 1,
           stepType: s.stepType,
-          onRejectGotoStepId: s.onRejectGotoStepId ? s.onRejectGotoStepId : null,
+          onRejectGotoStepId: s.onRejectGotoStepId && !String(s.onRejectGotoStepId).startsWith('temp-') ? s.onRejectGotoStepId : null,
           onRejectGotoStepOrder: targetStep ? targetStep.stepOrder : null,
         };
       });
@@ -157,7 +171,7 @@ export default function ProcessAdminTemplateDetail() {
       const res = await createInstance({ templateId: id });
       const instanceId = res?.id || res?.data?.id;
       if (instanceId) {
-        navigate(`/process-admin/instances/${instanceId}`);
+        navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', instanceId));
       }
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Failed to launch instance' });
@@ -266,6 +280,14 @@ export default function ProcessAdminTemplateDetail() {
 
       {/* Step Sequence Builder */}
       <div className="space-y-4">
+        {hasActiveInstances && (
+          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs flex items-center gap-2">
+            <span className="font-bold">Notice:</span>
+            <span>
+              This blueprint has active running instances. Modifying, reordering, or removing steps is locked (SEC-M4-04). To alter steps, complete or cancel all active instances first, or save a new version.
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-slate-900">Execution Steps & Decision Rules</h2>
@@ -276,6 +298,8 @@ export default function ProcessAdminTemplateDetail() {
           <Button
             variant="secondary"
             onClick={handleAddStep}
+            disabled={hasActiveInstances}
+            title={hasActiveInstances ? 'Cannot add steps while active instances are running' : 'Add step'}
             className="text-xs py-1.5 px-3"
           >
             + Add Step
@@ -316,7 +340,7 @@ export default function ProcessAdminTemplateDetail() {
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        disabled={index === 0}
+                        disabled={hasActiveInstances || index === 0}
                         onClick={() => handleMoveStep(index, -1)}
                         className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 rounded hover:bg-slate-50 cursor-pointer"
                         title="Move Up"
@@ -325,7 +349,7 @@ export default function ProcessAdminTemplateDetail() {
                       </button>
                       <button
                         type="button"
-                        disabled={index === steps.length - 1}
+                        disabled={hasActiveInstances || index === steps.length - 1}
                         onClick={() => handleMoveStep(index, 1)}
                         className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30 rounded hover:bg-slate-50 cursor-pointer"
                         title="Move Down"
@@ -334,6 +358,7 @@ export default function ProcessAdminTemplateDetail() {
                       </button>
                       <button
                         type="button"
+                        disabled={hasActiveInstances}
                         onClick={() => handleRemoveStep(index)}
                         className="ml-2 text-xs text-red-600 hover:text-red-800 font-medium p-1 rounded hover:bg-red-50 cursor-pointer"
                       >
