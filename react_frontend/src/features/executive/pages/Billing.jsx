@@ -21,9 +21,11 @@ import { useAuth } from '../../../context/AuthContext';
 import * as executiveApi from '../../../services/api/executive';
 import { Badge } from '../../../shared/components/Badge';
 import { Loader } from '../../../shared/components/Loader';
+import { useToast } from '../../../shared/components/Toast';
 
 export default function ExecutiveBilling() {
   const { user } = useAuth();
+  const toast = useToast();
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -35,7 +37,11 @@ export default function ExecutiveBilling() {
       const res = await executiveApi.getMetrics({});
       setMetrics(res?.data || res);
     } catch (err) {
-      setError(err.message || 'Failed to load billing telemetry.');
+      setError(
+        err.status === 402
+          ? `${err.message} Contact billing to renew or upgrade: support@officesync.com`
+          : (err.message || 'Failed to load billing telemetry.'),
+      );
     } finally {
       setLoading(false);
     }
@@ -241,7 +247,7 @@ export default function ExecutiveBilling() {
             </a>
             <button
               type="button"
-              onClick={() => alert('Receipt and invoice history is managed via your enterprise account manager.')}
+              onClick={() => toast.info('Receipt and invoice history is managed via your enterprise account manager.')}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
             >
               <Download className="w-4 h-4 text-slate-500" />

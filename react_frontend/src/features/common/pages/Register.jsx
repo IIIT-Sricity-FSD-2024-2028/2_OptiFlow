@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { PATHS } from "../../../app/paths";
 import { Link, useNavigate } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
+import { setSession } from "../../../services/auth/session";
 import {
   Eye,
   EyeOff,
@@ -129,8 +130,7 @@ export default function Register() {
       });
 
       if (response?.token) {
-        sessionStorage.setItem("authToken", response.token);
-        sessionStorage.setItem("isPlatform", "false");
+        setSession(response.token, false);
       }
 
       setIsProcessing(false);

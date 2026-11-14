@@ -3,11 +3,13 @@ import { PATHS } from '../../../app/paths';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { RoleRedirect } from '../../../app/guards/RoleRedirect';
+import { useToast } from '../../../shared/components/Toast';
 
 import '../styles/marketing.css';
 
 export default function Contact() {
   const { user, loading } = useAuth();
+  const toast = useToast();
   
   if (!loading && user) {
     return <RoleRedirect />;
@@ -67,7 +69,7 @@ export default function Contact() {
           <div className="hero-card" style={{ padding: '2.5rem' }}>
             <h3 style={{ marginBottom: '1.5rem' }}>Send us a message</h3>
 
-            <form onSubmit={(e) => { e.preventDefault(); alert('Message sent!'); e.target.reset(); }}>
+            <form onSubmit={(e) => { e.preventDefault(); toast.success('Message sent!'); e.target.reset(); }}>
               <div className="input-group">
                 <label>Full Name</label>
                 <input type="text" placeholder="John Doe" required />

@@ -30,6 +30,7 @@ const USER_SELECT_FIELDS = {
   company: { select: { id: true, legalName: true } },
   manager: { select: { id: true, fullName: true, email: true } },
   roleAssignments: {
+    where: { revokedAt: null },
     include: {
       role: true,
     },
@@ -116,7 +117,7 @@ export async function listUsers(req, res, next) {
 export async function listUserRoleMappings(req, res, next) {
   try {
     const mappings = await prisma.roleAssignment.findMany({
-      where: { user: { companyId: req.user.companyId } },
+      where: { user: { companyId: req.user.companyId }, revokedAt: null },
       include: {
         user: { select: { id: true, fullName: true, email: true, companyId: true } },
         role: true,

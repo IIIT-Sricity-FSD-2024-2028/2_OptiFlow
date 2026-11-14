@@ -18,6 +18,7 @@ export async function listRoleAssignments(req, res, next) {
 
     const where = {
       user: { companyId: req.user.companyId },
+      revokedAt: null,
       ...(userId ? { userId: String(userId) } : {}),
       ...(roleId ? { roleId: String(roleId) } : {}),
     };

@@ -3,11 +3,13 @@ import { PATHS } from '../../../app/paths';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { RoleRedirect } from '../../../app/guards/RoleRedirect';
+import { useToast } from '../../../shared/components/Toast';
 
 import '../styles/marketing.css';
 
 export default function Landing() {
   const { user, loading } = useAuth();
+  const toast = useToast();
   
   // Accordion State
   const [activeAccordion, setActiveAccordion] = useState(null);
@@ -27,9 +29,9 @@ export default function Landing() {
   const handleContactSubmit = (e) => {
     e.preventDefault();
     if (intent === 'quote') {
-      alert(`Thank you, ${contactName}! Your quote request has been received. Our sales team will be in touch shortly.`);
+      toast.success(`Thank you, ${contactName}! Your quote request has been received. Our sales team will be in touch shortly.`);
     } else {
-      alert(`Thanks for saying hi, ${contactName}! We've received your message.`);
+      toast.success(`Thanks for saying hi, ${contactName}! We've received your message.`);
     }
     e.target.reset();
     setContactName('');
@@ -306,7 +308,7 @@ export default function Landing() {
           </div>
 
           <div className="footer-newsletter">
-            <form id="newsletterForm" onSubmit={(e) => { e.preventDefault(); alert('Subscribed!'); }}>
+            <form id="newsletterForm" onSubmit={(e) => { e.preventDefault(); toast.success('Subscribed!'); e.target.reset(); }}>
               <input type="email" placeholder="Email" required />
               <button type="submit">Subscribe to news</button>
             </form>

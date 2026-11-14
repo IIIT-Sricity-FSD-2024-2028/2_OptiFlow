@@ -543,8 +543,10 @@ export async function updateTask(req, res, next) {
         return res.status(403).json({
           success: false,
           error: "COMPLIANCE_BLOCK",
+          code: "COMPLIANCE_BLOCK",
           message: "This transition is blocked by active compliance rules.",
-          violations: evaluation.failedRules
+          violations: evaluation.failedRules,
+          details: evaluation.failedRules
         });
       }
     }

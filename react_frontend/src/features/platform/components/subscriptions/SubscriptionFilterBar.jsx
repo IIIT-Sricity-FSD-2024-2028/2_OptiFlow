@@ -12,7 +12,7 @@ export function SubscriptionFilterBar({
   useEffect(() => {
     let isMounted = true;
     apiClient('/api/platform/plans')
-      .then((res) => { if (isMounted) setPlans(res || []); })
+      .then((res) => { if (isMounted) setPlans(res?.items || []); })
       .catch((err) => console.error('Failed to load plans:', err));
     return () => { isMounted = false; };
   }, []);

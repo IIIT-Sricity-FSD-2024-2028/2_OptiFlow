@@ -13,8 +13,58 @@ import {
   validateRequired,
   validateEmail,
   validateNumber,
+  validateEnum,
 } from "../utils/validation.js";
-import { parseListParams, formatListResponse } from "../utils/pagination.js";
+import { ValidationError } from "../utils/errors.js";
+
+// ---------------------------------------------------------------------------
+// Input guards shared by the privileged endpoints below (SEC-M2-15).
+// Everything here rejects with a 400 instead of letting a bad value reach Prisma or throw a
+// TypeError (which surfaced as a 500).
+// ---------------------------------------------------------------------------
+
+/** Required/optional string field: must be a string, trimmed, within a length range. */
+function textField(value, field, { min = 1, max = 200 } = {}) {
+  if (typeof value !== "string") {
+    throw new ValidationError(`${field} must be text`, [
+      { field, message: `${field} must be text` },
+    ]);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length < min || trimmed.length > max) {
+    throw new ValidationError(`${field} length is invalid`, [
+      { field, message: `${field} must be between ${min} and ${max} characters` },
+    ]);
+  }
+  return trimmed;
+}
+
+/** Password text: string, 8-128 characters (bcrypt only uses the first 72 bytes anyway). */
+function passwordField(value, field = "password") {
+  if (typeof value !== "string" || value.length < 8 || value.length > 128) {
+    throw new BadRequestError(`${field} must be 8 to 128 characters long`);
+  }
+  return value;
+}
+
+/** Plan limit: null means unlimited, otherwise a whole number >= 0. */
+function planLimit(value, field) {
+  if (value === null) return null;
+  validateNumber(value, field, { min: 0, max: 1_000_000, integer: true });
+  return Number(value);
+}
+
+/** Boolean flag: only real booleans are accepted (Boolean("false") would be true). */
+function boolField(value, field) {
+  if (typeof value !== "boolean") {
+    throw new ValidationError(`${field} must be true or false`, [
+      { field, message: `${field} must be true or false` },
+    ]);
+  }
+  return value;
+}
+import { parseListParams } from "../utils/pagination.js";
+import { ok, created, okList } from "../utils/respond.js";
 import { writeAuditLog } from "../utils/platformAudit.js";
 import { buildSetPasswordLink } from "../utils/passwordTokens.js";
 import { sendOwnerInviteEmail } from "../services/email.service.js";
@@ -78,12 +128,7 @@ export async function platformLogin(req, res, next) {
 
     const adminMustChangePassword = admin.passwordChangedAt === null;
 
-    res.status(200).json({
-      success: true,
-      message: adminMustChangePassword
-        ? "Platform admin authenticated successfully (Password change required)"
-        : "Platform admin authenticated successfully",
-      data: {
+    ok(res, {
         token,
         mustChangePassword: adminMustChangePassword,
         adminUser: {
@@ -96,8 +141,9 @@ export async function platformLogin(req, res, next) {
           passwordChangedAt: admin.passwordChangedAt,
           createdAt: admin.createdAt,
         },
-      },
-    });
+      }, adminMustChangePassword
+        ? "Platform admin authenticated successfully (Password change required)"
+        : "Platform admin authenticated successfully");
   } catch (err) {
     next(err);
   }
@@ -116,10 +162,7 @@ export async function platformLogout(req, res, next) {
       path: "/api/platform",
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Platform administrator logged out successfully",
-    });
+    ok(res, null, "Platform administrator logged out successfully");
   } catch (err) {
     next(err);
   }
@@ -207,13 +250,9 @@ export async function changePlatformPassword(req, res, next) {
       maxAge: 3600 * 1000,
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Password changed successfully",
-      data: {
+    ok(res, {
         token: freshToken,
-      },
-    });
+      }, "Password changed successfully");
   } catch (err) {
     next(err);
   }
@@ -224,10 +263,7 @@ export async function changePlatformPassword(req, res, next) {
  */
 export async function platformAuthMe(req, res, next) {
   try {
-    res.status(200).json({
-      success: true,
-      data: req.platformAdmin,
-    });
+    ok(res, req.platformAdmin);
   } catch (err) {
     next(err);
   }
@@ -429,9 +465,7 @@ export async function getPlatformMetrics(req, res, next) {
       },
     });
 
-    res.status(200).json({
-      success: true,
-      data: {
+    ok(res, {
         companyCounts,
         subscriptionCounts,
         planDistribution,
@@ -447,8 +481,7 @@ export async function getPlatformMetrics(req, res, next) {
         // Legacy fallback fields for backwards compatibility
         totalCompanies,
         subscriptionsByPlan: planDistribution,
-      },
-    });
+      });
   } catch (err) {
     next(err);
   }
@@ -506,10 +539,7 @@ export async function listPlatformCompanies(req, res, next) {
     ]);
 
     // 4. Return standard list contract
-    res.status(200).json({
-      success: true,
-      data: formatListResponse(companies, total, page, pageSize),
-    });
+    okList(res, companies, { total, page, pageSize });
   } catch (err) {
     next(err);
   }
@@ -740,10 +770,7 @@ export async function createPlatformCompany(req, res, next) {
 
     const { tokenVersion: _tv, ...owner } = result.owner;
 
-    res.status(201).json({
-      success: true,
-      message: "Company provisioned successfully",
-      data: {
+    created(res, {
         ...result,
         owner,
         // Shown once to the provisioning admin; never stored or audited.
@@ -754,8 +781,7 @@ export async function createPlatformCompany(req, res, next) {
           delivered: inviteEmail.delivered,
           provider: inviteEmail.provider,
         },
-      },
-    });
+      }, "Company provisioned successfully");
   } catch (err) {
     next(err);
   }
@@ -810,10 +836,7 @@ export async function getPlatformCompanyById(req, res, next) {
       branchCount: company._count?.branches ?? company.branches?.length ?? 0,
     };
 
-    res.status(200).json({
-      success: true,
-      data,
-    });
+    ok(res, data);
   } catch (err) {
     next(err);
   }
@@ -882,11 +905,7 @@ export async function updatePlatformCompany(req, res, next) {
       return result;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Company updated successfully",
-      data: updated,
-    });
+    ok(res, updated, "Company updated successfully");
   } catch (err) {
     next(err);
   }
@@ -915,10 +934,7 @@ export async function listPlans(req, res, next) {
       orderBy: { name: "asc" },
     });
 
-    res.status(200).json({
-      success: true,
-      data: plans,
-    });
+    okList(res, plans);
   } catch (err) {
     next(err);
   }
@@ -934,7 +950,7 @@ export async function getPlanById(req, res, next) {
     if (!plan) {
       throw new NotFoundError(`Plan with ID ${id} not found`);
     }
-    res.status(200).json({ success: true, data: plan });
+    ok(res, plan);
   } catch (err) {
     next(err);
   }
@@ -946,13 +962,23 @@ export async function getPlanById(req, res, next) {
 export async function createPlan(req, res, next) {
   try {
     const body = req.body || {};
-    const name = (body.name || "").trim();
+    validateRequired({ name: body.name }, ["name"]);
+    const name = textField(body.name, "name", { max: 120 });
+    validateNumber(body.auditLogRetentionDays ?? 90, "auditLogRetentionDays", {
+      min: 1,
+      max: 3650,
+      integer: true,
+    });
     const auditLogRetentionDays = Number(body.auditLogRetentionDays ?? 90);
-    const allowsIntegrations = Boolean(body.allowsIntegrations ?? false);
+    const allowsIntegrations = boolField(
+      body.allowsIntegrations ?? false,
+      "allowsIntegrations",
+    );
     const isActive =
-      body.isActive !== undefined ? Boolean(body.isActive) : true;
-
-    validateRequired({ name }, ["name"]);
+      body.isActive !== undefined ? boolField(body.isActive, "isActive") : true;
+    for (const f of ["maxBranches", "maxUsers", "maxActiveProcessTemplates", "maxComplianceRules"]) {
+      if (body[f] !== undefined) planLimit(body[f], f);
+    }
 
     const newPlan = await prisma.$transaction(async (tx) => {
       const plan = await tx.plan.create({
@@ -1000,11 +1026,7 @@ export async function createPlan(req, res, next) {
       return plan;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Plan created successfully",
-      data: newPlan,
-    });
+    created(res, newPlan, "Plan created successfully");
   } catch (err) {
     next(err);
   }
@@ -1022,29 +1044,26 @@ export async function updatePlan(req, res, next) {
     if (!plan) throw new NotFoundError(`Plan with ID ${id} not found`);
 
     const updateData = {};
-    if (body.name) updateData.name = body.name.trim();
-    if (body.maxBranches !== undefined)
-      updateData.maxBranches =
-        body.maxBranches === null ? null : Number(body.maxBranches);
-    if (body.maxUsers !== undefined)
-      updateData.maxUsers =
-        body.maxUsers === null ? null : Number(body.maxUsers);
-    if (body.maxActiveProcessTemplates !== undefined)
-      updateData.maxActiveProcessTemplates =
-        body.maxActiveProcessTemplates === null
-          ? null
-          : Number(body.maxActiveProcessTemplates);
-    if (body.maxComplianceRules !== undefined)
-      updateData.maxComplianceRules =
-        body.maxComplianceRules === null
-          ? null
-          : Number(body.maxComplianceRules);
-    if (body.auditLogRetentionDays !== undefined)
+    if (body.name !== undefined)
+      updateData.name = textField(body.name, "name", { max: 120 });
+    for (const f of ["maxBranches", "maxUsers", "maxActiveProcessTemplates", "maxComplianceRules"]) {
+      if (body[f] !== undefined) updateData[f] = planLimit(body[f], f);
+    }
+    if (body.auditLogRetentionDays !== undefined) {
+      validateNumber(body.auditLogRetentionDays, "auditLogRetentionDays", {
+        min: 1,
+        max: 3650,
+        integer: true,
+      });
       updateData.auditLogRetentionDays = Number(body.auditLogRetentionDays);
+    }
     if (body.allowsIntegrations !== undefined)
-      updateData.allowsIntegrations = Boolean(body.allowsIntegrations);
+      updateData.allowsIntegrations = boolField(body.allowsIntegrations, "allowsIntegrations");
     if (body.isActive !== undefined)
-      updateData.isActive = Boolean(body.isActive);
+      updateData.isActive = boolField(body.isActive, "isActive");
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestError("No valid fields provided for update");
+    }
 
     const action =
       body.isActive === false
@@ -1064,11 +1083,7 @@ export async function updatePlan(req, res, next) {
       return result;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Plan updated successfully",
-      data: updated,
-    });
+    ok(res, updated, "Plan updated successfully");
   } catch (err) {
     next(err);
   }
@@ -1213,20 +1228,12 @@ export async function listSubscriptions(req, res, next) {
       expiringSoon: expiringSoonCount,
     };
 
-    if (req.query.page) {
-      return res.status(200).json({
-        success: true,
-        data: formatListResponse(subscriptions, total, page, pageSize, {
-          summary,
-        }),
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: subscriptions,
-      summary,
-    });
+    // One list shape whether or not the caller paginates.
+    return okList(
+      res,
+      subscriptions,
+      req.query.page ? { total, page, pageSize, summary } : { total, summary },
+    );
   } catch (err) {
     next(err);
   }
@@ -1264,10 +1271,7 @@ export async function getSubscriptionById(req, res, next) {
       throw new NotFoundError(`Subscription with ID ${id} not found`);
     }
 
-    res.status(200).json({
-      success: true,
-      data: subscription,
-    });
+    ok(res, subscription);
   } catch (err) {
     next(err);
   }
@@ -1289,6 +1293,10 @@ export async function createSubscription(req, res, next) {
     const status = body.status || "Active";
 
     validateRequired({ companyId, planId }, ["companyId", "planId"]);
+    validateEnum(status, ["Trialing", "Active", "PastDue"], "status");
+    if (typeof companyId !== "string" || typeof planId !== "string") {
+      throw new BadRequestError("companyId and planId must be text ids");
+    }
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -1350,11 +1358,7 @@ export async function createSubscription(req, res, next) {
       return created;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Subscription created successfully",
-      data: subscription,
-    });
+    created(res, subscription, "Subscription created successfully");
   } catch (err) {
     next(err);
   }
@@ -1470,11 +1474,7 @@ export async function updateSubscription(req, res, next) {
       return sub;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Subscription updated successfully",
-      data: updated,
-    });
+    ok(res, updated, "Subscription updated successfully");
   } catch (err) {
     next(err);
   }
@@ -1583,10 +1583,7 @@ export async function listPlatformAuditLogs(req, res, next) {
       prisma.platformAuditLog.count({ where }),
     ]);
 
-    res.status(200).json({
-      success: true,
-      data: formatListResponse(logs, total, page, pageSize),
-    });
+    okList(res, logs, { total, page, pageSize });
   } catch (err) {
     next(err);
   }
@@ -1711,18 +1708,12 @@ export async function listPlatformAdminUsers(req, res, next) {
       inactive: inactiveCount,
     };
 
-    if (req.query.page) {
-      return res.status(200).json({
-        success: true,
-        data: formatListResponse(admins, total, page, pageSize, { summary }),
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: admins,
-      summary,
-    });
+    // One list shape whether or not the caller paginates.
+    return okList(
+      res,
+      admins,
+      req.query.page ? { total, page, pageSize, summary } : { total, summary },
+    );
   } catch (err) {
     next(err);
   }
@@ -1756,10 +1747,7 @@ export async function getPlatformAdminUserById(req, res, next) {
       throw new NotFoundError(`Platform admin user with ID ${id} not found`);
     }
 
-    res.status(200).json({
-      success: true,
-      data: admin,
-    });
+    ok(res, admin);
   } catch (err) {
     next(err);
   }
@@ -1771,19 +1759,19 @@ export async function getPlatformAdminUserById(req, res, next) {
 export async function createPlatformAdminUser(req, res, next) {
   try {
     const body = req.body || {};
-    const email = (body.email || "").trim().toLowerCase();
-    const fullName = (body.fullName || body.full_name || "").trim();
+    validateRequired({ email: body.email, fullName: body.fullName || body.full_name }, ["email", "fullName"]);
+    const email = textField(body.email, "email", { max: 254 }).toLowerCase();
+    const fullName = textField(body.fullName || body.full_name, "fullName", { max: 120 });
     let password = body.password;
     let isGenerated = false;
 
-    validateRequired({ email, fullName }, ["email", "fullName"]);
     validateEmail(email, "email");
 
     if (!password) {
       password = crypto.randomBytes(9).toString("base64").slice(0, 12) + "!1Aa";
       isGenerated = true;
-    } else if (password.length < 8) {
-      throw new BadRequestError("Password must be at least 8 characters long");
+    } else {
+      passwordField(password);
     }
 
     const existing = await prisma.platformAdminUser.findUnique({
@@ -1828,14 +1816,10 @@ export async function createPlatformAdminUser(req, res, next) {
       return created;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Platform admin user created successfully",
-      data: {
+    created(res, {
         ...newAdmin,
         temporaryPassword: password,
-      },
-    });
+      }, "Platform admin user created successfully");
   } catch (err) {
     next(err);
   }
@@ -1855,6 +1839,8 @@ export async function updatePlatformAdminUser(req, res, next) {
     if (!existing) {
       throw new NotFoundError(`Platform admin user with ID ${id} not found`);
     }
+
+    if (body.isActive !== undefined) boolField(body.isActive, "isActive");
 
     // Safeguard: An admin cannot deactivate themselves from this page
     if (body.isActive === false && req.platformAdmin.id === id) {
@@ -1877,9 +1863,9 @@ export async function updatePlatformAdminUser(req, res, next) {
 
     const updateData = {};
     if (body.fullName || body.full_name)
-      updateData.fullName = (body.fullName || body.full_name).trim();
+      updateData.fullName = textField(body.fullName || body.full_name, "fullName", { max: 120 });
     if (body.email) {
-      const normalizedEmail = body.email.trim().toLowerCase();
+      const normalizedEmail = textField(body.email, "email", { max: 254 }).toLowerCase();
       validateEmail(normalizedEmail, "email");
       if (normalizedEmail !== existing.email) {
         const emailInUse = await prisma.platformAdminUser.findUnique({
@@ -1894,13 +1880,9 @@ export async function updatePlatformAdminUser(req, res, next) {
       }
     }
     if (body.isActive !== undefined)
-      updateData.isActive = Boolean(body.isActive);
+      updateData.isActive = boolField(body.isActive, "isActive");
     if (body.password) {
-      if (body.password.length < 8) {
-        throw new BadRequestError(
-          "Password must be at least 8 characters long",
-        );
-      }
+      passwordField(body.password);
       updateData.passwordHash = await bcrypt.hash(body.password, 10);
       updateData.passwordChangedAt = new Date();
     }
@@ -1936,11 +1918,7 @@ export async function updatePlatformAdminUser(req, res, next) {
       return resAdmin;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Platform admin user updated successfully",
-      data: updated,
-    });
+    ok(res, updated, "Platform admin user updated successfully");
   } catch (err) {
     next(err);
   }
@@ -1968,8 +1946,8 @@ export async function resetPlatformAdminPassword(req, res, next) {
       newPassword =
         crypto.randomBytes(9).toString("base64").slice(0, 12) + "!1Aa";
       isGenerated = true;
-    } else if (newPassword.length < 8) {
-      throw new BadRequestError("Password must be at least 8 characters long");
+    } else {
+      passwordField(newPassword);
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -2007,14 +1985,10 @@ export async function resetPlatformAdminPassword(req, res, next) {
       return admin;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Platform admin password reset successfully",
-      data: {
+    ok(res, {
         ...updated,
         temporaryPassword: isGenerated ? newPassword : undefined,
-      },
-    });
+      }, "Platform admin password reset successfully");
   } catch (err) {
     next(err);
   }
@@ -2163,18 +2137,12 @@ export async function listPlatformSupportAccesses(req, res, next) {
       revoked: revokedCount,
     };
 
-    if (req.query.page) {
-      return res.status(200).json({
-        success: true,
-        data: formatListResponse(sorted, total, page, pageSize, { summary }),
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: sorted,
-      summary,
-    });
+    // One list shape whether or not the caller paginates.
+    return okList(
+      res,
+      sorted,
+      req.query.page ? { total, page, pageSize, summary } : { total, summary },
+    );
   } catch (err) {
     next(err);
   }
@@ -2209,13 +2177,10 @@ export async function getPlatformSupportAccessById(req, res, next) {
       });
     }
 
-    res.status(200).json({
-      success: true,
-      data: {
+    ok(res, {
         ...access,
         revokedByAdmin,
-      },
-    });
+      });
   } catch (err) {
     next(err);
   }
@@ -2228,12 +2193,14 @@ export async function createPlatformSupportAccess(req, res, next) {
   try {
     const body = req.body || {};
     const companyId = body.companyId || body.company_id;
-    const reason = (body.reason || "").trim();
-    const durationHours = Number(
-      body.durationHours || body.duration_hours || 4,
-    );
-
-    validateRequired({ companyId, reason }, ["companyId", "reason"]);
+    validateRequired({ companyId, reason: body.reason }, ["companyId", "reason"]);
+    if (typeof companyId !== "string") {
+      throw new BadRequestError("companyId must be a text id");
+    }
+    const reason = textField(body.reason, "reason", { min: 1, max: 1000 });
+    const rawDuration = body.durationHours ?? body.duration_hours ?? 4;
+    validateNumber(rawDuration, "durationHours", { min: 1, max: 24 });
+    const durationHours = Number(rawDuration);
 
     // Enforce minimum reason length
     if (reason.length < 10) {
@@ -2322,11 +2289,7 @@ export async function createPlatformSupportAccess(req, res, next) {
       return grant;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Support access granted successfully",
-      data: access,
-    });
+    created(res, access, "Support access granted successfully");
   } catch (err) {
     next(err);
   }
@@ -2388,11 +2351,7 @@ export async function revokePlatformSupportAccess(req, res, next) {
       return revoked;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Support access revoked successfully",
-      data: updated,
-    });
+    ok(res, updated, "Support access revoked successfully");
   } catch (err) {
     next(err);
   }
