@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Evidence Vault — OfficeSync</title>
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+    <style>
+      /* Document Preview Styles */
+      .doc-preview {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 40px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 200px;
+        margin-bottom: 24px;
+      }
+      .doc-icon {
+        width: 48px;
+        height: 48px;
+        color: var(--blue);
+        margin-bottom: 16px;
+      }
+      .doc-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+      }
+      .doc-meta {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div class="main-area">
+        <header class="top-header">
+          <h1 class="page-title">Dashboard</h1>
+          <div class="header-actions">
+            <div class="bell-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content page-content-split">
+          <div class="master-pane">
+            <div
+              style="
+                padding: 16px 20px 0;
+                border-bottom: 1px solid var(--border);
+                background: var(--card-bg);
+              "
+            >
+              <div
+                class="filter-tabs"
+                id="vault-tabs"
+                style="margin-bottom: 0; border-bottom: none"
+              >
+                <div class="filter-tab active" data-filter="pending">
+                  Pending Review (0)
+                </div>
+                <div class="filter-tab" data-filter="approved">
+                  Approved (0)
+                </div>
+                <div class="filter-tab" data-filter="rejected">
+                  Rejected (0)
+                </div>
+              </div>
+            </div>
+
+            <div id="evidence-list" style="padding: 0 16px"></div>
+          </div>
+
+          <div class="detail-pane" id="evidence-detail-pane">
+            <div class="empty-state" style="margin-top: 20vh">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                ></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <div class="empty-state-text">Select an item to review</div>
+              <div class="empty-state-sub">
+                Choose a pending document from the list.
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div
+      id="reject-modal"
+      class="modal-overlay hidden"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <div
+        class="modal"
+        style="
+          background: #fff;
+          width: 100%;
+          max-width: 500px;
+          border-radius: 12px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        "
+      >
+        <div
+          class="modal-header"
+          style="padding: 20px 24px; border-bottom: 1px solid var(--border)"
+        >
+          <div
+            class="modal-title"
+            style="font-size: 16px; font-weight: 700; color: #b91c1c"
+          >
+            Reject Evidence
+          </div>
+        </div>
+        <div class="modal-body" style="padding: 24px">
+          <div
+            style="
+              background: #fef2f2;
+              color: #991b1b;
+              padding: 12px;
+              border-radius: 8px;
+              font-size: 13px;
+              margin-bottom: 20px;
+            "
+          >
+            The submitter will be notified that their evidence was rejected and
+            they must resubmit.
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reject-reason"
+              >Reason for Rejection *</label
+            >
+            <textarea
+              id="reject-reason"
+              class="form-textarea"
+              placeholder="Explain why this evidence is insufficient or incorrect..."
+              style="height: 100px"
+            ></textarea>
+            <span
+              class="form-error hidden"
+              id="reject-reason-error"
+              style="color: #ef4444; font-size: 12px; margin-top: 4px"
+              >You must provide a reason.</span
+            >
+          </div>
+        </div>
+        <div
+          class="modal-footer"
+          style="
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+          "
+        >
+          <button class="btn btn-secondary" onclick="closeRejectModal()">
+            Cancel
+          </button>
+          <button
+            class="btn btn-danger"
+            style="background: #ef4444; color: white"
+            onclick="confirmReject()"
+          >
+            Confirm Rejection
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../js/tasks-store.js"></script>
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/data/pm-data-store.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/utils/validator.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+
+    <script>
+      let session, state,
+        activeFilter = "pending",
+        activeEvidenceId = null,
+        currentRejectId = null;
+
+      document.addEventListener("DOMContentLoaded", async () => {
+        if (!sessionStorage.getItem("currentUser")) {
+          window.location.replace("../../login.html");
+          return;
+        }
+        session = window.Auth.getSession();
+        window.Sidebar.render("compliance"); 
+        window.Toast.init();
+
+        state = await window.Helpers.getState();
+
+        // Ensure evidence array exists
+        if (!state.evidence) state.evidence = [];
+
+        bindEvents();
+        renderList();
+      });
+
+      function bindEvents() {
+        document.querySelectorAll("#vault-tabs .filter-tab").forEach((tab) => {
+          tab.addEventListener("click", () => {
+            document
+              .querySelectorAll("#vault-tabs .filter-tab")
+              .forEach((t) => t.classList.remove("active"));
+            tab.classList.add("active");
+            activeFilter = tab.dataset.filter;
+            activeEvidenceId = null; 
+            document.getElementById("evidence-detail-pane").innerHTML = `
+              <div class="empty-state" style="margin-top: 20vh">
+                <div class="empty-state-text">Select an item to review</div>
+              </div>`;
+            renderList();
+          });
+        });
+      }
+
+      function renderList() {
+        // Filter by status 
+        let items = (state.evidence || []).filter((e) => {
+          const st = String(e.status || "").toLowerCase();
+          if (activeFilter === "pending")
+            return st === "pending" || st === "under_review" || st === "needs_info";
+          return st === activeFilter;
+        });
+
+        // Update Tab Counts
+        const pendingCount = (state.evidence || []).filter(
+          (e) => {
+             const st = String(e.status || "").toLowerCase();
+             return st === "pending" || st === "under_review" || st === "needs_info";
+          }
+        ).length;
+        const approvedCount = (state.evidence || []).filter(
+          (e) => String(e.status || "").toLowerCase() === "approved",
+        ).length;
+        const rejectedCount = (state.evidence || []).filter(
+          (e) => String(e.status || "").toLowerCase() === "rejected",
+        ).length;
+
+        const tabs = document.querySelectorAll("#vault-tabs .filter-tab");
+        if (tabs.length >= 3) {
+          tabs[0].textContent = `Pending Review (${pendingCount})`;
+          tabs[1].textContent = `Approved (${approvedCount})`;
+          tabs[2].textContent = `Rejected (${rejectedCount})`;
+        }
+
+        const container = document.getElementById("evidence-list");
+        if (items.length === 0) {
+          container.innerHTML = `<div class="empty-state" style="padding:40px 0"><div class="empty-state-text">No ${activeFilter} items</div></div>`;
+          return;
+        }
+
+        container.innerHTML = items
+          .map((e) => {
+            const submitter = (state.users || []).find(
+              (u) => String(u.userId || u.id) === String(e.userId || e.user_id),
+            ) || { fullName: "Unknown User" };
+            
+            let badgeClass = "badge-gray";
+            const st = String(e.status || "").toLowerCase();
+            if (st === "pending" || st === "under_review" || st === "needs_info")
+              badgeClass = "badge-orange";
+            if (st === "approved") badgeClass = "badge-green";
+            if (st === "rejected") badgeClass = "badge-red";
+
+            const dateStr = e.submittedAt ? new Date(e.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Recently";
+
+            return `
+            <div style="padding:16px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; ${String(activeEvidenceId) === String(e.id) ? "background:#f8fafc; border-radius: var(--r-sm); margin:4px 0;" : ""}" onclick="selectEvidence('${e.id}')">
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">${submitter.fullName || submitter.name}</span>
+                <span style="font-size:11px; color:var(--text-muted);">${dateStr}</span>
+              </div>
+              <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${e.title || 'Untitled Evidence'}</div>
+              <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Task: ${e.taskName || "General Submission"}</div>
+              <div style="display:flex; gap:8px;">
+                <span class="badge ${badgeClass}">${(e.statusLabel || e.status || '').replace('_', ' ')}</span>
+                <span class="badge badge-gray">${e.evidenceType || e.type || 'Document'}</span>
+              </div>
+            </div>`;
+          })
+          .join("");
+      }
+
+      async function selectEvidence(id) {
+        activeEvidenceId = id;
+        const ev = state.evidence.find(x => String(x.id) === String(id));
+        
+        if (ev && String(ev.status).toLowerCase() === "pending") {
+          try {
+            await window.Helpers.api.request(`/evidence/${id}`, 'PATCH', { 
+              status: 'Under_Review' 
+            });
+            ev.status = 'Under_Review';
+          } catch (e) {
+            console.warn("Failed to mark evidence as under review:", e);
+          }
+        }
+
+        renderList();
+        renderDetail(id);
+      }
+
+      function renderDetail(id) {
+        const e = state.evidence.find((x) => String(x.id) === String(id));
+        if (!e) return;
+
+        const submitter = (state.users || []).find(
+          (u) => String(u.userId || u.id) === String(e.userId || e.user_id),
+        ) || { fullName: "Unknown User", email: "" };
+
+        const pane = document.getElementById("evidence-detail-pane");
+        const st = String(e.status || "").toLowerCase();
+        const dateStr = e.submittedAt ? new Date(e.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Recently";
+
+        pane.innerHTML = `
+          <div style="background:var(--card-bg); max-width:800px; margin:0 auto; padding:32px 40px; border-radius:var(--r-xl); box-shadow:var(--shadow-sm); margin-top:16px; min-height:80vh;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:16px;">
+              <div>
+                <h2 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0 0 4px 0;">${e.title || 'Untitled Evidence'}</h2>
+                <div style="font-size:13px; color:var(--text-muted);">Submitted by ${submitter.fullName || submitter.name} on ${dateStr}</div>
+              </div>
+              <span class="badge ${st === "approved" ? "badge-green" : st === "rejected" ? "badge-red" : "badge-orange"}" style="padding:6px 12px; font-size:12px;">${(e.statusLabel || e.status || '').replace('_', ' ')}</span>
+            </div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:32px;">
+              <div>
+                <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px;">Related Task</div>
+                <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">${e.taskName || "N/A"}</div>
+              </div>
+              <div>
+                <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px;">Evidence Type</div>
+                <div style="font-size:14px; font-weight:500; color:var(--text-primary); margin-top:4px;">${e.evidenceType || e.type || 'Document'}</div>
+              </div>
+            </div>
+
+            <div class="doc-preview">
+              <svg class="doc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <div class="doc-name">${e.file_url || e.file || "attached_evidence_document.pdf"}</div>
+              <div class="doc-meta">Secure File · 2.4 MB</div>
+              <button class="btn btn-secondary btn-sm" style="margin-top:16px;" onclick="window.open('${e.file_url || '#'}', '_blank')">View Document</button>
+            </div>
+
+            <div style="margin-bottom:32px;">
+              <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Submitter Notes</div>
+              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:var(--r-lg); padding:20px; font-size:13px; color:var(--text-primary); line-height:1.6; font-style:italic;">
+                "${e.notes || "No notes provided."}"
+              </div>
+            </div>
+
+            ${
+              st === "rejected"
+                ? `
+            <div style="margin-bottom:32px;">
+              <div style="font-size:10px; font-weight:700; color:#ef4444; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Rejection Reason</div>
+              <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:var(--r-lg); padding:20px; font-size:13px; color:#991b1b; line-height:1.6;">
+                ${e.rejectReason || "No reason recorded."}
+              </div>
+            </div>
+            `
+                : ""
+            }
+
+            ${
+              st === "pending" || st === "under_review" || st === "needs_info"
+                ? `
+            <div style="display:flex; gap:16px; border-top:1px solid var(--border); padding-top:24px;">
+              <button class="btn btn-danger btn-lg" style="flex:1; justify-content:center; background:white; color:#ef4444; border:1px solid #ef4444;" onclick="openRejectModal('${e.id}')">Reject & Return</button>
+              <button class="btn btn-success btn-lg" style="flex:1; justify-content:center; background:#10b981; color:white; border:none;" onclick="approveEvidence('${e.id}')">Approve Evidence</button>
+            </div>`
+                : ""
+            }
+          </div>
+        `;
+      }
+
+      async function approveEvidence(id) {
+        try {
+          const ev = state.evidence.find((x) => String(x.id) === String(id));
+          if (!ev) return;
+
+          await window.Helpers.api.request(`/evidence/${id}`, 'PATCH', {
+            status: 'Approved',
+            reviewed_by: session.rawId,
+            reviewed_at: new Date().toISOString()
+          });
+
+          ev.status = "Approved";
+          window.Toast.success("Evidence Approved");
+
+          // Notification to submitter
+          window.Helpers.pushNotification(ev.userId, {
+            title: "Evidence Approved",
+            message: `Your submission "${ev.title}" was approved by Compliance.`,
+            type: "success"
+          });
+
+          renderList();
+          renderDetail(id);
+        } catch (e) {
+          console.error(e);
+          window.Toast.error("Error", "Could not approve evidence.");
+        }
+      }
+
+      function openRejectModal(id) {
+        currentRejectId = id;
+        document.getElementById("reject-reason").value = "";
+        document.getElementById("reject-reason-error").style.display = "none";
+        document.getElementById("reject-modal").style.display = "flex";
+      }
+
+      function closeRejectModal() {
+        document.getElementById("reject-modal").style.display = "none";
+        currentRejectId = null;
+      }
+
+      async function confirmReject() {
+        const reason = document.getElementById("reject-reason").value.trim();
+        const errorSpan = document.getElementById("reject-reason-error");
+
+        if (!reason) {
+          errorSpan.style.display = "block";
+          errorSpan.classList.remove("hidden");
+          return;
+        }
+
+        try {
+          const ev = state.evidence.find((x) => String(x.id) === String(currentRejectId));
+          if (!ev) return;
+
+          await window.Helpers.api.request(`/evidence/${currentRejectId}`, 'PATCH', {
+            status: 'Rejected',
+            notes: (ev.notes || "") + "\n\nREJECTION REASON: " + reason,
+            reviewed_by: session.rawId,
+            reviewed_at: new Date().toISOString()
+          });
+
+          ev.status = "Rejected";
+          ev.rejectReason = reason;
+
+          window.Toast.warning("Evidence Rejected");
+
+          // Notification to submitter
+          window.Helpers.pushNotification(ev.userId, {
+            title: "Evidence Rejected",
+            message: `Your submission "${ev.title}" requires changes. Feedback: ${reason}`,
+            type: "error"
+          });
+
+          closeRejectModal();
+          renderList();
+          renderDetail(currentRejectId);
+        } catch (e) {
+          console.error(e);
+          window.Toast.error("Error", "Could not reject evidence.");
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Evidence — OfficeSync</title>
+    <meta
+      name="description"
+      content="Submit and manage evidence — OfficeSync"
+    />
+    <link rel="stylesheet" href="../css/pm/base.css" />
+    <link rel="stylesheet" href="../css/pm/layout.css" />
+    <link rel="stylesheet" href="../css/pm/components.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div class="main-area">
+        <header class="top-header">
+          <h1 class="page-title">Evidence</h1>
+          <div class="header-actions">
+            <button class="btn btn-primary btn-sm" id="btn-add-evidence">
+              + Submit Evidence
+            </button>
+            <div class="bell-btn">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content">
+          <!-- Info Banner -->
+          <div
+            style="
+              background: var(--blue-light);
+              border: 1px solid var(--blue-border);
+              border-radius: var(--r-lg);
+              padding: 14px 18px;
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin-bottom: 20px;
+            "
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--blue)"
+              stroke-width="2"
+              style="width: 18px; height: 18px; flex-shrink: 0"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <span style="font-size: 13px; color: var(--blue-dark)"
+              >Submit supporting evidence for your compliance tasks. All
+              submissions are reviewed by the Project Manager.</span
+            >
+          </div>
+
+          <!-- Summary Stats -->
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 14px;
+              margin-bottom: 20px;
+            "
+            id="ev-stats"
+          ></div>
+
+          <!-- Evidence Table -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Submitted Evidence</div>
+              <span class="badge badge-blue" id="ev-count">0 items</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>EVIDENCE TITLE</th>
+                    <th>TASK</th>
+                    <th>TYPE</th>
+                    <th>SUBMITTED ON</th>
+                    <th>STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="ev-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script src="../js/tasks-store.js"></script>
+    <script src="../js/utils/helpers.js"></script>
+    <script src="../js/data/db.js"></script>
+    <script src="../js/data/pm-data-store.js"></script>
+    <script src="../js/utils/auth.js"></script>
+    <script src="../js/utils/validator.js"></script>
+    <script src="../js/components/sidebar.js"></script>
+    <script src="../js/components/toast.js"></script>
+    <script src="../js/components/modal.js"></script>
+    <script>
+      let session, state;
+
+      document.addEventListener("DOMContentLoaded", async () => {
+        // ✅ 2. Security Guard & Session Adapter
+        if (!sessionStorage.getItem("currentUser")) {
+          window.location.replace("../login.html");
+          return;
+        }
+        session = window.Auth.getSession(); // Grabs the perfectly formatted user data!
+        window.Sidebar.render("evidence");
+        window.Toast.init();
+
+        state = await window.Helpers.getState();
+        // Initialize evidence array if needed
+        if (!state.evidence) state.evidence = getDefaultEvidence();
+        render();
+
+        document
+          .getElementById("btn-add-evidence")
+          .addEventListener("click", openAddModal);
+      });
+
+      function getDefaultEvidence() {
+        return [
+          {
+            id: 1,
+            userId: 3,
+            title: "GDPR Data Consent Forms — Batch 1",
+            taskId: 101,
+            taskName: "Initial Data Audit",
+            type: "Document",
+            submittedOn: "Dec 10, 2024",
+            status: "approved",
+            statusLabel: "Approved",
+            notes: "All consent forms attached.",
+          },
+          {
+            id: 2,
+            userId: 3,
+            title: "Client Data Verification Screenshots",
+            taskId: 103,
+            taskName: "Client Data Cross-verification",
+            type: "Screenshot",
+            submittedOn: "Dec 14, 2024",
+            status: "pending",
+            statusLabel: "Pending",
+            notes: "Access blocked — awaiting IT team resolution.",
+          },
+          {
+            id: 3,
+            userId: 4,
+            title: "Compliance Evidence Package v1",
+            taskId: 102,
+            taskName: "Compliance Evidence Submission",
+            type: "Archive",
+            submittedOn: "Dec 18, 2024",
+            status: "under_review",
+            statusLabel: "Under Review",
+            notes: "",
+          },
+        ];
+      }
+
+      function getMyEvidence() {
+        if (!state.evidence) return [];
+        const sessId = String(session.id || session.rawId || '');
+        return state.evidence.filter((e) => String(e.userId || e.user_id || '') === sessId);
+      }
+
+      function render() {
+        const myEvidence = getMyEvidence();
+        const approved = myEvidence.filter(
+          (e) => String(e.status || "").toLowerCase() === "approved",
+        ).length;
+        const pending = myEvidence.filter((e) => ["pending", "under_review", "needs_info"].includes(String(e.status || "").toLowerCase())).length;
+        const rejected = myEvidence.filter(
+          (e) => String(e.status || "").toLowerCase() === "rejected",
+        ).length;
+
+        document.getElementById("ev-count").textContent =
+          myEvidence.length + " items";
+
+        document.getElementById("ev-stats").innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Submitted</div><div class="stat-value"><div class="stat-number">${myEvidence.length}</div></div><div class="stat-sub blue">All items</div></div>
+    <div class="stat-card"><div class="stat-label">Approved</div><div class="stat-value"><div class="stat-number">${approved}</div></div><div class="stat-sub green">Verified</div></div>
+    <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value"><div class="stat-number">${pending}</div></div><div class="stat-sub orange">Awaiting review</div></div>
+    <div class="stat-card"><div class="stat-label">Rejected</div><div class="stat-value"><div class="stat-number">${rejected}</div></div><div class="stat-sub ${rejected > 0 ? "red" : "green"}">${rejected > 0 ? "Needs resubmission" : "None"}</div></div>`;
+
+        const tbody = document.getElementById("ev-table-body");
+        if (myEvidence.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:32px"><div class="empty-state-text">No evidence submitted yet</div><div class="empty-state-sub">Click "+ Submit Evidence" to get started.</div></div></td></tr>`;
+          return;
+        }
+
+        const statusMap = {
+          approved: "status-done",
+          pending: "status-pending",
+          under_review: "status-in-progress",
+          rejected: "status-blocked",
+          needs_info: "status-at-risk"
+        };
+
+        tbody.innerHTML = myEvidence
+          .map(
+            (ev) => {
+              const eType = ev.evidenceType || ev.type || 'Document';
+              const eDate = ev.submittedAt ? new Date(ev.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Recently";
+              const eStatus = String(ev.status || 'pending').toLowerCase();
+              const eLabel = (ev.statusLabel || ev.status || 'Pending').replace('_', ' ');
+              
+              return `
+    <tr>
+      <td>
+        <div class="td-label">${ev.title || 'Untitled'}</div>
+        ${ev.notes ? `<div class="td-sub" style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${ev.notes}">${ev.notes}</div>` : ""}
+      </td>
+      <td style="font-size:12px;color:var(--text-secondary)">${ev.taskName || "—"}</td>
+      <td><span class="badge badge-gray">${eType}</span></td>
+      <td style="font-size:12px;color:var(--text-muted)">${eDate}</td>
+      <td><span class="badge ${statusMap[eStatus] || "badge-gray"}">${eLabel}</span></td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="openEditModal('${ev.id}')">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteEvidence('${ev.id}')">Delete</button>
+        </div>
+      </td>
+    </tr>`;
+            }
+          )
+          .join("");
+      }
+
+      function openAddModal() {
+        const sessId = String(session.id || session.rawId || '');
+        const myTasks = (state.tasks || []).filter(
+          (t) => String(t.assignedUserId || t.assignedTo || t.assignedToId || '') === sessId
+        );
+        window.Modal.create({
+          id: "modal-ev-add",
+          title: "Submit Evidence",
+          body: `
+      <div class="form-group">
+        <label class="form-label" for="ev-title">Evidence Title *</label>
+        <input type="text" id="ev-title" class="form-input" placeholder="e.g. GDPR Consent Forms — Batch 1">
+        <span class="form-error hidden" id="ev-title-error"></span>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="ev-task">Related Task</label>
+          <select id="ev-task" class="form-select">
+            <option value="">Select task (optional)</option>
+            ${myTasks.map((t) => `<option value="${t.taskId || t.id}" data-name="${t.title || t.name}">${t.title || t.name}</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ev-type">Evidence Type *</label>
+          <select id="ev-type" class="form-select">
+            <option value="Document">Document</option>
+            <option value="Screenshot">Screenshot</option>
+            <option value="Image">Image</option>
+            <option value="Report">Report</option>
+            <option value="Archive">Archive</option>
+            <option value="Email">Email</option>
+            <option value="Other">Other</option>
+          </select>
+          <span class="form-error hidden" id="ev-type-error"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ev-notes">Notes / Description</label>
+        <textarea id="ev-notes" class="form-textarea" placeholder="Add any relevant context or remarks..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ev-file">Attach File (simulated)</label>
+        <input type="text" id="ev-file" class="form-input" placeholder="Enter file name or URL (e.g. consent_forms.pdf)">
+      </div>`,
+          footerHTML: `
+      <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-ev-add')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="submitEvidence()">Submit</button>`,
+        });
+
+        const evType = document.getElementById("ev-type");
+        if (evType) {
+          evType.addEventListener("change", (e) => {
+            const fileInput = document.getElementById("ev-file");
+            if (!fileInput) return;
+            const val = e.target.value;
+            if (["Document", "Screenshot", "Archive", "Image"].includes(val)) {
+              fileInput.outerHTML = '<input type="file" id="ev-file" class="form-input" accept=".pdf,.png,.jpg,.zip">';
+            } else {
+              fileInput.outerHTML = '<input type="text" id="ev-file" class="form-input" placeholder="Paste URL here">';
+            }
+          });
+          evType.dispatchEvent(new Event("change"));
+        }
+
+        window.Validator.attachLive("ev-title", {
+          required: true,
+          minLength: 5,
+        });
+        window.Validator.attachLive("ev-type", { required: true });
+      }
+
+      function openEditModal(evId) {
+        const ev = state.evidence.find((e) => String(e.id) === String(evId));
+        if (!ev) return;
+        window.Modal.create({
+          id: "modal-ev-edit",
+          title: "Edit Evidence",
+          body: `
+      <div class="form-group">
+        <label class="form-label" for="eev-title">Title *</label>
+        <input type="text" id="eev-title" class="form-input" value="${ev.title || ''}">
+        <span class="form-error hidden" id="eev-title-error"></span>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="eev-type">Type</label>
+        <select id="eev-type" class="form-select">
+          <option value="Document"   ${ev.evidenceType === "Document" ? "selected" : ""}>Document</option>
+          <option value="Screenshot" ${ev.evidenceType === "Screenshot" ? "selected" : ""}>Screenshot</option>
+          <option value="Report"     ${ev.evidenceType === "Report" ? "selected" : ""}>Report</option>
+          <option value="Archive"    ${ev.evidenceType === "Archive" ? "selected" : ""}>Archive</option>
+          <option value="Email"      ${ev.evidenceType === "Email" ? "selected" : ""}>Email</option>
+          <option value="Other"      ${ev.evidenceType === "Other" ? "selected" : ""}>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="eev-notes">Notes</label>
+        <textarea id="eev-notes" class="form-textarea">${ev.notes || ""}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="eev-file">Attach File</label>
+        <input type="text" id="eev-file" class="form-input" placeholder="Paste URL here" value="${ev.file_url || ""}">
+      </div>`,
+          footerHTML: `
+      <button class="btn btn-secondary btn-sm" onclick="window.Modal.close('modal-ev-edit')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="submitEdit('${evId}')">Save & Resubmit</button>`,
+        });
+
+        window.Validator.attachLive("eev-title", {
+          required: true,
+          minLength: 5,
+        });
+      }
+
+      async function submitEvidence() {
+        const result = window.Validator.validateForm({
+          "ev-title": { required: true, minLength: 5 },
+          "ev-type": { required: true },
+        });
+        if (!result.valid) return;
+
+        const taskEl = document.getElementById("ev-task");
+        const taskId = taskEl && taskEl.value ? String(taskEl.value).trim() : null;
+
+        const sessionUser = window.Auth ? window.Auth.getSession() : {};
+        const newEv = {
+          user_id:       String(session.id || session.rawId || ''),
+          task_id:       taskId || null,
+          title:         window.Helpers.getVal("ev-title"),
+          evidence_type: window.Helpers.getVal("ev-type"),
+          notes:         window.Helpers.getVal("ev-notes"),
+          file_url:      window.Helpers.getVal("ev-file") || "attached_document.pdf",
+        };
+
+        try {
+          await window.Helpers.api.request('/evidence', 'POST', newEv);
+          state = await window.Helpers.getState();
+
+          // Notify Compliance Officer
+          const recipient = (state.users || []).find(u => {
+            const r = String(u.roleName || u.role || u.roleSlug || '').toLowerCase();
+            const l = String(u.roleLabel || u.role_label || '').toLowerCase();
+            return r === 'compliance_officer' || l.includes('compliance');
+          });
+          if (recipient) {
+            window.Helpers.pushNotification(String(recipient.userId || recipient.id), {
+              title:   'New Evidence',
+              message: `New evidence submitted by ${session.name || session.fullName || 'User'}: "${newEv.title}"`,
+              type:    'info',
+            });
+          }
+
+          window.Modal.close('modal-ev-add');
+          window.Toast.success('Evidence Submitted');
+          render();
+        } catch (e) {
+          console.error(e);
+          window.Toast.error('Failed to submit');
+        }
+      }
+      async function submitEdit(evId) {
+        const result = window.Validator.validateForm({
+          "eev-title": { required: true, minLength: 5 },
+        });
+        if (!result.valid) return;
+
+        const payload = {
+          title: window.Helpers.getVal("eev-title"),
+          evidence_type: window.Helpers.getVal("eev-type"),
+          notes: window.Helpers.getVal("eev-notes"),
+          status: 'Pending', // Resubmit!
+        };
+
+        try {
+          await window.Helpers.api.request(`/evidence/${evId}`, 'PATCH', payload);
+          state = await window.Helpers.getState();
+
+          window.Modal.close('modal-ev-edit');
+          window.Toast.success('Evidence Resubmitted');
+          render();
+        } catch (e) {
+          console.error(e);
+          window.Toast.error('Failed to update');
+        }
+      }
+      function deleteEvidence(evId) {
+        window.Modal.confirm({
+          title: "Delete Evidence",
+          message:
+            "Are you sure you want to delete this evidence submission? This cannot be undone.",
+          confirmLabel: "Delete",
+          confirmClass: "btn-danger",
+          onConfirm: async () => {
+            try {
+              await window.Helpers.api.request(`/evidence/${evId}`, 'DELETE');
+              state = await window.Helpers.getState();
+              window.Helpers.log(`Deleted evidence #${evId}`, "Compliance");
+              window.Toast.warning("Deleted", "Evidence has been removed.");
+              render();
+            } catch (e) {
+              console.error(e);
+              window.Toast.warning("Error", "Failed to delete evidence: " + e.message);
+            }
+          },
+        });
+      }
+    </script>
+  </body>
+</html>
