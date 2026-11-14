@@ -23,6 +23,7 @@ import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as complianceApi from '../../../../services/api/compliance';
 import * as usersApi from '../../../../services/api/users';
+import { todayInput } from '../../utils/dateLimits';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const PAGE_SIZE = 10;
@@ -437,6 +438,7 @@ export default function PmTasks() {
                 <FormField label="Target Due Date">
                   <Input
                     type="date"
+                    min={todayInput()}
                     value={form.dueDate}
                     onChange={(event) => setForm((c) => ({ ...c, dueDate: event.target.value }))}
                   />

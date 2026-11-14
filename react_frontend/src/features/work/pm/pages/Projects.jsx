@@ -10,8 +10,10 @@ import { Modal } from '../../../../shared/components/Modal';
 import { Toast } from '../../../../shared/components/Toast';
 import { Pagination } from '../../../../shared/components/Pagination';
 import * as projectsApi from '../../../../services/api/projects';
+import * as tasksApi from '../../../../services/api/tasks';
 import * as teamsApi from '../../../../services/api/teams';
 import { createInstance, listTemplates } from '../../../../services/api/process';
+import { todayInput } from '../../utils/dateLimits';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const projectPath = (id) => PATHS.PM.PROJECT_DETAIL.replace(':id', id);
@@ -27,7 +29,7 @@ const PROJECT_FILTERS = [
 
 const statusStyle = (status) => {
   if (status === 'Completed') return { border: 'border-t-emerald-500', badge: 'success', bar: 'bg-emerald-500' };
-  if (status === 'OnHold' || status === 'On_Hold') return { border: 'border-t-rose-500', badge: 'danger', bar: 'bg-rose-500' };
+  if (status === 'OnHold') return { border: 'border-t-rose-500', badge: 'danger', bar: 'bg-rose-500' };
   if (status === 'Active') return { border: 'border-t-blue-500', badge: 'info', bar: 'bg-blue-500' };
   return { border: 'border-t-slate-300', badge: 'default', bar: 'bg-slate-400' };
 };
@@ -89,7 +91,7 @@ export default function PmProjects() {
   }, []);
 
   const filteredProjects = projects.filter((project) => {
-    const status = project.status === 'On_Hold' ? 'OnHold' : project.status;
+    const status = project.status;
     const matchesFilter = filter === 'All' || status === filter;
     const query = search.trim().toLowerCase();
     const matchesSearch = !query || [project.name, project.description, project.team?.name]
@@ -100,7 +102,7 @@ export default function PmProjects() {
   const filterCounts = {
     All: projects.length,
     Active: projects.filter((project) => project.status === 'Active').length,
-    OnHold: projects.filter((project) => ['OnHold', 'On_Hold'].includes(project.status)).length,
+    OnHold: projects.filter((project) => project.status === 'OnHold').length,
     Planning: projects.filter((project) => project.status === 'Planning').length,
     Completed: projects.filter((project) => project.status === 'Completed').length,
   };
@@ -142,7 +144,23 @@ export default function PmProjects() {
             projectId: project.id,
             title: `${selectedTemplate?.name || 'Workflow'} - ${project.name}`,
           });
-          showToast('success', 'Project created with its workflow.');
+          // Workflow tasks are created unassigned; hand them to the team's lead so they reach the TL dashboard.
+          const freshResponse = await projectsApi.get(project.id);
+          const fresh = freshResponse?.data || freshResponse;
+          const leads = (fresh?.team?.teamMembers || []).filter((member) => /team.?lead|^lead$/i.test(member.role || ''));
+          if (leads.length !== 1) {
+            showToast('warning', 'Workflow started, but its tasks are unassigned: the team needs exactly one Team Lead.');
+          } else {
+            const results = await Promise.allSettled((fresh.tasks || []).map((task) => tasksApi.update(task.id, { assignedToId: leads[0].userId })));
+            const refreshedResponse = await projectsApi.get(project.id).catch(() => null);
+            const refreshed = refreshedResponse?.data || refreshedResponse;
+            if (refreshed?.id) setProjects((current) => current.map((item) => (item.id === project.id ? refreshed : item)));
+            if (results.some((result) => result.status === 'rejected')) {
+              showToast('warning', 'Workflow started, but some tasks could not be assigned to the Team Lead.');
+            } else {
+              showToast('success', 'Project created with its workflow; tasks assigned to the Team Lead.');
+            }
+          }
         } catch (error) {
           showToast('warning', `Project created, but its workflow could not be started: ${error.message || 'Request failed.'}`);
         }
@@ -218,7 +236,7 @@ export default function PmProjects() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <h2 className="text-base font-bold leading-snug text-slate-900 group-hover:text-blue-700">{project.name}</h2>
-                    <Badge status={style.badge}>{project.status === 'OnHold' || project.status === 'On_Hold' ? 'On Hold' : project.status || 'Planning'}</Badge>
+                    <Badge status={style.badge}>{project.status === 'OnHold' ? 'On Hold' : project.status || 'Planning'}</Badge>
                   </div>
 
                   <p className="min-h-10 text-sm leading-relaxed text-slate-600 line-clamp-2">
@@ -313,7 +331,7 @@ export default function PmProjects() {
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="End Date" required>
-              <Input type="date" value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} required disabled={saving} />
+              <Input type="date" min={todayInput()} value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} required disabled={saving} />
             </FormField>
             <FormField label="Status">
               <Select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))} disabled={saving}>

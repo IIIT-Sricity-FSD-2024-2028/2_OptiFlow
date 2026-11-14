@@ -12,6 +12,7 @@ import * as projectsApi from '../../../../services/api/projects';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
+import { todayInput } from '../../utils/dateLimits';
 
 const STATUSES = ['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'];
 const normalize = (response) => response?.data || response;
@@ -229,7 +230,8 @@ export default function PmProjectDetail() {
 
   const handleMarkTaskComplete = async (task) => {
     try {
-      await tasksApi.update(task.id, { status: 'Completed', pmApproval: true });
+      // Not a review approval: compliance rules apply (pmApproval is only for In_Review tasks).
+      await tasksApi.update(task.id, { status: 'Completed' });
       const response = await projectsApi.get(id);
       setProject(normalize(response));
       setSelectedTask((prev) => prev ? { ...prev, status: 'Completed' } : null);
@@ -656,7 +658,7 @@ export default function PmProjectDetail() {
               <Input type="number" min="0" step="0.5" value={taskForm.estimatedHours} onChange={(event) => setTaskForm({ ...taskForm, estimatedHours: event.target.value })} disabled={savingTask} />
             </FormField>
             <FormField label="Deadline">
-              <Input type="date" value={taskForm.dueDate} onChange={(event) => setTaskForm({ ...taskForm, dueDate: event.target.value })} disabled={savingTask} />
+              <Input type="date" min={todayInput()} value={taskForm.dueDate} onChange={(event) => setTaskForm({ ...taskForm, dueDate: event.target.value })} disabled={savingTask} />
             </FormField>
           </div>
         </form>

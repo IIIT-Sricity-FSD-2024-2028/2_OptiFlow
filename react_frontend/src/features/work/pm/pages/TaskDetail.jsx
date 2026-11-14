@@ -12,6 +12,7 @@ import { Modal } from '../../../../shared/components/Modal';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as complianceApi from '../../../../services/api/compliance';
 import * as evidenceApi from '../../../../services/api/evidence';
+import { tomorrowInput } from '../../utils/dateLimits';
 
 const normalize = (response) => response?.data || response;
 const STATUSES = ['Draft', 'Active', 'In_Review', 'Blocked', 'Completed', 'Cancelled'];
@@ -21,8 +22,8 @@ export default function PmTaskDetail() {
   const { id } = useParams();
   const [task, setTask] = useState(null);
   const [violations, setViolations] = useState([]);
-  const [bindings, setBindings] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [extensionOpen, setExtensionOpen] = useState(false);
@@ -40,14 +41,12 @@ export default function PmTaskDetail() {
     Promise.all([
       tasksApi.get(id),
       complianceApi.getViolations().catch(() => []),
-      complianceApi.getBindings().catch(() => []),
       evidenceApi.getEvidenceList().catch(() => []),
     ])
-      .then(([taskResponse, violationsRes, bindingsRes, evidenceRes]) => {
+      .then(([taskResponse, violationsRes, evidenceRes]) => {
         if (!active) return;
         setTask(normalize(taskResponse));
         setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
-        setBindings(Array.isArray(bindingsRes) ? bindingsRes : bindingsRes?.data || []);
         setEvidenceList(Array.isArray(evidenceRes) ? evidenceRes : evidenceRes?.data || []);
       })
       .catch((error) => {
@@ -59,18 +58,34 @@ export default function PmTaskDetail() {
     return () => { active = false; };
   }, [id]);
 
+  const reloadViolations = () => complianceApi.getViolations()
+    .then((res) => setViolations(Array.isArray(res) ? res : res?.data || []))
+    .catch(() => {});
+
+  // Prefer the backend code; the message check stays until the API client
+  // passes `code` through (A4).
+  const isComplianceBlock = (error) => error?.code === 'COMPLIANCE_BLOCK'
+    || String(error?.message || '').includes('blocked by active compliance');
+
   const updateTask = async (patch) => {
     setSaving(true);
     try {
       const response = await tasksApi.update(id, patch);
-      setTask((current) => ({ ...current, ...normalize(response), ...patch }));
+      setTask((current) => ({ ...current, ...normalize(response) }));
+      setOverrideOpen(false);
       showToast('success', 'Task updated.');
     } catch (error) {
-      const msg = error.message || 'Failed to update task.';
-      showToast('error', msg.includes('COMPLIANCE_BLOCK') || msg.includes('blocked by active compliance')
-        ? 'Blocked by Compliance: Complete required evidence before marking Completed.'
-        : msg
-      );
+      if (isComplianceBlock(error)) {
+        reloadViolations();
+        // Final approval of a reviewed task may override the block (audited server-side).
+        if (patch.status === 'Completed' && task?.status === 'In_Review' && !patch.pmApproval) {
+          setOverrideOpen(true);
+        } else {
+          showToast('error', 'Blocked by Compliance: Complete required evidence before marking Completed.');
+        }
+      } else {
+        showToast('error', error.message || 'Failed to update task.');
+      }
     } finally {
       setSaving(false);
     }
@@ -97,30 +112,13 @@ export default function PmTaskDetail() {
     && ['Open', 'Under_Review'].includes(violation.status)
   ));
 
-  // Rules bound to Project/Task/Company requiring evidence for Completed status
-  const projectId = task.projectId || task.project?.id;
-  const relevantBindings = bindings.filter((binding) => (
-    binding.rule?.isActive !== false
-    && ((binding.scopeType === 'Project' && String(binding.scopeId) === String(projectId))
-      || (binding.scopeType === 'Task' && String(binding.scopeId) === String(id))
-      || (binding.scopeType === 'Company' && String(binding.scopeId) === String(task.companyId)))
-  ));
-
-  const evidenceRequiredRules = relevantBindings
-    .map((b) => b.rule)
-    .filter((r) => r?.criteria?.trigger?.field === 'status' && r?.criteria?.trigger?.transitionTo === 'Completed');
-
-  const taskApprovedEvidence = evidenceList.filter((e) =>
-    String(e.taskId || e.task_id || e.task?.id) === String(id) &&
-    String(e.status || '').toLowerCase() === 'approved'
-  );
-
   const currentTaskEvidence = evidenceList.filter((e) =>
     String(e.taskId || e.task_id || e.task?.id) === String(id)
   );
 
-  const isMissingRequiredEvidence = evidenceRequiredRules.length > 0 && taskApprovedEvidence.length === 0;
-  const complianceBlocked = activeTaskViolations.length > 0 || isMissingRequiredEvidence;
+  // The backend decides whether a transition is blocked; the page only shows
+  // the open violations it has recorded for this task.
+  const complianceBlocked = activeTaskViolations.length > 0;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Completed';
 
   const grantExtension = async () => {
@@ -140,7 +138,7 @@ export default function PmTaskDetail() {
         dueDate: extensionDate,
         deadlineExtensionReason: reason,
       });
-      setTask((current) => ({ ...current, ...normalize(response), dueDate: extensionDate }));
+      setTask((current) => ({ ...current, ...normalize(response) }));
       setViolations((current) => current.map((violation) => (
         violation.entityType === 'Task'
         && String(violation.entityId) === String(id)
@@ -172,12 +170,10 @@ export default function PmTaskDetail() {
             </span>
             <div>
               <p className="text-sm font-bold text-rose-900">
-                Transition to "Completed" is blocked by Compliance
+                This task has open compliance violations
               </p>
               <p className="text-xs text-rose-700 mt-0.5">
-                {activeTaskViolations.length > 0
-                  ? `Active violations: ${activeTaskViolations.map((v) => v.rule?.name || 'Compliance Policy').join(', ')}`
-                  : 'Mandatory policy requires approved compliance evidence before completion.'}
+                {`Active violations: ${activeTaskViolations.map((v) => v.rule?.name || 'Compliance Policy').join(', ')}`}
               </p>
             </div>
           </div>
@@ -206,14 +202,9 @@ export default function PmTaskDetail() {
                 onChange={(event) => updateTask({ status: event.target.value })}
                 disabled={saving}
               >
-                {STATUSES.map((status) => {
-                  const isBlockedOption = status === 'Completed' && complianceBlocked && task.status !== 'Completed';
-                  return (
-                    <option key={status} value={status} disabled={isBlockedOption}>
-                      {status.replace(/_/g, ' ')} {isBlockedOption ? '(Locked by Compliance)' : ''}
-                    </option>
-                  );
-                })}
+                {STATUSES.map((status) => (
+                  <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
+                ))}
               </Select>
             </FormField>
             <div>
@@ -363,12 +354,31 @@ export default function PmTaskDetail() {
         <div className="space-y-4">
           <p className="text-sm text-gray-600">The new deadline and reason will be recorded in the task audit history.</p>
           <FormField label="New deadline" required>
-            <Input type="date" value={extensionDate} onChange={(event) => setExtensionDate(event.target.value)} />
+            <Input type="date" min={tomorrowInput()} value={extensionDate} onChange={(event) => setExtensionDate(event.target.value)} />
           </FormField>
           <FormField label="Reason" required>
             <Textarea value={extensionReason} onChange={(event) => setExtensionReason(event.target.value)} rows={4} placeholder="Explain why the deadline is being extended." />
           </FormField>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={overrideOpen}
+        onClose={() => setOverrideOpen(false)}
+        title="Approve despite compliance block?"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setOverrideOpen(false)} disabled={saving}>Cancel</Button>
+            <Button variant="danger" onClick={() => updateTask({ status: 'Completed', pmApproval: true })} disabled={saving}>
+              {saving ? 'Saving…' : 'Approve with override'}
+            </Button>
+          </>
+        )}
+      >
+        <p className="text-sm text-gray-600">
+          Compliance rules block completing this task. As Project Manager you can give final approval anyway;
+          the override is recorded in the audit log.
+        </p>
       </Modal>
 
       {escalations.length > 0 && (

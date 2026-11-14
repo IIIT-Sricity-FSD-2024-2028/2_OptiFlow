@@ -466,6 +466,8 @@ model Subtask {
   createdById  String
   dueDate      DateTime?
   completedAt  DateTime?
+  // Reviewer's reason when a submitted subtask is sent back; cleared on approval.
+  reviewComment String?
   deletedAt    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
