@@ -17,6 +17,7 @@ import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 import {
   assertValidScope,
   assertScopeFitsRole,
+  assertOwnerAdminGrantRules,
   COMPANY_WIDE_SLUGS,
   countActiveOwners,
   resolveCompanyRole,
@@ -220,10 +221,14 @@ async function resolveAssignmentScope({ companyId, body, role, fallback }) {
   return scope;
 }
 
-/** Throws unless the caller may grant this role (only owners grant owner; owners/admins grant admin). */
+/**
+ * Throws unless the caller may grant this role (only owners grant owner; owners/admins grant admin).
+ * A System Admin passes here for Company Owner; assertOwnerAdminGrantRules then allows it, under
+ * the company lock, only while the company has no owner.
+ */
 function assertMayGrantRole(req, role) {
   const slug = systemSlugOfRole(role);
-  if (slug === 'company_owner' && req.user.role !== 'company_owner') {
+  if (slug === 'company_owner' && !['company_owner', 'system_admin'].includes(req.user.role)) {
     throw new ForbiddenError('Only the Company Owner can assign the Company Owner role');
   }
   if (slug === 'system_admin' && !['company_owner', 'system_admin'].includes(req.user.role)) {
@@ -319,6 +324,13 @@ export async function createUser(req, res, next) {
       });
 
       if (targetRole) {
+        await assertOwnerAdminGrantRules({
+          companyId,
+          callerRole: req.user.role,
+          userId: user.id,
+          grantingSlug: systemSlugOfRole(targetRole),
+          client: tx,
+        });
         await tx.roleAssignment.create({
           data: {
             companyId,
@@ -530,6 +542,14 @@ export async function updateUser(req, res, next) {
             throw new ForbiddenError('You cannot change your own role');
           }
           assertMayGrantRole(req, targetRole);
+          await assertOwnerAdminGrantRules({
+            companyId,
+            callerRole: req.user.role,
+            userId: id,
+            grantingSlug: systemSlugOfRole(targetRole),
+            ignoreAssignmentId: primary?.id ?? null,
+            client: tx,
+          });
 
           const losesOwner =
             primary &&

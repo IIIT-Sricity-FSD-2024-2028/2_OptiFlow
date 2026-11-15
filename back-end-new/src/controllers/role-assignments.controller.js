@@ -3,7 +3,13 @@ import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors.
 import { validateRequired } from '../utils/validation.js';
 import { systemSlugOfRole } from '../utils/roles.js';
 import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
-import { assertValidScope, assertScopeFitsRole, countActiveOwners, ROLE_WITH_TEMPLATE } from '../utils/roleAssignmentGuards.js';
+import {
+  assertValidScope,
+  assertScopeFitsRole,
+  assertOwnerAdminGrantRules,
+  countActiveOwners,
+  ROLE_WITH_TEMPLATE,
+} from '../utils/roleAssignmentGuards.js';
 import { withCompanyLock } from '../utils/planLimits.js';
 
 /** Shared by list, create and the 'already assigned' path so all return the same shape (BD11). */
@@ -43,7 +49,8 @@ export async function listRoleAssignments(req, res, next) {
  * Who may grant or revoke a role (D-S1, D-S3).
  * Decided by the resolved system slug of the role and of the caller, never by label text.
  * - Nobody may change their own roles.
- * - Company Owner can be granted or revoked only by a Company Owner.
+ * - Company Owner can be granted or revoked only by a Company Owner. A System Admin may also
+ *   grant it while the company has no owner; that part is checked under the company lock.
  * - System Admin only by a Company Owner or System Admin.
  */
 function assertMayChangeRole(req, targetUserId, role, verb) {
@@ -51,7 +58,8 @@ function assertMayChangeRole(req, targetUserId, role, verb) {
     throw new ForbiddenError(`You cannot ${verb} your own roles`);
   }
   const slug = systemSlugOfRole(role);
-  if (slug === 'company_owner' && req.user.role !== 'company_owner') {
+  const mayBootstrapOwner = verb === 'assign' && req.user.role === 'system_admin';
+  if (slug === 'company_owner' && req.user.role !== 'company_owner' && !mayBootstrapOwner) {
     throw new ForbiddenError(`Only a Company Owner can ${verb} the Company Owner role`);
   }
   if (slug === 'system_admin' && !['company_owner', 'system_admin'].includes(req.user.role)) {
@@ -110,6 +118,14 @@ export async function createRoleAssignment(req, res, next) {
         include: ASSIGNMENT_INCLUDE,
       });
       if (existing) return { assignment: existing, created: false };
+
+      await assertOwnerAdminGrantRules({
+        companyId,
+        callerRole: req.user.role,
+        userId: targetUser.id,
+        grantingSlug: systemSlugOfRole(role),
+        client: tx,
+      });
 
       const row = await tx.roleAssignment.create({
         data: {

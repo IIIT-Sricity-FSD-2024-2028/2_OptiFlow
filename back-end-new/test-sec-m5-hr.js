@@ -695,6 +695,115 @@ check('G: an email-change request does not reveal whether the address is taken',
   assert.equal((await prisma.user.findUnique({ where: { id: u.id } })).email, u.email);
 });
 
+// ---------------------------------------------------------------- F1 / A1 owner bootstrap
+// Runs fn(ctx) with Beta LLC temporarily ownerless and holding a System Admin, like a company
+// that signed up itself. Restores the seeded owner and removes everything it added.
+async function withOwnerlessBeta(tag, fn) {
+  const betaOwner = await userByEmail('ceo@betallc.com');
+  const ownerRole = await systemRole(beta.id, 'company_owner');
+  const ownerRows = await prisma.roleAssignment.findMany({ where: { userId: betaOwner.id, roleId: ownerRole.id, revokedAt: null } });
+  // The Beta seed has no System Admin role; a self-registered company gets one from the template.
+  let createdSysRole = null;
+  if (!(await systemRole(beta.id, 'system_admin'))) {
+    const tpl = await prisma.roleTemplate.findFirst({ where: { slug: 'system_admin' } });
+    createdSysRole = await prisma.role.create({
+      data: { companyId: beta.id, roleTemplateId: tpl.id, label: 'System Admin', name: 'system_admin', isSystem: true },
+    });
+  }
+  await prisma.roleAssignment.updateMany({ where: { id: { in: ownerRows.map((r) => r.id) } }, data: { revokedAt: new Date() } });
+  const admin = await makeUser({ companyId: beta.id, email: `${tag}-admin-${suffix}@betallc.com`, roleName: 'system_admin' });
+  const extraUserIds = [];
+  try {
+    await fn({ ownerRole, admin, token: await login(admin.email), extraUserIds });
+  } finally {
+    // Remove only what this test added: owner rows its admin granted, and users made via the API.
+    // Other rows of makeUser users go in teardown; then restore the seeded owner.
+    await prisma.roleAssignment.deleteMany({ where: { roleId: ownerRole.id, grantedById: admin.id } });
+    await prisma.roleAssignment.deleteMany({ where: { userId: { in: extraUserIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: extraUserIds } } });
+    await prisma.roleAssignment.updateMany({ where: { id: { in: ownerRows.map((r) => r.id) } }, data: { revokedAt: null } });
+    if (createdSysRole) {
+      await prisma.roleAssignment.deleteMany({ where: { roleId: createdSysRole.id } });
+      await prisma.role.delete({ where: { id: createdSysRole.id } });
+    }
+  }
+}
+
+check('F1: a System Admin can grant Company Owner while the company has no active owner, once', async () => {
+  await withOwnerlessBeta('f1', async ({ ownerRole, admin, token: t, extraUserIds }) => {
+    const a = await makeUser({ companyId: beta.id, email: `f1-a-${suffix}@betallc.com`, roleName: 'team_member' });
+    const b = await makeUser({ companyId: beta.id, email: `f1-b-${suffix}@betallc.com`, roleName: 'team_member' });
+    const self = await call('POST', '/api/role-assignments', { token: t, body: { userId: admin.id, roleId: ownerRole.id } });
+    assert.equal(self.status, 403, `self-grant: ${JSON.stringify(self.json)}`);
+    const first = await call('POST', '/api/role-assignments', { token: t, body: { userId: a.id, roleId: ownerRole.id } });
+    assert.equal(first.status, 201, `bootstrap: ${JSON.stringify(first.json)}`);
+    const second = await call('POST', '/api/role-assignments', { token: t, body: { userId: b.id, roleId: ownerRole.id } });
+    assert.equal(second.status, 403, `second owner grant: ${JSON.stringify(second.json)}`);
+    assert.match(second.json.message, /Only a Company Owner/);
+    const viaCreate = await call('POST', '/api/users', {
+      token: t,
+      body: { fullName: 'F1 Owner', email: `f1-c-${suffix}@betallc.com`, password: 'password123', role: 'company_owner' },
+    });
+    if (viaCreate.json?.data?.id) extraUserIds.push(viaCreate.json.data.id);
+    assert.equal(viaCreate.status, 403, `create owner after bootstrap: ${JSON.stringify(viaCreate.json)}`);
+    const viaPatch = await call('PATCH', `/api/users/${b.id}`, { token: t, body: { role: 'company_owner' } });
+    assert.equal(viaPatch.status, 403, `patch owner after bootstrap: ${JSON.stringify(viaPatch.json)}`);
+    const revoke = await call('DELETE', `/api/role-assignments/${first.json.data.id}`, { token: t });
+    assert.equal(revoke.status, 403, `System Admin revoking an owner: ${JSON.stringify(revoke.json)}`);
+  });
+});
+
+check('F1: an ownerless company can also get its first owner through POST /users', async () => {
+  await withOwnerlessBeta('f1u', async ({ token: t, extraUserIds }) => {
+    const r = await call('POST', '/api/users', {
+      token: t,
+      body: { fullName: 'F1 First Owner', email: `f1u-owner-${suffix}@betallc.com`, password: 'password123', role: 'company_owner' },
+    });
+    if (r.json?.data?.id) extraUserIds.push(r.json.data.id);
+    assert.equal(r.status, 201, JSON.stringify(r.json));
+  });
+});
+
+check('F1: a System Admin cannot make anyone owner of a company that has one, via PATCH', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `f1p-admin-${suffix}@acme.com`, roleName: 'system_admin' });
+  const target = await makeUser({ companyId: acme.id, email: `f1p-target-${suffix}@acme.com`, roleName: 'team_member' });
+  const r = await call('PATCH', `/api/users/${target.id}`, { token: await login(admin.email), body: { role: 'company_owner' } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.match(r.json.message, /Only a Company Owner/);
+});
+
+check('A1: nobody can give System Admin to a Company Owner, or Company Owner to a System Admin', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `a1-admin-${suffix}@acme.com`, roleName: 'system_admin' });
+  const alice = await userByEmail('ceo@acme.com');
+  const sysRole = await systemRole(acme.id, 'system_admin');
+  const ownerRole = await systemRole(acme.id, 'company_owner');
+  const t = await login(admin.email);
+  try {
+    const toOwner = await call('POST', '/api/role-assignments', { token: t, body: { userId: alice.id, roleId: sysRole.id } });
+    assert.equal(toOwner.status, 403, `sysadmin to owner: ${JSON.stringify(toOwner.json)}`);
+    assert.match(toOwner.json.message, /both the Company Owner and System Admin/);
+    const toAdmin = await call('POST', '/api/role-assignments', { token: tokens.owner, body: { userId: admin.id, roleId: ownerRole.id } });
+    assert.equal(toAdmin.status, 403, `owner to sysadmin: ${JSON.stringify(toAdmin.json)}`);
+    assert.match(toAdmin.json.message, /both the Company Owner and System Admin/);
+  } finally {
+    // Without the fix the first grant succeeds and would leave the seeded owner resolving as System Admin.
+    await prisma.roleAssignment.deleteMany({ where: { userId: alice.id, roleId: sysRole.id } });
+  }
+});
+
+check('A1: replacing a System Admin primary role with Company Owner via PATCH is allowed', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `a1-swap-${suffix}@acme.com`, roleName: 'system_admin' });
+  try {
+    const r = await call('PATCH', `/api/users/${admin.id}`, { token: tokens.owner, body: { role: 'company_owner' } });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const held = (await activeAssignments(admin.id)).map((ra) => ra.role.name);
+    assert.deepEqual(held, ['company_owner']);
+  } finally {
+    // Don't leave Acme with an extra owner for tests that run after this one.
+    await prisma.roleAssignment.deleteMany({ where: { userId: admin.id } });
+  }
+});
+
 // ---------------------------------------------------------------- runner
 let failed = 0;
 try {

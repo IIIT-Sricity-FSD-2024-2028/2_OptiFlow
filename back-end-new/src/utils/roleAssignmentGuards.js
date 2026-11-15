@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma.js';
-import { BadRequestError } from './errors.js';
+import { BadRequestError, ForbiddenError } from './errors.js';
 import { normalizeRole, systemSlugOfRole } from './roles.js';
 
 export const SCOPE_TYPES = ['Company', 'Branch', 'Team', 'Project'];
@@ -70,6 +70,31 @@ export async function countActiveOwners(companyId, client = prisma) {
     distinct: ['userId'],
   });
   return rows.length;
+}
+
+/**
+ * Owner/System Admin grant rules, checked inside the company lock (pass the lock's tx as client).
+ * - A System Admin may grant Company Owner only while the company has no active owner. Sign-up
+ *   creates a System Admin, not an owner, so this is how such a company gets its first owner (F1).
+ * - Nobody may hold both roles: system_admin outranks company_owner when a user's role is
+ *   resolved, so the pair would silently strip the owner's rights (A1).
+ * ignoreAssignmentId: a row the same change revokes (a PATCH replacing the primary role).
+ */
+export async function assertOwnerAdminGrantRules({ companyId, callerRole, userId, grantingSlug, ignoreAssignmentId = null, client = prisma }) {
+  if (grantingSlug !== 'company_owner' && grantingSlug !== 'system_admin') return;
+
+  if (grantingSlug === 'company_owner' && callerRole !== 'company_owner' && (await countActiveOwners(companyId, client)) > 0) {
+    throw new ForbiddenError('Only a Company Owner can assign the Company Owner role');
+  }
+
+  const otherSlug = grantingSlug === 'company_owner' ? 'system_admin' : 'company_owner';
+  const held = await client.roleAssignment.findMany({
+    where: { companyId, userId, revokedAt: null, ...(ignoreAssignmentId ? { NOT: { id: ignoreAssignmentId } } : {}) },
+    include: { role: ROLE_WITH_TEMPLATE },
+  });
+  if (held.some((ra) => systemSlugOfRole(ra.role) === otherSlug)) {
+    throw new ForbiddenError('A user cannot hold both the Company Owner and System Admin roles');
+  }
 }
 
 /**
