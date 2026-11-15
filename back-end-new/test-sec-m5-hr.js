@@ -811,6 +811,24 @@ check('A1: replacing a System Admin primary role with Company Owner via PATCH is
   }
 });
 
+// ---------------------------------------------------------------- F16 notification read state
+check('F16: the notifications list reports isRead from the server read state', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `f16-${suffix}@acme.com`, roleName: 'team_member' });
+  const [first] = await Promise.all(['one', 'two'].map((n) =>
+    prisma.notification.create({ data: { companyId: acme.id, userId: u.id, title: `M5 ${suffix} f16 ${n}`, message: 'x', type: 'System' } })));
+  const t = await login(u.email);
+  const mark = await call('PATCH', `/api/notifications/${first.id}/read`, { token: t });
+  assert.equal(mark.status, 200, JSON.stringify(mark.json));
+  assert.equal(mark.json.data.isRead, true);
+  const r = await call('GET', '/api/notifications', { token: t });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const byId = Object.fromEntries(r.json.data.map((n) => [n.id, n]));
+  assert.equal(byId[first.id].isRead, true);
+  assert.ok(byId[first.id].readAt, 'readAt is still returned');
+  const other = r.json.data.find((n) => n.id !== first.id);
+  assert.equal(other.isRead, false);
+});
+
 // ---------------------------------------------------------------- runner
 let failed = 0;
 try {

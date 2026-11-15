@@ -6,6 +6,9 @@ import {
 } from '../utils/errors.js';
 import { validateRequired } from '../utils/validation.js';
 
+/** Adds isRead (derived from readAt), which the Notifications page and the Topbar bell read (F16). */
+const withIsRead = (n) => ({ ...n, isRead: n.readAt !== null });
+
 
 // ============================================================================
 // NOTIFICATIONS CONTROLLERS & ENDPOINTS
@@ -54,7 +57,7 @@ export async function listNotifications(req, res, next) {
 
     res.status(200).json({
       success: true,
-      data: notifications,
+      data: notifications.map(withIsRead),
     });
   } catch (err) {
     next(err);
@@ -132,7 +135,7 @@ export async function createNotification(req, res, next) {
     res.status(201).json({
       success: true,
       message: 'Notification created successfully',
-      data: notification,
+      data: withIsRead(notification),
     });
   } catch (err) {
     next(err);
@@ -172,7 +175,7 @@ export async function markNotificationAsRead(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Notification marked as read',
-      data: updated,
+      data: withIsRead(updated),
     });
   } catch (err) {
     next(err);
