@@ -359,7 +359,8 @@ async function findCompanyTeam(req, id) {
  * - Owner, System Admin, HR: any team of the company.
  * - Branch Manager: teams of their branch.
  * - Team Leader: only a team they lead.
- * - Project Manager: only teams that carry a project they were assigned (by someone else) to manage.
+ * Project Managers get no roster rights: a PM assignment can be created or moved by any PM through
+ * PATCH /projects, so it cannot be trusted here (F2).
  */
 async function assertMayManageMembers(req, team) {
   const { role, id: callerId } = req.user;
@@ -376,32 +377,6 @@ async function assertMayManageMembers(req, team) {
       select: { id: true },
     });
     if (!leads) throw new ForbiddenError('Team Leaders can only manage members of a team they lead');
-    return;
-  }
-
-  if (role === 'project_manager') {
-    // Only a Project Manager assignment granted by someone else counts (SEC-M5-16). Creating a
-    // project on a team, or naming yourself PM of it, must not hand you that team's roster.
-    const pmProjects = await prisma.roleAssignment.findMany({
-      where: {
-        userId: callerId,
-        revokedAt: null,
-        scopeType: 'Project',
-        OR: [{ grantedById: null }, { grantedById: { not: callerId } }],
-        role: { isSystem: true, OR: [{ roleTemplate: { slug: 'project_manager' } }, { name: 'project_manager' }] },
-      },
-      select: { scopeId: true },
-    });
-    const managesProject = await prisma.project.findFirst({
-      where: {
-        teamId: team.id,
-        companyId: req.user.companyId,
-        deletedAt: null,
-        id: { in: pmProjects.map((a) => a.scopeId) },
-      },
-      select: { id: true },
-    });
-    if (!managesProject) throw new ForbiddenError('Project Managers can only manage members of teams on projects they were assigned to manage');
     return;
   }
 

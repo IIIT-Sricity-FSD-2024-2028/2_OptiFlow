@@ -19,8 +19,9 @@ const router = Router();
 // "their projects". Branch Managers stay, limited to their branch by the controller.
 const TEAM_EDITORS = ['system_admin', 'company_owner', 'hr_manager', 'branch_manager'];
 // Who may reach the member endpoints; the controller narrows this further (SEC-M5-16):
-// Branch Managers to their branch, Team Leaders to a team they lead, PMs to teams on their projects.
-const MEMBER_EDITORS = ['system_admin', 'company_owner', 'hr_manager', 'branch_manager', 'project_manager', 'team_leader'];
+// Branch Managers to their branch, Team Leaders to a team they lead. Project Managers are not
+// included: their assignments can be moved through PATCH /projects, so they grant no roster rights (F2).
+const MEMBER_EDITORS = ['system_admin', 'company_owner', 'hr_manager', 'branch_manager', 'team_leader'];
 
 // Teams Routes
 router.get(['/teams', '/api/teams'], authenticate, listTeams);

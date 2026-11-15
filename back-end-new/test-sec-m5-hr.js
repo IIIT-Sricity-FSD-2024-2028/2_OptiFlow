@@ -395,7 +395,7 @@ check('M5-12: a leader with open tasks in the team cannot be removed', async () 
   }
 });
 
-check('M5-16: member endpoints respect branch, team-lead and PM scope', async () => {
+check('M5-16: member endpoints respect branch and team-lead scope; PMs are refused', async () => {
   const bm = await makeUser({ companyId: acme.id, email: `m5-bmwest-${suffix}@acme.com`, roleName: 'branch_manager', scopeType: 'Branch', scopeId: west.id });
   const target = await makeUser({ companyId: acme.id, email: `m5-scoped-${suffix}@acme.com`, roleName: 'team_member' });
   const bmToken = await login(bm.email);
@@ -403,10 +403,7 @@ check('M5-16: member endpoints respect branch, team-lead and PM scope', async ()
   assert.equal((await call('POST', `/api/teams/${teamCore.id}/members`, { token: bmToken, body: { userId: target.id } })).status, 403);
   // tl2 (Lucas) leads Sales, not Core.
   assert.equal((await call('POST', `/api/teams/${teamCore.id}/members`, { token: tokens.tl2, body: { userId: target.id } })).status, 403);
-  // Bob has no project on the Admin Support team.
-  const bob = await userByEmail('pm@acme.com');
-  const bobOnAdmin = await prisma.project.count({ where: { teamId: teamAdmin.id, createdById: bob.id, deletedAt: null } });
-  assert.equal(bobOnAdmin, 0, 'fixture assumption');
+  // PMs have no roster rights (F2).
   assert.equal((await call('POST', `/api/teams/${teamAdmin.id}/members`, { token: tokens.pm, body: { userId: target.id } })).status, 403);
   // Charlie (lead of Core) may add to Core and remove again.
   assert.equal((await call('POST', `/api/teams/${teamCore.id}/members`, { token: tokens.tl, body: { userId: target.id } })).status, 201);
@@ -548,7 +545,9 @@ check('M5-16: creating a project on a team (and naming yourself PM) does not giv
   }
 });
 
-check('M5-16: a PM assigned by someone else may manage that project team', async () => {
+// F2: a PM assignment can be created or moved by any PM through PATCH /projects (another member's
+// file), so it can no longer be trusted for roster rights. PMs never change team rosters.
+check('F2: a PM assigned by someone else still cannot change that project team roster', async () => {
   const bob = await userByEmail('pm@acme.com');
   const owner = await userByEmail('ceo@acme.com');
   const target = await makeUser({ companyId: acme.id, email: `m5-pmok-${suffix}@acme.com`, roleName: 'team_member' });
@@ -556,8 +555,16 @@ check('M5-16: a PM assigned by someone else may manage that project team', async
   const pmRole = await systemRole(acme.id, 'project_manager');
   const ra = await prisma.roleAssignment.create({ data: { companyId: acme.id, userId: bob.id, roleId: pmRole.id, scopeType: 'Project', scopeId: project.id, grantedById: owner.id } });
   try {
-    const r = await call('POST', `/api/teams/${teamAdmin.id}/members`, { token: tokens.pm, body: { userId: target.id } });
-    assert.equal(r.status, 201, JSON.stringify(r.json));
+    const add = await call('POST', `/api/teams/${teamAdmin.id}/members`, { token: tokens.pm, body: { userId: target.id } });
+    assert.equal(add.status, 403, `PM add: ${JSON.stringify(add.json)}`);
+    // HR still manages the roster; then the PM can neither change the role nor remove the member.
+    const hrAdd = await call('POST', `/api/teams/${teamAdmin.id}/members`, { token: tokens.hr, body: { userId: target.id } });
+    assert.equal(hrAdd.status, 201, `HR add: ${JSON.stringify(hrAdd.json)}`);
+    // 'Member' (not 'Lead'), so a regression here could not demote the team's real Lead.
+    const changeRole = await call('PATCH', `/api/teams/${teamAdmin.id}/members/${target.id}`, { token: tokens.pm, body: { role: 'Member' } });
+    assert.equal(changeRole.status, 403, `PM change role: ${JSON.stringify(changeRole.json)}`);
+    const remove = await call('DELETE', `/api/teams/${teamAdmin.id}/members/${target.id}`, { token: tokens.pm });
+    assert.equal(remove.status, 403, `PM remove: ${JSON.stringify(remove.json)}`);
   } finally {
     await prisma.teamMember.deleteMany({ where: { teamId: teamAdmin.id, userId: target.id } });
     await prisma.roleAssignment.delete({ where: { id: ra.id } });
