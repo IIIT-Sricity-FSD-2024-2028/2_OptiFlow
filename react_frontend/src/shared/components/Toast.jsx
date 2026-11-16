@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { registerToastHandler } from '../utils/toast';
 
 // WHY: Toasts deliver non-blocking feedback (saved changes, validation errors, API alerts).
 // A central ToastProvider + useToast hook gives all 9 roles an effortless imperative API:
@@ -86,6 +87,9 @@ export const ToastProvider = ({ children }) => {
     }
     return id;
   }, [removeToast]);
+
+  // Lets code outside React show toasts through the same provider (see shared/utils/toast.js).
+  useEffect(() => registerToastHandler({ addToast }), [addToast]);
 
   // Convenience methods matching the user spec: toast.success(msg), toast.error(msg)
   const api = {

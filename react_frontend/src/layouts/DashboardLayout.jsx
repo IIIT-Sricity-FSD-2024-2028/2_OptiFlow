@@ -1,13 +1,15 @@
 // 
 
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getNavForRole } from '../config/nav';
 import { Sidebar } from '../shared/components/Sidebar';
 import { Topbar } from '../shared/components/Topbar';
+import { ErrorBoundary } from '../shared/components/ErrorBoundary';
 
 export default function DashboardLayout() {
   const { user } = useAuth();
+  const location = useLocation();
   const navItems = getNavForRole(user?.role);
 
   return (
@@ -22,7 +24,10 @@ export default function DashboardLayout() {
 
         {/* Child Pages */}
         <main style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
-          <Outlet />
+          {/* A page that crashes shows an error here; the sidebar and top bar keep working. */}
+          <ErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
