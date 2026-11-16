@@ -48,6 +48,7 @@ const systemRole = (companyId, name) => prisma.role.findFirst({ where: { company
 
 let acme, beta, hq, west, teamCore, teamSales, teamAdmin;
 const createdUserIds = [];
+const createdBranchIds = [];
 
 /** Creates a user directly (password already "changed", so no forced change at login). */
 async function makeUser({ companyId, email, roleName, scopeType = 'Company', scopeId }) {
@@ -89,6 +90,27 @@ async function setup() {
 }
 
 async function teardown() {
+  // F20: audit rows about roles and users the run created that teardown cannot reach by target user
+  // (role deletions, and user creates whose target is nulled when the user is deleted). Every such
+  // label and email carries the run suffix. LOGIN rows of the seeded logins are kept: they are real logins.
+  const ours = { string_contains: String(suffix) };
+  // Guarded: if setup() failed before the companies were loaded, cleanup must not mask that error.
+  if (acme && beta) await prisma.systemAuditLog.deleteMany({
+    where: {
+      companyId: { in: [acme.id, beta.id] },
+      OR: [
+        { oldValue: { path: ['deletedRoleLabel'], ...ours } },
+        { newValue: { path: ['deletedRoleLabel'], ...ours } },
+        { newValue: { path: ['email'], ...ours } },
+      ],
+    },
+  }).catch((err) => console.warn('teardown: audit cleanup failed:', err.message));
+  if (createdBranchIds.length) {
+    const inBranch = { scopeType: 'Branch', scopeId: { in: createdBranchIds } };
+    await prisma.systemAuditLog.deleteMany({ where: { branchId: { in: createdBranchIds } } }).catch(() => {});
+    await prisma.roleAssignment.deleteMany({ where: inBranch }).catch(() => {});
+    await prisma.branch.deleteMany({ where: { id: { in: createdBranchIds } } }).catch(() => {});
+  }
   if (createdUserIds.length) {
     const q = { where: { userId: { in: createdUserIds } } };
     await prisma.notification.deleteMany(q).catch(() => {});
@@ -467,6 +489,7 @@ check('M5-08 (branches): changing the manager soft-revokes only the old Branch M
     assert.ok(rows.some((r) => r.userId === bystander.id && !r.revokedAt && r.role.name === 'team_member'), 'bystander untouched');
   } finally {
     await prisma.roleAssignment.deleteMany({ where: { scopeType: 'Branch', scopeId: branch.id } });
+    await prisma.systemAuditLog.deleteMany({ where: { branchId: branch.id } });
     await prisma.branch.delete({ where: { id: branch.id } });
   }
 });
@@ -827,6 +850,58 @@ check('F16: the notifications list reports isRead from the server read state', a
   assert.ok(byId[first.id].readAt, 'readAt is still returned');
   const other = r.json.data.find((n) => n.id !== first.id);
   assert.equal(other.isRead, false);
+});
+
+// ---------------------------------------------------------------- F3 / N1 role audit
+const auditEvents = async (where) =>
+  (await prisma.systemAuditLog.findMany({ where: { action: 'PERMISSION_CHANGE', ...where } }))
+    .map((r) => (r.newValue || r.oldValue)?.event).sort();
+
+check('N1: granting and revoking a role writes PERMISSION_CHANGE audit rows', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `n1-${suffix}@acme.com`, roleName: 'team_member' });
+  const co = await systemRole(acme.id, 'compliance_officer');
+  const c = await call('POST', '/api/role-assignments', { token: tokens.owner, body: { userId: u.id, roleId: co.id } });
+  assert.equal(c.status, 201, JSON.stringify(c.json));
+  assert.equal((await call('DELETE', `/api/role-assignments/${c.json.data.id}`, { token: tokens.owner })).status, 200);
+  assert.deepEqual(await auditEvents({ targetUserId: u.id }), ['ROLE_ASSIGNED', 'ROLE_REVOKED']);
+});
+
+check('F3: setting and changing a branch manager audits each grant and revoke', async () => {
+  const m1 = await makeUser({ companyId: acme.id, email: `f3-bm1-${suffix}@acme.com`, roleName: 'team_member' });
+  const m2 = await makeUser({ companyId: acme.id, email: `f3-bm2-${suffix}@acme.com`, roleName: 'team_member' });
+  const created = await call('POST', '/api/branches', { token: tokens.owner, body: { name: `F3 ${suffix}`, managerUserId: m1.id } });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  const branch = created.json.data;
+  createdBranchIds.push(branch.id);
+  const patch = await call('PATCH', `/api/branches/${branch.id}`, { token: tokens.owner, body: { name: branch.name, managerUserId: m2.id } });
+  assert.equal(patch.status, 200, JSON.stringify(patch.json));
+  assert.deepEqual(await auditEvents({ targetUserId: m1.id, branchId: branch.id }), ['ROLE_ASSIGNED', 'ROLE_REVOKED']);
+  assert.deepEqual(await auditEvents({ targetUserId: m2.id, branchId: branch.id }), ['ROLE_ASSIGNED']);
+  const row = await prisma.systemAuditLog.findFirst({ where: { targetUserId: m2.id, branchId: branch.id, action: 'PERMISSION_CHANGE' } });
+  assert.equal(row.performedById, (await userByEmail('ceo@acme.com')).id);
+  const bmRole = await systemRole(acme.id, 'branch_manager');
+  assert.deepEqual(row.newValue, { event: 'ROLE_ASSIGNED', userId: m2.id, roleId: bmRole.id, roleLabel: bmRole.label, scopeType: 'Branch', scopeId: branch.id });
+});
+
+check('N2: concurrent manager changes on one branch leave exactly one active Branch Manager', async () => {
+  const people = await Promise.all([1, 2, 3, 4].map((i) =>
+    makeUser({ companyId: acme.id, email: `n2-${i}-${suffix}@acme.com`, roleName: 'team_member' })));
+  const branch = await prisma.branch.create({ data: { companyId: acme.id, name: `N2 ${suffix}` } });
+  createdBranchIds.push(branch.id);
+  const rs = await Promise.all(people.map((p) =>
+    call('PATCH', `/api/branches/${branch.id}`, { token: tokens.owner, body: { name: branch.name, managerUserId: p.id } })));
+  assert.ok(rs.every((r) => r.status === 200), JSON.stringify(rs.map((r) => r.status)));
+  const active = await prisma.roleAssignment.count({ where: { scopeType: 'Branch', scopeId: branch.id, revokedAt: null, role: { name: 'branch_manager' } } });
+  assert.equal(active, 1);
+});
+
+check('N2: concurrent branch creates with managers do not deadlock', async () => {
+  const people = await Promise.all([1, 2, 3].map((i) =>
+    makeUser({ companyId: acme.id, email: `n2c-${i}-${suffix}@acme.com`, roleName: 'team_member' })));
+  const rs = await Promise.all(people.map((p, i) =>
+    call('POST', '/api/branches', { token: tokens.owner, body: { name: `N2c ${i} ${suffix}`, managerUserId: p.id } })));
+  rs.forEach((r) => r.json?.data?.id && createdBranchIds.push(r.json.data.id));
+  assert.deepEqual(rs.map((r) => r.status), [201, 201, 201], JSON.stringify(rs.map((r) => r.json?.message)));
 });
 
 // ---------------------------------------------------------------- runner

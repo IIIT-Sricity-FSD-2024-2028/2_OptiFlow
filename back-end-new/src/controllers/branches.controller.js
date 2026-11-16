@@ -3,7 +3,7 @@ import { NotFoundError, BadRequestError, ForbiddenError, ConflictError } from '.
 import { resolveEffectiveBranchId, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired } from '../utils/validation.js';
 import { ROLES } from '../utils/roles.js';
-import { assertWithinPlanLimit } from '../utils/planLimits.js';
+import { assertWithinPlanLimit, withCompanyLock } from '../utils/planLimits.js';
 import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 
 async function enrichBranchesWithManagers(branches, companyId) {
@@ -126,9 +126,13 @@ export async function getBranchById(req, res, next) {
  * - nobody can make themselves Branch Manager or remove their own Branch Manager role;
  * - only Branch Manager rows of this branch are touched, and they are soft-revoked, never
  *   rewritten in place or deleted.
+ * Takes the company row lock first, so two concurrent changes cannot both leave a manager.
+ * Returns the rows it revoked and granted, for the caller to audit after the transaction commits.
  */
 async function setBranchManager(tx, req, branchId, managerUserId) {
   const companyId = req.user.companyId;
+  const none = { revoked: [], granted: null, roleLabel: null };
+  await tx.$queryRaw`SELECT id FROM companies WHERE id = ${companyId} FOR UPDATE`;
   const bmRole = await tx.role.findFirst({
     where: {
       companyId,
@@ -136,7 +140,7 @@ async function setBranchManager(tx, req, branchId, managerUserId) {
       OR: [{ roleTemplate: { slug: 'branch_manager' } }, { name: 'branch_manager' }],
     },
   });
-  if (!bmRole) return;
+  if (!bmRole) return none;
 
   const newManagerId = managerUserId ? String(managerUserId) : null;
   if (newManagerId) {
@@ -156,7 +160,7 @@ async function setBranchManager(tx, req, branchId, managerUserId) {
     where: { companyId, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, revokedAt: null },
   });
   if (newManagerId && current.length === 1 && current[0].userId === newManagerId) {
-    return; // unchanged
+    return none; // unchanged
   }
   if (current.some((ra) => ra.userId === req.user.id)) {
     throw new ForbiddenError('You cannot remove your own Branch Manager role');
@@ -168,10 +172,35 @@ async function setBranchManager(tx, req, branchId, managerUserId) {
       data: { revokedAt: new Date() },
     });
   }
+  let granted = null;
   if (newManagerId) {
-    await tx.roleAssignment.create({
+    granted = await tx.roleAssignment.create({
       data: { companyId, userId: newManagerId, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, grantedById: req.user.id },
     });
+  }
+  return { revoked: current, granted, roleId: bmRole.id, roleLabel: bmRole.label };
+}
+
+/** One PERMISSION_CHANGE audit row per Branch Manager row revoked or granted by setBranchManager. */
+async function auditBranchManagerChange(req, branchId, { revoked, granted, roleId, roleLabel }) {
+  // Same payload shape as the role-assignments audit rows.
+  const scope = (userId) => ({ userId, roleId, roleLabel, scopeType: 'Branch', scopeId: branchId });
+  const entries = [
+    ...revoked.map((ra) => ({ targetUserId: ra.userId, oldValue: { event: 'ROLE_REVOKED', ...scope(ra.userId) } })),
+    ...(granted ? [{ targetUserId: granted.userId, newValue: { event: 'ROLE_ASSIGNED', ...scope(granted.userId) } }] : []),
+  ];
+  for (const entry of entries) {
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        branchId,
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        performedById: req.user.id,
+        ...entry,
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: Audit record logging during Branch Manager change:', auditErr.message);
+    }
   }
 }
 
@@ -187,7 +216,9 @@ export async function createBranch(req, res, next) {
 
     const managerUserId = body.managerUserId || body.managerId;
     // Branch and its manager are written together, so an invalid manager leaves no orphan branch.
-    const branch = await prisma.$transaction(async (tx) => {
+    // The company lock is taken before the insert: the insert's foreign-key lock on the company row
+    // would otherwise deadlock with setBranchManager's lock when two creates run at once.
+    const { branch, managerChange } = await withCompanyLock(req.user.companyId, async (tx) => {
       const created = await tx.branch.create({
         data: {
           name,
@@ -195,10 +226,8 @@ export async function createBranch(req, res, next) {
           companyId: req.user.companyId,
         },
       });
-      if (managerUserId) {
-        await setBranchManager(tx, req, created.id, managerUserId);
-      }
-      return created;
+      const change = managerUserId ? await setBranchManager(tx, req, created.id, managerUserId) : null;
+      return { branch: created, managerChange: change };
     });
 
     // Record audit log
@@ -212,6 +241,7 @@ export async function createBranch(req, res, next) {
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during branch creation:', auditErr.message);
     }
+    if (managerChange) await auditBranchManagerChange(req, branch.id, managerChange);
 
     const fullBranch = await prisma.branch.findUnique({ where: { id: branch.id }, include: BRANCH_LIST_INCLUDE });
     const [enriched] = await enrichBranchesWithManagers([fullBranch], req.user.companyId);
@@ -248,15 +278,14 @@ export async function updateBranch(req, res, next) {
     }
 
     const managerUserId = body.managerUserId !== undefined ? body.managerUserId : body.managerId;
-    const updated = await prisma.$transaction(async (tx) => {
-      if (managerUserId !== undefined) {
-        await setBranchManager(tx, req, id, managerUserId);
-      }
-      return tx.branch.update({
+    const { updated, managerChange } = await prisma.$transaction(async (tx) => {
+      const change = managerUserId !== undefined ? await setBranchManager(tx, req, id, managerUserId) : null;
+      const row = await tx.branch.update({
         where: { id },
         data: updateData,
         include: BRANCH_LIST_INCLUDE,
       });
+      return { updated: row, managerChange: change };
     });
 
     // Record audit log
@@ -271,6 +300,7 @@ export async function updateBranch(req, res, next) {
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during branch update:', auditErr.message);
     }
+    if (managerChange) await auditBranchManagerChange(req, id, managerChange);
 
     const [enrichedUpdated] = await enrichBranchesWithManagers([updated], req.user.companyId);
 

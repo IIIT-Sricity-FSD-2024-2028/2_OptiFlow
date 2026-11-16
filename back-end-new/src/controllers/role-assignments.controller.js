@@ -153,9 +153,11 @@ export async function createRoleAssignment(req, res, next) {
     try {
       await createSystemAuditLog({companyId,
         targetUserId: targetUser.id,
-        action: AUDIT_ACTIONS.ROLE_ASSIGNED,
+        // ROLE_ASSIGNED / ROLE_REVOKED are not accepted by utils/audit.js yet (hand-off H5), so role
+        // changes are recorded as PERMISSION_CHANGE with an `event`, which the HR Audit Logs page counts.
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
         performedById: req.user.id,
-        newValue: { userId: targetUser.id, roleId: role.id, roleLabel: role.label, scopeType, scopeId },
+        newValue: { event: 'ROLE_ASSIGNED', userId: targetUser.id, roleId: role.id, roleLabel: role.label, scopeType, scopeId },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during role assignment:', auditErr.message);
@@ -228,9 +230,9 @@ export async function deleteRoleAssignment(req, res, next) {
     try {
       await createSystemAuditLog({companyId,
         targetUserId: assignment.userId,
-        action: AUDIT_ACTIONS.ROLE_REVOKED,
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
         performedById: req.user.id,
-        oldValue: { userId: assignment.userId, roleLabel: assignment.role?.label, scopeType: assignment.scopeType, scopeId: assignment.scopeId },
+        oldValue: { event: 'ROLE_REVOKED', userId: assignment.userId, roleLabel: assignment.role?.label, scopeType: assignment.scopeType, scopeId: assignment.scopeId },
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during role revocation:', auditErr.message);
