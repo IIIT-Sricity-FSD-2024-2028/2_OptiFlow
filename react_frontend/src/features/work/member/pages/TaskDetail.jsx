@@ -23,20 +23,7 @@ import * as evidenceApi from '../../../../services/api/evidence';
 import * as complianceApi from '../../../../services/api/compliance';
 import * as usersApi from '../../../../services/api/users';
 import * as projectsApi from '../../../../services/api/projects';
-import {
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  Calendar,
-  FileText,
-  ArrowLeft,
-  Send,
-  ShieldAlert,
-  Check,
-  AlertOctagon,
-  UserCheck,
-  Mail,
-} from 'lucide-react';
+import { AlertTriangle, FileText, ShieldAlert } from 'lucide-react';
 
 export default function MemberTaskDetail() {
   const { id: taskId } = useParams();
@@ -154,28 +141,22 @@ export default function MemberTaskDetail() {
     };
   }, [taskId, user?.id]);
 
-  const handleSubtaskToggle = async (subId, completed) => {
-    try {
-      const nextStatus = completed ? 'Completed' : 'Active';
-      await subtasksApi.update(subId, { status: nextStatus });
-      setSubtasks((prev) =>
-        prev.map((st) => ((st.id || st.subtaskId) === subId ? { ...st, status: nextStatus } : st))
-      );
-    } catch (err) {
-      toast.error('Could not update subtask. Please try again.');
-    }
+  // Members submit their own subtasks (In_Review); the Team Lead approves them.
+  const markSubmitted = (ids) => {
+    const idSet = new Set(ids.map(String));
+    setSubtasks((prev) =>
+      prev.map((st) => (idSet.has(String(st.id || st.subtaskId)) ? { ...st, status: 'In_Review' } : st))
+    );
+    setSubmittedSubtaskIds((prev) => new Set([...prev, ...ids]));
   };
 
   const handleSubtaskSubmit = async (subId) => {
     try {
       await subtasksApi.update(subId, { status: 'In_Review' });
-      setSubtasks((prev) =>
-        prev.map((st) => ((st.id || st.subtaskId) === subId ? { ...st, status: 'In_Review' } : st))
-      );
-      setSubmittedSubtaskIds((prev) => new Set([...prev, subId]));
-      toast.success('Subtask submitted to Team Lead for review!');
+      markSubmitted([subId]);
+      toast.success('Subtask sent to your Team Lead for review.');
     } catch (err) {
-      toast.error('Could not submit subtask for review.');
+      toast.error(err.message || 'Could not submit subtask for review.');
     }
   };
 
@@ -184,7 +165,7 @@ export default function MemberTaskDetail() {
       await evidenceApi.remove(evId);
       setEvidenceList((prev) => prev.filter((e) => e.id !== evId));
       toast.success('Evidence removed.');
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete evidence.');
     }
   };
@@ -217,6 +198,13 @@ export default function MemberTaskDetail() {
 
   const isCompleted = String(task.status || '').toLowerCase().includes('complete');
   const isPendingReview = ['pending_tl_review', 'in_review', 'under_review'].includes(String(task.status || '').toLowerCase());
+  const subtaskStatus = (st) => String(st.status || '').toLowerCase();
+  const mySubtasks = subtasks.filter((st) => String(st.assignedToId || st.assignedTo?.id || '') === String(user?.id || ''));
+  const myOpenSubtaskIds = mySubtasks
+    .filter((st) => !subtaskStatus(st).includes('complete') && !subtaskStatus(st).includes('review') && subtaskStatus(st) !== 'cancelled')
+    .map((st) => st.id || st.subtaskId);
+  const myWorkInReview = mySubtasks.length > 0 && myOpenSubtaskIds.length === 0
+    && mySubtasks.some((st) => subtaskStatus(st).includes('review'));
   const dueDate = task.dueDate || task.deadline;
   const isOverdue = dueDate && new Date(dueDate) < new Date() && !isCompleted;
   const managerName = manager?.fullName || manager?.name || 'Team Lead';
@@ -249,6 +237,8 @@ export default function MemberTaskDetail() {
         isOverdue={isOverdue}
         isCompleted={isCompleted}
         isPendingReview={isPendingReview}
+        myWorkInReview={myWorkInReview}
+        hasOpenSubtasks={myOpenSubtaskIds.length > 0}
         isLockedOut={isLockedOut}
         isEvidenceRequired={isEvidenceRequired}
         complianceRule={complianceRule}
@@ -293,9 +283,9 @@ export default function MemberTaskDetail() {
           <SubtaskList
             subtasks={subtasks}
             readOnly={isCompleted}
-            onStatusToggle={handleSubtaskToggle}
             onSubmitSubtask={!isCompleted ? handleSubtaskSubmit : undefined}
             submittedSubtaskIds={submittedSubtaskIds}
+            currentUserId={user?.id}
           />
 
           {/* Reusable EvidenceUploadCard */}
@@ -373,11 +363,12 @@ export default function MemberTaskDetail() {
         onClose={() => setIsSubmitModalOpen(false)}
         taskId={taskId}
         taskTitle={task?.title}
+        subtaskIds={myOpenSubtaskIds}
         isEvidenceRequired={isEvidenceRequired}
         complianceRuleName={complianceRule?.name}
         existingEvidenceCount={evidenceList.length}
-        onSuccess={(newEv) => {
-          setTask((prev) => ({ ...prev, status: 'In_Review' }));
+        onSuccess={(newEv, submittedIds = []) => {
+          markSubmitted(submittedIds);
           if (newEv) {
             setEvidenceList((prev) => [newEv, ...prev]);
           }
@@ -390,7 +381,6 @@ export default function MemberTaskDetail() {
         taskId={taskId}
         projectId={task?.projectId || project?.id}
         managerId={manager?.id || task?.createdById}
-        onSuccess={() => setTask((prev) => ({ ...prev, status: 'Blocked' }))}
       />
 
       <RequestExtensionModal

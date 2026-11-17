@@ -18,6 +18,7 @@ import { cleanDatabase } from "./seeds/cleanup.js";
 import { seedPlatform, seedSupportAccess } from "./seeds/platform.js";
 import { seedHr } from "./seeds/hr.js";
 import { seedWork } from "./seeds/work.js";
+import { seedWorkDemo } from "./seeds/workDemo.js";
 import { seedProcess } from "./seeds/process.js";
 import { seedCompliance } from "./seeds/compliance.js";
 
@@ -35,6 +36,7 @@ async function main() {
   const platform = await seedPlatform(prisma, { passwordHash });
   const hr = await seedHr(prisma, { passwordHash, ...platform });
   const work = await seedWork(prisma, { ...platform, ...hr });
+  await seedWorkDemo(prisma);
   await seedProcess(prisma, { ...platform, ...hr, ...work });
 
   console.log("Generating massive mock data for demo dashboards...");

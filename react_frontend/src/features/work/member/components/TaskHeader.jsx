@@ -24,6 +24,8 @@ export default function TaskHeader({
   isOverdue,
   isCompleted,
   isPendingReview,
+  myWorkInReview = false,
+  hasOpenSubtasks = true,
   isLockedOut,
   isEvidenceRequired,
   complianceRule,
@@ -153,14 +155,14 @@ export default function TaskHeader({
                   Report Blocker
                 </Button>
 
-                {isPendingReview ? (
+                {myWorkInReview || (isPendingReview && !hasOpenSubtasks) ? (
                   <Button
                     variant="primary"
                     size="sm"
                     disabled
                     className="text-xs font-semibold opacity-75 cursor-not-allowed bg-purple-600 hover:bg-purple-600"
                   >
-                    <Clock className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    <Clock className="w-3.5 h-3.5 mr-1.5" />
                     Under Review by Lead
                   </Button>
                 ) : isLockedOut ? (
@@ -179,6 +181,8 @@ export default function TaskHeader({
                     variant="primary"
                     size="sm"
                     onClick={onOpenSubmitModal}
+                    disabled={!hasOpenSubtasks}
+                    title={!hasOpenSubtasks ? 'You have no open subtasks on this task' : undefined}
                     className="text-xs font-semibold flex items-center gap-1.5 shadow-xs"
                   >
                     <Send className="w-3.5 h-3.5" />
