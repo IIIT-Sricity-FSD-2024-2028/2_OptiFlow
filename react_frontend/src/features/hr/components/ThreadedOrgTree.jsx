@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search,
@@ -47,23 +47,32 @@ function ThreadCommentNode({
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  useEffect(() => {
+  // Follow "expand all" / "collapse all" whenever it (or the depth) changes, including the
+  // first render. Adjusted during render instead of in an effect.
+  const expandKey = `${globalExpandState}|${depth}`;
+  const [appliedExpandKey, setAppliedExpandKey] = useState(null);
+  if (appliedExpandKey !== expandKey) {
+    setAppliedExpandKey(expandKey);
     if (globalExpandState === "all_expanded") {
       setIsCollapsed(false);
     } else if (globalExpandState === "all_collapsed") {
       setIsCollapsed(depth > 0);
     }
-  }, [globalExpandState, depth]);
+  }
 
   const descendantMatch = useMemo(() => {
     return searchQuery ? hasMatchingDescendant(node, searchQuery) : false;
   }, [node, searchQuery]);
 
-  useEffect(() => {
+  // Open the branch when a search matches something below it.
+  const searchKey = `${searchQuery}|${descendantMatch}`;
+  const [appliedSearchKey, setAppliedSearchKey] = useState(null);
+  if (appliedSearchKey !== searchKey) {
+    setAppliedSearchKey(searchKey);
     if (searchQuery && descendantMatch) {
       setIsCollapsed(false);
     }
-  }, [searchQuery, descendantMatch]);
+  }
 
   const isSelfMatch = searchQuery ? matchesFilter(node, searchQuery) : false;
   const directReports = node.children ? node.children.length : 0;

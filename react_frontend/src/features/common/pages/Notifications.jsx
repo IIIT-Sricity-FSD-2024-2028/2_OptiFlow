@@ -1,18 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../../services/api/client';
 import { Button } from '../../../shared/components/Button';
-import { Badge } from '../../../shared/components/Badge';
 import { Loader } from '../../../shared/components/Loader';
-import { 
-  Bell, 
-  CheckCheck, 
-  ShieldAlert, 
-  Shield, 
-  ExternalLink, 
-  Filter, 
-  CheckCircle2, 
-  Clock 
+import {
+  Bell,
+  CheckCheck,
+  ShieldAlert,
+  Shield,
+  ExternalLink,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 
 export default function Notifications() {
@@ -36,6 +34,7 @@ export default function Notifications() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
     fetchNotifications();
   }, [fetchNotifications]);
 
@@ -45,7 +44,9 @@ export default function Notifications() {
       setMarkingId(id);
       await apiClient(`/notifications/${id}/read`, { method: 'PATCH' });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch (_) {} finally {
+    } catch {
+      // Best effort: the item stays unread and the next refresh shows the server state.
+    } finally {
       setMarkingId(null);
     }
   };
@@ -54,7 +55,9 @@ export default function Notifications() {
     try {
       await apiClient('/notifications/read-all', { method: 'POST' });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch (_) {}
+    } catch {
+      // Best effort: items stay unread and the next refresh shows the server state.
+    }
   };
 
   const handleNavigate = async (n) => {
@@ -164,7 +167,6 @@ export default function Notifications() {
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 shadow-xs overflow-hidden">
           {filteredList.map((n) => {
             const isUrgent = n.priority === 'URGENT';
-            const isHigh = n.priority === 'HIGH';
             const isCompliance = n.category === 'COMPLIANCE';
 
             return (

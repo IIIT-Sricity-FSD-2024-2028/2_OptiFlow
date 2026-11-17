@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ZoomIn, ZoomOut, Building2, Users, User } from "lucide-react";
 import styles from "./OrgTree.module.css";
