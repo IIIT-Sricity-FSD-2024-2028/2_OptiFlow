@@ -1,5 +1,5 @@
 import { ForbiddenError } from './errors.js';
-import { normalizeRole } from './roles.js';
+import { normalizeRole, ROLES } from './roles.js';
 
 /**
  * Checks if the request user is a Company Owner / CEO (global company access)
@@ -16,12 +16,49 @@ export function isBranchManager(user) {
   return user?.role === 'branch_manager';
 }
 
+// Matches no row; used when a Branch Manager has no Branch-scoped assignment.
+const NO_BRANCH = '__no_branch_scope__';
+
+/**
+ * Returns the branch id a Branch Manager is scoped to, or null when the
+ * active assignment is not Branch-scoped.
+ */
+export function getBranchScopeId(user) {
+  if (!user?.scopeId || user.scopeType !== 'Branch') return null;
+  return user.scopeId;
+}
+
+/**
+ * Project ids a Project Manager holds through Project-scoped role assignments.
+ */
+export async function getAssignedProjectIds(prisma, user) {
+  const role = normalizeRole(user?.role);
+  if (!user?.id || (role !== 'project_manager' && role !== 'pm')) return [];
+  const assignments = await prisma.roleAssignment.findMany({
+    where: {
+      userId: user.id,
+      companyId: user.companyId,
+      revokedAt: null,
+      scopeType: 'Project',
+      role: {
+        OR: [
+          { label: ROLES.PROJECT_MANAGER },
+          { name: 'project_manager' },
+          { roleTemplate: { slug: 'project_manager' } },
+        ],
+      },
+    },
+    select: { scopeId: true },
+  });
+  return assignments.map(({ scopeId }) => scopeId);
+}
+
 /**
  * Resolves the effective branch filter for scoped queries
  */
 export function resolveEffectiveBranchId({ user, branchId }) {
   if (isBranchManager(user)) {
-    return user?.scopeId || '__unassigned_branch_sentinel__';
+    return getBranchScopeId(user) || NO_BRANCH;
   }
   if (isCompanyOwner(user) && branchId) {
     return branchId;
@@ -98,7 +135,7 @@ export function buildProjectListWhere({ companyId, branchId, user, assignedProje
 /**
  * Builds Prisma where filter for Task queries with strict role-based scope
  */
-export function buildTaskListWhere({ companyId, branchId, user }) {
+export function buildTaskListWhere({ companyId, branchId, user, assignedProjectIds = [] }) {
   const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
 
   const where = {
@@ -126,9 +163,16 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
 
   const role = normalizeRole(user?.role);
 
-  // Project Managers only see parent tasks they created.
+  // Project Managers see tasks they created and tasks in projects they run.
   if (role === 'project_manager' || role === 'pm') {
-    return { ...where, createdById: user.id };
+    return {
+      ...where,
+      OR: [
+        { createdById: user.id },
+        { project: { createdById: user.id } },
+        ...(assignedProjectIds.length > 0 ? [{ projectId: { in: assignedProjectIds } }] : []),
+      ],
+    };
   }
 
   // Team Leads only see parent tasks allocated directly to them.
@@ -153,10 +197,12 @@ export function buildTaskListWhere({ companyId, branchId, user }) {
 /**
  * Builds Prisma where filter for subtasks according to the caller's task role.
  */
-export function buildSubtaskListWhere({ companyId, branchId, user }) {
+export function buildSubtaskListWhere({ companyId, branchId, user, assignedProjectIds = [] }) {
+  // Subtasks of a soft-deleted parent task are hidden for every role.
   const where = {
     deletedAt: null,
     ...(companyId ? { companyId } : {}),
+    task: { is: { deletedAt: null } },
   };
   const effectiveBranchId = resolveEffectiveBranchId({ user, branchId });
   const role = normalizeRole(user?.role);
@@ -189,7 +235,19 @@ export function buildSubtaskListWhere({ companyId, branchId, user }) {
   }
 
   if ((role === 'project_manager' || role === 'pm') && user?.id) {
-    return { ...where, task: { is: { createdById: user.id, deletedAt: null } } };
+    return {
+      ...where,
+      task: {
+        is: {
+          deletedAt: null,
+          OR: [
+            { createdById: user.id },
+            { project: { createdById: user.id } },
+            ...(assignedProjectIds.length > 0 ? [{ projectId: { in: assignedProjectIds } }] : []),
+          ],
+        },
+      },
+    };
   }
 
   return where;
@@ -241,7 +299,7 @@ export async function buildBranchViolationWhere(prisma, companyId, branchId) {
  */
 export function resolveMetricsBranchId(user, queryBranchId) {
   if (isBranchManager(user)) {
-    return user?.scopeId || '__unassigned_branch_sentinel__';
+    return getBranchScopeId(user) || NO_BRANCH;
   }
   if (isCompanyOwner(user) && queryBranchId) {
     return queryBranchId;
@@ -255,10 +313,11 @@ export function resolveMetricsBranchId(user, queryBranchId) {
  */
 export function assertBranchManagerScope(user, branchId, action = 'access this resource') {
   if (!isBranchManager(user)) return;
-  if (!user?.scopeId) {
+  const scopedBranchId = getBranchScopeId(user);
+  if (!scopedBranchId) {
     throw new ForbiddenError(`Branch Manager is not assigned to a valid branch scope.`);
   }
-  if (!branchId || branchId !== user.scopeId) {
+  if (!branchId || branchId !== scopedBranchId) {
     throw new ForbiddenError(`Branch Managers can only ${action} within their assigned branch.`);
   }
 }

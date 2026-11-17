@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function StatusBadge({ status, isOverdue = false, className = '' }) {
   const s = String(status || 'Pending').replace(/_/g, ' ');

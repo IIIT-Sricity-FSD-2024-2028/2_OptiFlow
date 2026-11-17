@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listInstances, deleteInstance } from '../../../services/api/process';
+import { PATHS } from '../../../app/paths';
 import { Table } from '../../../shared/components/Table';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
@@ -141,7 +142,7 @@ export default function ProcessAdminInstances() {
           <Button
             variant="secondary"
             className="text-xs py-1 px-2.5"
-            onClick={() => navigate(`/process-admin/instances/${row.id}`)}
+            onClick={() => navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', row.id))}
           >
             Inspect & Action
           </Button>

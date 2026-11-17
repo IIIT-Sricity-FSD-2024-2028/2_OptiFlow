@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Button } from '../../../shared/components/Button';
-import { Input, Select, FormField } from '../../../shared/components/FormField';
+import { Select, FormField } from '../../../shared/components/FormField';
 
 export function EscalationForm({
   taskId,

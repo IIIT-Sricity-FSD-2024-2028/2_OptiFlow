@@ -149,13 +149,13 @@ export default function ProcessAdminInstanceDetail() {
               Abort / Cancel Instance
             </Button>
           )}
-          {(instance.status === 'Draft' || instance.status === 'Cancelled') && (
+          {instance.status === 'Draft' && (
             <Button
               variant="primary"
               className="text-xs py-1.5 px-3"
               onClick={() => handleManualStatusChange('Active')}
             >
-              Resume / Start Instance
+              Start Instance
             </Button>
           )}
         </div>
@@ -277,7 +277,7 @@ export default function ProcessAdminInstanceDetail() {
                   </div>
 
                   {/* Step Action Buttons (Only available for Pending active steps or Process Admin override) */}
-                  {instance.status === 'Active' && isPending && (
+                  {instance.status === 'Active' && isPending && isCurrent && (
                     <div className="flex items-center gap-2 pt-2 sm:pt-0 shrink-0">
                       <Button
                         variant="secondary"

@@ -134,7 +134,7 @@ async function runArchivePlanTests() {
       headers: { Authorization: `Bearer ${token}` },
     });
     const listActiveData = await listActiveRes.json();
-    const activeItems = listActiveData.data;
+    const activeItems = listActiveData.data.items;
     assert.ok(
       !activeItems.some((p) => p.id === createdPlanId),
       'Archived plan must not appear in isActive=true query'
@@ -144,7 +144,7 @@ async function runArchivePlanTests() {
       headers: { Authorization: `Bearer ${token}` },
     });
     const listAllData = await listAllRes.json();
-    const allItems = listAllData.data;
+    const allItems = listAllData.data.items;
     assert.ok(
       allItems.some((p) => p.id === createdPlanId && p.isActive === false),
       'Archived plan must appear in complete list with isActive=false'

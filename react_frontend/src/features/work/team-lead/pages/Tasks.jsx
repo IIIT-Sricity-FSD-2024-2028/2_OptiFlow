@@ -14,7 +14,6 @@ import {
   Search, 
   X, 
   RotateCcw,
-  Layers
 } from 'lucide-react';
 import * as tasksApi from '../../../../services/api/tasks';
 import * as projectsApi from '../../../../services/api/projects';
@@ -37,7 +36,8 @@ export default function TeamLeadTasks() {
 
   // Search & filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(selectedProjectParam);
+  // The project filter lives in the URL (?projectId=), so it is read, not copied into state.
+  const selectedProjectId = selectedProjectParam;
 
   useEffect(() => {
     let mounted = true;
@@ -82,10 +82,6 @@ export default function TeamLeadTasks() {
     };
   }, []);
 
-  useEffect(() => {
-    setSelectedProjectId(selectedProjectParam);
-  }, [selectedProjectParam]);
-
   const handleTabChange = (filterKey) => {
     const nextParams = new URLSearchParams(searchParams);
     if (filterKey === 'all') {
@@ -98,7 +94,6 @@ export default function TeamLeadTasks() {
   };
 
   const handleProjectFilterChange = (projectId) => {
-    setSelectedProjectId(projectId);
     const nextParams = new URLSearchParams(searchParams);
     if (projectId === 'all') {
       nextParams.delete('projectId');

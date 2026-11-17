@@ -6,7 +6,7 @@ import { ROLES } from '../../roles';
 
 // It uses <Outlet /> to render the nested child routes if the user is allowed in.
 export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionNotice } = useAuth();
   const location = useLocation();
 
   // If AuthContext is still checking sessionStorage, don't redirect yet
@@ -17,7 +17,8 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
   // 1. Not logged in at all? Kick to login page.
   if (!user) {
     // Both standard and platform admins use the unified login page now
-    return <Navigate to={PATHS.PUBLIC.LOGIN} replace />;
+    const to = sessionNotice ? `${PATHS.PUBLIC.LOGIN}?reason=${sessionNotice}` : PATHS.PUBLIC.LOGIN;
+    return <Navigate to={to} replace />;
   }
 
   const isPlatformUser = Boolean(user.isPlatform || user.role === ROLES.PLATFORM_ADMIN);

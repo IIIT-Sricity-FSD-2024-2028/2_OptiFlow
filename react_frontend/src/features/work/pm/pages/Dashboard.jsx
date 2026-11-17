@@ -15,7 +15,6 @@ import {
   Clock, 
   FileCheck,
   ChevronRight,
-  TrendingUp
 } from 'lucide-react';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as projectsApi from '../../../../services/api/projects';
