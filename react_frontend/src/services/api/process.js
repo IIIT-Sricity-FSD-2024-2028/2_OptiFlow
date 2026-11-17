@@ -6,7 +6,7 @@ export const getTemplate = (id) => apiClient(`/api/process-templates/${id}`);
 export const createTemplate = (data) => apiClient('/api/process-templates', { method: 'POST', body: data });
 export const updateTemplate = (id, data) => apiClient(`/api/process-templates/${id}`, { method: 'PATCH', body: data });
 export const deleteTemplate = (id) => apiClient(`/api/process-templates/${id}`, { method: 'DELETE' });
-export const addTemplateStep = (templateId, data) => apiClient(`/api/processes/templates/${templateId}/steps`, { method: 'POST', body: data });
+export const addTemplateStep = (templateId, data) => apiClient(`/api/process-templates/${templateId}/steps`, { method: 'POST', body: data });
 
 // Instances
 export const listInstances = (params) => {
