@@ -9,8 +9,10 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
-    include: ['test/**/*.test.{js,jsx}'],
-    setupFiles: ['./test/setup.js'],
+    include: ['test/**/*.test.{js,jsx}', 'src/**/*.test.{js,jsx}'],
+    setupFiles: ['./test/setup.js', './src/test/setup.js'],
+    css: false,
+    restoreMocks: true,
   },
   resolve: {
     alias: {
