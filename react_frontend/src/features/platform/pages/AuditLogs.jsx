@@ -10,7 +10,6 @@ export default function PlatformAuditLogs() {
   const {
     logs, total, page, setPage, pageSize,
     q, setQ, action, setAction,
-    entityType, setEntityType,
     datePreset, setDatePreset,
     startDate, setStartDate,
     endDate, setEndDate,

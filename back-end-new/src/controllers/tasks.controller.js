@@ -17,7 +17,7 @@ import {
   getBranchScopeId,
 } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
-import { evaluateTaskTransition } from '../services/compliance.service.js';
+import { evaluateTaskTransition, recordViolationOnce } from '../services/compliance.service.js';
 import { assertCanManageProject } from './projects.controller.js';
 
 
@@ -624,32 +624,15 @@ export async function updateTask(req, res, next) {
         // 1. Auto-generate Violations in the Database
         const violationObjects = [];
         for (const rule of evaluation.failedRules) {
-          // Create violation if one doesn't exist for this specific entity and rule
-          // In a real app we might want to check if an open violation already exists
-          const existingViolation = await prisma.complianceViolation.findFirst({
-            where: {
-              ruleId: rule.id,
-              entityType: 'Task',
-              entityId: id,
-              status: 'Open'
-            }
+          // One active violation per rule and task (also enforced by a unique index).
+          const { violation } = await recordViolationOnce(prisma, {
+            companyId: req.user.companyId,
+            ruleId: rule.id,
+            entityType: 'Task',
+            entityId: id,
+            severity: rule.severity || 'Medium',
           });
-
-          if (!existingViolation) {
-            const v = await prisma.complianceViolation.create({
-              data: {
-                companyId: req.user.companyId,
-                ruleId: rule.id,
-                entityType: 'Task',
-                entityId: id,
-                status: 'Open',
-                severity: rule.severity || 'Medium'
-              }
-            });
-            violationObjects.push(v);
-          } else {
-            violationObjects.push(existingViolation);
-          }
+          violationObjects.push(violation);
 
           // 2. Cross-Module Escalation: Ensure an active Escalation exists for PM visibility
           const existingEscalation = await prisma.escalation.findFirst({
@@ -724,8 +707,7 @@ export async function updateTask(req, res, next) {
           },
           include: { rule: true },
         });
-        // TODO(SEC-M3-24): switch to rule.ruleType once SEC-M1-13 adds it.
-        for (const violation of violations.filter((item) => item.rule?.name?.toLowerCase().includes('overdue'))) {
+        for (const violation of violations.filter((item) => item.rule?.ruleType === 'Overdue')) {
           const resolutionRemarks = `Deadline extended to ${task.dueDate.toISOString().slice(0, 10)}. Reason: ${deadlineExtensionReason}`;
           await transaction.complianceViolation.update({
             where: { id: violation.id },

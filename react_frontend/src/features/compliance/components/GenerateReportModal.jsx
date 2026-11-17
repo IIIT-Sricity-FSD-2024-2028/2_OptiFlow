@@ -120,7 +120,6 @@ export const GenerateReportModal = ({ isOpen, onClose }) => {
       const typeObj = reportTypes.find((t) => t.id === selectedType) || reportTypes[0];
       const projectObj = projects.find((p) => String(p.id) === String(selectedProjectId));
       const projLabel = projectObj ? projectObj.name : 'All Projects';
-      const formatUpper = exportFormat.toUpperCase();
       const safeTitle = `${typeObj.name} — ${projLabel}`.toLowerCase().replace(/[^a-z0-9]/gi, '_');
       const isCsv = exportFormat === 'csv';
       const isXlsx = exportFormat === 'xlsx';

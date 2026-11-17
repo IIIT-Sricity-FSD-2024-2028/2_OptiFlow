@@ -52,6 +52,7 @@ export async function seedCompliance(prisma: PrismaClient, ctx: PlatformResult &
       companyId: acmeCorp.id,
       name: "No Overdue Tasks Allowed",
       description: "Any task past its due date will trigger a compliance violation.",
+      ruleType: "Overdue",
       severity: Severity.Medium,
       categoryId: categoryOperations.id,
       isActive: true,

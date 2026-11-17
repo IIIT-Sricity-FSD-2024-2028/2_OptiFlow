@@ -30,7 +30,6 @@ export const Topbar = ({ title }) => {
   // Notification State
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loadingNotifs, setLoadingNotifs] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -77,7 +76,9 @@ export const Topbar = ({ title }) => {
       await apiClient('/notifications/read-all', { method: 'POST' });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
-    } catch (_) {}
+    } catch (_) {
+      // best effort: the list refreshes on the next poll
+    }
   };
 
   const handleNotificationClick = async (n) => {
@@ -87,7 +88,9 @@ export const Topbar = ({ title }) => {
         setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, isRead: true } : item));
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
-    } catch (_) {}
+    } catch (_) {
+      // best effort: navigation continues even if marking as read failed
+    }
 
     setIsNotifOpen(false);
     if (n.linkUrl) {
@@ -202,7 +205,6 @@ export const Topbar = ({ title }) => {
                 ) : (
                   notifications.slice(0, 10).map((n) => {
                     const isUrgent = n.priority === 'URGENT';
-                    const isHigh = n.priority === 'HIGH';
                     const isCompliance = n.category === 'COMPLIANCE';
 
                     return (

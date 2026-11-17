@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { PATHS } from "../../../app/paths";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { apiClient } from "../../../services/api/client";
 import { setSession } from "../../../services/auth/session";
 import {
@@ -58,7 +58,6 @@ export default function Register() {
   const [error, setError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [registrationComplete, setRegistrationComplete] = useState(false);
-  const navigate = useNavigate();
 
   // Generated workspace slug preview
   const workspaceSlug =

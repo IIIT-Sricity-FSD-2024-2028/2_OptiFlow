@@ -8,6 +8,7 @@ import {
   BadRequestError,
   ForbiddenError,
   ValidationError,
+  ConflictError,
 } from "../utils/errors.js";
 import { validateRequired, validateEnum } from "../utils/validation.js";
 import { ROLES, normalizeRole } from "../utils/roles.js";
@@ -171,6 +172,14 @@ export async function createComplianceViolation(req, res, next) {
 
     if (!rule) {
       throw new NotFoundError(`Compliance rule with ID ${ruleId} not found`);
+    }
+
+    const duplicate = await prisma.complianceViolation.findFirst({
+      where: { ruleId, entityType, entityId, status: { in: ["Open", "Under_Review"] } },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new ConflictError("An active violation already exists for this rule and record");
     }
 
     const newViolation = await prisma.complianceViolation.create({

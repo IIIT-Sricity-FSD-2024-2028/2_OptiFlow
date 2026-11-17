@@ -266,6 +266,60 @@ async function main() {
     });
   } catch (err) { console.error(err); process.exitCode = 1; }
 
+  console.log('\n--- Process visibility and compliance records ---');
+  try {
+    const tplv = await prisma.processTemplate.findFirst({ where: { companyId: f.company.id } })
+      || await prisma.processTemplate.create({ data: { companyId: f.company.id, name: `Vis ${stamp}`, createdById: users.pa.id } });
+    const bmRole = await prisma.role.findFirst({ where: { companyId: f.company.id, name: `branch_manager_${stamp}` } });
+    const branch = await prisma.branch.findFirst({ where: { companyId: f.company.id } });
+    const bm = await prisma.user.create({
+      data: { companyId: f.company.id, email: `bm_${stamp}@wf.test`, fullName: 'bm', passwordHash: 'x', passwordChangedAt: new Date(), isActive: true, tokenVersion: 1 },
+    });
+    await prisma.roleAssignment.create({ data: { companyId: f.company.id, userId: bm.id, roleId: bmRole.id, scopeType: 'Branch', scopeId: branch.id } });
+    users.bm = { ...bm, token: jwt.sign({ sub: bm.id, tokenVersion: 1 }, env.JWT_SECRET, { expiresIn: '2h' }) };
+    const otherBranch = await prisma.branch.create({ data: { companyId: f.company.id, name: `Other ${stamp}` } });
+    const otherTeam = await prisma.team.create({ data: { companyId: f.company.id, branchId: otherBranch.id, name: `Other team ${stamp}` } });
+    const otherProj = await prisma.project.create({ data: { companyId: f.company.id, teamId: otherTeam.id, name: 'Other proj', status: 'Active', createdById: users.pm.id } });
+    const mk = (projectId) => prisma.processInstance.create({ data: { companyId: f.company.id, templateId: tplv.id, projectId, status: 'Draft', title: 'Vis instance', initiatedById: users.pa.id } });
+    const iA = await mk(f.projA.id);
+    const iB = await mk(f.projB.id);
+    const iO = await mk(otherProj.id);
+    const seen = async (who) => (await call(who, 'GET', '/api/process-instances')).body.data.map((i) => i.id);
+
+    await check('compliance officer sees every instance', async () => {
+      const ids = await seen('co');
+      assert.ok([iA, iB, iO].every((i) => ids.includes(i.id)));
+    });
+    await check('branch manager sees their branch only', async () => {
+      const ids = await seen('bm');
+      assert.ok(ids.includes(iA.id) && ids.includes(iB.id));
+      assert.ok(!ids.includes(iO.id), 'other branch hidden');
+    });
+    await check('team lead sees their team projects only; member sees none', async () => {
+      const ids = await seen('tl1');
+      assert.ok(ids.includes(iA.id) && !ids.includes(iB.id) && !ids.includes(iO.id));
+      assert.equal((await seen('m1')).length, 0);
+    });
+
+    const rule = await prisma.complianceRule.create({
+      data: { companyId: f.company.id, name: `Quarterly hygiene ${stamp}`, description: 'd', severity: 'Medium', ruleType: 'Overdue' },
+    });
+    await check('rule type is stored and validated', async () => {
+      const bad = await call('owner', 'POST', '/api/compliance-rules', { name: 'x', description: 'y', ruleType: 'Nope' });
+      assert.equal(bad.status, 400);
+      assert.equal(rule.ruleType, 'Overdue');
+    });
+    await check('only one active violation per rule and entity', async () => {
+      const data = { companyId: f.company.id, ruleId: rule.id, entityType: 'Task', entityId: f.taskA.id, status: 'Open', severity: 'Medium' };
+      await prisma.complianceViolation.create({ data });
+      await assert.rejects(() => prisma.complianceViolation.create({ data }), (e) => e.code === 'P2002');
+      const dup = await call('co', 'POST', '/api/compliance-violations', { ruleId: rule.id, entityType: 'Task', entityId: f.taskA.id });
+      assert.equal(dup.status, 409);
+      await prisma.complianceViolation.updateMany({ where: { ruleId: rule.id }, data: { status: 'Resolved' } });
+      await prisma.complianceViolation.create({ data });
+    });
+  } catch (err) { console.error(err); process.exitCode = 1; }
+
   server.close();
   console.log(`\n${process.exitCode ? 'FAILED' : 'All'} ${passed} checks ${process.exitCode ? 'before the failure' : 'passed'}`);
   await prisma.$disconnect();

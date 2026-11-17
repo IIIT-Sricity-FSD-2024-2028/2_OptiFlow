@@ -7,8 +7,9 @@ import {
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
 import { ROLES, hasRole } from '../utils/roles.js';
 import { assertWithinPlanLimit } from '../utils/planLimits.js';
+import { isBranchManager, getBranchScopeId } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
-import { evaluateTaskTransition } from '../services/compliance.service.js';
+import { evaluateTaskTransition, recordViolationOnce } from '../services/compliance.service.js';
 
 
 const ALLOWED_STEP_TYPES = ['Approval', 'Input_Required', 'Automated_Task'];
@@ -31,6 +32,32 @@ export const PROCESS_ADMIN_ROLES = [
   ROLES.SYSTEM_ADMIN,
   ROLES.PROCESS_ADMIN,
 ];
+
+// Who sees which process instances: least privilege, with oversight roles.
+//  - Owner, System Admin, Process Admin, Project Manager and Platform Admin: everything.
+//  - Compliance Officer: everything (read-only audit view; every write route is role-gated).
+//  - Branch Manager: instances of projects in their branch.
+//  - Team Lead: instances of projects belonging to a team they are a member of.
+//  - Everyone: instances they started or hold a step in.
+// Returns a Prisma where fragment to merge into an instance filter (empty for "all").
+function processInstanceScope(user) {
+  if (hasRole(user.role, [...PROCESS_MANAGER_ROLES, ROLES.PLATFORM_ADMIN, ROLES.COMPLIANCE_OFFICER])) {
+    return {};
+  }
+  const own = [
+    { initiatedById: user.id },
+    { steps: { some: { assignedToId: user.id } } },
+    { steps: { some: { actionedById: user.id } } },
+  ];
+  if (isBranchManager(user)) {
+    const branchId = getBranchScopeId(user) || '__no_branch_scope__';
+    return { OR: [...own, { project: { team: { branchId } } }] };
+  }
+  if (hasRole(user.role, [ROLES.TEAM_LEAD])) {
+    return { OR: [...own, { project: { team: { teamMembers: { some: { userId: user.id } } } } }] };
+  }
+  return { OR: own };
+}
 
 // ============================================================================
 // SHARED RESOURCE INCLUDES (PRE-M4-01 / BD11)
@@ -733,29 +760,14 @@ export async function listInstances(req, res, next) {
   try {
     const { templateId, projectId } = req.query;
 
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const where = {
       companyId: req.user.companyId,
       ...(templateId ? { templateId: String(templateId) } : {}),
       ...(projectId ? { projectId: String(projectId) } : {}),
     };
 
-    // SEC-M4-08: Apply X2 scoping rule for regular team members
-    if (!isPrivileged) {
-      where.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(where, processInstanceScope(req.user));
 
     const instances = await prisma.processInstance.findMany({
       where,
@@ -778,28 +790,13 @@ export async function listInstances(req, res, next) {
  */
 export async function getInstance(req, res, next) {
   try {
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const where = {
       id: req.params.id,
       companyId: req.user.companyId,
     };
 
-    // SEC-M4-08: Apply X2 scoping rule for regular team members
-    if (!isPrivileged) {
-      where.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(where, processInstanceScope(req.user));
 
     const instance = await prisma.processInstance.findFirst({
       where,
@@ -1142,27 +1139,12 @@ export async function listSteps(req, res, next) {
   try {
     const { processInstanceId } = req.query;
 
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const instanceWhere = {
       companyId: req.user.companyId,
     };
 
-    // SEC-M4-08: Scope steps to accessible instances for members
-    if (!isPrivileged) {
-      instanceWhere.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(instanceWhere, processInstanceScope(req.user));
 
     const steps = await prisma.processInstanceStep.findMany({
       where: {
@@ -1187,27 +1169,12 @@ export async function listSteps(req, res, next) {
  */
 export async function getStep(req, res, next) {
   try {
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const instanceWhere = {
       companyId: req.user.companyId,
     };
 
-    // SEC-M4-08: Scope step to accessible instances for members
-    if (!isPrivileged) {
-      instanceWhere.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(instanceWhere, processInstanceScope(req.user));
 
     const step = await prisma.processInstanceStep.findFirst({
       where: {
@@ -1393,6 +1360,29 @@ export async function actionStep(req, res, next) {
         const complianceCheck = await evaluateTaskTransition(linkedTask.id, linkedTask, { status: 'Completed' });
         if (!complianceCheck.allowed) {
           const failedRuleNames = (complianceCheck.failedRules || []).map((r) => r.name).join(', ');
+          // Same as the task endpoints: a blocked approval is recorded, once per rule and task.
+          for (const rule of complianceCheck.failedRules || []) {
+            try {
+              const { violation, created } = await recordViolationOnce(prisma, {
+                companyId: req.user.companyId,
+                ruleId: rule.id,
+                entityType: 'Task',
+                entityId: linkedTask.id,
+                severity: rule.severity || 'Medium',
+              });
+              if (created) {
+                await createComplianceAuditLog({
+                  companyId: req.user.companyId,
+                  violationId: violation.id,
+                  action: AUDIT_ACTIONS.CREATE,
+                  performedById: req.user.id,
+                  newValue: { ruleId: rule.id, entityId: linkedTask.id, source: 'process_step_approval' },
+                });
+              }
+            } catch (recordErr) {
+              console.warn('[Compliance] Could not record violation for blocked step approval:', recordErr.message);
+            }
+          }
           const blockError = new ForbiddenError(
             `Cannot approve step: Linked task "${linkedTask.title}" failed compliance evaluation (${failedRuleNames || 'active compliance blocker'}). Required evidence or sign-off is missing.`
           );

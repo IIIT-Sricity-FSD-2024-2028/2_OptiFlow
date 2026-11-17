@@ -37,11 +37,11 @@ const THEMES = {
 export const Badge = ({
   value,
   children,
-  type = "status",
+  type: _type = "status",
   status,
   variant,
-  pulse = false,
-  dot = false,
+  pulse: _pulse = false,
+  dot: _dot = false,
   className = "",
   ...props
 }) => {
