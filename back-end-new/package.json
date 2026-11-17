@@ -7,11 +7,14 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "node test-step10.js && node test-contract-audit.js && node test-archive-plan.js",
-    "test:ci": "node scripts/setup-test-db.js && node test-step10.js && node test-contract-audit.js && node test-archive-plan.js",
+    "test": "node test-sec-m2-auth-platform.js && node test-step10.js && node test-contract-audit.js && node test-archive-plan.js && node test-audit-logs.js && node test-subscriptions-support-admins.js && node test-sec-m5-hr.js && node test-work-fixes.js && node scripts/audit/test-security-m4.js && node scripts/contract-audit/audit-runner.js",
+    "test:ci": "node scripts/setup-test-db.js && node test-sec-m2-auth-platform.js && node test-step10.js && node test-contract-audit.js && node test-archive-plan.js && node test-audit-logs.js && node test-subscriptions-support-admins.js && node test-sec-m5-hr.js && node test-work-fixes.js && node scripts/audit/test-security-m4.js && node scripts/contract-audit/audit-runner.js",
     "test:platform": "node test-sec-m2-auth-platform.js && node test-step10.js && node test-contract-audit.js && node test-archive-plan.js",
     "prisma:generate": "prisma generate",
-    "db:seed": "npx tsx prisma/seed.ts"
+    "db:seed": "npx tsx prisma/seed.ts",
+    "test:work": "node test-work-fixes.js",
+    "test:hr": "node test-sec-m5-hr.js",
+    "test:m4": "node scripts/audit/test-security-m4.js && node scripts/contract-audit/audit-runner.js"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

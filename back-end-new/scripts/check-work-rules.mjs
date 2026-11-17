@@ -2,6 +2,12 @@
 // Needs the server running and the default seed. Creates one throwaway project
 // (soft-deleted at the end). Usage: node scripts/check-work-rules.mjs
 const BASE = process.env.API_URL || 'http://localhost:5500/api';
+
+// This script logs in with the seed accounts and writes data; never point it at a shared server.
+if (!['localhost', '127.0.0.1'].includes(new URL(BASE).hostname) || process.env.NODE_ENV === 'production') {
+  console.error(`Refusing to run against ${BASE}: use a local server and the development seed.`);
+  process.exit(2);
+}
 const PASSWORD = 'password123'; // seed password for all test accounts
 
 async function call(token, method, path, body) {
@@ -36,7 +42,6 @@ const member = await login('employee@acme.com');
 const teams = (await call(ceo, 'GET', '/teams')).data?.data || [];
 const team = teams[0];
 const users = (await call(ceo, 'GET', '/users')).data?.data || [];
-const other = (await call(ceo, 'GET', '/users')).data; // shape check only
 const pmUser = users.find((u) => u.email === 'pm@acme.com');
 
 // SEC-M3-07: validation
@@ -60,16 +65,16 @@ const pmView = await call(pm, 'GET', `/projects/${project.id}`);
 expect('assigned PM can read project', pmView.status, 200);
 
 // SEC-M3-02: another PM cannot edit or delete it
-expect('other PM update -> 403/404', (await call(pm2, 'PATCH', `/projects/${project.id}`, { name: 'hijack' })).status, [403, 404]);
-expect('other PM delete -> 403/404', (await call(pm2, 'DELETE', `/projects/${project.id}`)).status, [403, 404]);
+expect('other PM update -> 403', (await call(pm2, 'PATCH', `/projects/${project.id}`, { name: 'hijack' })).status, 403);
+expect('other PM delete -> 403', (await call(pm2, 'DELETE', `/projects/${project.id}`)).status, 403);
 // SEC-M3-03: other PM cannot create tasks in it
-expect('other PM create task -> 403/404', (await call(pm2, 'POST', '/tasks', { title: 't', projectId: project.id })).status, [403, 404]);
+expect('other PM create task -> 403', (await call(pm2, 'POST', '/tasks', { title: 't', projectId: project.id })).status, 403);
 
 // Task flow
 const taskRes = await call(pm, 'POST', '/tasks', { title: 'scope check task', projectId: project.id, dueDate: 'nope' });
 expect('bad dueDate -> 400', taskRes.status, 400);
 const t = await call(pm, 'POST', '/tasks', { title: 'scope check task', projectId: project.id, status: 'Active' });
-expect('assigned PM create task -> 201 (or 400 if team has no single lead)', t.status, [201, 400]);
+expect('assigned PM create task -> 201', t.status, 201);
 const task = t.data?.data;
 
 // SEC-M3-23: the server notifies the assigned Team Lead (no browser-created notifications).
@@ -84,9 +89,9 @@ if (task) {
   expect('pmApproval from Active -> 400', (await call(pm, 'PATCH', `/tasks/${task.id}`, { status: 'Completed', pmApproval: true })).status, 400);
   // SEC-M3-13: due date change needs reason for non-managers (TL may not be assignee in this team)
   const tlChange = await call(tl, 'PATCH', `/tasks/${task.id}`, { dueDate: '2030-01-01' });
-  expect('TL due date change without reason -> 400/403/404', tlChange.status, [400, 403, 404]);
+  expect('TL due date change without reason -> 400', tlChange.status, 400);
   // SEC-M3-22: a member who is not the assignee cannot change the task
-  expect('member patch parent -> 403/404', (await call(member, 'PATCH', `/tasks/${task.id}`, { status: 'In_Review' })).status, [403, 404]);
+  expect('member patch parent -> 403', (await call(member, 'PATCH', `/tasks/${task.id}`, { status: 'In_Review' })).status, 403);
   // Deadlines: no past dates; subtask due on or before the task due date.
   const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
   expect('task dueDate yesterday -> 400', (await call(pm, 'POST', '/tasks', { title: 'past', projectId: project.id, dueDate: day(-1) })).status, 400);
@@ -102,7 +107,7 @@ if (task) {
 
   // SEC-M3-08: Team Lead cannot complete the parent task
   const tlComplete = await call(tl, 'PATCH', `/tasks/${task.id}`, { status: 'Completed' });
-  expect('TL completes parent -> 403/404', tlComplete.status, [403, 404]);
+  expect('TL completes parent -> 403', tlComplete.status, 403);
   // SEC-M3-19: member submits own subtask for review, cannot complete it
   const memberUser = users.find((u) => u.email === 'employee@acme.com');
   const mSub = await call(pm, 'POST', '/subtasks', { taskId: task.id, title: 'member st', status: 'Active', assignedToId: memberUser?.id });
@@ -122,7 +127,7 @@ if (task) {
   } else {
     console.log(`- member subtask checks skipped (${mSub.status} ${mSub.data?.message})`);
   }
-  const sub =await call(pm, 'POST', '/subtasks', { taskId: task.id, title: 'st', status: 'Completed' });
+  const sub = await call(pm, 'POST', '/subtasks', { taskId: task.id, title: 'st', status: 'Completed' });
   expect('subtask created Completed stamps completedAt', Boolean(sub.data?.data?.completedAt), true);
   await call(pm, 'DELETE', `/tasks/${task.id}`);
   expect('subtask hidden after parent delete', (await call(pm, 'GET', `/subtasks/${sub.data?.data?.id}`)).status, 404);
@@ -131,12 +136,18 @@ if (task) {
 // SEC-M3-21: member escalations are scoped
 const memberEsc = (await call(member, 'GET', '/escalations')).data?.data || [];
 const ceoEsc = (await call(ceo, 'GET', '/escalations')).data?.data || [];
-expect('member sees fewer escalations than owner', memberEsc.length <= ceoEsc.length, true);
+const memberId = users.find((u) => u.email === 'employee@acme.com')?.id;
+expect(
+  'member sees only escalations they raised or were sent',
+  memberEsc.every((e) => e.reportedById === memberId || e.targetManagerId === memberId),
+  true
+);
+expect('owner sees at least as many as the member', ceoEsc.length >= memberEsc.length, true);
 
 // SEC-M3-05: reassigning the PM revokes only the previous PM's access.
 const pm2User = users.find((u) => u.email === 'pm2@acme.com');
 expect('reassign PM to pm2 -> 200', (await call(ceo, 'PATCH', `/projects/${project.id}`, { projectManagerId: pm2User?.id })).status, 200);
-expect('previous PM can no longer edit -> 403/404', (await call(pm, 'PATCH', `/projects/${project.id}`, { description: 'old pm edit' })).status, [403, 404]);
+expect('previous PM can no longer edit -> 403', (await call(pm, 'PATCH', `/projects/${project.id}`, { description: 'old pm edit' })).status, 403);
 expect('new PM can edit -> 200', (await call(pm2, 'PATCH', `/projects/${project.id}`, { description: 'new pm edit' })).status, 200);
 
 // SEC-M3-06: a project with no PM shows none (no guessed company PM).
@@ -156,6 +167,5 @@ const audit = (await call(ceo, 'GET', '/audit-logs/process')).data;
 const auditRows = Array.isArray(audit) ? audit : audit?.data || audit?.logs || [];
 expect('project delete is audited', auditRows.some((row) => row.projectId === project.id && /delete/i.test(String(row.action))), true);
 
-void other;
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

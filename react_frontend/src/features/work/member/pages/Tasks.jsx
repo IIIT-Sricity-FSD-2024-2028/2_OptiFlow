@@ -21,7 +21,7 @@ export default function MemberTasks() {
   const [loading, setLoading] = useState(true);
   const [allTasks, setAllTasks] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [, setUsers] = useState([]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
