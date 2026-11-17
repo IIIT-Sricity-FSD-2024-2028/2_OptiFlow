@@ -4,6 +4,11 @@
 import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { assertTestDatabase } from './scripts/setup-test-db.js';
+
+// Refuses to run against anything but a database whose name contains "test".
+assertTestDatabase(process.env.DATABASE_URL);
+
 
 // The sign-up limiter would throttle the many registrations below; limiter behaviour has its own test.
 process.env.RATE_LIMIT_ENABLED = 'false';

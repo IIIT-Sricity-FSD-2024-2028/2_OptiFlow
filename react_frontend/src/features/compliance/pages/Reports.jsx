@@ -24,7 +24,7 @@ export default function ComplianceReports() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [downloadedFileName, setDownloadedFileName] = useState('');

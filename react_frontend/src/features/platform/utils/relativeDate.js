@@ -77,7 +77,7 @@ export function formatRelativeExpiry(dateInput) {
     const absHours = Math.abs(diffHours);
     const absDays = Math.abs(diffDays);
 
-    let text = `${absMin}m ago`;
+    let text;
     if (absMin >= 60 && absHours < 24) {
       text = `expired ${absHours}h ago`;
     } else if (absHours >= 24) {

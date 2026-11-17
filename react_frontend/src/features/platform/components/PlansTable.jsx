@@ -24,7 +24,7 @@ export function PlansTable({
   onUnarchive,
   onCreatePlan,
 }) {
-  const renderLimit = (value, icon) => {
+  const renderLimit = (value) => {
     if (value === null || value === undefined) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-gray-50 text-gray-700 border border-gray-100/60">

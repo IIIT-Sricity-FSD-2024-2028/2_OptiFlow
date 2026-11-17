@@ -11,6 +11,11 @@ import { prisma } from '../../src/config/prisma.js';
 import { createApp } from '../../src/app.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../src/config/env.js';
+import { assertTestDatabase } from '../setup-test-db.js';
+
+// Refuses to run against anything but a database whose name contains "test".
+assertTestDatabase(process.env.DATABASE_URL);
+
 
 // Parse command-line flags
 const args = process.argv.slice(2);

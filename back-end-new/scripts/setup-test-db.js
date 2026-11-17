@@ -14,7 +14,7 @@ export function assertTestDatabase(databaseUrl) {
 
   if (!dbName.includes('test')) {
     throw new Error(
-      `[SAFETY FATAL] Refusing to run tests! Database name "${dbName}" does NOT contain "test". URL: ${url}`
+      `[SAFETY FATAL] Refusing to run tests! Database name "${dbName}" does NOT contain "test". Host: ${parsed.host}`
     );
   }
 

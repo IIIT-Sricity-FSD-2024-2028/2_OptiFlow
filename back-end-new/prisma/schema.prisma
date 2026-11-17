@@ -626,6 +626,9 @@ model ComplianceRule {
   sourceTemplate   ComplianceRule?  @relation("ClonedFrom", fields: [sourceTemplateId], references: [id])
   clonedRules      ComplianceRule[] @relation("ClonedFrom")
 
+  // What the automated engine checks for this rule (never inferred from the rule's name).
+  ruleType         ComplianceRuleType @default(Custom)
+
   // The machine-readable evaluation criteria
   criteria         Json?    
   
@@ -692,6 +695,12 @@ model ComplianceViolation {
   @@index([entityType, entityId])
   @@index([ruleId])
   @@map("compliance_violations")
+}
+
+enum ComplianceRuleType {
+  Overdue
+  Unassigned
+  Custom
 }
 
 enum ViolationStatus {

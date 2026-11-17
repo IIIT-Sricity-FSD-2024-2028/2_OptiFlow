@@ -157,7 +157,6 @@ export default function ExecutiveAuditLogs() {
   const createCount = logs.filter((l) => l.action === 'CREATE').length;
   const updateCount = logs.filter((l) => ['UPDATE', 'EDIT'].includes(l.action)).length;
   const deleteCount = logs.filter((l) => l.action === 'DELETE').length;
-  const statusChangeCount = logs.filter((l) => l.action === 'STATUS_CHANGE').length;
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">

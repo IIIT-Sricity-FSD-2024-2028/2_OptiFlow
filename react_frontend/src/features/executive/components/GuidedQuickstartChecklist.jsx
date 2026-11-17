@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Building2,
   Users,
@@ -22,7 +22,6 @@ export function GuidedQuickstartChecklist({
   companyName = "your organization",
   companyId = "",
 }) {
-  const navigate = useNavigate();
   const storageKey = `optiflow_quickstart_dismissed_${companyId || "default"}`;
 
   const [isDismissed, setIsDismissed] = useState(() => {
@@ -113,14 +112,18 @@ export function GuidedQuickstartChecklist({
     setIsDismissed(true);
     try {
       localStorage.setItem(storageKey, "true");
-    } catch {}
+    } catch {
+      // storage unavailable (private mode): the dismissal just will not persist
+    }
   };
 
   const handleRestore = () => {
     setIsDismissed(false);
     try {
       localStorage.removeItem(storageKey);
-    } catch {}
+    } catch {
+      // storage unavailable (private mode)
+    }
   };
 
   // If user dismissed it, show a discreet reactivation chip

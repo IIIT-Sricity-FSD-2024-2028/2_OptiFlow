@@ -110,7 +110,6 @@ export default function ExecutiveProjects() {
   const activeCount = projects.filter((p) => p.status === 'Active').length;
   const completedCount = projects.filter((p) => p.status === 'Completed').length;
   const atRiskCount = projects.filter((p) => ['OnHold', 'On_Hold'].includes(p.status)).length;
-  const totalTasks = projects.reduce((s, p) => s + (p.tasks?.length || 0), 0);
 
   if (loading)
     return (

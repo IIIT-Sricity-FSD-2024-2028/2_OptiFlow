@@ -25,6 +25,7 @@ const ALLOWED_MIME_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 const ALLOWED_SEVERITIES = ["Low", "Medium", "High", "Critical"];
+const ALLOWED_RULE_TYPES = ["Overdue", "Unassigned", "Custom"];
 const ALLOWED_VIOLATION_STATUSES = [
   "Open",
   "Under_Review",
@@ -168,8 +169,11 @@ export async function createComplianceRule(req, res, next) {
           ? Boolean(body.is_active)
           : true;
 
+    const ruleType = body.ruleType || body.rule_type || "Custom";
+
     validateRequired({ name, description }, ["name", "description"]);
     validateEnum(severity, ALLOWED_SEVERITIES, "severity");
+    validateEnum(ruleType, ALLOWED_RULE_TYPES, "ruleType");
 
     if (categoryId) {
       const category = await prisma.complianceCategory.findFirst({
@@ -193,6 +197,7 @@ export async function createComplianceRule(req, res, next) {
         severity,
         categoryId,
         sourceTemplateId,
+        ruleType,
         isActive,
       },
       include: ruleListInclude(req.user.companyId),
@@ -249,6 +254,11 @@ export async function updateComplianceRule(req, res, next) {
     if (body.severity) {
       validateEnum(body.severity, ALLOWED_SEVERITIES, "severity");
       updateData.severity = body.severity;
+    }
+    if (body.ruleType !== undefined || body.rule_type !== undefined) {
+      const nextType = body.ruleType !== undefined ? body.ruleType : body.rule_type;
+      validateEnum(nextType, ALLOWED_RULE_TYPES, "ruleType");
+      updateData.ruleType = nextType;
     }
     if (body.isActive !== undefined) {
       updateData.isActive = Boolean(body.isActive);

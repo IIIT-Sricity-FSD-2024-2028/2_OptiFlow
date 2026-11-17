@@ -173,3 +173,32 @@ async function checkEvidenceForTask(taskId, requirement, rule) {
   // 3. Otherwise, any approved general task evidence qualifies
   return approvedEvidences.length > 0;
 }
+
+const ACTIVE_VIOLATION_STATUSES = ['Open', 'Under_Review'];
+
+/**
+ * Opens a violation for (rule, entity) unless an active one already exists. The database also
+ * enforces this with a partial unique index, so two concurrent callers cannot both insert.
+ * @param {object} client prisma client or transaction client
+ * @returns {Promise<{ violation: object, created: boolean }>}
+ */
+export async function recordViolationOnce(client, data) {
+  const where = {
+    ruleId: data.ruleId,
+    entityType: data.entityType,
+    entityId: data.entityId,
+    status: { in: ACTIVE_VIOLATION_STATUSES },
+  };
+  const existing = await client.complianceViolation.findFirst({ where });
+  if (existing) return { violation: existing, created: false };
+  try {
+    const violation = await client.complianceViolation.create({ data: { status: 'Open', ...data } });
+    return { violation, created: true };
+  } catch (err) {
+    if (err?.code === 'P2002') {
+      const winner = await client.complianceViolation.findFirst({ where });
+      if (winner) return { violation: winner, created: false };
+    }
+    throw err;
+  }
+}
