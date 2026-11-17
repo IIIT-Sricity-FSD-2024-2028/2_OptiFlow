@@ -4,6 +4,11 @@ import jwt from 'jsonwebtoken';
 import { prisma } from './src/config/prisma.js';
 import { createApp } from './src/app.js';
 import { env } from './src/config/env.js';
+import { assertTestDatabase } from './scripts/setup-test-db.js';
+
+// Refuses to run against anything but a database whose name contains "test".
+assertTestDatabase(process.env.DATABASE_URL);
+
 
 console.log('======================================================================');
 console.log('         RUNNING TEST-STEP10.JS (PLATFORM ADMIN SESSION HANDLING)      ');

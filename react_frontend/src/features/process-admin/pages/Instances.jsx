@@ -146,13 +146,15 @@ export default function ProcessAdminInstances() {
           >
             Inspect & Action
           </Button>
-          <Button
-            variant="danger"
-            className="text-xs py-1 px-2.5"
-            onClick={() => setInstanceToDelete(row)}
-          >
-            Delete
-          </Button>
+          {row.status !== 'Active' && (
+            <Button
+              variant="danger"
+              className="text-xs py-1 px-2.5"
+              onClick={() => setInstanceToDelete(row)}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       ),
     },

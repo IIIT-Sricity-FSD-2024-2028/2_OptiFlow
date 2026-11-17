@@ -689,6 +689,20 @@ export async function deleteProject(req, res, next) {
         where: { projectId: id, deletedAt: null },
         data: { deletedAt },
       }),
+      // Project-scoped role assignments end with the project (D-S9: revoke, do not delete).
+      prisma.roleAssignment.updateMany({
+        where: { companyId: req.user.companyId, scopeType: 'Project', scopeId: id, revokedAt: null },
+        data: { revokedAt: deletedAt },
+      }),
+      // Open escalations about the project or its tasks are closed with it.
+      prisma.escalation.updateMany({
+        where: {
+          companyId: req.user.companyId,
+          status: { in: ['Open', 'Reviewed'] },
+          OR: [{ projectId: id }, { task: { projectId: id } }],
+        },
+        data: { status: 'Closed', resolvedAt: deletedAt },
+      }),
       prisma.project.update({
         where: { id },
         data: { deletedAt },

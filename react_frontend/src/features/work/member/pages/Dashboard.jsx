@@ -31,10 +31,10 @@ export default function MemberDashboard() {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
   const [subtasks, setSubtasks] = useState([]);
-  const [escalations, setEscalations] = useState([]);
-  const [evidenceList, setEvidenceList] = useState([]);
+  const [, setEscalations] = useState([]);
+  const [, setEvidenceList] = useState([]);
   const [manager, setManager] = useState(null);
-  const [activeProject, setActiveProject] = useState(null);
+  const [, setActiveProject] = useState(null);
 
   // Blocker Modal state
   const [isBlockerModalOpen, setIsBlockerModalOpen] = useState(false);

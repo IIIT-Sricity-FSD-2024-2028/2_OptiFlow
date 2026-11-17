@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { PATHS } from '../../../app/paths';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { RoleRedirect } from '../../../app/guards/RoleRedirect';
 import { useToast } from '../../../shared/components/Toast';

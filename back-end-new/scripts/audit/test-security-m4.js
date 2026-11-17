@@ -3,6 +3,11 @@ import { prisma } from '../../src/config/prisma.js';
 import { createApp } from '../../src/app.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../src/config/env.js';
+import { assertTestDatabase } from '../setup-test-db.js';
+
+// Refuses to run against anything but a database whose name contains "test".
+assertTestDatabase(process.env.DATABASE_URL);
+
 
 console.log('======================================================================');
 console.log('         RUNNING TEST-SECURITY-M4.JS (MEMBER 4 SECURITY VERIFICATION)  ');
@@ -62,6 +67,7 @@ async function createTestFixtures() {
       email: `owner_${timestamp}@test.com`,
       fullName: 'Owner User',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },
@@ -82,6 +88,7 @@ async function createTestFixtures() {
       email: `admin_${timestamp}@test.com`,
       fullName: 'Process Admin User',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },
@@ -102,6 +109,7 @@ async function createTestFixtures() {
       email: `member1_${timestamp}@test.com`,
       fullName: 'Member User 1',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },
@@ -122,6 +130,7 @@ async function createTestFixtures() {
       email: `member2_${timestamp}@test.com`,
       fullName: 'Member User 2',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },

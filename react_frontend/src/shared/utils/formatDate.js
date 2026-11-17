@@ -56,7 +56,7 @@ export const formatAuditTimestamp = (dateValue) => {
   if (isSameDay) {
     const diffMs = now.getTime() - d.getTime();
     const diffSec = Math.max(0, Math.floor(diffMs / 1000));
-    let relative = '';
+    let relative;
 
     if (diffSec < 45) {
       relative = 'just now';

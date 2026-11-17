@@ -5,15 +5,20 @@ import {
   ForbiddenError,
 } from '../utils/errors.js';
 import { validateRequired, validateEnum, validateNumber } from '../utils/validation.js';
-import { ROLES, hasRole, normalizeRole } from '../utils/roles.js';
+import { ROLES, hasRole } from '../utils/roles.js';
 import { assertWithinPlanLimit } from '../utils/planLimits.js';
+import { isBranchManager, getBranchScopeId } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
-import { evaluateTaskTransition } from '../services/compliance.service.js';
+import { evaluateTaskTransition, recordViolationOnce } from '../services/compliance.service.js';
 
 
 const ALLOWED_STEP_TYPES = ['Approval', 'Input_Required', 'Automated_Task'];
 const ALLOWED_INSTANCE_STATUSES = ['Draft', 'Active', 'Completed', 'Cancelled', 'Rejected'];
 const ALLOWED_STEP_STATUSES = ['Pending', 'Approved', 'Rejected', 'Skipped'];
+// Statuses an action may move a step to.
+const ACTION_STEP_STATUSES = ['Approved', 'Rejected', 'Skipped'];
+// Linked tasks only follow a step while they are still in play.
+const OPEN_LINKED_TASK_STATUSES = ['Active', 'In_Review', 'Blocked'];
 
 export const PROCESS_MANAGER_ROLES = [
   ROLES.COMPANY_OWNER,
@@ -27,6 +32,32 @@ export const PROCESS_ADMIN_ROLES = [
   ROLES.SYSTEM_ADMIN,
   ROLES.PROCESS_ADMIN,
 ];
+
+// Who sees which process instances: least privilege, with oversight roles.
+//  - Owner, System Admin, Process Admin, Project Manager and Platform Admin: everything.
+//  - Compliance Officer: everything (read-only audit view; every write route is role-gated).
+//  - Branch Manager: instances of projects in their branch.
+//  - Team Lead: instances of projects belonging to a team they are a member of.
+//  - Everyone: instances they started or hold a step in.
+// Returns a Prisma where fragment to merge into an instance filter (empty for "all").
+function processInstanceScope(user) {
+  if (hasRole(user.role, [...PROCESS_MANAGER_ROLES, ROLES.PLATFORM_ADMIN, ROLES.COMPLIANCE_OFFICER])) {
+    return {};
+  }
+  const own = [
+    { initiatedById: user.id },
+    { steps: { some: { assignedToId: user.id } } },
+    { steps: { some: { actionedById: user.id } } },
+  ];
+  if (isBranchManager(user)) {
+    const branchId = getBranchScopeId(user) || '__no_branch_scope__';
+    return { OR: [...own, { project: { team: { branchId } } }] };
+  }
+  if (hasRole(user.role, [ROLES.TEAM_LEAD])) {
+    return { OR: [...own, { project: { team: { teamMembers: { some: { userId: user.id } } } } }] };
+  }
+  return { OR: own };
+}
 
 // ============================================================================
 // SHARED RESOURCE INCLUDES (PRE-M4-01 / BD11)
@@ -63,6 +94,72 @@ export const PROCESS_STEP_INCLUDE = {
   assignedTo: { select: { id: true, fullName: true, email: true } },
   actionedBy: { select: { id: true, fullName: true, email: true } },
 };
+
+// ============================================================================
+// TEMPLATE STEP INPUT HELPERS
+// ============================================================================
+
+/**
+ * Validates a steps array sent with a template: whole-number unique orders, loopback targets
+ * that exist and come earlier.
+ */
+function validateTemplateStepsInput(steps) {
+  const orders = new Set();
+  steps.forEach((s, i) => {
+    const order = typeof s === 'object' && s !== null ? Number(s.stepOrder ?? i + 1) : i + 1;
+    if (!Number.isInteger(order) || order < 1) {
+      throw new BadRequestError(`steps[${i}].stepOrder must be a whole number >= 1`);
+    }
+    if (orders.has(order)) {
+      throw new BadRequestError(`Two steps share stepOrder ${order}; each step needs its own position`);
+    }
+    orders.add(order);
+  });
+  steps.forEach((s, i) => {
+    if (typeof s !== 'object' || s === null) return;
+    if (s.onRejectGotoStepOrder === undefined || s.onRejectGotoStepOrder === null) return;
+    const current = Number(s.stepOrder ?? i + 1);
+    const target = Number(s.onRejectGotoStepOrder);
+    const label = s.name || `step ${i + 1}`;
+    if (!Number.isInteger(target)) {
+      throw new BadRequestError(`Reject loopback target on "${label}" must be a step order number`);
+    }
+    if (target >= current) {
+      throw new BadRequestError(
+        `Reject loopback target step order (${target}) on step "${label}" must precede current step order (${current})`
+      );
+    }
+    if (!orders.has(target)) {
+      throw new BadRequestError(`Reject loopback target step order (${target}) on "${label}" does not exist`);
+    }
+  });
+}
+
+/**
+ * True when the incoming steps describe exactly the steps the template already has
+ * (same ids, order, names, types and loopbacks). Lets a template with running instances
+ * be renamed or toggled without touching its steps.
+ */
+function templateStepsUnchanged(existingSteps, incoming) {
+  if (!Array.isArray(incoming) || incoming.length !== existingSteps.length) return false;
+  const byId = new Map(existingSteps.map((es) => [es.id, es]));
+  const byOrder = new Map(existingSteps.map((es) => [es.stepOrder, es]));
+  for (let i = 0; i < incoming.length; i++) {
+    const s = incoming[i];
+    if (typeof s !== 'object' || s === null || !s.id) return false;
+    const es = byId.get(s.id);
+    if (!es) return false;
+    if (Number(s.stepOrder ?? i + 1) !== es.stepOrder) return false;
+    if ((s.name || '').trim() !== (es.name || '').trim()) return false;
+    if ((s.stepType || 'Approval') !== es.stepType) return false;
+    let targetId = s.onRejectGotoStepId ?? null;
+    if (!targetId && s.onRejectGotoStepOrder != null) {
+      targetId = byOrder.get(Number(s.onRejectGotoStepOrder))?.id ?? null;
+    }
+    if ((targetId || null) !== (es.onRejectGotoStepId || null)) return false;
+  }
+  return true;
+}
 
 // ============================================================================
 // 1. PROCESS TEMPLATES ENDPOINTS
@@ -128,6 +225,7 @@ export async function createTemplate(req, res, next) {
     if (version !== undefined) {
       validateNumber(version, 'version');
     }
+    if (Array.isArray(steps)) validateTemplateStepsInput(steps);
 
     const formattedSteps = Array.isArray(steps)
       ? steps.map((s, index) => {
@@ -257,9 +355,17 @@ export async function updateTemplate(req, res, next) {
       throw new NotFoundError(`Process template ${req.params.id} not found`);
     }
 
-    const { name, version, isActive, steps } = req.body;
+    const { name, version, isActive, steps: incomingSteps } = req.body;
     if (version !== undefined) {
       validateNumber(version, 'version');
+    }
+    if (Array.isArray(incomingSteps)) validateTemplateStepsInput(incomingSteps);
+
+    // A save that sends the steps back unchanged is not a step edit.
+    let steps = incomingSteps;
+    if (Array.isArray(incomingSteps)) {
+      const currentSteps = await prisma.processTemplateStep.findMany({ where: { templateId: req.params.id } });
+      if (templateStepsUnchanged(currentSteps, incomingSteps)) steps = undefined;
     }
 
     if (isActive !== undefined && Boolean(isActive) && !existing.isActive) {
@@ -302,6 +408,15 @@ export async function updateTemplate(req, res, next) {
 
     const updated = await prisma.$transaction(async (tx) => {
       if (Array.isArray(steps)) {
+        // Re-check inside the transaction: an instance may have started since the first check.
+        const runningNow = await tx.processInstance.count({
+          where: { templateId: req.params.id, companyId: req.user.companyId, status: 'Active' },
+        });
+        if (runningNow > 0) {
+          throw new BadRequestError(
+            `Cannot modify steps on process template "${existing.name}": ${runningNow} active process instance(s) are currently running.`
+          );
+        }
         const existingSteps = await tx.processTemplateStep.findMany({
           where: { templateId: req.params.id },
         });
@@ -578,6 +693,16 @@ export async function addTemplateStep(req, res, next) {
     validateRequired(req.body, ['name', 'stepOrder']);
     validateNumber(req.body.stepOrder, 'stepOrder');
     const stepOrder = Number(req.body.stepOrder);
+    if (!Number.isInteger(stepOrder) || stepOrder < 1) {
+      throw new BadRequestError('stepOrder must be a whole number >= 1');
+    }
+    const orderTaken = await prisma.processTemplateStep.findFirst({
+      where: { templateId: req.params.id, stepOrder },
+      select: { id: true },
+    });
+    if (orderTaken) {
+      throw new BadRequestError(`Another step already uses stepOrder ${stepOrder}`);
+    }
 
     if (req.body.stepType) {
       validateEnum(req.body.stepType, ALLOWED_STEP_TYPES, 'stepType');
@@ -635,29 +760,14 @@ export async function listInstances(req, res, next) {
   try {
     const { templateId, projectId } = req.query;
 
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const where = {
       companyId: req.user.companyId,
       ...(templateId ? { templateId: String(templateId) } : {}),
       ...(projectId ? { projectId: String(projectId) } : {}),
     };
 
-    // SEC-M4-08: Apply X2 scoping rule for regular team members
-    if (!isPrivileged) {
-      where.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(where, processInstanceScope(req.user));
 
     const instances = await prisma.processInstance.findMany({
       where,
@@ -680,28 +790,13 @@ export async function listInstances(req, res, next) {
  */
 export async function getInstance(req, res, next) {
   try {
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const where = {
       id: req.params.id,
       companyId: req.user.companyId,
     };
 
-    // SEC-M4-08: Apply X2 scoping rule for regular team members
-    if (!isPrivileged) {
-      where.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(where, processInstanceScope(req.user));
 
     const instance = await prisma.processInstance.findFirst({
       where,
@@ -970,6 +1065,11 @@ export async function deleteInstance(req, res, next) {
       throw new NotFoundError(`Process instance ${req.params.id} not found`);
     }
 
+    // A running instance must be cancelled first so its tasks and approvers are not cut off mid-way.
+    if (existing.status === 'Active') {
+      throw new BadRequestError('Cannot delete an Active process instance; cancel it first');
+    }
+
     await prisma.$transaction(async (tx) => {
       // Find all step IDs in this instance
       const steps = await tx.processInstanceStep.findMany({
@@ -985,6 +1085,17 @@ export async function deleteInstance(req, res, next) {
           data: { processInstanceStepId: null },
         });
       }
+
+      // Files registered against the instance or its steps go with it.
+      await tx.attachment.deleteMany({
+        where: {
+          companyId: req.user.companyId,
+          OR: [
+            { entityType: 'ProcessInstance', entityId: req.params.id },
+            ...(stepIds.length > 0 ? [{ entityType: 'ProcessInstanceStep', entityId: { in: stepIds } }] : []),
+          ],
+        },
+      });
 
       await tx.processInstanceStep.deleteMany({
         where: { processInstanceId: req.params.id },
@@ -1028,27 +1139,12 @@ export async function listSteps(req, res, next) {
   try {
     const { processInstanceId } = req.query;
 
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const instanceWhere = {
       companyId: req.user.companyId,
     };
 
-    // SEC-M4-08: Scope steps to accessible instances for members
-    if (!isPrivileged) {
-      instanceWhere.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(instanceWhere, processInstanceScope(req.user));
 
     const steps = await prisma.processInstanceStep.findMany({
       where: {
@@ -1073,27 +1169,12 @@ export async function listSteps(req, res, next) {
  */
 export async function getStep(req, res, next) {
   try {
-    const isPrivileged = hasRole(req.user.role, [
-      ...PROCESS_MANAGER_ROLES,
-      ROLES.PLATFORM_ADMIN,
-      'company_owner',
-      'system_admin',
-      'process_admin',
-      'project_manager',
-    ]);
-
     const instanceWhere = {
       companyId: req.user.companyId,
     };
 
-    // SEC-M4-08: Scope step to accessible instances for members
-    if (!isPrivileged) {
-      instanceWhere.OR = [
-        { initiatedById: req.user.id },
-        { steps: { some: { assignedToId: req.user.id } } },
-        { steps: { some: { actionedById: req.user.id } } },
-      ];
-    }
+    // SEC-M4-08: scope by role (see processInstanceScope)
+    Object.assign(instanceWhere, processInstanceScope(req.user));
 
     const step = await prisma.processInstanceStep.findFirst({
       where: {
@@ -1230,9 +1311,9 @@ export async function actionStep(req, res, next) {
       throw new BadRequestError('Only the current active step in the workflow can be actioned');
     }
 
-    if (status) {
-      validateEnum(status, ALLOWED_STEP_STATUSES, 'status');
-    }
+    // An action must decide the step; "Pending" or a missing status is not an action.
+    validateRequired({ status }, ['status']);
+    validateEnum(status, ACTION_STEP_STATUSES, 'status');
 
     // Role check: If step assigned to another user, regular Team Member cannot action it.
     // If step is unassigned, only managers/admins can action it.
@@ -1258,7 +1339,7 @@ export async function actionStep(req, res, next) {
       }
     }
 
-    const newStatus = status || currentStep.status;
+    const newStatus = status;
 
     // SEC-M4-03: Evaluate compliance before marking linked tasks Completed
     if (newStatus === 'Approved') {
@@ -1279,9 +1360,35 @@ export async function actionStep(req, res, next) {
         const complianceCheck = await evaluateTaskTransition(linkedTask.id, linkedTask, { status: 'Completed' });
         if (!complianceCheck.allowed) {
           const failedRuleNames = (complianceCheck.failedRules || []).map((r) => r.name).join(', ');
-          throw new ForbiddenError(
+          // Same as the task endpoints: a blocked approval is recorded, once per rule and task.
+          for (const rule of complianceCheck.failedRules || []) {
+            try {
+              const { violation, created } = await recordViolationOnce(prisma, {
+                companyId: req.user.companyId,
+                ruleId: rule.id,
+                entityType: 'Task',
+                entityId: linkedTask.id,
+                severity: rule.severity || 'Medium',
+              });
+              if (created) {
+                await createComplianceAuditLog({
+                  companyId: req.user.companyId,
+                  violationId: violation.id,
+                  action: AUDIT_ACTIONS.CREATE,
+                  performedById: req.user.id,
+                  newValue: { ruleId: rule.id, entityId: linkedTask.id, source: 'process_step_approval' },
+                });
+              }
+            } catch (recordErr) {
+              console.warn('[Compliance] Could not record violation for blocked step approval:', recordErr.message);
+            }
+          }
+          const blockError = new ForbiddenError(
             `Cannot approve step: Linked task "${linkedTask.title}" failed compliance evaluation (${failedRuleNames || 'active compliance blocker'}). Required evidence or sign-off is missing.`
           );
+          // Same machine-readable code the task endpoints use, so the frontend shows the block.
+          blockError.code = 'COMPLIANCE_BLOCK';
+          throw blockError;
         }
       }
     }
@@ -1311,28 +1418,31 @@ export async function actionStep(req, res, next) {
       });
 
       // Synchronize linked Project Tasks
+      // Only tasks still in play follow the step (never revive Draft / Cancelled / Completed).
+      // D-S5: a step approved by its assignee only sends the task for review; a manager's
+      // approval is the final sign-off that completes it (compliance was checked above).
+      const linkedTaskWhere = {
+        processInstanceStepId: currentStep.id,
+        companyId: req.user.companyId,
+        deletedAt: null,
+        status: { in: OPEN_LINKED_TASK_STATUSES },
+      };
       if (newStatus === 'Approved') {
-        await tx.task.updateMany({
-          where: {
-            processInstanceStepId: currentStep.id,
-            companyId: req.user.companyId,
-            deletedAt: null,
-          },
-          data: {
-            status: 'Completed',
-            completedAt: new Date(),
-          },
-        });
+        if (isOwnerOrManager) {
+          await tx.task.updateMany({
+            where: linkedTaskWhere,
+            data: { status: 'Completed', completedAt: new Date() },
+          });
+        } else {
+          await tx.task.updateMany({
+            where: { ...linkedTaskWhere, status: { in: ['Active', 'Blocked'] } },
+            data: { status: 'In_Review' },
+          });
+        }
       } else if (newStatus === 'Rejected') {
         await tx.task.updateMany({
-          where: {
-            processInstanceStepId: currentStep.id,
-            companyId: req.user.companyId,
-            deletedAt: null,
-          },
-          data: {
-            status: 'Blocked',
-          },
+          where: { ...linkedTaskWhere, status: { in: ['Active', 'In_Review'] } },
+          data: { status: 'Blocked' },
         });
       }
 

@@ -189,7 +189,7 @@ export function AuditLogDetailModal({ isOpen, onClose, log }) {
               })}
               
               {/* Show deleted keys if any */}
-              {filteredOldKeys.filter(k => !log.newValue?.hasOwnProperty(k)).map((key) => (
+              {filteredOldKeys.filter(k => !Object.prototype.hasOwnProperty.call(log.newValue || {}, k)).map((key) => (
                 <li key={key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200/90 shadow-2xs">
                   <span className="text-sm font-semibold text-slate-800 capitalize sm:w-1/3">
                     {formatKeyLabel(key)}

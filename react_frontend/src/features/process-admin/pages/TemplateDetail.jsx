@@ -284,7 +284,7 @@ export default function ProcessAdminTemplateDetail() {
           <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs flex items-center gap-2">
             <span className="font-bold">Notice:</span>
             <span>
-              This blueprint has active running instances. Modifying, reordering, or removing steps is locked (SEC-M4-04). To alter steps, complete or cancel all active instances first, or save a new version.
+              This blueprint has active running instances. Modifying, reordering, or removing steps is locked (SEC-M4-04). To alter steps, complete or cancel all active instances first. You can still rename the template or switch it on or off.
             </span>
           </div>
         )}
@@ -375,6 +375,7 @@ export default function ProcessAdminTemplateDetail() {
                           value={step.name}
                           onChange={(e) => handleStepChange(index, 'name', e.target.value)}
                           placeholder="E.g., Department Manager Sign-off"
+                          disabled={hasActiveInstances}
                         />
                       </FormField>
                     </div>
@@ -385,6 +386,7 @@ export default function ProcessAdminTemplateDetail() {
                         <Select
                           value={step.stepType}
                           onChange={(e) => handleStepChange(index, 'stepType', e.target.value)}
+                          disabled={hasActiveInstances}
                         >
                           {STEP_TYPES.map((st) => (
                             <option key={st.value} value={st.value}>
@@ -410,7 +412,7 @@ export default function ProcessAdminTemplateDetail() {
                           onChange={(e) =>
                             handleStepChange(index, 'onRejectGotoStepId', e.target.value || null)
                           }
-                          disabled={priorSteps.length === 0}
+                          disabled={priorSteps.length === 0 || hasActiveInstances}
                         >
                           <option value="">Abort & Mark Instance Rejected</option>
                           {priorSteps.map((p, pIdx) => (

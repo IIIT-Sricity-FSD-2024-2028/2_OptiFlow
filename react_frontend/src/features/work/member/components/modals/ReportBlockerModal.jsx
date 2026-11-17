@@ -74,7 +74,9 @@ export function ReportBlockerModal({
         if (actualTaskId) {
           await tasksApi.update(actualTaskId, { status: 'Blocked' });
         }
-      } catch (_) {}
+      } catch {
+        // The blocker is already logged; a failed status change is not fatal.
+      }
 
       toast.success('Blocker logged and leadership alerted.');
       onSuccess?.(finalTaskId);

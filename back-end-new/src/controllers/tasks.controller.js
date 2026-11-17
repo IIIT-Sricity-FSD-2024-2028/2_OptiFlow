@@ -17,7 +17,7 @@ import {
   getBranchScopeId,
 } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
-import { evaluateTaskTransition } from '../services/compliance.service.js';
+import { evaluateTaskTransition, recordViolationOnce } from '../services/compliance.service.js';
 import { assertCanManageProject } from './projects.controller.js';
 
 
@@ -29,6 +29,8 @@ const OPEN_PROJECT_STATUSES = ['Planning', 'Active'];
 const CLOSED_TASK_STATUSES = ['Completed', 'Cancelled'];
 // Statuses a Team Member may set on their own work (D-S5).
 const MEMBER_SETTABLE_STATUSES = ['Active', 'In_Review', 'Blocked'];
+// Team Leads move a task up to In_Review; Draft, Cancelled and Completed are manager actions (D-S5).
+const LEAD_SETTABLE_STATUSES = ['Active', 'In_Review', 'Blocked'];
 
 const TEAM_LEAD_ROLE_FILTER = {
   OR: [
@@ -526,6 +528,9 @@ export async function updateTask(req, res, next) {
     if (body.description !== undefined) updateData.description = body.description;
     if (body.status) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');
+      if (isTeamLead && !canApprove && body.status !== existing.status && !LEAD_SETTABLE_STATUSES.includes(body.status)) {
+        throw new ForbiddenError(`Team Leads cannot set a task to ${body.status}; submit it for review and the Project Manager decides`);
+      }
       // D-S5: only the PM (or a manager) approves a parent task.
       if (body.status === 'Completed' && body.status !== existing.status && !canApprove) {
         throw new ForbiddenError('Only the Project Manager can mark this task Completed; submit it for review instead');
@@ -619,32 +624,15 @@ export async function updateTask(req, res, next) {
         // 1. Auto-generate Violations in the Database
         const violationObjects = [];
         for (const rule of evaluation.failedRules) {
-          // Create violation if one doesn't exist for this specific entity and rule
-          // In a real app we might want to check if an open violation already exists
-          const existingViolation = await prisma.complianceViolation.findFirst({
-            where: {
-              ruleId: rule.id,
-              entityType: 'Task',
-              entityId: id,
-              status: 'Open'
-            }
+          // One active violation per rule and task (also enforced by a unique index).
+          const { violation } = await recordViolationOnce(prisma, {
+            companyId: req.user.companyId,
+            ruleId: rule.id,
+            entityType: 'Task',
+            entityId: id,
+            severity: rule.severity || 'Medium',
           });
-
-          if (!existingViolation) {
-            const v = await prisma.complianceViolation.create({
-              data: {
-                companyId: req.user.companyId,
-                ruleId: rule.id,
-                entityType: 'Task',
-                entityId: id,
-                status: 'Open',
-                severity: rule.severity || 'Medium'
-              }
-            });
-            violationObjects.push(v);
-          } else {
-            violationObjects.push(existingViolation);
-          }
+          violationObjects.push(violation);
 
           // 2. Cross-Module Escalation: Ensure an active Escalation exists for PM visibility
           const existingEscalation = await prisma.escalation.findFirst({
@@ -719,8 +707,7 @@ export async function updateTask(req, res, next) {
           },
           include: { rule: true },
         });
-        // TODO(SEC-M3-24): switch to rule.ruleType once SEC-M1-13 adds it.
-        for (const violation of violations.filter((item) => item.rule?.name?.toLowerCase().includes('overdue'))) {
+        for (const violation of violations.filter((item) => item.rule?.ruleType === 'Overdue')) {
           const resolutionRemarks = `Deadline extended to ${task.dueDate.toISOString().slice(0, 10)}. Reason: ${deadlineExtensionReason}`;
           await transaction.complianceViolation.update({
             where: { id: violation.id },
@@ -1004,15 +991,17 @@ export async function createSubtask(req, res, next) {
         );
       }
 
-      // Team Leads may assign to themselves, direct reports or members of the project team.
+      // Anyone below Owner / System Admin may assign only to themselves, the task's Team Lead,
+      // their direct reports or members of the project team.
       const inProjectTeam = Array.isArray(assignee.teamMembers) && assignee.teamMembers.length > 0;
       if (
-        isTeamLeadRole(req.user) &&
+        !isCompanyAdmin(req.user) &&
         assignee.id !== req.user.id &&
+        assignee.id !== parentTask.assignedToId &&
         assignee.managerUserId !== req.user.id &&
         !inProjectTeam
       ) {
-        throw new ForbiddenError('Team Leads can assign subtasks only to themselves or their team members');
+        throw new ForbiddenError('Subtasks can be assigned only to members of the project team');
       }
     }
 
@@ -1073,6 +1062,9 @@ export async function updateSubtask(req, res, next) {
       if (body.status && !MEMBER_SETTABLE_STATUSES.includes(body.status)) {
         throw new ForbiddenError('Submit the subtask for review; your Team Lead completes it');
       }
+      if (body.status && existing.status === 'Completed' && body.status !== 'Completed') {
+        throw new ForbiddenError('An approved subtask cannot be reopened by the member');
+      }
     }
 
     const updateData = {};
@@ -1120,9 +1112,9 @@ export async function updateSubtask(req, res, next) {
 
     if (existing.assignedToId && existing.assignedToId !== req.user.id && updateData.status && updateData.status !== existing.status) {
       if (updateData.status === 'Completed') {
-        notify(req.user.companyId, existing.assignedToId, 'Subtask approved', `Your subtask "${updated.title}" was approved.`, 'success');
+        notify(req.user.companyId, existing.assignedToId, 'Subtask approved', `Your subtask "${updated.title}" was approved.`, 'Task');
       } else if (existing.status === 'In_Review' && updateData.status === 'Active') {
-        notify(req.user.companyId, existing.assignedToId, 'Subtask sent back', `Your subtask "${updated.title}" was sent back for revision. Reason: ${updated.reviewComment}`, 'warning');
+        notify(req.user.companyId, existing.assignedToId, 'Subtask sent back', `Your subtask "${updated.title}" was sent back for revision. Reason: ${updated.reviewComment}`, 'Task');
       }
     }
 
@@ -1178,11 +1170,20 @@ export async function deleteSubtask(req, res, next) {
  * GET /escalations & GET /api/escalations
  * Lists escalations in caller company.
  */
-// Escalation visibility (D-S11): owners/admins see all; Branch Managers their branch;
-// PMs their projects; Team Leads their tasks; everyone sees what they raised or were sent.
-async function buildEscalationWhere(req) {
+// Escalation visibility (D-S11): Owner, System Admin, Compliance Officer and Process Admin see all;
+// Branch Managers their branch; PMs their projects; Team Leads their team's; everyone sees what
+// they raised or were sent.
+function isEscalationViewerOfAll(user) {
+  return isCompanyAdmin(user) || hasRole(user?.role, [ROLES.COMPLIANCE_OFFICER, ROLES.PROCESS_ADMIN]);
+}
+// Escalation actions that close the loop (resolve / close) belong to whoever it was sent to
+// and to managers; deleting is a manager-only action.
+function canManageEscalations(user) {
+  return isCompanyAdmin(user) || isProjectManagerRole(user) || isBranchManager(user);
+}
+export async function buildEscalationWhere(req) {
   const companyId = req.user.companyId;
-  if (isCompanyAdmin(req.user)) return { companyId };
+  if (isEscalationViewerOfAll(req.user)) return { companyId };
   if (isBranchManager(req.user)) {
     const branchId = getBranchScopeId(req.user) || '__no_branch_scope__';
     return {
@@ -1207,7 +1208,19 @@ async function buildEscalationWhere(req) {
     };
   }
   if (isTeamLeadRole(req.user)) {
-    return { companyId, OR: [...own, { task: { assignedToId: req.user.id } }] };
+    // Their team's escalations: raised by a team member, or about work in the team's projects.
+    const myTeam = { team: { teamMembers: { some: { userId: req.user.id } } } };
+    const teamMemberIds = { teamMembers: { some: { team: { teamMembers: { some: { userId: req.user.id } } } } } };
+    return {
+      companyId,
+      OR: [
+        ...own,
+        { task: { assignedToId: req.user.id } },
+        { project: myTeam },
+        { task: { project: myTeam } },
+        { reportedBy: teamMemberIds },
+      ],
+    };
   }
   return { companyId, OR: own };
 }
@@ -1281,8 +1294,9 @@ export async function createEscalation(req, res, next) {
 
     let task = null;
     if (taskId) {
+      // Members and leads may only escalate work they can see; managers anything in their scope.
       task = await prisma.task.findFirst({
-        where: { id: taskId, companyId: req.user.companyId, deletedAt: null },
+        where: { ...await scopedTaskWhere(req), id: taskId, companyId: req.user.companyId, deletedAt: null },
       });
       if (!task) throw new NotFoundError(`Task ${taskId} not found in this company`);
       if (projectId && task.projectId && task.projectId !== projectId) {
@@ -1357,14 +1371,24 @@ export async function updateEscalation(req, res, next) {
     const updateData = {};
     if (body.status) {
       validateEnum(body.status, ALLOWED_ESCALATION_STATUSES, 'status');
+      const closesLoop = body.status === 'Resolved' || body.status === 'Closed';
+      if (closesLoop && !canManageEscalations(req.user) && existing.targetManagerId !== req.user.id) {
+        throw new ForbiddenError('Only the escalation target or a manager can resolve or close an escalation');
+      }
       updateData.status = body.status;
-      if (body.status === 'Resolved' || body.status === 'Closed') {
+      if (closesLoop) {
         updateData.resolvedAt = new Date();
       } else {
         updateData.resolvedAt = null;
       }
     }
-    if (body.description) updateData.description = body.description;
+    if (body.description) {
+      // Editing the text is for the reporter, the target and managers.
+      if (!canManageEscalations(req.user) && existing.reportedById !== req.user.id && existing.targetManagerId !== req.user.id) {
+        throw new ForbiddenError('You cannot edit this escalation');
+      }
+      updateData.description = body.description;
+    }
 
     const updated = await prisma.escalation.update({
       where: { id },
@@ -1393,6 +1417,10 @@ export async function updateEscalation(req, res, next) {
 export async function deleteEscalation(req, res, next) {
   try {
     const { id } = req.params;
+
+    if (!canManageEscalations(req.user)) {
+      throw new ForbiddenError('Only a manager can delete an escalation');
+    }
 
     const existing = await prisma.escalation.findFirst({
       where: { ...await buildEscalationWhere(req), id },

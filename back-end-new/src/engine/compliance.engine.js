@@ -1,9 +1,9 @@
 import { PrismaClient } from '@prisma/client';
+import { recordViolationOnce } from '../services/compliance.service.js';
 const prisma = new PrismaClient();
 
 // The rule evaluators contain the actual "brains" of the automated compliance checks.
-// Since rules are created dynamically by users, we match the rule's intention by keywords in its name.
-// In a V2, we would add an `evaluatorType` enum to the ComplianceRule Prisma model.
+// A rule picks its evaluator through ComplianceRule.ruleType.
 const EVALUATORS = {
   // Evaluator 1: Check for Overdue Tasks
   async checkOverdueTasks(companyId, ruleId, scopeType, scopeId) {
@@ -29,24 +29,10 @@ const EVALUATORS = {
     // Record Violations
     let newViolations = 0;
     for (const task of overdueTasks) {
-      // Avoid duplicate active violations for the same entity + rule
-      const existing = await prisma.complianceViolation.findFirst({
-        where: { ruleId, entityType: 'Task', entityId: task.id, status: 'Open' }
+      const { created } = await recordViolationOnce(prisma, {
+        companyId, ruleId, entityType: 'Task', entityId: task.id, severity: 'Medium',
       });
-
-      if (!existing) {
-        await prisma.complianceViolation.create({
-          data: {
-            companyId,
-            ruleId,
-            entityType: 'Task',
-            entityId: task.id,
-            status: 'Open',
-            severity: 'Medium',
-          }
-        });
-        newViolations++;
-      }
+      if (created) newViolations++;
     }
     return newViolations;
   },
@@ -67,26 +53,18 @@ const EVALUATORS = {
     const unassignedTasks = await prisma.task.findMany({ where: whereClause, select: { id: true } });
     let newViolations = 0;
     for (const task of unassignedTasks) {
-      const existing = await prisma.complianceViolation.findFirst({
-        where: { ruleId, entityType: 'Task', entityId: task.id, status: 'Open' }
+      const { created } = await recordViolationOnce(prisma, {
+        companyId, ruleId, entityType: 'Task', entityId: task.id, severity: 'High',
       });
-
-      if (!existing) {
-        await prisma.complianceViolation.create({
-          data: {
-            companyId,
-            ruleId,
-            entityType: 'Task',
-            entityId: task.id,
-            status: 'Open',
-            severity: 'High',
-          }
-        });
-        newViolations++;
-      }
+      if (created) newViolations++;
     }
     return newViolations;
   }
+};
+
+const RULE_TYPE_EVALUATORS = {
+  Overdue: EVALUATORS.checkOverdueTasks,
+  Unassigned: EVALUATORS.checkUnassignedTasks,
 };
 
 export async function runComplianceEngine(companyId = null) {
@@ -103,18 +81,11 @@ export async function runComplianceEngine(companyId = null) {
   });
 
   for (const rule of activeRules) {
-    // Determine Evaluator based on keywords in Rule Name
-    let evaluatorFunc = null;
-    const ruleName = rule.name.toLowerCase();
-
-    if (ruleName.includes('overdue')) {
-      evaluatorFunc = EVALUATORS.checkOverdueTasks;
-    } else if (ruleName.includes('unassigned') || ruleName.includes('assign')) {
-      evaluatorFunc = EVALUATORS.checkUnassignedTasks;
-    }
+    // The evaluator comes from the rule's declared type, never from its name.
+    const evaluatorFunc = RULE_TYPE_EVALUATORS[rule.ruleType] || null;
 
     if (!evaluatorFunc) {
-      console.log(`[Compliance Engine] No evaluator found for rule: "${rule.name}"`);
+      // Custom rules are enforced by their criteria on task transitions, not by a scheduled check.
       continue;
     }
 

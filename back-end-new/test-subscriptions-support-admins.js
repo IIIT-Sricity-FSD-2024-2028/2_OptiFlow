@@ -4,6 +4,11 @@ import { prisma } from './src/config/prisma.js';
 import jwt from 'jsonwebtoken';
 import { env } from './src/config/env.js';
 import { verifySupportAccessGrant } from './src/utils/supportGrant.js';
+import { assertTestDatabase } from './scripts/setup-test-db.js';
+
+// Refuses to run against anything but a database whose name contains "test".
+assertTestDatabase(process.env.DATABASE_URL);
+
 
 async function runTests() {
   console.log('======================================================================');
@@ -127,7 +132,7 @@ async function runTests() {
     });
     assert.equal(listFiltered.status, 200);
     const listData = await listFiltered.json();
-    assert.ok(Array.isArray(listData.data), 'Filtered list must return array of subscriptions');
+    assert.ok(Array.isArray(listData.data?.items), 'Filtered list must return an items array of subscriptions');
     console.log('✓ List subscription filters (status, pastDue, expiringWithin) verified.');
 
     // -------------------------------------------------------------------------
@@ -206,7 +211,8 @@ async function runTests() {
       headers: authHeaders,
     });
     assert.equal(listRevoked.status, 200);
-    const revokedList = (await listRevoked.json()).data;
+    const revokedBody = (await listRevoked.json()).data;
+    const revokedList = Array.isArray(revokedBody) ? revokedBody : revokedBody.items;
     assert.ok(revokedList.some((g) => g.id === grantData.id), 'Revoked list must contain revoked grant');
     console.log('✓ Support access status filtering (active/expired/revoked) verified.');
 

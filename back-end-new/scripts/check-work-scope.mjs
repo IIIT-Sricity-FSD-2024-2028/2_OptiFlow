@@ -7,20 +7,22 @@ import {
   buildSubtaskListWhere,
   getAssignedProjectIds,
 } from '../src/utils/tenantScope.js';
+import { buildEscalationWhere } from '../src/controllers/tasks.controller.js';
 
-const ROLE_LABELS = ['Project Manager', 'Team Lead', 'Team Member', 'Branch Manager', 'Company Owner', 'System Admin'];
+const ROLE_LABELS = ['Project Manager', 'Team Lead', 'Team Member', 'Branch Manager', 'Company Owner', 'System Admin', 'Compliance Officer', 'Process Admin'];
 
 async function sampleUser(label) {
   const ra = await prisma.roleAssignment.findFirst({
     where: { revokedAt: null, role: { label } },
-    include: { role: true, user: true },
+    include: { role: { include: { roleTemplate: true } }, user: true },
   });
   if (!ra) return null;
   return {
     id: ra.user.id,
     companyId: ra.user.companyId,
     roleLabel: ra.role.label,
-    role: ra.role.name || ra.role.label,
+    // The resolved system role slug, as the API's auth middleware puts on req.user.
+    role: ra.role.roleTemplate?.slug || ra.role.name,
     scopeType: ra.scopeType,
     scopeId: ra.scopeId,
   };
@@ -39,16 +41,8 @@ for (const label of ROLE_LABELS) {
     const projects = await prisma.project.count({ where: buildProjectListWhere(args) });
     const tasks = await prisma.task.count({ where: buildTaskListWhere(args) });
     const subtasks = await prisma.subtask.count({ where: buildSubtaskListWhere(args) });
-    const escalations = await prisma.escalation.count({
-      where: {
-        companyId: user.companyId,
-        OR: [
-          { reportedById: user.id },
-          { project: { team: { branchId: 'x' } } },
-          { task: { OR: [{ createdById: user.id }, { project: { OR: [{ createdById: user.id }, { id: { in: assignedProjectIds } }] } }] } },
-        ],
-      },
-    });
+    // The real escalation visibility filter used by the API, not a copy of it.
+    const escalations = await prisma.escalation.count({ where: await buildEscalationWhere({ user }) });
     console.log(`+ ${label}: projects=${projects} tasks=${tasks} subtasks=${subtasks} escalations=${escalations} assignedProjects=${assignedProjectIds.length}`);
   } catch (err) {
     failures += 1;
