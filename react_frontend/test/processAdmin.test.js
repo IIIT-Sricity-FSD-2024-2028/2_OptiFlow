@@ -1,123 +1,71 @@
-// react_frontend/test/processAdmin.test.js
-// Unit tests for Process Admin API client contracts using mockClient
+// Contract tests for the real Process Admin API module (src/services/api/process.js).
+// Only the network client is replaced, so a changed URL, method or body in the module fails here.
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import assert from 'node:assert/strict';
-import { createMockClient, mockTemplates, mockInstances } from './mockClient.js';
+vi.mock('../src/services/api/client', () => ({
+  apiClient: vi.fn(async () => ({ success: true, data: {} })),
+}));
 
-// Bind API methods to the mock client
-function createProcessApi(client) {
-  return {
-    listTemplates: () => client('/api/process-templates'),
-    getTemplate: (id) => client(`/api/process-templates/${id}`),
-    createTemplate: (data) => client('/api/process-templates', { method: 'POST', body: data }),
-    updateTemplate: (id, data) => client(`/api/process-templates/${id}`, { method: 'PATCH', body: data }),
-    deleteTemplate: (id) => client(`/api/process-templates/${id}`, { method: 'DELETE' }),
-    addTemplateStep: (id, data) => client(`/api/process-templates/${id}/steps`, { method: 'POST', body: data }),
-    listInstances: (params) => {
-      const q = params ? '?' + new URLSearchParams(params).toString() : '';
-      return client(`/api/process-instances${q}`);
-    },
-    getInstance: (id) => client(`/api/process-instances/${id}`),
-    createInstance: (data) => client('/api/process-instances', { method: 'POST', body: data }),
-    actionStep: (stepId, data) => client(`/api/process-instance-steps/${stepId}/action`, { method: 'PATCH', body: data }),
-  };
-}
+import { apiClient } from '../src/services/api/client';
+import * as processApi from '../src/services/api/process';
 
-async function runTests() {
-  console.log('🧪 Starting Process Admin API client unit tests...\n');
-
-  const client = createMockClient();
-  const api = createProcessApi(client);
-
-  // 1. listTemplates
-  const templatesRes = await api.listTemplates();
-  assert.ok(Array.isArray(templatesRes.data), 'listTemplates must return array in data');
-  assert.equal(templatesRes.data.length, mockTemplates.length);
-  console.log('  ✓ listTemplates returns envelope data matching templates');
-
-  // 2. getTemplate
-  const tpl = await api.getTemplate('tpl-101');
-  assert.equal(tpl.data.id, 'tpl-101');
-  assert.equal(tpl.data.name, 'Standard Document Approval');
-  assert.equal(tpl.data.steps.length, 2);
-  console.log('  ✓ getTemplate returns requested template with steps');
-
-  // 3. createTemplate
-  const createdTpl = await api.createTemplate({
-    name: 'New Custom Workflow',
-    steps: [{ name: 'Step 1', stepOrder: 1, stepType: 'Approval' }],
-  });
-  assert.ok(createdTpl.data.id, 'New template must have an ID');
-  assert.equal(createdTpl.data.name, 'New Custom Workflow');
-  assert.equal(createdTpl.data.steps.length, 1);
-  console.log('  ✓ createTemplate creates template and returns data');
-
-  // 4. updateTemplate
-  const updatedTpl = await api.updateTemplate('tpl-101', { name: 'Standard Doc Approval Renamed' });
-  assert.equal(updatedTpl.data.name, 'Standard Doc Approval Renamed');
-  console.log('  ✓ updateTemplate updates template fields');
-
-  // 5. addTemplateStep (Canonical endpoint)
-  const newStep = await api.addTemplateStep('tpl-101', {
-    name: 'Additional Step',
-    stepOrder: 3,
-    stepType: 'Approval',
-  });
-  assert.ok(newStep.data.id);
-  assert.equal(newStep.data.name, 'Additional Step');
-  console.log('  ✓ addTemplateStep adds step via canonical route');
-
-  // 6. deleteTemplate
-  const delRes = await api.deleteTemplate('tpl-102');
-  assert.equal(delRes.success, true);
-  console.log('  ✓ deleteTemplate removes template');
-
-  // 7. listInstances
-  const instancesRes = await api.listInstances();
-  assert.ok(Array.isArray(instancesRes.data));
-  assert.equal(instancesRes.data.length, mockInstances.length);
-  console.log('  ✓ listInstances returns instances list');
-
-  // 8. getInstance
-  const inst = await api.getInstance('inst-201');
-  assert.equal(inst.data.id, 'inst-201');
-  assert.equal(inst.data.status, 'Active');
-  assert.equal(inst.data.currentStepId, 'istep-2');
-  console.log('  ✓ getInstance returns instance with steps and currentStepId');
-
-  // 9. createInstance
-  const createdInst = await api.createInstance({
-    templateId: 'tpl-101',
-    title: 'Audit Run 2026',
-  });
-  assert.ok(createdInst.data.id);
-  assert.equal(createdInst.data.status, 'Draft');
-  console.log('  ✓ createInstance creates draft instance');
-
-  // 10. actionStep
-  const actionRes = await api.actionStep('istep-2', { status: 'Approved' });
-  assert.equal(actionRes.data.status, 'Approved');
-  assert.ok(actionRes.data.actionedAt);
-  console.log('  ✓ actionStep transitions step to Approved');
-
-  // 11. Error handling (404)
-  let threw404 = false;
-  try {
-    await api.getTemplate('nonexistent-tpl-id');
-  } catch (err) {
-    threw404 = true;
-    assert.equal(err.status, 404);
-  }
-  assert.ok(threw404, 'Must throw error on 404');
-  console.log('  ✓ Client throws on 404 responses');
-
-  console.log('\n======================================================================');
-  console.log('      ALL 11 PROCESS ADMIN API CLIENT TESTS PASSED!                   ');
-  console.log('======================================================================\n');
-}
-
-runTests().catch((err) => {
-  console.error('Test failure:', err);
-  process.exit(1);
+beforeEach(() => {
+  apiClient.mockClear();
 });
 
+describe('process API paths and methods', () => {
+  it('lists and reads templates on the canonical path', async () => {
+    await processApi.listTemplates();
+    await processApi.getTemplate('t1');
+    expect(apiClient).toHaveBeenNthCalledWith(1, '/api/process-templates');
+    expect(apiClient).toHaveBeenNthCalledWith(2, '/api/process-templates/t1');
+  });
+
+  it('creates, updates and deletes templates', async () => {
+    const body = { name: 'Flow', steps: [{ name: 'A', stepOrder: 1 }] };
+    await processApi.createTemplate(body);
+    await processApi.updateTemplate('t1', { name: 'Renamed' });
+    await processApi.deleteTemplate('t1');
+    expect(apiClient).toHaveBeenNthCalledWith(1, '/api/process-templates', { method: 'POST', body });
+    expect(apiClient).toHaveBeenNthCalledWith(2, '/api/process-templates/t1', { method: 'PATCH', body: { name: 'Renamed' } });
+    expect(apiClient).toHaveBeenNthCalledWith(3, '/api/process-templates/t1', { method: 'DELETE' });
+  });
+
+  it('adds a template step on the canonical steps path', async () => {
+    const body = { name: 'Review', stepOrder: 2 };
+    await processApi.addTemplateStep('t1', body);
+    expect(apiClient).toHaveBeenCalledWith('/api/process-templates/t1/steps', { method: 'POST', body });
+  });
+
+  it('builds the instance query string only when params are given', async () => {
+    await processApi.listInstances();
+    await processApi.listInstances({ templateId: 't1', projectId: 'p1' });
+    expect(apiClient).toHaveBeenNthCalledWith(1, '/api/process-instances');
+    expect(apiClient).toHaveBeenNthCalledWith(2, '/api/process-instances?templateId=t1&projectId=p1');
+  });
+
+  it('launches, updates and deletes instances', async () => {
+    await processApi.createInstance({ templateId: 't1' });
+    await processApi.updateInstance('i1', { status: 'Cancelled' });
+    await processApi.deleteInstance('i1');
+    expect(apiClient).toHaveBeenNthCalledWith(1, '/api/process-instances', { method: 'POST', body: { templateId: 't1' } });
+    expect(apiClient).toHaveBeenNthCalledWith(2, '/api/process-instances/i1', { method: 'PATCH', body: { status: 'Cancelled' } });
+    expect(apiClient).toHaveBeenNthCalledWith(3, '/api/process-instances/i1', { method: 'DELETE' });
+  });
+
+  it('actions a step with PATCH on the /action path', async () => {
+    await processApi.actionStep('s1', { status: 'Approved', comment: 'ok' });
+    expect(apiClient).toHaveBeenCalledWith('/api/process-instance-steps/s1/action', {
+      method: 'PATCH',
+      body: { status: 'Approved', comment: 'ok' },
+    });
+  });
+
+  it('keeps the legacy aliases pointing at the instance functions', () => {
+    expect(processApi.list).toBe(processApi.listInstances);
+    expect(processApi.get).toBe(processApi.getInstance);
+    expect(processApi.create).toBe(processApi.createInstance);
+    expect(processApi.update).toBe(processApi.updateInstance);
+    expect(processApi.remove).toBe(processApi.deleteInstance);
+  });
+});

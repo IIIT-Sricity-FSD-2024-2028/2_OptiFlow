@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
 import { useToast } from '../../../../shared/components/Toast';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
-import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Modal } from '../../../../shared/components/Modal';
 import { StatusBadge, PriorityBadge } from '../../components/StatusBadge';
 import { ReportBlockerModal } from '../components/modals/ReportBlockerModal';
+import EscalationTable from '../components/EscalationTable';
 import { resolveTeamLead } from '../../utils/userUtils';
 import * as escalationsApi from '../../../../services/api/escalations';
 import * as tasksApi from '../../../../services/api/tasks';
@@ -21,20 +21,16 @@ import {
   Clock,
   Search,
   Plus,
-  ArrowRight,
-  ExternalLink,
-  MessageSquare,
 } from 'lucide-react';
 
 export default function MemberEscalations() {
   const { user } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [escalations, setEscalations] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [, setUsers] = useState([]);
   const [manager, setManager] = useState(null);
 
   // Filters

@@ -1,4 +1,3 @@
-import { openEvidenceFile } from '../../../../shared/utils/evidenceFile';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
@@ -7,24 +6,18 @@ import { useToast } from '../../../../shared/components/Toast';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
-import { EmptyState } from '../../../../shared/components/EmptyState';
 import { ConfirmDialog } from '../../../../shared/components/ConfirmDialog';
-import { StatusBadge } from '../../components/StatusBadge';
 import { UploadEvidenceModal } from '../components/modals/UploadEvidenceModal';
 import EvidenceTable from '../components/EvidenceTable';
 import { EVIDENCE_TYPES } from '../../constants';
 import * as evidenceApi from '../../../../services/api/evidence';
 import * as tasksApi from '../../../../services/api/tasks';
 import {
-  UploadCloud,
   FileText,
   CheckCircle2,
   Clock,
   Search,
   Plus,
-  Trash2,
-  Edit2,
-  ExternalLink,
 } from 'lucide-react';
 
 export default function MemberEvidence() {
@@ -117,7 +110,7 @@ export default function MemberEvidence() {
       toast.success('Artifact record removed.');
       setIsDeleteConfirmOpen(false);
       setDeletingId(null);
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete evidence record.');
     }
   };

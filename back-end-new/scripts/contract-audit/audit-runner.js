@@ -90,6 +90,7 @@ async function createTestFixtures() {
       email: `owner_${timestamp}@test.com`,
       fullName: 'Owner User',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },
@@ -110,6 +111,7 @@ async function createTestFixtures() {
       email: `admin_${timestamp}@test.com`,
       fullName: 'Process Admin User',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },
@@ -130,6 +132,7 @@ async function createTestFixtures() {
       email: `member1_${timestamp}@test.com`,
       fullName: 'Member User 1',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },
@@ -150,6 +153,7 @@ async function createTestFixtures() {
       email: `member2_${timestamp}@test.com`,
       fullName: 'Member User 2',
       passwordHash: 'dummy',
+      passwordChangedAt: new Date(),
       isActive: true,
       tokenVersion: 1,
     },
@@ -673,6 +677,20 @@ async function main() {
             processInstanceStepId: stepId,
           },
         });
+
+        // A running instance cannot be deleted; it must be cancelled first.
+        const resDelActive = await fetch(`${baseUrl}/api/process-instances/${inst.id}`, {
+          method: 'DELETE',
+          headers: authHeaders(adminToken),
+        });
+        assert.equal(resDelActive.status, 400, 'deleting an Active instance must return 400');
+
+        const resCancel = await fetch(`${baseUrl}/api/process-instances/${inst.id}`, {
+          method: 'PATCH',
+          headers: authHeaders(adminToken),
+          body: JSON.stringify({ status: 'Cancelled' }),
+        });
+        assert.equal(resCancel.status, 200, 'cancelling the instance must return 200');
 
         const resDelInst = await fetch(`${baseUrl}/api/process-instances/${inst.id}`, {
           method: 'DELETE',

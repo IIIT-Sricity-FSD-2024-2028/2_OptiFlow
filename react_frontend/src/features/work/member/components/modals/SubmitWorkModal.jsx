@@ -6,13 +6,12 @@ import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../shared/components/Toast';
 import * as subtasksApi from '../../../../../services/api/subtasks';
 import * as evidenceApi from '../../../../../services/api/evidence';
-import { Upload, FileText, X, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Upload, FileText, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export function SubmitWorkModal({
   isOpen,
   onClose,
   taskId,
-  taskTitle = 'Task',
   subtaskIds = [],
   isEvidenceRequired = false,
   complianceRuleName = '',
