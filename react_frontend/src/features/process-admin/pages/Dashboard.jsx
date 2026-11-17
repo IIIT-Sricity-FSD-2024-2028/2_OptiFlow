@@ -71,7 +71,7 @@ export default function ProcessAdminDashboard() {
       setSelectedTemplateId('');
       const instanceId = res?.id || res?.data?.id;
       if (instanceId) {
-        navigate(`/process-admin/instances/${instanceId}`);
+        navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', instanceId));
       } else {
         loadDashboardData();
       }

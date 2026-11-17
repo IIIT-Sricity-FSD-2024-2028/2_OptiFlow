@@ -33,7 +33,7 @@ export function SubscriptionAssignModal({ isOpen, onClose, onConfirm }) {
           setCompanies(eligible);
           if (eligible[0]) setSelectedCompanyId(eligible[0].id);
 
-          const activePlans = (plansRes || []).filter((p) => p.isActive !== false);
+          const activePlans = (plansRes?.items || []).filter((p) => p.isActive !== false);
           setPlans(activePlans);
           if (activePlans[0]) setSelectedPlanId(activePlans[0].id);
         })

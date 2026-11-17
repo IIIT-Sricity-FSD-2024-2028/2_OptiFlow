@@ -12,11 +12,7 @@ import { formatDate } from '../../../../shared/utils/formatDate';
 import { 
   CheckCircle2, 
   XCircle, 
-  Clock, 
-  FileText, 
-  AlertTriangle, 
-  ArrowUpRight,
-  RotateCcw
+  Clock,
 } from 'lucide-react';
 import * as evidenceApi from '../../../../services/api/evidence';
 import * as escalationsApi from '../../../../services/api/escalations';
@@ -46,7 +42,9 @@ const getDocumentName = (evidence) => {
 
   try {
     name = decodeURIComponent(name);
-  } catch (_) {}
+  } catch {
+    // Not URI-encoded: keep the raw name.
+  }
 
   if (!name || name.startsWith('http') || name.startsWith('supabase')) {
     return evidence.title || 'Attached Deliverable';
@@ -139,7 +137,9 @@ export default function TeamLeadReviews() {
       if (taskId) {
         try {
           await tasksApi.update(taskId, { status: 'Active' });
-        } catch (_) {}
+        } catch {
+          // Best effort: the rejection above is already saved.
+        }
       }
 
       // 3. Create Escalation to PM
@@ -152,7 +152,9 @@ export default function TeamLeadReviews() {
             description: `Team Lead rejected evidence "${selected.title}". Feedback: ${rejectionReason.trim()}. Work reopened for revision.`,
             priority: 'High',
           });
-        } catch (_) {}
+        } catch {
+          // Best effort: the rejection above is already saved.
+        }
       }
 
       // 4. Update local state

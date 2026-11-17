@@ -1,5 +1,3 @@
-import React from 'react';
-import { Badge } from '../../../shared/components/Badge';
 import { formatDate } from '../../../shared/utils/formatDate';
 import { StatusBadge, PriorityBadge } from './StatusBadge';
 import { ChevronRight } from 'lucide-react';

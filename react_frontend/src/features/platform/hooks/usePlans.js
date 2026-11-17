@@ -12,7 +12,7 @@ export function usePlans() {
             setLoading(true);
             setError(null);
             const res = await apiClient('/platform/plans');
-            setPlans(Array.isArray(res) ? res : res?.items || []);
+            setPlans(res?.items || []);
         }
         catch (err) {
             console.error(err.message || 'Failed to fetch subscription plans');

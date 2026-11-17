@@ -63,7 +63,8 @@ function boolField(value, field) {
   }
   return value;
 }
-import { parseListParams, formatListResponse } from "../utils/pagination.js";
+import { parseListParams } from "../utils/pagination.js";
+import { ok, created, okList } from "../utils/respond.js";
 import { writeAuditLog } from "../utils/platformAudit.js";
 import { buildSetPasswordLink } from "../utils/passwordTokens.js";
 import { sendOwnerInviteEmail } from "../services/email.service.js";
@@ -127,12 +128,7 @@ export async function platformLogin(req, res, next) {
 
     const adminMustChangePassword = admin.passwordChangedAt === null;
 
-    res.status(200).json({
-      success: true,
-      message: adminMustChangePassword
-        ? "Platform admin authenticated successfully (Password change required)"
-        : "Platform admin authenticated successfully",
-      data: {
+    ok(res, {
         token,
         mustChangePassword: adminMustChangePassword,
         adminUser: {
@@ -145,8 +141,9 @@ export async function platformLogin(req, res, next) {
           passwordChangedAt: admin.passwordChangedAt,
           createdAt: admin.createdAt,
         },
-      },
-    });
+      }, adminMustChangePassword
+        ? "Platform admin authenticated successfully (Password change required)"
+        : "Platform admin authenticated successfully");
   } catch (err) {
     next(err);
   }
@@ -165,10 +162,7 @@ export async function platformLogout(req, res, next) {
       path: "/api/platform",
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Platform administrator logged out successfully",
-    });
+    ok(res, null, "Platform administrator logged out successfully");
   } catch (err) {
     next(err);
   }
@@ -256,13 +250,9 @@ export async function changePlatformPassword(req, res, next) {
       maxAge: 3600 * 1000,
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Password changed successfully",
-      data: {
+    ok(res, {
         token: freshToken,
-      },
-    });
+      }, "Password changed successfully");
   } catch (err) {
     next(err);
   }
@@ -273,10 +263,7 @@ export async function changePlatformPassword(req, res, next) {
  */
 export async function platformAuthMe(req, res, next) {
   try {
-    res.status(200).json({
-      success: true,
-      data: req.platformAdmin,
-    });
+    ok(res, req.platformAdmin);
   } catch (err) {
     next(err);
   }
@@ -478,9 +465,7 @@ export async function getPlatformMetrics(req, res, next) {
       },
     });
 
-    res.status(200).json({
-      success: true,
-      data: {
+    ok(res, {
         companyCounts,
         subscriptionCounts,
         planDistribution,
@@ -496,8 +481,7 @@ export async function getPlatformMetrics(req, res, next) {
         // Legacy fallback fields for backwards compatibility
         totalCompanies,
         subscriptionsByPlan: planDistribution,
-      },
-    });
+      });
   } catch (err) {
     next(err);
   }
@@ -555,10 +539,7 @@ export async function listPlatformCompanies(req, res, next) {
     ]);
 
     // 4. Return standard list contract
-    res.status(200).json({
-      success: true,
-      data: formatListResponse(companies, total, page, pageSize),
-    });
+    okList(res, companies, { total, page, pageSize });
   } catch (err) {
     next(err);
   }
@@ -789,10 +770,7 @@ export async function createPlatformCompany(req, res, next) {
 
     const { tokenVersion: _tv, ...owner } = result.owner;
 
-    res.status(201).json({
-      success: true,
-      message: "Company provisioned successfully",
-      data: {
+    created(res, {
         ...result,
         owner,
         // Shown once to the provisioning admin; never stored or audited.
@@ -803,8 +781,7 @@ export async function createPlatformCompany(req, res, next) {
           delivered: inviteEmail.delivered,
           provider: inviteEmail.provider,
         },
-      },
-    });
+      }, "Company provisioned successfully");
   } catch (err) {
     next(err);
   }
@@ -859,10 +836,7 @@ export async function getPlatformCompanyById(req, res, next) {
       branchCount: company._count?.branches ?? company.branches?.length ?? 0,
     };
 
-    res.status(200).json({
-      success: true,
-      data,
-    });
+    ok(res, data);
   } catch (err) {
     next(err);
   }
@@ -931,11 +905,7 @@ export async function updatePlatformCompany(req, res, next) {
       return result;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Company updated successfully",
-      data: updated,
-    });
+    ok(res, updated, "Company updated successfully");
   } catch (err) {
     next(err);
   }
@@ -964,10 +934,7 @@ export async function listPlans(req, res, next) {
       orderBy: { name: "asc" },
     });
 
-    res.status(200).json({
-      success: true,
-      data: plans,
-    });
+    okList(res, plans);
   } catch (err) {
     next(err);
   }
@@ -983,7 +950,7 @@ export async function getPlanById(req, res, next) {
     if (!plan) {
       throw new NotFoundError(`Plan with ID ${id} not found`);
     }
-    res.status(200).json({ success: true, data: plan });
+    ok(res, plan);
   } catch (err) {
     next(err);
   }
@@ -1059,11 +1026,13 @@ export async function createPlan(req, res, next) {
       return plan;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Plan created successfully",
-      data: newPlan,
-    });
+    // Same shape as GET /platform/plans items (they carry `_count`), so a client store can upsert
+    // this response directly. A plan that was just created has no subscriptions yet.
+    created(
+      res,
+      { ...newPlan, _count: { subscriptions: 0 } },
+      "Plan created successfully",
+    );
   } catch (err) {
     next(err);
   }
@@ -1120,11 +1089,15 @@ export async function updatePlan(req, res, next) {
       return result;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Plan updated successfully",
-      data: updated,
+    // Same shape as GET /platform/plans items (they carry `_count`).
+    const subscriptions = await prisma.subscription.count({
+      where: { planId: id },
     });
+    ok(
+      res,
+      { ...updated, _count: { subscriptions } },
+      "Plan updated successfully",
+    );
   } catch (err) {
     next(err);
   }
@@ -1269,20 +1242,12 @@ export async function listSubscriptions(req, res, next) {
       expiringSoon: expiringSoonCount,
     };
 
-    if (req.query.page) {
-      return res.status(200).json({
-        success: true,
-        data: formatListResponse(subscriptions, total, page, pageSize, {
-          summary,
-        }),
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: subscriptions,
-      summary,
-    });
+    // One list shape whether or not the caller paginates.
+    return okList(
+      res,
+      subscriptions,
+      req.query.page ? { total, page, pageSize, summary } : { total, summary },
+    );
   } catch (err) {
     next(err);
   }
@@ -1320,10 +1285,7 @@ export async function getSubscriptionById(req, res, next) {
       throw new NotFoundError(`Subscription with ID ${id} not found`);
     }
 
-    res.status(200).json({
-      success: true,
-      data: subscription,
-    });
+    ok(res, subscription);
   } catch (err) {
     next(err);
   }
@@ -1410,11 +1372,7 @@ export async function createSubscription(req, res, next) {
       return created;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Subscription created successfully",
-      data: subscription,
-    });
+    created(res, subscription, "Subscription created successfully");
   } catch (err) {
     next(err);
   }
@@ -1530,11 +1488,7 @@ export async function updateSubscription(req, res, next) {
       return sub;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Subscription updated successfully",
-      data: updated,
-    });
+    ok(res, updated, "Subscription updated successfully");
   } catch (err) {
     next(err);
   }
@@ -1643,10 +1597,7 @@ export async function listPlatformAuditLogs(req, res, next) {
       prisma.platformAuditLog.count({ where }),
     ]);
 
-    res.status(200).json({
-      success: true,
-      data: formatListResponse(logs, total, page, pageSize),
-    });
+    okList(res, logs, { total, page, pageSize });
   } catch (err) {
     next(err);
   }
@@ -1771,18 +1722,12 @@ export async function listPlatformAdminUsers(req, res, next) {
       inactive: inactiveCount,
     };
 
-    if (req.query.page) {
-      return res.status(200).json({
-        success: true,
-        data: formatListResponse(admins, total, page, pageSize, { summary }),
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: admins,
-      summary,
-    });
+    // One list shape whether or not the caller paginates.
+    return okList(
+      res,
+      admins,
+      req.query.page ? { total, page, pageSize, summary } : { total, summary },
+    );
   } catch (err) {
     next(err);
   }
@@ -1816,10 +1761,7 @@ export async function getPlatformAdminUserById(req, res, next) {
       throw new NotFoundError(`Platform admin user with ID ${id} not found`);
     }
 
-    res.status(200).json({
-      success: true,
-      data: admin,
-    });
+    ok(res, admin);
   } catch (err) {
     next(err);
   }
@@ -1888,14 +1830,10 @@ export async function createPlatformAdminUser(req, res, next) {
       return created;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Platform admin user created successfully",
-      data: {
+    created(res, {
         ...newAdmin,
         temporaryPassword: password,
-      },
-    });
+      }, "Platform admin user created successfully");
   } catch (err) {
     next(err);
   }
@@ -1994,11 +1932,7 @@ export async function updatePlatformAdminUser(req, res, next) {
       return resAdmin;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Platform admin user updated successfully",
-      data: updated,
-    });
+    ok(res, updated, "Platform admin user updated successfully");
   } catch (err) {
     next(err);
   }
@@ -2065,14 +1999,10 @@ export async function resetPlatformAdminPassword(req, res, next) {
       return admin;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Platform admin password reset successfully",
-      data: {
+    ok(res, {
         ...updated,
         temporaryPassword: isGenerated ? newPassword : undefined,
-      },
-    });
+      }, "Platform admin password reset successfully");
   } catch (err) {
     next(err);
   }
@@ -2221,18 +2151,12 @@ export async function listPlatformSupportAccesses(req, res, next) {
       revoked: revokedCount,
     };
 
-    if (req.query.page) {
-      return res.status(200).json({
-        success: true,
-        data: formatListResponse(sorted, total, page, pageSize, { summary }),
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: sorted,
-      summary,
-    });
+    // One list shape whether or not the caller paginates.
+    return okList(
+      res,
+      sorted,
+      req.query.page ? { total, page, pageSize, summary } : { total, summary },
+    );
   } catch (err) {
     next(err);
   }
@@ -2267,13 +2191,10 @@ export async function getPlatformSupportAccessById(req, res, next) {
       });
     }
 
-    res.status(200).json({
-      success: true,
-      data: {
+    ok(res, {
         ...access,
         revokedByAdmin,
-      },
-    });
+      });
   } catch (err) {
     next(err);
   }
@@ -2382,11 +2303,7 @@ export async function createPlatformSupportAccess(req, res, next) {
       return grant;
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Support access granted successfully",
-      data: access,
-    });
+    created(res, access, "Support access granted successfully");
   } catch (err) {
     next(err);
   }
@@ -2448,11 +2365,7 @@ export async function revokePlatformSupportAccess(req, res, next) {
       return revoked;
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Support access revoked successfully",
-      data: updated,
-    });
+    ok(res, updated, "Support access revoked successfully");
   } catch (err) {
     next(err);
   }

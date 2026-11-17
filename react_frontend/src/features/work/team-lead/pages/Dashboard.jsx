@@ -8,22 +8,17 @@ import { formatDate } from '../../../../shared/utils/formatDate';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
-import {
-  FormField,
-  
-  Input,
-  Select,
-} from '../../../../shared/components/FormField';
-import { Modal } from '../../../../shared/components/Modal';
 import { Toast } from '../../../../shared/components/Toast';
-import { ConfirmDialog } from '../../../../shared/components/ConfirmDialog';
 import { EscalationForm } from '../../components/EscalationForm';
 import { SubtaskList } from '../../components/SubtaskList';
+import { ReviewQueue } from '../components/ReviewQueue';
+import { EscalationWatch } from '../components/EscalationWatch';
+import { DashboardSubtaskModal, SendBackSubtaskModal } from '../components/DashboardModals';
+import { getBadgeStatus, formatStatus } from '../components/statusDisplay';
 
 import * as tasksApi from '../../../../services/api/tasks';
 import * as subtasksApi from '../../../../services/api/subtasks';
 import * as escalationsApi from '../../../../services/api/escalations';
-import * as notificationsApi from '../../../../services/api/notifications';
 import * as usersApi from '../../../../services/api/users';
 import * as projectsApi from '../../../../services/api/projects';
 import { useAuth } from '../../../../context/AuthContext';
@@ -57,11 +52,12 @@ export default function TeamLeadDashboard() {
   const [subtaskError, setSubtaskError] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [reviewTab, setReviewTab] = useState('tasks'); // 'tasks' | 'subtasks' | 'extensions'
+  const [sendBackSubtask, setSendBackSubtask] = useState(null);
+  const [sendBackReason, setSendBackReason] = useState('');
+  const [sendBackError, setSendBackError] = useState('');
+  const [sendingBack, setSendingBack] = useState(false);
 
 
-  const [isApproveConfirmOpen, setApproveConfirmOpen] = useState(false);
-  const [isRejectConfirmOpen, setRejectConfirmOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
 
 
   const [toast, setToast] = useState({
@@ -168,7 +164,7 @@ export default function TeamLeadDashboard() {
     return () => {
       mounted = false;
     };
-  }, [user.id]);
+  }, [user.id, user?.teams]);
 
   const teamOverviewTasks = tasks.filter(
     (task) => !task.isSubtask && !task.parentId && !task.taskId
@@ -213,141 +209,6 @@ export default function TeamLeadDashboard() {
       !String(e.blockerType || '').toLowerCase().includes('extension') &&
       !String(e.title || '').toLowerCase().includes('extension request')
   );
-
-  const getBadgeStatus = (status) => {
-    if (!status) return 'default';
-
-    const value = String(status).toLowerCase();
-
-    if (
-      value.includes('completed') ||
-      value.includes('approved')
-    ) {
-      return 'success';
-    }
-
-    if (value === 'active') {
-      return 'active';
-    }
-
-    if (
-      value.includes('progress') ||
-      value.includes('review')
-    ) {
-      return 'info';
-    }
-
-    if (
-      value.includes('pending') ||
-      value.includes('blocked')
-    ) {
-      return 'warning';
-    }
-
-    if (
-      value.includes('rejected') ||
-      value.includes('failed')
-    ) {
-      return 'danger';
-    }
-
-    return 'default';
-  };
-
-  const formatStatus = (status) =>
-    String(status || 'Unknown').replace(/_/g, ' ');
-
-  const openApproveConfirm = (task) => {
-    setSelectedTask(task);
-    setApproveConfirmOpen(true);
-  };
-
-  const handleApprove = async () => {
-    if (!selectedTask) return;
-
-    try {
-      await tasksApi.update(selectedTask.id, {
-        status: 'Completed',
-      });
-
-      setTasks((previousTasks) =>
-        previousTasks.map((task) =>
-          task.id === selectedTask.id
-            ? {
-                ...task,
-                status: 'Completed',
-              }
-            : task
-        )
-      );
-
-      showToast(
-        'success',
-        'Task approved successfully.'
-      );
-    } catch (error) {
-      console.error('Approve task failed:', error);
-      if (error.code === 'COMPLIANCE_BLOCK') {
-        showToast(
-          'error',
-          'Approval blocked: Mandatory compliance evidence must be approved before completion.'
-        );
-      } else {
-        showToast(
-          'error',
-          error.message || 'Failed to approve task.'
-        );
-      }
-    } finally {
-      setApproveConfirmOpen(false);
-      setSelectedTask(null);
-    }
-  };
-
-  // ---------------------------------------------------------------------------
-  // Reject / request changes
-  // ---------------------------------------------------------------------------
-
-  const openRejectConfirm = (task) => {
-    setSelectedTask(task);
-    setRejectConfirmOpen(true);
-  };
-
-  const handleReject = async () => {
-    if (!selectedTask) return;
-
-    try {
-      await tasksApi.update(selectedTask.id, {
-        status: 'Active',
-      });
-
-      setTasks((previousTasks) =>
-        previousTasks.map((task) =>
-          task.id === selectedTask.id
-            ? {
-                ...task,
-                status: 'Active',
-              }
-            : task
-        )
-      );
-
-      showToast(
-        'success',
-        'Task sent back for changes.'
-      );
-    } catch (error) {
-      console.error('Reject task failed:', error);
-
-      showToast(
-        'error',
-        'Failed to reject task.'
-      );
-    } finally {
-      setRejectConfirmOpen(false);
-      setSelectedTask(null);
-    }
-  };
 
   // ---------------------------------------------------------------------------
   // Subtask
@@ -477,27 +338,33 @@ export default function TeamLeadDashboard() {
             : t
         )
       );
-      // Notify the assignee
-      const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
-      if (assigneeId) {
-        try {
-          await notificationsApi.create({
-            userId: assigneeId,
-            title: 'Subtask Approved',
-            message: `Your subtask "${subtask.title}" has been approved by your Team Lead.`,
-            type: 'success',
-          });
-        } catch (_) { /* non-critical */ }
-      }
       showToast('success', `Subtask "${subtask.title}" approved.`);
-    } catch (err) {
+    } catch {
       showToast('error', 'Failed to approve subtask.');
     }
   };
 
-  const handleRejectSubtask = async (subtask) => {
+  const openSendBack = (subtask) => {
+    setSendBackSubtask(subtask);
+    setSendBackReason('');
+    setSendBackError('');
+  };
+
+  const closeSendBack = () => {
+    if (!sendingBack) setSendBackSubtask(null);
+  };
+
+  const handleRejectSubtask = async () => {
+    const subtask = sendBackSubtask;
+    const reason = sendBackReason.trim();
+    if (!subtask) return;
+    if (!reason) {
+      setSendBackError('Tell the team member why the subtask is being sent back.');
+      return;
+    }
+    setSendingBack(true);
     try {
-      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Active' });
+      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Active', reviewComment: reason });
       setTasks((prev) =>
         prev.map((t) =>
           t.id === subtask._parentTask?.id
@@ -505,28 +372,19 @@ export default function TeamLeadDashboard() {
                 ...t,
                 subtasks: (t.subtasks || []).map((st) =>
                   (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
-                    ? { ...st, status: 'Active' }
+                    ? { ...st, status: 'Active', reviewComment: reason }
                     : st
                 ),
               }
             : t
         )
       );
-      // Notify the assignee
-      const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
-      if (assigneeId) {
-        try {
-          await notificationsApi.create({
-            userId: assigneeId,
-            title: 'Subtask Sent Back',
-            message: `Your subtask "${subtask.title}" was sent back for revision by your Team Lead. Please check and resubmit.`,
-            type: 'warning',
-          });
-        } catch (_) { /* non-critical */ }
-      }
-      showToast('success', 'Subtask sent back to In Progress.');
+      setSendBackSubtask(null);
+      showToast('success', 'Subtask sent back with your comment.');
     } catch (err) {
-      showToast('error', 'Failed to reject subtask.');
+      setSendBackError(err.message || 'Failed to send the subtask back.');
+    } finally {
+      setSendingBack(false);
     }
   };
 
@@ -537,25 +395,11 @@ export default function TeamLeadDashboard() {
       setEscalations((prev) =>
         prev.map((e) => (e.id === ext.id ? { ...e, status: newStatus } : e))
       );
-      // Notify the requesting team member
-      const reportedById = ext.reportedBy?.id || ext.reportedById;
-      if (reportedById) {
-        try {
-          await notificationsApi.create({
-            userId: reportedById,
-            title: approved ? 'Extension Request Approved' : 'Extension Request Rejected',
-            message: approved
-              ? `Your deadline extension request ("${ext.title}") has been approved by your Team Lead.`
-              : `Your deadline extension request ("${ext.title}") was not approved. Please discuss with your Team Lead.`,
-            type: approved ? 'success' : 'warning',
-          });
-        } catch (_) { /* non-critical */ }
-      }
       showToast(
         approved ? 'success' : 'info',
         approved ? 'Extension approved & member notified.' : 'Extension rejected & member notified.'
       );
-    } catch (err) {
+    } catch {
       showToast('error', 'Failed to update extension request.');
     }
   };
@@ -774,8 +618,8 @@ export default function TeamLeadDashboard() {
 
                             <p className="text-xs text-gray-500 mt-1">
                               {task.assigneeName ||
-                                task.assignee?.fullName ||
-                                task.assignee ||
+                                task.assignedTo?.fullName ||
+                                task.assignedTo?.email ||
                                 'Unassigned'}{' '}
                               · Due{' '}
                               {formatDate(task.dueDate || task.deadline)}
@@ -946,175 +790,17 @@ export default function TeamLeadDashboard() {
 
       {/* Review queue — tabbed */}
 
-      <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-gray-900">Review Queue</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Approve, reject or respond to team submissions</p>
-          </div>
-          <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-blue-600 text-white text-xs font-bold">
-            {reviewQueueTasks.length + reviewQueueSubtasks.length + extensionRequests.filter(e => e.status !== 'Resolved' && e.status !== 'Closed').length}
-          </span>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100 bg-gray-50/50">
-          {[
-            { key: 'tasks', label: 'Tasks', count: reviewQueueTasks.length },
-            { key: 'subtasks', label: 'Subtasks', count: reviewQueueSubtasks.length },
-            { key: 'extensions', label: 'Extensions', count: extensionRequests.filter(e => e.status !== 'Resolved' && e.status !== 'Closed').length },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setReviewTab(tab.key)}
-              className={`flex items-center gap-2 px-5 py-3 text-xs font-semibold border-b-2 transition-colors ${
-                reviewTab === tab.key
-                  ? 'border-blue-600 text-blue-700 bg-white'
-                  : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-                  reviewTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab content */}
-        <div className="p-5">
-
-          {/* — Tasks tab — */}
-          {reviewTab === 'tasks' && (
-            reviewQueueTasks.length === 0 ? (
-              <EmptyState
-                title="No tasks in review"
-                description="When team members submit their work you'll see it here."
-              />
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {reviewQueueTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{task.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Submitted by <strong>{task.assigneeName || task.assignee || 'Unknown'}</strong>
-                      </p>
-                      {task.notes && (
-                        <p className="text-xs text-gray-400 mt-1 italic truncate max-w-md">&ldquo;{task.notes}&rdquo;</p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <Badge status={getBadgeStatus(task.status)}>{formatStatus(task.status)}</Badge>
-                      <Button variant="primary" onClick={() => openApproveConfirm(task)}>Approve</Button>
-                      <Button variant="danger" onClick={() => openRejectConfirm(task)}>Reject</Button>
-                      {!task.isSubtask && !task.parentId && (
-                        <Button variant="outline" onClick={() => openSubtaskModal(task.id)}>Break down</Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-
-          {/* — Subtasks tab — */}
-          {reviewTab === 'subtasks' && (
-            reviewQueueSubtasks.length === 0 ? (
-              <EmptyState
-                title="No subtasks in review"
-                description="Subtasks submitted by team members will appear here."
-              />
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {reviewQueueSubtasks.map((subtask) => {
-                  const subId = subtask.id || subtask.subtaskId;
-                  return (
-                    <div
-                      key={subId}
-                      className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900 text-sm truncate">{subtask.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Under: <strong>{subtask._parentTask?.title || 'Parent task'}</strong>
-                          {subtask.assignedToName && <> · by {subtask.assignedToName}</>}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 shrink-0">
-                        <Badge status="info">In Review</Badge>
-                        <Button variant="primary" onClick={() => handleApproveSubtask(subtask)}>Approve</Button>
-                        <Button variant="danger" onClick={() => handleRejectSubtask(subtask)}>Send Back</Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )
-          )}
-
-          {/* — Extensions tab — */}
-          {reviewTab === 'extensions' && (() => {
-            const openExts = extensionRequests.filter(e => e.status !== 'Resolved' && e.status !== 'Closed');
-            return openExts.length === 0 ? (
-              <EmptyState
-                title="No pending extension requests"
-                description="Extension requests from team members will appear here."
-              />
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {openExts.map((ext) => (
-                  <div
-                    key={ext.id}
-                    className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-start justify-between gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 text-sm">{ext.title}</p>
-                      {ext.description && (
-                        <p className="text-xs text-gray-600 mt-1 bg-amber-50 border border-amber-100 rounded px-2 py-1 max-w-lg">
-                          {ext.description}
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1.5">
-                        Requested by{' '}
-                        <strong>{ext.reportedBy?.fullName || ext.reportedBy?.email || 'Team member'}</strong>
-                        {ext.createdAt && (
-                          <> · {new Date(ext.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="primary"
-                        onClick={() => handleExtensionDecision(ext, true)}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() => handleExtensionDecision(ext, false)}
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-        </div>
-      </section>
+      <ReviewQueue
+        activeTab={reviewTab}
+        onTabChange={setReviewTab}
+        tasks={reviewQueueTasks}
+        subtasks={reviewQueueSubtasks}
+        extensionRequests={extensionRequests}
+        onBreakDown={openSubtaskModal}
+        onApproveSubtask={handleApproveSubtask}
+        onSendBackSubtask={openSendBack}
+        onExtensionDecision={handleExtensionDecision}
+      />
 
       {/* Escalation + Watch */}
 
@@ -1128,242 +814,43 @@ export default function TeamLeadDashboard() {
 
         {/* Escalation watch */}
 
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-
-          <div className="px-5 py-4 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900">
-              Team escalation watch
-            </h2>
-
-            <p className="text-xs text-gray-500 mt-1">
-              Blockers filed by your team
-            </p>
-          </div>
-
-          <div className="p-5 max-h-[380px] overflow-y-auto">
-
-            {regularEscalations.length === 0 ? (
-              <EmptyState
-                title="No escalations"
-                description="When blockers are reported, they will appear here."
-              />
-            ) : (
-              <div className="divide-y divide-gray-100">
-
-                {regularEscalations.map((escalation) => (
-                  <div
-                    key={escalation.id}
-                    className="py-4 first:pt-0 last:pb-0 flex items-start justify-between gap-4"
-                  >
-
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900">
-                        {escalation.title}
-                      </p>
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        {escalation.createdAt
-                          ? new Date(
-                              escalation.createdAt
-                            ).toLocaleDateString(
-                              'en-IN',
-                              {
-                                day: 'numeric',
-                                month: 'short',
-                              }
-                            )
-                          : '—'}{' '}
-                        ·{' '}
-                        {escalation.blockerType || '—'}
-                      </p>
-                    </div>
-
-                    <Badge
-                      status={
-                        escalation.status === 'Resolved'
-                          ? 'success'
-                          : getBadgeStatus(
-                              escalation.status
-                            )
-                      }
-                    >
-                      {escalation.status || 'Open'}
-                    </Badge>
-
-                  </div>
-                ))}
-
-              </div>
-            )}
-
-          </div>
-        </div>
+        <EscalationWatch escalations={regularEscalations} />
 
       </section>
 
       {/* Create subtask modal */}
 
-      <Modal
+      <DashboardSubtaskModal
         isOpen={isSubtaskModalOpen}
         onClose={closeSubtaskModal}
-        title="Create subtask"
-        footer={
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="secondary"
-              onClick={closeSubtaskModal}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              variant="primary"
-              onClick={handleSaveSubtask}
-              disabled={savingSubtask}
-            >
-              {savingSubtask ? 'Saving…' : 'Save & assign'}
-            </Button>
-          </div>
-        }
-      >
-        {subtaskError && (
-          <div
-            className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-            role="alert"
-          >
-            {subtaskError}
-          </div>
-        )}
-        <div className="space-y-4">
-
-          <p className="text-sm text-gray-500">
-            {selectedParentTaskId
-              ? `Breaking down task #${selectedParentTaskId}`
-              : 'Pick the parent task this subtask rolls up under.'}
-          </p>
-
-          <FormField
-            label="Parent task"
-            required
-          >
-            <Select
-              value={selectedParentTaskId}
-              onChange={(event) =>
-                setSelectedParentTaskId(
-                  event.target.value
-                )
-              }
-              disabled={isParentLocked}
-              options={[
-                {
-                  value: '',
-                  label: 'Select parent task…',
-                },
-                ...teamOverviewTasks.map(
-                  (task) => ({
-                    value: task.id,
-                    label: task.title,
-                  })
-                ),
-              ]}
-            />
-          </FormField>
-
-          <FormField
-            label="Subtask title"
-            required
-          >
-            <Input
-              value={subtaskTitle}
-              onChange={(event) =>
-                setSubtaskTitle(
-                  event.target.value
-                )
-              }
-              placeholder="What should be done?"
-            />
-          </FormField>
-
-          <FormField label="Assign to">
-            <Select
-              value={subtaskAssignee}
-              onChange={(event) =>
-                setSubtaskAssignee(
-                  event.target.value
-                )
-              }
-              options={[
-                {
-                  value: '',
-                  label: 'Select team member…',
-                },
-                {
-                  value: user.id,
-                  label: user.fullName || 'Me',
-                },
-                ...teamMembers.map(
-                  (member) => ({
-                    value: member.id,
-                    label:
-                      member.fullName ||
-                      member.name ||
-                      member.email ||
-                      `Member ${member.id}`,
-                  })
-                ),
-              ]}
-            />
-          </FormField>
-
-          <FormField label="Deadline">
-            <Input
-              type="date"
-              value={subtaskDeadline}
-              onChange={(event) =>
-                setSubtaskDeadline(
-                  event.target.value
-                )
-              }
-            />
-          </FormField>
-
-        </div>
-      </Modal>
-
-      {/* Approve confirmation */}
-
-      <ConfirmDialog
-        isOpen={isApproveConfirmOpen}
-        title="Approve Task"
-        message={
-          selectedTask
-            ? `Are you sure you want to approve "${selectedTask.title}"?`
-            : 'Are you sure you want to approve this task?'
-        }
-        confirmText="Yes, Approve"
-        onConfirm={handleApprove}
-        onCancel={() => {
-          setApproveConfirmOpen(false);
-          setSelectedTask(null);
-        }}
+        onSave={handleSaveSubtask}
+        saving={savingSubtask}
+        error={subtaskError}
+        parentTaskId={selectedParentTaskId}
+        onParentTaskChange={setSelectedParentTaskId}
+        parentLocked={isParentLocked}
+        parentTasks={teamOverviewTasks}
+        title={subtaskTitle}
+        onTitleChange={setSubtaskTitle}
+        assignee={subtaskAssignee}
+        onAssigneeChange={setSubtaskAssignee}
+        user={user}
+        teamMembers={teamMembers}
+        deadline={subtaskDeadline}
+        onDeadlineChange={setSubtaskDeadline}
+        parentDueDate={tasks.find((task) => String(task.id) === String(selectedParentTaskId))?.dueDate}
       />
 
-      {/* Reject confirmation */}
+      {/* Send back subtask modal */}
 
-      <ConfirmDialog
-        isOpen={isRejectConfirmOpen}
-        title="Request Changes"
-        message={
-          selectedTask
-            ? `Send "${selectedTask.title}" back to In Progress?`
-            : 'Are you sure you want to request changes?'
-        }
-        confirmText="Yes, Request Changes"
-        onConfirm={handleReject}
-        onCancel={() => {
-          setRejectConfirmOpen(false);
-          setSelectedTask(null);
-        }}
+      <SendBackSubtaskModal
+        subtask={sendBackSubtask}
+        onClose={closeSendBack}
+        onConfirm={handleRejectSubtask}
+        sending={sendingBack}
+        error={sendBackError}
+        reason={sendBackReason}
+        onReasonChange={setSendBackReason}
       />
 
       {/* Toast */}
