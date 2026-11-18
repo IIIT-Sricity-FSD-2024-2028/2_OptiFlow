@@ -14,6 +14,7 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "test:work": "node test-work-fixes.js",
     "test:hr": "node test-sec-m5-hr.js",
+    "test:compliance": "node test-compliance-e2e.js",
     "test:m4": "node scripts/audit/test-security-m4.js && node scripts/contract-audit/audit-runner.js"
   },
   "prisma": {
