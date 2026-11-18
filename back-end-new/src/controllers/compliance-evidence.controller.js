@@ -350,9 +350,15 @@ export async function deleteEvidence(req, res, next) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
     }
 
-    const role = normalizeRole(req.user?.role);
+    const role = normalizeRole(req.user?.role || req.user?.roleLabel);
     const isMember = role === 'team_member' || role === 'member';
+    const isPrivilegedCompliance = [
+      'company_owner',
+      'system_admin',
+      'compliance_officer',
+    ].includes(role);
 
+    // SEC-M1-07: Forbid deleting Approved evidence except for Company Owner or Compliance Officer
     if (isMember) {
       if (existing.userId !== req.user.id) {
         throw new ForbiddenError('You can only delete your own evidence submissions');
@@ -360,6 +366,29 @@ export async function deleteEvidence(req, res, next) {
       if (existing.status !== 'Pending') {
         throw new ForbiddenError('Reviewed or approved evidence cannot be deleted');
       }
+    } else if (!isPrivilegedCompliance) {
+      if (existing.status === 'Approved') {
+        throw new ForbiddenError('Approved evidence cannot be deleted. Contact a Compliance Officer or Company Owner.');
+      }
+    }
+
+    // SEC-M1-07: Record audit log before deleting evidence
+    try {
+      await createComplianceAuditLog({
+        companyId: req.user.companyId,
+        evidenceId: id,
+        action: AUDIT_ACTIONS.DELETE,
+        performedById: req.user.id,
+        oldValue: {
+          title: existing.title,
+          status: existing.status,
+          fileUrl: existing.fileUrl,
+          taskId: existing.taskId,
+          violationId: existing.violationId,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: Audit logging for evidence delete:', auditErr.message);
     }
 
     if (existing.fileUrl) {

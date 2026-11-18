@@ -151,9 +151,19 @@ async function checkEvidenceForTask(taskId, requirement, rule) {
       if (targetCategory) {
         const evCatName = ev.violation?.rule?.category?.name || '';
         const evCatId = ev.violation?.rule?.categoryId || '';
-        matchesCategory =
-          evCatName.toLowerCase() === String(targetCategory).toLowerCase() ||
-          evCatId === targetCategory;
+        const ruleCatName = rule.category?.name || '';
+        const ruleCatId = rule.categoryId || '';
+        const targetStr = String(targetCategory).toLowerCase();
+
+        // SEC-M1-11: Match category via violation, rule's own category, or evidenceType
+        const matchesViolationCat =
+          evCatName.toLowerCase() === targetStr || evCatId === targetCategory;
+        const matchesRuleCat =
+          ruleCatName.toLowerCase() === targetStr || ruleCatId === targetCategory;
+        const matchesEvidenceType =
+          String(ev.evidenceType || '').toLowerCase() === targetStr;
+
+        matchesCategory = matchesViolationCat || matchesRuleCat || matchesEvidenceType;
       }
 
       if (targetType) {
