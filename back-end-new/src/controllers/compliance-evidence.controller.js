@@ -1,4 +1,3 @@
-const uploadDir = path.join(process.cwd(), 'uploads');
 import path from 'path';
 import fs from 'fs';
 import { pipeline } from 'stream/promises';
@@ -9,14 +8,37 @@ import { validateRequired, validateEnum } from '../utils/validation.js';
 import { ROLES, normalizeRole } from '../utils/roles.js';
 import { createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 import { uploadToStorage, getStorageSignedUrl, deleteFromStorage } from '../services/storage.service.js';
+import { env } from '../config/env.js';
 
-const ALLOWED_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'text/csv', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+const uploadDir = path.join(process.cwd(), 'uploads');
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.csv', '.doc', '.docx'];
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
 const ALLOWED_SEVERITIES = ['Low', 'Medium', 'High', 'Critical'];
 const ALLOWED_VIOLATION_STATUSES = ['Open', 'Under_Review', 'Resolved', 'Ignored'];
 const ALLOWED_EVIDENCE_STATUSES = ['Pending', 'Under_Review', 'Approved', 'Rejected'];
 
-
-import { env } from '../config/env.js';
+/**
+ * Validates file extension and MIME type against the allow-list (SEC-M1-02).
+ */
+function validateUploadedFile(file) {
+  if (!file) return;
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    throw new BadRequestError(`File extension '${ext}' is not permitted. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`);
+  }
+  if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    throw new BadRequestError(`File MIME type '${file.mimetype}' is not permitted.`);
+  }
+}
 
 /** Include shared by list, get, create, update and upload so every response has the same shape. */
 const EVIDENCE_LIST_INCLUDE = {
@@ -102,7 +124,7 @@ export async function createEvidence(req, res, next) {
     const taskId = body.taskId || body.task_id || null;
     const violationId = body.violationId || body.violation_id || null;
     const evidenceType = body.evidenceType || body.evidence_type || 'Document';
-    const fileUrl = body.fileUrl || body.file_url || '';
+    let fileUrl = body.fileUrl || body.file_url || '';
     const notes = body.notes || '';
 
     validateRequired({ title }, ['title']);
@@ -121,6 +143,27 @@ export async function createEvidence(req, res, next) {
       if (!violation) throw new NotFoundError(`Violation ${violationId} not found in this company`);
     }
 
+    // SEC-M1-08: If file is attached in multipart request, process and upload atomically
+    let storageDetails = null;
+    if (req.file) {
+      validateUploadedFile(req.file);
+      const safeOriginalName = (req.file.originalname || 'artifact.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `${req.user.companyId}/evidence/${Date.now()}-${safeOriginalName}`;
+      const uploadResult = await uploadToStorage({
+        buffer: req.file.buffer,
+        filePath: storagePath,
+        mimetype: req.file.mimetype,
+      });
+      fileUrl = uploadResult.fileUrl;
+      storageDetails = {
+        safeOriginalName,
+        storagePath,
+        storageType: uploadResult.storageType,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      };
+    }
+
     const newEvidence = await prisma.complianceEvidence.create({
       data: {
         companyId: req.user.companyId,
@@ -136,17 +179,43 @@ export async function createEvidence(req, res, next) {
       include: EVIDENCE_LIST_INCLUDE,
     });
 
+    if (storageDetails) {
+      try {
+        await prisma.attachment.create({
+          data: {
+            companyId: req.user.companyId,
+            entityType: 'ComplianceEvidence',
+            entityId: newEvidence.id,
+            fileName: req.file.originalname,
+            fileType: req.file.mimetype,
+            fileSizeBytes: req.file.size,
+            storageKey: storageDetails.storagePath || fileUrl,
+            uploadedById: req.user.id,
+          },
+        });
+      } catch (attErr) {
+        console.warn('[Attachment] Could not persist attachment record:', attErr.message);
+      }
+    }
+
     try {
       await createComplianceAuditLog({
         companyId: req.user.companyId,
-        
         evidenceId: newEvidence.id,
         action: AUDIT_ACTIONS.CREATE,
         performedById: req.user.id,
-        newValue: { title, status: 'Pending' },
+        newValue: {
+          title,
+          taskId,
+          violationId,
+          evidenceType,
+          status: 'Pending',
+          fileUrl,
+          hasAttachedFile: !!storageDetails,
+        },
       });
     } catch (auditErr) {
-      console.warn('[AuditLog] Notice: Audit logging for evidence create:', auditErr.message);
+      console.warn('[Compliance Evidence] Failed to create audit log for createEvidence:', auditErr.message);
     }
 
     res.status(201).json({
@@ -417,12 +486,29 @@ export async function uploadEvidenceFile(req, res, next) {
       throw new BadRequestError('No file attached. Include a "file" field in the multipart/form-data body.');
     }
 
+    // SEC-M1-02: Enforce extension and MIME type allow-list
+    validateUploadedFile(file);
+
     const evidence = await prisma.complianceEvidence.findFirst({
       where: { id, companyId: req.user.companyId },
     });
 
     if (!evidence) {
       throw new NotFoundError(`Compliance evidence with ID ${id} not found`);
+    }
+
+    // SEC-M1-03: Evidence can only be uploaded/replaced while in Pending status
+    if (evidence.status !== 'Pending') {
+      throw new BadRequestError(
+        `Cannot upload or replace file for evidence with status '${evidence.status}'. Only 'Pending' evidence can be modified.`
+      );
+    }
+
+    // SEC-M1-03: Only the submitter or an administrator can upload/replace files
+    const userRole = normalizeRole(req.user?.role || req.user?.roleLabel || '');
+    const isOwnerOrAdmin = [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, 'company_owner', 'system_admin'].includes(userRole);
+    if (!isOwnerOrAdmin && evidence.userId !== req.user.id) {
+      throw new ForbiddenError('Only the submitter or an administrator can upload evidence files for this record');
     }
 
     // Clean safe filename
@@ -458,11 +544,7 @@ export async function uploadEvidenceFile(req, res, next) {
     const updatedEvidence = await prisma.complianceEvidence.update({
       where: { id },
       data: { fileUrl },
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        task: { select: { id: true, title: true } },
-        violation: { include: { rule: true } },
-      },
+      include: EVIDENCE_LIST_INCLUDE,
     });
 
     await createComplianceAuditLog({
@@ -504,6 +586,9 @@ export async function streamEvidenceFile(req, res, next) {
       throw new NotFoundError(`Evidence file for ID ${id} not found`);
     }
 
+    // SEC-M1-02: Security headers preventing XSS and content type sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
     // 1. If stored in Supabase Cloud Storage, generate a signed URL and redirect
     if (evidence.fileUrl.startsWith('supabase://')) {
       const signedUrl = await getStorageSignedUrl(evidence.fileUrl, 3600);
@@ -525,6 +610,7 @@ export async function streamEvidenceFile(req, res, next) {
       throw new NotFoundError('Physical evidence file not found on disk');
     }
 
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.sendFile(safeFilePath);
   } catch (err) {
     next(err);

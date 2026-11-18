@@ -34,6 +34,7 @@ router.post(
   ['/evidence', '/api/evidence'],
   authenticate,
   requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.PROJECT_MANAGER, ROLES.TEAM_LEAD, ROLES.TEAM_MEMBER, 'compliance_officer', 'project_manager', 'team_leader', 'team_lead', 'team_member'),
+  upload.single('file'),
   createEvidence
 );
 router.post(
