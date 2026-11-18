@@ -375,7 +375,7 @@ export async function triggerComplianceEngine(req, res, next) {
     const result = await runComplianceEngine(req.user.companyId);
     res.status(200).json({
       success: true,
-      message: `Engine completed. Found ${result.newViolations} new violations.`,
+      message: `Engine completed. Found ${result.newViolations} new violations, auto-resolved ${result.resolvedViolations || 0}.`,
       data: result,
     });
   } catch (err) {

@@ -7,8 +7,7 @@ import {
   listSystemAuditLogs,
   listProcessAuditLogs,
   listAuditLogsByUser,
-  listAuditLogsByEntity,
-  createAuditLogEndpoint
+  listAuditLogsByEntity
 } from '../controllers/audit-logs.controller.js';
 
 const router = Router();
@@ -24,14 +23,11 @@ const canReadAudit = requireRoles(
   ROLES.COMPLIANCE_OFFICER
 );
 
-// Audit Logs Routes
+// Audit Logs Routes (Immutable, server-generated audit records)
 router.get(['/audit-logs/system', '/api/audit-logs/system'], authenticate, canReadAudit, listSystemAuditLogs);
 router.get(['/audit-logs/process', '/api/audit-logs/process'], authenticate, canReadAudit, listProcessAuditLogs);
 router.get(['/audit-logs', '/api/audit-logs'], authenticate, canReadAudit, listAuditLogs);
 router.get(['/audit-logs/by-user/:userId', '/api/audit-logs/by-user/:userId'], authenticate, canReadAudit, listAuditLogsByUser);
 router.get(['/audit-logs/by-entity/:entityType/:entityId', '/api/audit-logs/by-entity/:entityType/:entityId'], authenticate, canReadAudit, listAuditLogsByEntity);
-router.post(['/audit-logs', '/api/audit-logs'], authenticate, createAuditLogEndpoint);
-
-
 
 export default router;

@@ -12,6 +12,7 @@
 //   process     process template, steps, instance
 //   compliance  categories, rules, violations, evidence, audit trail
 
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { cleanDatabase } from "./seeds/cleanup.js";
