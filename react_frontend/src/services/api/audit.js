@@ -1,12 +1,12 @@
 import { apiClient } from './client';
 
-// WHY: The Audit Logs API module. Used heavily by Compliance and Executive roles 
-// to track system changes and user activities.
-
-const BASE_PATH = '/audit'; // Or '/audit-logs' depending on your exact backend route
+/**
+ * Audit Logs API (Server-side generated, read-only audit trails)
+ * Backend routes: /api/audit-logs and /audit-logs
+ */
+const BASE_PATH = '/api/audit-logs';
 
 export const getAuditLogsList = (params = {}) => {
-  // Useful for filtering by role, date, or user ID (e.g. ?role=company_owner)
   const queryString = new URLSearchParams(params).toString();
   const url = queryString ? `${BASE_PATH}?${queryString}` : BASE_PATH;
   return apiClient(url);
@@ -16,22 +16,22 @@ export const getAuditLog = (id) => {
   return apiClient(`${BASE_PATH}/${id}`);
 };
 
-export const createAuditLog = (data) => {
-  return apiClient(BASE_PATH, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+export const getSystemAuditLogs = (params = {}) => {
+  const queryString = new URLSearchParams(params).toString();
+  return apiClient(`${BASE_PATH}/system${queryString ? `?${queryString}` : ''}`);
 };
 
-export const updateAuditLog = (id, data) => {
-  return apiClient(`${BASE_PATH}/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
+export const getProcessAuditLogs = (params = {}) => {
+  const queryString = new URLSearchParams(params).toString();
+  return apiClient(`${BASE_PATH}/process${queryString ? `?${queryString}` : ''}`);
 };
 
-export const removeAuditLog = (id) => {
-  return apiClient(`${BASE_PATH}/${id}`, {
-    method: 'DELETE',
-  });
+export const getAuditLogsByUser = (userId, params = {}) => {
+  const queryString = new URLSearchParams(params).toString();
+  return apiClient(`${BASE_PATH}/by-user/${userId}${queryString ? `?${queryString}` : ''}`);
+};
+
+export const getAuditLogsByEntity = (entityType, entityId, params = {}) => {
+  const queryString = new URLSearchParams(params).toString();
+  return apiClient(`${BASE_PATH}/by-entity/${entityType}/${entityId}${queryString ? `?${queryString}` : ''}`);
 };
