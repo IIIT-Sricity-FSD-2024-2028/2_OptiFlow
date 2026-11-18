@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/prisma.js';
 import { recordViolationOnce } from '../services/compliance.service.js';
-const prisma = new PrismaClient();
 
 // The rule evaluators contain the actual "brains" of the automated compliance checks.
 // A rule picks its evaluator through ComplianceRule.ruleType.

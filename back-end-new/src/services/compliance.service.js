@@ -170,8 +170,8 @@ async function checkEvidenceForTask(taskId, requirement, rule) {
     return true;
   }
 
-  // 3. Otherwise, any approved general task evidence qualifies
-  return approvedEvidences.length > 0;
+  // SEC-M1-10: Evidence must explicitly match rule or category; do not fall back to generic evidence
+  return false;
 }
 
 const ACTIVE_VIOLATION_STATUSES = ['Open', 'Under_Review'];

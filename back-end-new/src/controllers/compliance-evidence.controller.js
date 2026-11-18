@@ -49,6 +49,15 @@ export async function listEvidence(req, res, next) {
       ];
     }
 
+    // PRE-M1-02: Support query param filters (taskId, violationId, status)
+    const { taskId, task_id, violationId, violation_id, status } = req.query || {};
+    const filterTaskId = taskId || task_id;
+    const filterViolationId = violationId || violation_id;
+
+    if (filterTaskId) where.taskId = String(filterTaskId);
+    if (filterViolationId) where.violationId = String(filterViolationId);
+    if (status) where.status = String(status);
+
     const evidenceList = await prisma.complianceEvidence.findMany({
       where,
       include: EVIDENCE_LIST_INCLUDE,

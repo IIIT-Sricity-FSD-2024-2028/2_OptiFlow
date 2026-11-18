@@ -99,6 +99,26 @@ async function buildViolationReadWhere(req) {
       { evidence: { some: { userId: req.user.id } } },
     ];
   }
+
+  // PRE-M1-02: Query parameter filters (taskId, ruleId, entityId, entityType, status, severity)
+  const { taskId, task_id, ruleId, rule_id, entityId, entity_id, entityType, entity_type, status, severity } = req.query || {};
+  const filterTaskId = taskId || task_id;
+  const filterRuleId = ruleId || rule_id;
+  const filterEntityId = entityId || entity_id;
+  const filterEntityType = entityType || entity_type;
+
+  if (filterRuleId) where.ruleId = String(filterRuleId);
+  if (status) where.status = String(status);
+  if (severity) where.severity = String(severity);
+
+  if (filterTaskId) {
+    where.entityType = 'Task';
+    where.entityId = String(filterTaskId);
+  } else if (filterEntityId) {
+    where.entityId = String(filterEntityId);
+    if (filterEntityType) where.entityType = String(filterEntityType);
+  }
+
   return where;
 }
 
