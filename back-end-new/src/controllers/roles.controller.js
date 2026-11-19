@@ -1,8 +1,34 @@
 import { prisma } from '../config/prisma.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ConflictError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ConflictError, ValidationError } from '../utils/errors.js';
 import { validateRequired } from '../utils/validation.js';
 import { isReservedRoleName } from '../utils/roles.js';
 import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+
+/** R10: a field that is present must be a string, so malformed bodies get a 400, not a 500. */
+function assertStringFields(body, fields) {
+  const errors = fields
+    .filter((f) => body[f] !== undefined && body[f] !== null && typeof body[f] !== 'string')
+    .map((f) => ({ field: f, message: `${f} must be a string` }));
+  if (errors.length) throw new ValidationError('Invalid field types', errors);
+}
+
+/** R16: permissionSlugs must be an array of known slugs. An empty array clears every permission. */
+async function resolvePermissionSlugs(permissionSlugs) {
+  if (!Array.isArray(permissionSlugs) || permissionSlugs.some((s) => typeof s !== 'string')) {
+    throw new ValidationError('permissionSlugs must be an array of permission slugs', [
+      { field: 'permissionSlugs', message: 'permissionSlugs must be an array of strings' },
+    ]);
+  }
+  const perms = permissionSlugs.length
+    ? await prisma.permission.findMany({ where: { slug: { in: permissionSlugs } } })
+    : [];
+  const known = new Set(perms.map((p) => p.slug));
+  const unknown = [...new Set(permissionSlugs.filter((s) => !known.has(s)))];
+  if (unknown.length) {
+    throw new BadRequestError(`Unknown permission slug(s): ${unknown.join(', ')}`);
+  }
+  return perms;
+}
 
 export async function listRoles(req, res, next) {
   try {
@@ -62,7 +88,9 @@ export async function getRoleById(req, res, next) {
 
 export async function createCustomRole(req, res, next) {
   try {
-    const { label, description, permissionSlugs = [] } = req.body;
+    const body = req.body || {};
+    assertStringFields(body, ['label', 'description']);
+    const { label, description, permissionSlugs = [] } = body;
     validateRequired({ label }, ['label']);
     if (isReservedRoleName(label)) {
       throw new BadRequestError(`"${label.trim()}" is reserved for a built-in role. Choose a different name.`);
@@ -75,13 +103,7 @@ export async function createCustomRole(req, res, next) {
       throw new BadRequestError(`Role with label "${label.trim()}" already exists`);
     }
 
-    let permissionsToConnect = [];
-    if (Array.isArray(permissionSlugs) && permissionSlugs.length > 0) {
-      const perms = await prisma.permission.findMany({
-        where: { slug: { in: permissionSlugs } },
-      });
-      permissionsToConnect = perms.map((p) => ({ permissionId: p.id }));
-    }
+    const permissionsToConnect = (await resolvePermissionSlugs(permissionSlugs)).map((p) => ({ permissionId: p.id }));
 
     const newRole = await prisma.role.create({
       data: {
@@ -137,6 +159,7 @@ export async function updateRole(req, res, next) {
   try {
     const { id } = req.params;
     const body = req.body || {};
+    assertStringFields(body, ['label', 'description']);
 
     const role = await prisma.role.findFirst({
       where: { id, companyId: req.user.companyId },
@@ -147,6 +170,9 @@ export async function updateRole(req, res, next) {
 
     const updateData = {};
     if (body.label !== undefined) {
+      if (body.label === null) {
+        throw new ValidationError('Invalid field types', [{ field: 'label', message: 'label cannot be null' }]);
+      }
       const label = String(body.label).trim();
       validateRequired({ label }, ['label']);
       if (role.isSystem && label !== role.label) {
@@ -204,7 +230,8 @@ export async function updateRole(req, res, next) {
 export async function updateRolePermissions(req, res, next) {
   try {
     const { id } = req.params;
-    const { permissionSlugs = [] } = req.body;
+    // R16: a missing or misspelled permissionSlugs used to default to [] and wipe every permission.
+    const { permissionSlugs } = req.body || {};
 
     const role = await prisma.role.findFirst({
       where: {
@@ -225,9 +252,7 @@ export async function updateRolePermissions(req, res, next) {
       );
     }
 
-    const matchedPerms = await prisma.permission.findMany({
-      where: { slug: { in: permissionSlugs } },
-    });
+    const matchedPerms = await resolvePermissionSlugs(permissionSlugs);
 
     await prisma.$transaction([
       prisma.rolePermission.deleteMany({

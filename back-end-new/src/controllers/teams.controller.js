@@ -1,13 +1,15 @@
 import { prisma } from '../config/prisma.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ConflictError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ConflictError, ValidationError } from '../utils/errors.js';
 import { resolveEffectiveBranchId, isBranchManager, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired } from '../utils/validation.js';
 import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { resolveUserRole } from '../utils/roles.js';
+import { ROLE_WITH_TEMPLATE } from '../utils/roleAssignmentGuards.js';
 
 /** Include shared by list, create and update so every response has the same shape. */
 const TEAM_LIST_INCLUDE = {
   branch: { select: { id: true, name: true, companyId: true } },
-  projects: { select: { id: true, name: true, status: true } },
+  projects: { where: { deletedAt: null }, select: { id: true, name: true, status: true } },
   teamMembers: {
     include: {
       user: {
@@ -23,6 +25,26 @@ const TEAM_LIST_INCLUDE = {
     orderBy: { joinedAt: 'asc' },
   },
 };
+
+// Roles that see every team's projects and roster emails (branch managers are scope-checked first).
+const TEAM_DETAIL_ROLES = ['company_owner', 'system_admin', 'hr_manager', 'branch_manager'];
+
+/** R5/R19: a team as the caller may see it: no projects or roster emails for outsiders. */
+function forTeamCaller(team, req) {
+  if (TEAM_DETAIL_ROLES.includes(req.user.role)) return team;
+  if ((team.teamMembers || []).some((tm) => tm.userId === req.user.id)) return team;
+  // eslint-disable-next-line no-unused-vars
+  const { projects, ...rest } = team;
+  return {
+    ...rest,
+    teamMembers: (team.teamMembers || []).map(({ user, ...tm }) => {
+      if (!user) return { ...tm, user };
+      // eslint-disable-next-line no-unused-vars
+      const { email, ...publicUser } = user;
+      return { ...tm, user: publicUser };
+    }),
+  };
+}
 
 export async function listTeams(req, res, next) {
   try {
@@ -44,9 +66,11 @@ export async function listTeams(req, res, next) {
       orderBy: { name: 'asc' },
     });
 
+    // R19: the list follows the same rule as GET /teams/:id (R5): projects and roster emails only
+    // for privileged roles or members of that team. Names and roster entries stay for pickers.
     res.status(200).json({
       success: true,
-      data: teams,
+      data: teams.map((team) => forTeamCaller(team, req)),
     });
   } catch (err) {
     next(err);
@@ -79,6 +103,7 @@ export async function getTeamById(req, res, next) {
           orderBy: { joinedAt: 'asc' },
         },
         projects: {
+          where: { deletedAt: null },
           include: {
             tasks: { where: { deletedAt: null }, select: { id: true, title: true, status: true } },
           },
@@ -94,18 +119,30 @@ export async function getTeamById(req, res, next) {
       assertBranchManagerScope(req.user, team.branchId, 'view details for this team');
     }
 
+    // R5: projects and roster emails only for privileged roles (BM scope checked above) or members.
+    const data = forTeamCaller(team, req);
+
     res.status(200).json({
       success: true,
-      data: team,
+      data,
     });
   } catch (err) {
     next(err);
   }
 }
 
+/** R10: a field that is present must be a string, so malformed bodies get a 400, not a 500. */
+function assertStringFields(body, fields) {
+  const errors = fields
+    .filter((f) => body[f] !== undefined && body[f] !== null && typeof body[f] !== 'string')
+    .map((f) => ({ field: f, message: `${f} must be a string` }));
+  if (errors.length) throw new ValidationError('Invalid field types', errors);
+}
+
 export async function createTeam(req, res, next) {
   try {
     const body = req.body || {};
+    assertStringFields(body, ['name', 'team_name', 'branchId', 'branch_id']);
     const name = (body.name || body.team_name || '').trim();
     const branchId = (body.branchId || body.branch_id || '').trim();
 
@@ -160,6 +197,7 @@ export async function updateTeam(req, res, next) {
   try {
     const { id } = req.params;
     const body = req.body || {};
+    assertStringFields(body, ['name', 'team_name', 'branchId', 'branch_id']);
 
     const existing = await prisma.team.findFirst({
       where: { id, branch: { companyId: req.user.companyId } },
@@ -259,15 +297,33 @@ export async function deleteTeam(req, res, next) {
     }
 
     const projectsCount = await prisma.project.count({
-      where: { teamId: id },
+      where: { teamId: id, deletedAt: null },
     });
 
     if (projectsCount > 0) {
       throw new ConflictError(`Cannot delete team: ${projectsCount} project(s) are currently assigned to this team`);
     }
+    // R6: Project.teamId is required with ON DELETE RESTRICT, so a soft-deleted (archived) project
+    // still pins its team. Say so, instead of the misleading "currently assigned" or a FK 500.
+    const archivedCount = await prisma.project.count({ where: { teamId: id } });
+    if (archivedCount > 0) {
+      throw new ConflictError(`Cannot delete team: it still holds ${archivedCount} archived project(s)`);
+    }
 
     // Wrap deletion in transaction to nullify foreign key references in SystemAuditLog (RAT-02)
-    await prisma.$transaction(async (tx) => {
+    const revokedGrants = await prisma.$transaction(async (tx) => {
+      // R7: Team-scoped role grants die with the team (soft revoke, D-S9).
+      const teamGrants = await tx.roleAssignment.findMany({
+        where: { user: { companyId: req.user.companyId }, scopeType: 'Team', scopeId: id, revokedAt: null },
+        include: { role: true },
+      });
+      if (teamGrants.length) {
+        await tx.roleAssignment.updateMany({
+          where: { id: { in: teamGrants.map((ra) => ra.id) }, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+
       await tx.systemAuditLog.updateMany({
         where: { teamId: id },
         data: { teamId: null },
@@ -280,6 +336,7 @@ export async function deleteTeam(req, res, next) {
       await tx.team.delete({
         where: { id },
       });
+      return teamGrants;
     });
 
     // Record audit log
@@ -292,6 +349,19 @@ export async function deleteTeam(req, res, next) {
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during team deletion:', auditErr.message);
+    }
+    for (const ra of revokedGrants) {
+      try {
+        await createSystemAuditLog({
+          companyId: req.user.companyId,
+          targetUserId: ra.userId,
+          action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+          performedById: req.user.id,
+          oldValue: { event: 'ROLE_REVOKED', userId: ra.userId, roleId: ra.roleId, roleLabel: ra.role?.label, scopeType: 'Team', scopeId: id, via: 'team-deleted' },
+        });
+      } catch (auditErr) {
+        console.warn('[AuditLog] Notice: Audit record logging during team grant revoke:', auditErr.message);
+      }
     }
 
     res.status(200).json({
@@ -330,7 +400,9 @@ const MEMBER_INCLUDE = {
  */
 async function withTeamLock(teamId, fn) {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM teams WHERE id = ${teamId} FOR UPDATE`;
+    const locked = await tx.$queryRaw`SELECT id FROM teams WHERE id = ${teamId} FOR UPDATE`;
+    // The team may have been deleted after the caller looked it up: answer 404, not a FK error.
+    if (!locked.length) throw new NotFoundError('Team not found');
     return fn(tx);
   });
 }
@@ -420,6 +492,17 @@ export async function addTeamMember(req, res, next) {
     if (!user.isActive) {
       throw new BadRequestError('A deactivated user cannot be added to a team');
     }
+    // D3: a Team Lead may only add users whose resolved role is team_member (which includes users
+    // with custom-only roles or none); Owner, Admin, HR and Branch Manager callers are not limited.
+    if (req.user.role === 'team_leader') {
+      const roleAssignments = await prisma.roleAssignment.findMany({
+        where: { userId, revokedAt: null },
+        include: { role: ROLE_WITH_TEMPLATE },
+      });
+      if (resolveUserRole({ roleAssignments }).roleSlug !== 'team_member') {
+        throw new ForbiddenError('Team Leads can only add team members');
+      }
+    }
 
     const membership = await withTeamLock(id, async (tx) => {
       const existing = await tx.teamMember.findUnique({
@@ -472,6 +555,10 @@ export async function updateTeamMemberRole(req, res, next) {
         where: { teamId_userId: { teamId: id, userId } },
       });
       if (!membership) throw new NotFoundError('User is not a member of this team');
+      if (role === 'Lead') {
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { isActive: true } });
+        if (!user?.isActive) throw new BadRequestError('A deactivated user cannot be made team Lead');
+      }
       // Compare canonical roles; a legacy 'Leader' row is rewritten as 'Lead' when touched.
       oldRole = isLeadRole(membership.role) ? 'Lead' : 'Member';
 
@@ -517,35 +604,40 @@ export async function removeTeamMember(req, res, next) {
     const team = await findCompanyTeam(req, id);
     await assertMayManageMembers(req, team);
 
-    const membership = await prisma.teamMember.findUnique({
-      where: { teamId_userId: { teamId: id, userId } },
+    // Read, Lead checks and delete run under the team lock, so a parallel add or handover
+    // cannot leave the team without a Lead.
+    const membership = await withTeamLock(id, async (tx) => {
+      const found = await tx.teamMember.findUnique({
+        where: { teamId_userId: { teamId: id, userId } },
+      });
+      if (!found) throw new NotFoundError('User is not a member of this team');
+
+      if (isLeadRole(found.role)) {
+        // Open work = tasks and subtasks assigned to the Lead on this team's live projects.
+        const openStatus = { notIn: OPEN_TASK_STATUSES_EXCLUDED };
+        const teamProject = { teamId: id, deletedAt: null };
+        const [openTasks, openSubtasks] = await Promise.all([
+          tx.task.count({
+            where: { assignedToId: userId, deletedAt: null, status: openStatus, project: teamProject },
+          }),
+          tx.subtask.count({
+            where: { assignedToId: userId, deletedAt: null, status: openStatus, task: { deletedAt: null, project: teamProject } },
+          }),
+        ]);
+        if (openTasks + openSubtasks > 0) {
+          throw new ConflictError(
+            `The team Lead still has ${openTasks} open task(s) and ${openSubtasks} open subtask(s) on this team's projects. Reassign them first.`
+          );
+        }
+        const others = await tx.teamMember.count({ where: { teamId: id, NOT: { userId } } });
+        if (others > 0) {
+          throw new ConflictError('Hand over the Lead role to another member before removing the current Lead.');
+        }
+      }
+
+      await tx.teamMember.delete({ where: { id: found.id } });
+      return found;
     });
-    if (!membership) throw new NotFoundError('User is not a member of this team');
-
-    if (isLeadRole(membership.role)) {
-      // Open work = tasks and subtasks assigned to the Lead on this team's live projects.
-      const openStatus = { notIn: OPEN_TASK_STATUSES_EXCLUDED };
-      const teamProject = { teamId: id, deletedAt: null };
-      const [openTasks, openSubtasks] = await Promise.all([
-        prisma.task.count({
-          where: { assignedToId: userId, deletedAt: null, status: openStatus, project: teamProject },
-        }),
-        prisma.subtask.count({
-          where: { assignedToId: userId, deletedAt: null, status: openStatus, task: { deletedAt: null, project: teamProject } },
-        }),
-      ]);
-      if (openTasks + openSubtasks > 0) {
-        throw new ConflictError(
-          `The team Lead still has ${openTasks} open task(s) and ${openSubtasks} open subtask(s) on this team's projects. Reassign them first.`
-        );
-      }
-      const others = await prisma.teamMember.count({ where: { teamId: id, NOT: { userId } } });
-      if (others > 0) {
-        throw new ConflictError('Hand over the Lead role to another member before removing the current Lead.');
-      }
-    }
-
-    await prisma.teamMember.delete({ where: { id: membership.id } });
     await auditMembership(req, team, AUDIT_ACTIONS.DELETE, { userId, role: membership.role, teamMember: true }, null);
 
     res.status(200).json({

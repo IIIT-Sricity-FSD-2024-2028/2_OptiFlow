@@ -102,6 +102,7 @@ async function teardown() {
         { oldValue: { path: ['deletedRoleLabel'], ...ours } },
         { newValue: { path: ['deletedRoleLabel'], ...ours } },
         { newValue: { path: ['email'], ...ours } },
+        { newValue: { path: ['label'], ...ours } },
       ],
     },
   }).catch((err) => console.warn('teardown: audit cleanup failed:', err.message));
@@ -902,6 +903,557 @@ check('N2: concurrent branch creates with managers do not deadlock', async () =>
     call('POST', '/api/branches', { token: tokens.owner, body: { name: `N2c ${i} ${suffix}`, managerUserId: p.id } })));
   rs.forEach((r) => r.json?.data?.id && createdBranchIds.push(r.json.data.id));
   assert.deepEqual(rs.map((r) => r.status), [201, 201, 201], JSON.stringify(rs.map((r) => r.json?.message)));
+});
+
+// ---------------------------------------------------------------- Task 6: F9
+check('F9: two concurrent confirms of one link: exactly one succeeds', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `f9-${suffix}@acme.com`, roleName: 'team_member' });
+  const { token } = buildEmailChangeToken({ userId: u.id, companyId: acme.id, tokenVersion: u.tokenVersion, newEmail: `f9-new-${suffix}@acme.com` });
+  const rs = await Promise.all([1, 2].map(() => call('POST', '/api/users/email-change/confirm', { body: { token } })));
+  assert.deepEqual(rs.map((r) => r.status).sort(), [200, 400]);
+  assert.equal((await prisma.user.findUnique({ where: { id: u.id } })).email, `f9-new-${suffix}@acme.com`);
+});
+
+check('F9: an admin email change invalidates pending confirmation links', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `f9b-${suffix}@acme.com`, roleName: 'team_member' });
+  const { token } = buildEmailChangeToken({ userId: u.id, companyId: acme.id, tokenVersion: u.tokenVersion, newEmail: `f9b-new-${suffix}@acme.com` });
+  assert.equal((await call('PATCH', `/api/users/${u.id}`, { token: tokens.hr, body: { email: `f9b-admin-${suffix}@acme.com` } })).status, 200);
+  assert.equal((await prisma.user.findUnique({ where: { id: u.id } })).tokenVersion, u.tokenVersion + 1);
+  assert.equal((await call('POST', '/api/users/email-change/confirm', { body: { token } })).status, 400);
+  assert.equal((await prisma.user.findUnique({ where: { id: u.id } })).email, `f9b-admin-${suffix}@acme.com`);
+});
+
+// ---------------------------------------------------------------- Task 7a: F17 / R1 / R2 user lifecycle
+check('F17: a System Admin cannot deactivate themselves via PATCH', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `f17-self-${suffix}@acme.com`, roleName: 'system_admin' });
+  const r = await call('PATCH', `/api/users/${admin.id}`, { token: await login(admin.email), body: { isActive: false } });
+  assert.equal(r.status, 400, JSON.stringify(r.json));
+  assert.equal((await prisma.user.findUnique({ where: { id: admin.id } })).isActive, true);
+});
+
+check('F17: a System Admin cannot deactivate a peer System Admin via PATCH', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `f17-a-${suffix}@acme.com`, roleName: 'system_admin' });
+  const peer = await makeUser({ companyId: acme.id, email: `f17-b-${suffix}@acme.com`, roleName: 'system_admin' });
+  const r = await call('PATCH', `/api/users/${peer.id}`, { token: await login(admin.email), body: { isActive: false } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.equal((await prisma.user.findUnique({ where: { id: peer.id } })).isActive, true);
+});
+
+check('F17: the Owner can deactivate a System Admin via PATCH', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `f17-o-${suffix}@acme.com`, roleName: 'system_admin' });
+  const r = await call('PATCH', `/api/users/${admin.id}`, { token: tokens.owner, body: { isActive: false } });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await prisma.user.findUnique({ where: { id: admin.id } })).isActive, false);
+});
+
+check('R1: HR cannot reactivate a System Admin the Owner deactivated', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `r1-${suffix}@acme.com`, roleName: 'system_admin' });
+  const d = await call('DELETE', `/api/users/${admin.id}`, { token: tokens.owner });
+  assert.equal(d.status, 200, JSON.stringify(d.json));
+  const r = await call('PATCH', `/api/users/${admin.id}/reactivate`, { token: tokens.hr });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.equal((await prisma.user.findUnique({ where: { id: admin.id } })).isActive, false);
+});
+
+check('R2: a System Admin cannot demote a peer System Admin', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `r2-a-${suffix}@acme.com`, roleName: 'system_admin' });
+  const peer = await makeUser({ companyId: acme.id, email: `r2-b-${suffix}@acme.com`, roleName: 'system_admin' });
+  const r = await call('PATCH', `/api/users/${peer.id}`, { token: await login(admin.email), body: { role: 'team_member' } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.deepEqual((await activeAssignments(peer.id)).map((ra) => ra.role.name), ['system_admin']);
+});
+
+check('R2: a System Admin cannot reset a peer System Admin password', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `r2-pa-${suffix}@acme.com`, roleName: 'system_admin' });
+  const peer = await makeUser({ companyId: acme.id, email: `r2-pb-${suffix}@acme.com`, roleName: 'system_admin' });
+  const r = await call('PATCH', `/api/users/${peer.id}`, { token: await login(admin.email), body: { password: 'newpassword123' } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.equal((await prisma.user.findUnique({ where: { id: peer.id } })).passwordHash, peer.passwordHash);
+});
+
+check('R2: a System Admin cannot revoke a peer system_admin assignment', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `r2-ra-${suffix}@acme.com`, roleName: 'system_admin' });
+  const peer = await makeUser({ companyId: acme.id, email: `r2-rb-${suffix}@acme.com`, roleName: 'system_admin' });
+  const [row] = await activeAssignments(peer.id);
+  const r = await call('DELETE', `/api/role-assignments/${row.id}`, { token: await login(admin.email) });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.equal((await activeAssignments(peer.id)).length, 1);
+});
+
+check('R2: the Owner can still demote a System Admin', async () => {
+  const admin = await makeUser({ companyId: acme.id, email: `r2-o-${suffix}@acme.com`, roleName: 'system_admin' });
+  const r = await call('PATCH', `/api/users/${admin.id}`, { token: tokens.owner, body: { role: 'team_member' } });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.deepEqual((await activeAssignments(admin.id)).map((ra) => ra.role.name), ['team_member']);
+});
+
+// ---------------------------------------------------------------- D2 / D3: grant rank
+const createVia = async (token, tag, role, extra = {}) => {
+  const email = `d2-${tag}-${suffix}@acme.com`;
+  const r = await call('POST', '/api/users', { token, body: { fullName: `D2 ${tag}`, email, password: 'password123', role, ...extra } });
+  const made = await userByEmail(email);
+  if (made) createdUserIds.push(made.id);
+  return { r, made };
+};
+
+check('D2: HR cannot create a branch_manager account', async () => {
+  const branch = await prisma.branch.findFirst({ where: { companyId: acme.id } });
+  const { r, made } = await createVia(tokens.hr, 'bm', 'branch_manager', { branchId: branch.id });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.equal(made, null);
+});
+
+check('D2: HR can still create equal- and lower-ranked accounts (hr_manager, process_admin, compliance_officer, project_manager, team_leader)', async () => {
+  for (const role of ['hr_manager', 'process_admin', 'compliance_officer', 'project_manager', 'team_leader']) {
+    const { r } = await createVia(tokens.hr, role, role);
+    assert.equal(r.status, 201, `${role}: ${JSON.stringify(r.json)}`);
+  }
+});
+
+check('D2: HR cannot grant branch_manager through /role-assignments', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `d2-ra-${suffix}@acme.com`, roleName: 'team_member' });
+  const bm = await systemRole(acme.id, 'branch_manager');
+  const branch = await prisma.branch.findFirst({ where: { companyId: acme.id } });
+  const r = await call('POST', '/api/role-assignments', { token: tokens.hr, body: { userId: u.id, roleId: bm.id, scopeType: 'Branch', scopeId: branch.id } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.deepEqual((await activeAssignments(u.id)).map((ra) => ra.role.name), ['team_member']);
+});
+
+check('D2: HR cannot promote a user to branch_manager via PATCH', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `d2-patch-${suffix}@acme.com`, roleName: 'team_member' });
+  const branch = await prisma.branch.findFirst({ where: { companyId: acme.id } });
+  const r = await call('PATCH', `/api/users/${u.id}`, { token: tokens.hr, body: { role: 'branch_manager', branchId: branch.id } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.deepEqual((await activeAssignments(u.id)).map((ra) => ra.role.name), ['team_member']);
+});
+
+check('D2: the Owner can still create a branch_manager account', async () => {
+  const branch = await prisma.branch.findFirst({ where: { companyId: acme.id } });
+  const { r } = await createVia(tokens.owner, 'obm', 'branch_manager', { branchId: branch.id });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+});
+
+const tlTeam = async () => {
+  const tl = await userByEmail('tl@acme.com');
+  const lead = await prisma.teamMember.findFirst({ where: { userId: tl.id, role: 'Lead' } });
+  assert.ok(lead, 'tl@acme.com must lead a team in the seed');
+  return lead.teamId;
+};
+
+check('D3: a Team Lead cannot add the Owner to their team', async () => {
+  const teamId = await tlTeam();
+  const ceo = await userByEmail('ceo@acme.com');
+  const r = await call('POST', `/api/teams/${teamId}/members`, { token: tokens.tl, body: { userId: ceo.id } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  if (r.status === 201) await prisma.teamMember.deleteMany({ where: { teamId, userId: ceo.id } });
+  assert.equal(await prisma.teamMember.count({ where: { teamId, userId: ceo.id } }), 0);
+});
+
+check('D3: a Team Lead can add an active team member', async () => {
+  const teamId = await tlTeam();
+  const u = await makeUser({ companyId: acme.id, email: `d3-tm-${suffix}@acme.com`, roleName: 'team_member' });
+  const r = await call('POST', `/api/teams/${teamId}/members`, { token: tokens.tl, body: { userId: u.id } });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  const d = await call('DELETE', `/api/teams/${teamId}/members/${u.id}`, { token: tokens.tl });
+  assert.equal(d.status, 200, JSON.stringify(d.json));
+});
+
+check('D2: GRANT_RANK keeps the same order as role resolution (roles.js SLUG_PRECEDENCE)', async () => {
+  const { GRANT_RANK } = await import('./src/utils/roleAssignmentGuards.js');
+  const { resolveUserRole } = await import('./src/utils/roles.js');
+  const templateOf = { hr_manager: 'access_governance', team_leader: 'team_lead' };
+  const ra = (slug) => ({ role: { isSystem: true, label: slug, roleTemplate: { slug: templateOf[slug] || slug } } });
+  // Same role set: every slug the resolver can return appears in GRANT_RANK exactly once.
+  for (const tpl of ['system_admin', 'company_owner', 'branch_manager', 'access_governance', 'process_admin', 'compliance_officer', 'project_manager', 'team_lead', 'team_member']) {
+    const slug = resolveUserRole({ roleAssignments: [{ role: { isSystem: true, label: tpl, roleTemplate: { slug: tpl } } }] }).roleSlug;
+    assert.equal(GRANT_RANK.filter((s) => s === slug).length, 1, `${slug} must appear once in GRANT_RANK`);
+  }
+  assert.equal(new Set(GRANT_RANK).size, GRANT_RANK.length);
+  for (let i = 0; i + 1 < GRANT_RANK.length; i++) {
+    const higher = GRANT_RANK[i], lower = GRANT_RANK[i + 1];
+    assert.equal(resolveUserRole({ roleAssignments: [ra(lower), ra(higher)] }).roleSlug, higher, `${higher} should outrank ${lower}`);
+  }
+});
+
+// ---------------------------------------------------------------- F12
+check('F12: concurrent branch creates cannot exceed the plan branch limit', async () => {
+  const current = await prisma.branch.count({ where: { companyId: beta.id } });
+  const plan = await prisma.plan.create({ data: { name: `M5 tight branches ${suffix}`, maxBranches: current + 1, auditLogRetentionDays: 30, allowsIntegrations: false, isActive: true } });
+  const sub = await prisma.subscription.findFirst({ where: { companyId: beta.id } });
+  await prisma.subscription.update({ where: { id: sub.id }, data: { planId: plan.id } });
+  invalidateCompanyAuthCache(beta.id);
+  try {
+    const rs = await Promise.all(Array.from({ length: 4 }, (_, i) =>
+      call('POST', '/api/branches', { token: tokens.betaOwner, body: { name: `F12 race ${i} ${suffix}` } })));
+    const made = await prisma.branch.findMany({ where: { companyId: beta.id, name: { contains: String(suffix) } } });
+    createdBranchIds.push(...made.map((b) => b.id));
+    assert.equal(rs.filter((r) => r.status === 201).length, 1, rs.map((r) => r.status).join(','));
+    assert.equal(await prisma.branch.count({ where: { companyId: beta.id } }), current + 1);
+  } finally {
+    await prisma.subscription.update({ where: { id: sub.id }, data: { planId: sub.planId } });
+    invalidateCompanyAuthCache(beta.id);
+    await prisma.plan.delete({ where: { id: plan.id } }).catch(() => {});
+  }
+});
+
+// ---------------------------------------------------------------- Task 9 (A2, R4, R5, L2)
+check('A2: an employee cannot read the role mapping', async () => {
+  assert.equal((await call('GET', '/api/users/roles/mapping', { token: tokens.member })).status, 403);
+  assert.equal((await call('GET', '/api/users/roles/mapping', { token: tokens.hr })).status, 200);
+});
+
+check('R4: an employee listing users gets no deactivatedAt and no grant details', async () => {
+  const r = await call('GET', '/api/users', { token: tokens.member });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.data.length > 0);
+  // Your own record is not trimmed; colleagues' records are.
+  const me = await userByEmail('employee@acme.com');
+  assert.ok('deactivatedAt' in r.json.data.find((u) => u.id === me.id), 'own record keeps deactivatedAt');
+  for (const u of r.json.data.filter((x) => x.id !== me.id)) {
+    assert.ok(!('deactivatedAt' in u), `deactivatedAt leaked for ${u.email}`);
+    assert.ok(Array.isArray(u.roleAssignments), 'roleAssignments kept for picker filters');
+    for (const ra of u.roleAssignments) {
+      for (const k of ['grantedBy', 'grantedById', 'grantedAt']) assert.ok(!(k in ra), `${k} leaked for ${u.email}`);
+      assert.ok(ra.role && 'label' in ra.role, 'role.label kept');
+    }
+    assert.equal(typeof u.role, 'string');
+  }
+  const hr = await call('GET', '/api/users', { token: tokens.hr });
+  assert.equal(hr.status, 200);
+  assert.ok(hr.json.data.every((u) => 'deactivatedAt' in u), 'HR still sees deactivatedAt');
+});
+
+check("R4: an employee cannot see another user's assignedTasks", async () => {
+  const me = await userByEmail('employee@acme.com');
+  const task = await prisma.task.findFirst({
+    where: { assignedToId: { not: null, notIn: [me.id] }, deletedAt: null, project: { companyId: acme.id } },
+  });
+  assert.ok(task, 'seed needs a task assigned to someone other than the employee');
+  const m = await call('GET', `/api/users/${task.assignedToId}`, { token: tokens.member });
+  assert.equal(m.status, 200);
+  assert.ok(!('assignedTasks' in m.json.data), 'assignedTasks leaked to an employee');
+  assert.ok(!('deactivatedAt' in m.json.data));
+  const h = await call('GET', `/api/users/${task.assignedToId}`, { token: tokens.hr });
+  assert.equal(h.status, 200);
+  assert.ok(Array.isArray(h.json.data.assignedTasks) && h.json.data.assignedTasks.length > 0, 'HR sees assignedTasks');
+});
+
+check('R5: an employee outside a team gets no projects from GET /teams/:id', async () => {
+  const me = await userByEmail('employee@acme.com');
+  const team = await prisma.team.findFirst({
+    where: { companyId: acme.id, teamMembers: { none: { userId: me.id } }, projects: { some: {} } },
+  });
+  assert.ok(team, 'seed needs a team with projects that the employee is not in');
+  const m = await call('GET', `/api/teams/${team.id}`, { token: tokens.member });
+  assert.equal(m.status, 200);
+  assert.ok(!('projects' in m.json.data), 'projects leaked to a non-member');
+  for (const tm of m.json.data.teamMembers) assert.ok(!('email' in tm.user), 'member email leaked to a non-member');
+  const h = await call('GET', `/api/teams/${team.id}`, { token: tokens.hr });
+  assert.ok(Array.isArray(h.json.data.projects) && h.json.data.projects.length > 0, 'HR sees projects');
+  assert.ok(h.json.data.teamMembers.every((tm) => 'email' in tm.user), 'HR sees member emails');
+  // A member of their own team still sees its projects and roster emails.
+  const mine = await prisma.team.findFirst({ where: { teamMembers: { some: { userId: me.id } } } });
+  if (mine) {
+    const own = await call('GET', `/api/teams/${mine.id}`, { token: tokens.member });
+    assert.ok(Array.isArray(own.json.data.projects), 'member sees own team projects');
+    assert.ok(own.json.data.teamMembers.every((tm) => 'email' in tm.user), 'member sees own roster emails');
+  }
+});
+
+check('R5: an employee gets no project rows from GET /branches/:id for teams they are not in', async () => {
+  const me = await userByEmail('employee@acme.com');
+  const team = await prisma.team.findFirst({
+    where: { companyId: acme.id, teamMembers: { none: { userId: me.id } }, projects: { some: {} } },
+  });
+  const m = await call('GET', `/api/branches/${team.branchId}`, { token: tokens.member });
+  assert.equal(m.status, 200);
+  const myTeamIds = new Set((await prisma.teamMember.findMany({ where: { userId: me.id } })).map((t) => t.teamId));
+  for (const t of m.json.data.teams) {
+    if (!myTeamIds.has(t.id)) assert.ok(!('projects' in t), `projects of team ${t.name} leaked`);
+  }
+  const h = await call('GET', `/api/branches/${team.branchId}`, { token: tokens.hr });
+  const hrTeam = h.json.data.teams.find((t) => t.id === team.id);
+  assert.ok(Array.isArray(hrTeam.projects) && hrTeam.projects.length > 0, 'HR sees projects');
+});
+
+check('L2: GET /users returns role = highest-precedence slug for a user with two roles', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `l2-two-${suffix}@acme.com`, roleName: 'team_member' });
+  const pmRole = await systemRole(acme.id, 'project_manager');
+  await prisma.roleAssignment.create({ data: { companyId: acme.id, userId: u.id, roleId: pmRole.id, scopeType: 'Company', scopeId: acme.id } });
+  const r = await call('GET', `/api/users/${u.id}`, { token: tokens.hr });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.data.role, 'project_manager');
+  const list = await call('GET', '/api/users', { token: tokens.member });
+  assert.equal(list.json.data.find((x) => x.id === u.id).role, 'project_manager');
+});
+
+// ---------------------------------------------------------------- Task 10: role and team integrity
+check('R3: a legacy NULL-companyId system_admin row still blocks granting Company Owner', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `r3-legacy-${suffix}@acme.com`, roleName: 'team_member' });
+  const admin = await systemRole(acme.id, 'system_admin');
+  const owner = await systemRole(acme.id, 'company_owner');
+  await prisma.roleAssignment.create({ data: { companyId: null, userId: u.id, roleId: admin.id, scopeType: 'Company', scopeId: acme.id } });
+  const r = await call('POST', '/api/role-assignments', { token: tokens.owner, body: { userId: u.id, roleId: owner.id, scopeType: 'Company', scopeId: acme.id } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.match(r.json.message, /cannot hold both/);
+});
+
+check('R9: an inactive member cannot be made Lead', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `r9-${suffix}@acme.com`, roleName: 'team_member' });
+  const leadBefore = await prisma.teamMember.findMany({ where: { teamId: teamCore.id, role: { in: ['Lead', 'Leader'] } } });
+  const add = await call('POST', `/api/teams/${teamCore.id}/members`, { token: tokens.hr, body: { userId: u.id } });
+  assert.equal(add.status, 201, JSON.stringify(add.json));
+  await prisma.user.update({ where: { id: u.id }, data: { isActive: false } });
+  const r = await call('PATCH', `/api/teams/${teamCore.id}/members/${u.id}`, { token: tokens.hr, body: { role: 'Lead' } });
+  assert.equal(r.status, 400, JSON.stringify(r.json));
+  assert.equal(r.json.message, 'A deactivated user cannot be made team Lead');
+  const leadAfter = await prisma.teamMember.findMany({ where: { teamId: teamCore.id, role: { in: ['Lead', 'Leader'] } } });
+  assert.deepEqual(leadAfter.map((m) => [m.userId, m.role]), leadBefore.map((m) => [m.userId, m.role]));
+});
+
+check('R12: a second branch_manager grant on the same branch leaves one active manager', async () => {
+  const a = await makeUser({ companyId: acme.id, email: `r12-a-${suffix}@acme.com`, roleName: 'team_member' });
+  const b = await makeUser({ companyId: acme.id, email: `r12-b-${suffix}@acme.com`, roleName: 'team_member' });
+  const created = await call('POST', '/api/branches', { token: tokens.owner, body: { name: `R12 ${suffix}`, managerUserId: a.id } });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  const branchId = created.json.data.id;
+  createdBranchIds.push(branchId);
+  const bm = await systemRole(acme.id, 'branch_manager');
+  const r = await call('POST', '/api/role-assignments', { token: tokens.owner, body: { userId: b.id, roleId: bm.id, scopeType: 'Branch', scopeId: branchId } });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  const active = await prisma.roleAssignment.findMany({ where: { scopeType: 'Branch', scopeId: branchId, roleId: bm.id, revokedAt: null } });
+  assert.deepEqual(active.map((ra) => ra.userId), [b.id]);
+  const revokeAudit = await prisma.systemAuditLog.findFirst({ where: { targetUserId: a.id, action: 'PERMISSION_CHANGE', oldValue: { path: ['event'], equals: 'ROLE_REVOKED' } } });
+  assert.ok(revokeAudit, 'revoke of the previous manager is audited');
+});
+
+/** Team-delete tests: audit rows of teams this run created carry the suffix in the team name. */
+const cleanTeamAudit = () => prisma.systemAuditLog.deleteMany({
+  where: {
+    companyId: acme.id,
+    OR: [
+      { newValue: { path: ['name'], string_contains: String(suffix) } },
+      { newValue: { path: ['deletedTeamName'], string_contains: String(suffix) } },
+    ],
+  },
+}).catch(() => {});
+
+check('R7: deleting a team revokes its Team-scoped role grants', async () => {
+  const made = await call('POST', '/api/teams', { token: tokens.hr, body: { name: `R7 ${suffix}`, branchId: hq.id } });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const teamId = made.json.data.id;
+  try {
+    const u = await makeUser({ companyId: acme.id, email: `r7-${suffix}@acme.com`, roleName: 'team_member' });
+    const tl = await systemRole(acme.id, 'team_lead');
+    const ra = await prisma.roleAssignment.create({ data: { companyId: acme.id, userId: u.id, roleId: tl.id, scopeType: 'Team', scopeId: teamId } });
+    const r = await call('DELETE', `/api/teams/${teamId}`, { token: tokens.hr });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const after = await prisma.roleAssignment.findUnique({ where: { id: ra.id } });
+    assert.ok(after.revokedAt, 'Team-scoped grant is revoked');
+    const audit = await prisma.systemAuditLog.findFirst({ where: { targetUserId: u.id, action: 'PERMISSION_CHANGE', oldValue: { path: ['event'], equals: 'ROLE_REVOKED' } } });
+    assert.ok(audit, 'revoke is audited');
+  } finally {
+    await prisma.team.deleteMany({ where: { id: teamId } }).catch(() => {});
+    await cleanTeamAudit();
+  }
+});
+
+check('R6: a team whose only project is soft-deleted is not reported as having projects', async () => {
+  const made = await call('POST', '/api/teams', { token: tokens.hr, body: { name: `R6 ${suffix}`, branchId: hq.id } });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const teamId = made.json.data.id;
+  const owner = await userByEmail('ceo@acme.com');
+  const project = await prisma.project.create({
+    data: { companyId: acme.id, teamId, name: `R6 ${suffix}`, createdById: owner.id, deletedAt: new Date() },
+  });
+  try {
+    const get = await call('GET', `/api/teams/${teamId}`, { token: tokens.hr });
+    assert.deepEqual(get.json.data.projects, [], 'soft-deleted project is not listed');
+    const r = await call('DELETE', `/api/teams/${teamId}`, { token: tokens.hr });
+    // Project.teamId is required with ON DELETE RESTRICT, so an archived project keeps its team.
+    assert.equal(r.status, 409, JSON.stringify(r.json));
+    assert.equal(r.json.message, 'Cannot delete team: it still holds 1 archived project(s)');
+    assert.doesNotMatch(r.json.message, /currently assigned/);
+  } finally {
+    await prisma.project.deleteMany({ where: { id: project.id } }).catch(() => {});
+    await prisma.team.deleteMany({ where: { id: teamId } }).catch(() => {});
+    await cleanTeamAudit();
+  }
+});
+
+check('R12: creating a Branch Manager without a branch never replaces the default branch manager', async () => {
+  const first = await prisma.branch.findFirst({ where: { companyId: acme.id }, orderBy: { createdAt: 'asc' } });
+  const bmRole = await systemRole(acme.id, 'branch_manager');
+  const before = await prisma.roleAssignment.count({ where: { roleId: bmRole.id, scopeType: 'Branch', scopeId: first.id, revokedAt: null } });
+  const email = `r12-default-${suffix}@acme.com`;
+  const r = await call('POST', '/api/users', { token: tokens.owner, body: { fullName: 'R12 default', email, password: 'password123', role: 'branch_manager' } });
+  const made = await userByEmail(email);
+  if (made) createdUserIds.push(made.id);
+  if (before > 0) {
+    assert.equal(r.status, 400, JSON.stringify(r.json));
+    assert.equal(await prisma.roleAssignment.count({ where: { roleId: bmRole.id, scopeType: 'Branch', scopeId: first.id, revokedAt: null } }), before);
+  } else {
+    assert.equal(r.status, 201, JSON.stringify(r.json));
+  }
+});
+
+// ---------------------------------------------------------------- R10 / R16 / R13 / R17 input and audit hygiene
+check('R10: POST /roles with no body returns 400', async () => {
+  const r = await call('POST', '/api/roles', { token: tokens.hr });
+  assert.equal(r.status, 400, JSON.stringify(r.json));
+});
+
+check('R10: POST /roles with a non-string label returns 400', async () => {
+  const r = await call('POST', '/api/roles', { token: tokens.hr, body: { label: 123 } });
+  assert.equal(r.status, 400, JSON.stringify(r.json));
+});
+
+check('R10: POST /teams with a non-string name returns 400', async () => {
+  const r = await call('POST', '/api/teams', { token: tokens.hr, body: { name: ['x'], branchId: hq.id } });
+  assert.equal(r.status, 400, JSON.stringify(r.json));
+});
+
+check('R16: PUT/PATCH role permissions without permissionSlugs is refused and leaves permissions unchanged', async () => {
+  const slugs = (await prisma.permission.findMany({ take: 2, orderBy: { slug: 'asc' } })).map((p) => p.slug);
+  assert.ok(slugs.length > 0, 'seeded permissions exist');
+  const made = await call('POST', '/api/roles', { token: tokens.hr, body: { label: `R16 ${suffix}`, permissionSlugs: slugs } });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const roleId = made.json.data.id;
+  const count = () => prisma.rolePermission.count({ where: { roleId } });
+  try {
+    assert.equal(await count(), slugs.length);
+    for (const method of ['PUT', 'PATCH']) {
+      const empty = await call(method, `/api/roles/${roleId}/permissions`, { token: tokens.hr, body: {} });
+      assert.equal(empty.status, 400, `${method} {}: ${JSON.stringify(empty.json)}`);
+      assert.equal(await count(), slugs.length, 'permissions are not wiped');
+    }
+    const unknown = await call('PUT', `/api/roles/${roleId}/permissions`, { token: tokens.hr, body: { permissionSlugs: [slugs[0], `nope-${suffix}`] } });
+    assert.equal(unknown.status, 400, JSON.stringify(unknown.json));
+    assert.match(unknown.json.message, new RegExp(`nope-${suffix}`));
+    assert.equal(await count(), slugs.length);
+  } finally {
+    const del = await call('DELETE', `/api/roles/${roleId}`, { token: tokens.hr });
+    if (del.status !== 200) await prisma.role.delete({ where: { id: roleId } }).catch(() => {});
+  }
+});
+
+check('R13: creating a user with a role writes a PERMISSION_CHANGE ROLE_ASSIGNED row', async () => {
+  const email = `r13-create-${suffix}@acme.com`;
+  const r = await call('POST', '/api/users', { token: tokens.hr, body: { fullName: 'R13 create', email, password: 'password123', role: 'team_member' } });
+  const made = await userByEmail(email);
+  if (made) createdUserIds.push(made.id);
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  assert.deepEqual(await auditEvents({ targetUserId: made.id }), ['ROLE_ASSIGNED']);
+  assert.equal(await prisma.systemAuditLog.count({ where: { targetUserId: made.id, action: 'CREATE' } }), 1, 'CREATE audit is kept');
+});
+
+check('R13: a PATCH role change writes ROLE_REVOKED and ROLE_ASSIGNED rows', async () => {
+  const u = await makeUser({ companyId: acme.id, email: `r13-patch-${suffix}@acme.com`, roleName: 'team_member' });
+  const r = await call('PATCH', `/api/users/${u.id}`, { token: tokens.owner, body: { role: 'compliance_officer' } });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.deepEqual(await auditEvents({ targetUserId: u.id }), ['ROLE_ASSIGNED', 'ROLE_REVOKED']);
+  const tm = await systemRole(acme.id, 'team_member');
+  const revoked = await prisma.systemAuditLog.findFirst({ where: { targetUserId: u.id, action: 'PERMISSION_CHANGE', oldValue: { path: ['event'], equals: 'ROLE_REVOKED' } } });
+  assert.equal(revoked.oldValue.roleId, tm.id);
+  assert.equal(await prisma.systemAuditLog.count({ where: { targetUserId: u.id, action: 'UPDATE' } }), 1, 'UPDATE audit is kept');
+});
+
+check('R17: POST /users with roleId assigns exactly that role, even for a custom role labelled "Lead"', async () => {
+  const custom = await prisma.role.create({ data: { companyId: acme.id, label: 'Lead', name: `r17_lead_${suffix}`, isSystem: false } });
+  try {
+    const email = `r17-${suffix}@acme.com`;
+    const r = await call('POST', '/api/users', { token: tokens.hr, body: { fullName: 'R17', email, password: 'password123', role: 'Lead', roleId: custom.id } });
+    const made = await userByEmail(email);
+    if (made) createdUserIds.push(made.id);
+    assert.equal(r.status, 201, JSON.stringify(r.json));
+    assert.deepEqual((await activeAssignments(made.id)).map((ra) => ra.roleId), [custom.id]);
+    // A roleId is an id: it never falls back to label or slug resolution.
+    const bad = await call('POST', '/api/users', { token: tokens.hr, body: { fullName: 'R17 bad', email: `r17-bad-${suffix}@acme.com`, password: 'password123', roleId: 'lead' } });
+    const badUser = await userByEmail(`r17-bad-${suffix}@acme.com`);
+    if (badUser) createdUserIds.push(badUser.id);
+    assert.equal(bad.status, 400, JSON.stringify(bad.json));
+  } finally {
+    await prisma.roleAssignment.deleteMany({ where: { roleId: custom.id } }).catch(() => {});
+    await prisma.role.delete({ where: { id: custom.id } }).catch((e) => console.warn('R17 cleanup:', e.message));
+  }
+});
+
+// ---------------------------------------------------------------- final review fixes
+check('R19: GET /teams hides other teams\' projects and roster emails from an employee', async () => {
+  const me = await userByEmail('employee@acme.com');
+  const r = await call('GET', '/api/teams', { token: tokens.member });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const teams = r.json.data;
+  const foreign = teams.filter((t) => !(t.teamMembers || []).some((tm) => tm.userId === me.id));
+  assert.ok(foreign.length > 0, 'seed has a team the employee is not in');
+  for (const t of foreign) {
+    assert.equal(t.projects, undefined, `projects of ${t.name}`);
+    assert.ok((t.teamMembers || []).every((tm) => !tm.user || tm.user.email === undefined), `emails of ${t.name}`);
+  }
+  const hr = await call('GET', '/api/teams', { token: tokens.hr });
+  assert.ok(hr.json.data.some((t) => Array.isArray(t.projects)), 'HR still gets projects');
+});
+
+check('R12/D1: a System Admin cannot replace a peer System Admin who manages the branch; the Owner can', async () => {
+  const bmRole = await systemRole(acme.id, 'branch_manager');
+  const created = await call('POST', '/api/branches', { token: tokens.owner, body: { name: `D1 BM ${suffix}` } });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  const branchId = created.json.data.id;
+  createdBranchIds.push(branchId);
+  const adminY = await makeUser({ companyId: acme.id, email: `d1bm-y-${suffix}@acme.com`, roleName: 'system_admin' });
+  await prisma.roleAssignment.create({ data: { companyId: acme.id, userId: adminY.id, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId } });
+  const adminZ = await makeUser({ companyId: acme.id, email: `d1bm-z-${suffix}@acme.com`, roleName: 'system_admin' });
+  const target = await makeUser({ companyId: acme.id, email: `d1bm-x-${suffix}@acme.com`, roleName: 'team_member' });
+  const body = { userId: target.id, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId };
+  const bySa = await call('POST', '/api/role-assignments', { token: await login(adminZ.email), body });
+  assert.equal(bySa.status, 403, JSON.stringify(bySa.json));
+  const stillY = await prisma.roleAssignment.count({ where: { userId: adminY.id, roleId: bmRole.id, scopeId: branchId, revokedAt: null } });
+  assert.equal(stillY, 1, "the peer admin's grant is untouched");
+  const byOwner = await call('POST', '/api/role-assignments', { token: tokens.owner, body });
+  assert.equal(byOwner.status, 201, JSON.stringify(byOwner.json));
+  const active = await prisma.roleAssignment.findMany({ where: { roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, revokedAt: null } });
+  assert.deepEqual(active.map((a) => a.userId), [target.id]);
+});
+
+check('D1: /branches cannot replace a peer System Admin who manages the branch; the Owner can', async () => {
+  const bmRole = await systemRole(acme.id, 'branch_manager');
+  const adminY = await makeUser({ companyId: acme.id, email: `d1br-y-${suffix}@acme.com`, roleName: 'system_admin' });
+  const adminZ = await makeUser({ companyId: acme.id, email: `d1br-z-${suffix}@acme.com`, roleName: 'system_admin' });
+  const target = await makeUser({ companyId: acme.id, email: `d1br-x-${suffix}@acme.com`, roleName: 'team_member' });
+  const created = await call('POST', '/api/branches', { token: tokens.owner, body: { name: `D1 BR ${suffix}`, managerUserId: adminY.id } });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  const branchId = created.json.data.id;
+  createdBranchIds.push(branchId);
+  const bySa = await call('PATCH', `/api/branches/${branchId}`, { token: await login(adminZ.email), body: { name: `D1 BR ${suffix}`, managerUserId: target.id } });
+  assert.equal(bySa.status, 403, JSON.stringify(bySa.json));
+  assert.equal(await prisma.roleAssignment.count({ where: { userId: adminY.id, roleId: bmRole.id, scopeId: branchId, revokedAt: null } }), 1);
+  const byHr = await call('PATCH', `/api/branches/${branchId}`, { token: tokens.hr, body: { name: `D1 BR ${suffix}`, managerUserId: target.id } });
+  assert.equal(byHr.status, 403, JSON.stringify(byHr.json));
+  const byOwner = await call('PATCH', `/api/branches/${branchId}`, { token: tokens.owner, body: { name: `D1 BR ${suffix}`, managerUserId: target.id } });
+  assert.equal(byOwner.status, 200, JSON.stringify(byOwner.json));
+  const active = await prisma.roleAssignment.findMany({ where: { roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, revokedAt: null } });
+  assert.deepEqual(active.map((a) => a.userId), [target.id]);
+});
+
+check('R2: a System Admin cannot change a peer System Admin email', async () => {
+  const a = await makeUser({ companyId: acme.id, email: `r2e-a-${suffix}@acme.com`, roleName: 'system_admin' });
+  const b = await makeUser({ companyId: acme.id, email: `r2e-b-${suffix}@acme.com`, roleName: 'system_admin' });
+  const r = await call('PATCH', `/api/users/${b.id}`, { token: await login(a.email), body: { email: `r2e-b2-${suffix}@acme.com` } });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.equal((await prisma.user.findUnique({ where: { id: b.id } })).email, `r2e-b-${suffix}@acme.com`);
+});
+
+check('D2: HR cannot name a Branch Manager through /branches (create or update), but can still manage branches', async () => {
+  const puppet = await makeUser({ companyId: acme.id, email: `d2br-${suffix}@acme.com`, roleName: 'team_member' });
+  const withMgr = await call('POST', '/api/branches', { token: tokens.hr, body: { name: `D2 BR ${suffix}`, managerUserId: puppet.id } });
+  if (withMgr.json?.data?.id) createdBranchIds.push(withMgr.json.data.id);
+  assert.equal(withMgr.status, 403, JSON.stringify(withMgr.json));
+  const plain = await call('POST', '/api/branches', { token: tokens.hr, body: { name: `D2 BR plain ${suffix}` } });
+  assert.equal(plain.status, 201, JSON.stringify(plain.json));
+  createdBranchIds.push(plain.json.data.id);
+  const upd = await call('PATCH', `/api/branches/${plain.json.data.id}`, { token: tokens.hr, body: { name: `D2 BR plain ${suffix}`, managerUserId: puppet.id } });
+  assert.equal(upd.status, 403, JSON.stringify(upd.json));
+  assert.equal(await prisma.roleAssignment.count({ where: { userId: puppet.id, revokedAt: null, scopeType: 'Branch' } }), 0);
 });
 
 // ---------------------------------------------------------------- runner

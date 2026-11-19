@@ -1,33 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../../services/api/client';
 import { Button } from '../../../shared/components/Button';
 import { Loader } from '../../../shared/components/Loader';
+import { useToast } from '../../../shared/components/Toast';
 import {
   Bell,
   CheckCheck,
   ShieldAlert,
   Shield,
-  ExternalLink,
   CheckCircle2,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
 
+// Notification.type values; the API has no category or priority fields.
+const WORK_TYPES = ['Task', 'Review', 'Escalation'];
+const isComplianceType = (n) => n.type === 'Compliance';
+const isWorkType = (n) => WORK_TYPES.includes(n.type);
+
 export default function Notifications() {
-  const navigate = useNavigate();
+  const toast = useToast();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'UNREAD' | 'COMPLIANCE' | 'WORK'
   const [markingId, setMarkingId] = useState(null);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const res = await apiClient('/notifications');
       const list = res.data || (Array.isArray(res) ? res : []);
       setNotifications(list);
     } catch (err) {
       console.error('Failed to load notifications:', err);
+      setLoadError(err.message || 'Failed to load notifications.');
     } finally {
       setLoading(false);
     }
@@ -44,35 +53,33 @@ export default function Notifications() {
       setMarkingId(id);
       await apiClient(`/notifications/${id}/read`, { method: 'PATCH' });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch {
-      // Best effort: the item stays unread and the next refresh shows the server state.
+    } catch (err) {
+      toast.error(err.message || 'Failed to mark notification as read.');
     } finally {
-      setMarkingId(null);
+      setMarkingId((cur) => (cur === id ? null : cur));
     }
   };
 
   const handleMarkAllRead = async () => {
     try {
+      setMarkingAll(true);
       await apiClient('/notifications/read-all', { method: 'POST' });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch {
-      // Best effort: items stay unread and the next refresh shows the server state.
+    } catch (err) {
+      toast.error(err.message || 'Failed to mark all notifications as read.');
+    } finally {
+      setMarkingAll(false);
     }
   };
 
-  const handleNavigate = async (n) => {
-    if (!n.isRead) {
-      await handleMarkAsRead(n.id);
-    }
-    if (n.linkUrl) {
-      navigate(n.linkUrl);
-    }
+  const handleRowActivate = (n) => {
+    if (!n.isRead && markingId !== n.id) handleMarkAsRead(n.id);
   };
 
   const filteredList = notifications.filter(n => {
     if (activeFilter === 'UNREAD') return !n.isRead;
-    if (activeFilter === 'COMPLIANCE') return n.category === 'COMPLIANCE';
-    if (activeFilter === 'WORK') return n.category === 'WORK';
+    if (activeFilter === 'COMPLIANCE') return isComplianceType(n);
+    if (activeFilter === 'WORK') return isWorkType(n);
     return true;
   });
 
@@ -97,6 +104,7 @@ export default function Notifications() {
             variant="outline"
             size="sm"
             onClick={handleMarkAllRead}
+            disabled={markingAll}
             className="inline-flex items-center gap-1.5 shrink-0"
           >
             <CheckCheck size={16} />
@@ -135,7 +143,7 @@ export default function Notifications() {
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Compliance ({notifications.filter(n => n.category === 'COMPLIANCE').length})
+          Compliance ({notifications.filter(isComplianceType).length})
         </button>
         <button
           onClick={() => setActiveFilter('WORK')}
@@ -145,7 +153,7 @@ export default function Notifications() {
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Work Tasks ({notifications.filter(n => n.category === 'WORK').length})
+          Work Tasks ({notifications.filter(isWorkType).length})
         </button>
       </div>
 
@@ -154,6 +162,15 @@ export default function Notifications() {
         <div className="p-12 text-center text-slate-500">
           <Loader />
           <p className="text-xs mt-3">Loading notifications...</p>
+        </div>
+      ) : loadError ? (
+        <div role="alert" className="bg-white border border-rose-200 rounded-xl p-12 text-center">
+          <AlertTriangle size={36} className="mx-auto text-rose-500 mb-3" />
+          <h3 className="font-bold text-slate-800 text-sm">Notifications could not be loaded</h3>
+          <p className="text-xs text-slate-500 mt-1">{loadError}</p>
+          <Button variant="secondary" size="sm" onClick={fetchNotifications} className="mt-4">
+            Retry
+          </Button>
         </div>
       ) : filteredList.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
@@ -166,13 +183,15 @@ export default function Notifications() {
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 shadow-xs overflow-hidden">
           {filteredList.map((n) => {
-            const isUrgent = n.priority === 'URGENT';
-            const isCompliance = n.category === 'COMPLIANCE';
+            const isUrgent = n.type === 'Escalation';
+            const isCompliance = isComplianceType(n);
 
             return (
               <div
                 key={n.id}
-                onClick={() => handleNavigate(n)}
+                // Mouse shortcut only; the "Mark as read" button inside is the keyboard path
+                // (a focusable row around a button would nest interactive controls).
+                onClick={() => handleRowActivate(n)}
                 className={`p-4 sm:p-5 transition-colors cursor-pointer flex items-start gap-4 hover:bg-slate-50/80 ${
                   !n.isRead ? 'bg-blue-50/30' : ''
                 }`}
@@ -201,9 +220,9 @@ export default function Notifications() {
                       <span className="font-bold text-sm text-slate-900">
                         {n.title}
                       </span>
-                      {n.category && (
+                      {n.type && (
                         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {n.category}
+                          {n.type}
                         </span>
                       )}
                       {isUrgent && (
@@ -212,7 +231,7 @@ export default function Notifications() {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0">
                       <Clock size={12} />
                       {new Date(n.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
@@ -223,8 +242,8 @@ export default function Notifications() {
                   </p>
 
                   <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <span className="text-slate-400 font-medium">
-                      {n.senderName ? `Attributed to: ${n.senderName}` : 'System Generated'}
+                    <span className="text-slate-500 font-medium">
+                      System Generated
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -236,11 +255,6 @@ export default function Notifications() {
                         >
                           Mark as read
                         </button>
-                      )}
-                      {n.linkUrl && (
-                        <span className="text-blue-600 font-semibold inline-flex items-center gap-1 hover:underline">
-                          View details <ExternalLink size={12} />
-                        </span>
                       )}
                     </div>
                   </div>

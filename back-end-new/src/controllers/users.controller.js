@@ -18,9 +18,12 @@ import {
   assertValidScope,
   assertScopeFitsRole,
   assertOwnerAdminGrantRules,
+  assertGrantBelowCaller,
   COMPANY_WIDE_SLUGS,
   countActiveOwners,
   resolveCompanyRole,
+  revokeOtherBranchManagers,
+  auditBranchManagerRevokes,
   ROLE_WITH_TEMPLATE,
 } from '../utils/roleAssignmentGuards.js';
 import {
@@ -46,8 +49,9 @@ const USER_SELECT_FIELDS = {
   manager: { select: { id: true, fullName: true, email: true } },
   roleAssignments: {
     where: { revokedAt: null },
+    // roleTemplate is needed so the resolved role is decided by template, never by label (D-S1).
     include: {
-      role: true,
+      role: ROLE_WITH_TEMPLATE,
     },
     orderBy: { grantedAt: 'desc' },
   },
@@ -97,10 +101,43 @@ function formatUserResponse(u) {
     branchName: tm.team?.branch?.name,
     joinedAt: tm.joinedAt,
   }));
+  const { roleSlug, roleLabel } = resolveUserRole({ roleAssignments: u.roleAssignments || [] });
   return {
     ...u,
+    role: roleSlug,
+    roleLabel,
     teams,
     primaryTeam: teams[0] || null,
+  };
+}
+
+// Roles that may see other users' HR details (deactivation dates, grant history, assigned tasks).
+const USER_DETAIL_ROLES = ['company_owner', 'system_admin', 'hr_manager', 'branch_manager'];
+
+/**
+ * Trims a formatted user for callers outside USER_DETAIL_ROLES (R4). roleAssignments stay, slimmed
+ * to what pickers read (role.label / roleTemplate), because compliance and PM pages filter on them.
+ */
+function forCaller(user, req) {
+  // Your own record is never trimmed.
+  if (!user || USER_DETAIL_ROLES.includes(req.user?.role) || user.id === req.user?.id) return user;
+  const { deactivatedAt, assignedTasks, ...rest } = user;
+  return {
+    ...rest,
+    roleAssignments: (user.roleAssignments || []).map((ra) => ({
+      id: ra.id,
+      scopeType: ra.scopeType,
+      scopeId: ra.scopeId,
+      role: ra.role
+        ? {
+            id: ra.role.id,
+            name: ra.role.name,
+            label: ra.role.label,
+            isSystem: ra.role.isSystem,
+            roleTemplate: ra.role.roleTemplate ?? null,
+          }
+        : null,
+    })),
   };
 }
 
@@ -118,7 +155,7 @@ export async function listUsers(req, res, next) {
 
     res.status(200).json({
       success: true,
-      data: users.map(formatUserResponse),
+      data: users.map((u) => forCaller(formatUserResponse(u), req)),
     });
   } catch (err) {
     next(err);
@@ -184,7 +221,7 @@ export async function getUserById(req, res, next) {
 
     res.status(200).json({
       success: true,
-      data: formatUserResponse(user),
+      data: forCaller(formatUserResponse(user), req),
     });
   } catch (err) {
     next(err);
@@ -198,7 +235,7 @@ export async function getUserById(req, res, next) {
  * - Branch Manager must end up Branch-scoped.
  * `fallback` is the scope to keep when the body names none.
  */
-async function resolveAssignmentScope({ companyId, body, role, fallback }) {
+async function resolveAssignmentScope({ companyId, body, role, fallback, client = prisma }) {
   const slug = systemSlugOfRole(role);
   if (COMPANY_WIDE_SLUGS.includes(slug)) {
     return { scopeType: 'Company', scopeId: companyId };
@@ -216,7 +253,7 @@ async function resolveAssignmentScope({ companyId, body, role, fallback }) {
   } else {
     scope = fallback;
   }
-  await assertValidScope({ companyId, ...scope });
+  await assertValidScope({ companyId, ...scope, client });
   assertScopeFitsRole(role, scope.scopeType);
   return scope;
 }
@@ -234,10 +271,57 @@ function assertMayGrantRole(req, role) {
   if (slug === 'system_admin' && !['company_owner', 'system_admin'].includes(req.user.role)) {
     throw new ForbiddenError('You do not have permission to assign elevated administrative roles');
   }
+  assertGrantBelowCaller(req, role);
 }
 
 async function loadCompanyRoles(companyId) {
   return prisma.role.findMany({ where: { companyId }, ...ROLE_WITH_TEMPLATE });
+}
+
+/**
+ * The role a POST/PATCH /users body asks for (R17). `roleId` / `role_id` is an id and only an id:
+ * it never falls back to label resolution, so a custom role labelled "Lead" is never confused
+ * with the system Team Lead. `role` keeps accepting an id, a login slug or a custom label.
+ * Returns null when no role was requested.
+ */
+async function resolveRequestedRole(companyId, body) {
+  const roleId = body.roleId ?? body.role_id;
+  const hasId = roleId !== undefined && roleId !== null && roleId !== '';
+  if (!hasId && !body.role) return null;
+  const roles = await loadCompanyRoles(companyId);
+  if (hasId) {
+    const role = typeof roleId === 'string' ? roles.find((r) => r.id === roleId) : null;
+    if (!role) throw new BadRequestError(`Role id "${roleId}" is not a role of this company`);
+    return role;
+  }
+  const role = resolveCompanyRole(roles, body.role);
+  if (!role) throw new BadRequestError(`Role "${body.role}" is not configured for this company`);
+  return role;
+}
+
+/**
+ * PERMISSION_CHANGE rows for role grants and revokes made by POST/PATCH /users (R13), in the
+ * role-assignments shape. Written after commit; a failed write never fails the request.
+ */
+async function auditRoleEvents(req, userId, { revoked = [], granted = [] }) {
+  const payload = (event, ra) => ({ event, userId, roleId: ra.roleId, roleLabel: ra.role?.label, scopeType: ra.scopeType, scopeId: ra.scopeId });
+  const entries = [
+    ...revoked.map((ra) => ({ oldValue: payload('ROLE_REVOKED', ra) })),
+    ...granted.map((ra) => ({ newValue: payload('ROLE_ASSIGNED', ra) })),
+  ];
+  for (const entry of entries) {
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        targetUserId: userId,
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        performedById: req.user.id,
+        ...entry,
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: Audit record logging during user role change:', auditErr.message);
+    }
+  }
 }
 
 /**
@@ -253,7 +337,6 @@ export async function createUser(req, res, next) {
     const password = body.password || body.password_hash || '';
     const jobTitle = body.jobTitle || body.job_title || null;
     const managerUserId = body.managerUserId || body.manager_user_id || null;
-    const requestedRole = body.role || body.roleId || body.role_id || null;
 
     validateRequired({ fullName, email, password }, ['fullName', 'email', 'password']);
     validateEmail(email);
@@ -284,25 +367,26 @@ export async function createUser(req, res, next) {
     }
 
     // Resolve and validate the role and its scope before anything is written.
-    let targetRole = null;
+    const targetRole = await resolveRequestedRole(companyId, body);
     let scope = null;
-    if (requestedRole) {
-      targetRole = resolveCompanyRole(await loadCompanyRoles(companyId), requestedRole);
-      if (!targetRole) {
-        throw new BadRequestError(`Role "${requestedRole}" is not configured for this company`);
-      }
+    let usedDefaultBranch = false;
+    if (targetRole) {
       assertMayGrantRole(req, targetRole);
 
       let fallback = { scopeType: 'Company', scopeId: companyId };
       if (systemSlugOfRole(targetRole) === 'branch_manager' && !(body.branchId || body.branch_id || body.scopeType || body.scope_type)) {
         // No branch given: use the company's first branch, as before.
         const defaultBranch = await prisma.branch.findFirst({ where: { companyId }, orderBy: { createdAt: 'asc' } });
-        if (defaultBranch) fallback = { scopeType: 'Branch', scopeId: defaultBranch.id };
+        if (defaultBranch) {
+          fallback = { scopeType: 'Branch', scopeId: defaultBranch.id };
+          usedDefaultBranch = true;
+        }
       }
       scope = await resolveAssignmentScope({ companyId, body, role: targetRole, fallback });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    let revokedManagers = [];
 
     // Seat check and create run under the company row lock, so parallel creates cannot all
     // pass the same count (SEC-M5-09).
@@ -331,6 +415,8 @@ export async function createUser(req, res, next) {
           grantingSlug: systemSlugOfRole(targetRole),
           client: tx,
         });
+        // A default branch (none named) never loses its manager: refuse instead (checked under the lock).
+        revokedManagers = await revokeOtherBranchManagers({ req, role: targetRole, ...scope, userId: user.id, client: tx, refuseIfAny: usedDefaultBranch });
         await tx.roleAssignment.create({
           data: {
             companyId,
@@ -360,6 +446,10 @@ export async function createUser(req, res, next) {
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during user creation:', auditErr.message);
     }
+    if (targetRole) {
+      await auditRoleEvents(req, newUser.id, { granted: [{ roleId: targetRole.id, role: targetRole, ...scope }] });
+      await auditBranchManagerRevokes(req, targetRole, revokedManagers);
+    }
 
     res.status(201).json({
       success: true,
@@ -368,6 +458,61 @@ export async function createUser(req, res, next) {
     });
   } catch (err) {
     next(err);
+  }
+}
+
+/** Active role assignments of a user, read with `client` (pass the company lock's tx). */
+function loadActiveAssignments(userId, client = prisma) {
+  return client.roleAssignment.findMany({
+    where: { userId, revokedAt: null },
+    include: { role: ROLE_WITH_TEMPLATE },
+  });
+}
+
+/** Actions that change who a person is or whether they can sign in (F17, R1, R2). */
+const SENSITIVE_TARGET_ACTIONS = new Set(['deactivate', 'reactivate', 'role', 'password', 'email']);
+
+/**
+ * Who may act on which account (F17, R1, R2 / D1). Run it inside the company lock with the
+ * lock's tx as `client`, so the target's owner/admin status cannot change underneath (R8).
+ * action: 'update' (profile fields), 'deactivate', 'reactivate', 'role', 'password' or 'email'.
+ * - Nobody deactivates their own account.
+ * - The Company Owner cannot be deactivated; only a Company Owner modifies an owner account.
+ * - A System Admin account is modified only by a Company Owner or System Admin, and its
+ *   deactivation, reactivation, role, password and email only by a Company Owner. While the
+ *   company has no active owner a System Admin may do these too (as for the F1 bootstrap).
+ */
+async function assertMayActOnTarget({ req, targetAssignments, isSelf, action, client = prisma }) {
+  if (action === 'deactivate' && isSelf) {
+    throw new BadRequestError('You cannot deactivate your own administrative account');
+  }
+  const targetIsOwner = targetAssignments.some((ra) => systemSlugOfRole(ra.role) === 'company_owner');
+  const targetIsAdmin = targetAssignments.some((ra) => systemSlugOfRole(ra.role) === 'system_admin');
+  const callerRole = req.user.role;
+
+  if (targetIsOwner) {
+    if (action === 'deactivate') {
+      throw new ForbiddenError('The Company Owner account cannot be deactivated');
+    }
+    if (!isSelf && callerRole !== 'company_owner') {
+      throw new ForbiddenError('Only the Company Owner can modify Company Owner accounts');
+    }
+  }
+
+  if (targetIsAdmin && !isSelf && callerRole !== 'company_owner') {
+    const deactivateMsg = 'Only the Company Owner can deactivate System Administrators';
+    if (callerRole !== 'system_admin') {
+      if (action === 'deactivate') throw new ForbiddenError(deactivateMsg);
+      if (action === 'update') {
+        throw new ForbiddenError('You do not have permission to modify System Administrator accounts');
+      }
+      throw new ForbiddenError('Only the Company Owner can modify System Administrator accounts');
+    }
+    if (SENSITIVE_TARGET_ACTIONS.has(action) && (await countActiveOwners(req.user.companyId, client)) > 0) {
+      throw new ForbiddenError(
+        action === 'deactivate' ? deactivateMsg : 'Only the Company Owner can modify System Administrator accounts'
+      );
+    }
   }
 }
 
@@ -400,29 +545,9 @@ export async function updateUser(req, res, next) {
       throw new ForbiddenError('You do not have permission to update this user');
     }
 
-    // Sovereign checks: Non-owners cannot modify Company Owner accounts (demote, change credentials, or deactivate)
-    const targetAssignments = await prisma.roleAssignment.findMany({
-      where: { userId: id, revokedAt: null },
-      include: { role: ROLE_WITH_TEMPLATE },
-    });
-    const targetIsOwner = targetAssignments.some(
-      (ra) => systemSlugOfRole(ra.role) === 'company_owner'
-    );
-    const targetIsAdmin = targetAssignments.some(
-      (ra) => systemSlugOfRole(ra.role) === 'system_admin'
-    );
-
-    const callerIsOwner = req.user.role === 'company_owner';
-    const callerIsAdminOrOwner = ['company_owner', 'system_admin'].includes(req.user.role);
-
-    if (!isSelf) {
-      if (targetIsOwner && !callerIsOwner) {
-        throw new ForbiddenError('Only the Company Owner can modify Company Owner accounts');
-      }
-      if (targetIsAdmin && !callerIsAdminOrOwner) {
-        throw new ForbiddenError('You do not have permission to modify System Administrator accounts');
-      }
-    }
+    // Fast fail before any other work. Repeated under the company lock below with every action this
+    // request performs, which is the check that counts (R8).
+    await assertMayActOnTarget({ req, targetAssignments: await loadActiveAssignments(id), isSelf, action: 'update' });
 
     const updateData = {};
 
@@ -449,6 +574,9 @@ export async function updateUser(req, res, next) {
           throw new ConflictError('A user with this email address already exists');
         }
         updateData.email = email;
+        // Invalidates pending email-change links (they carry the old tokenVersion) and signs out
+        // sessions issued for the old address.
+        updateData.tokenVersion = { increment: 1 };
       }
     }
 
@@ -467,13 +595,10 @@ export async function updateUser(req, res, next) {
       updateData.passwordChangedAt = null;
     }
 
-    let needsSeat = false;
+    let requestedActive;
     if (isAdmin && (body.isActive !== undefined || body.is_active !== undefined)) {
       const activeVal = body.isActive !== undefined ? Boolean(body.isActive) : Boolean(body.is_active);
-      if (targetIsOwner && !activeVal) {
-        throw new ForbiddenError('The Company Owner account cannot be deactivated');
-      }
-      needsSeat = activeVal && !targetUser.isActive;
+      requestedActive = activeVal;
       updateData.isActive = activeVal;
       updateData.deactivatedAt = activeVal ? null : new Date();
       if (!activeVal) updateData.tokenVersion = { increment: 1 };
@@ -498,35 +623,36 @@ export async function updateUser(req, res, next) {
     }
 
     // Role change (SEC-M5-04 / SEC-M5-14): replace only the primary assignment and keep its scope.
-    const requestedRole = body.role || body.roleId || body.role_id;
-    let targetRole = null;
+    let targetRole = isAdmin ? await resolveRequestedRole(companyId, body) : null;
     let primary = null;
     let newScope = null;
-
-    if (requestedRole && isAdmin) {
-      targetRole = resolveCompanyRole(await loadCompanyRoles(companyId), requestedRole);
-      if (!targetRole) {
-        throw new BadRequestError(`Role "${requestedRole}" is not configured for this company`);
-      }
-    }
+    let revokedManagers = [];
 
     const updatedUser = await withCompanyLock(companyId, async (tx) => {
-      if (needsSeat) {
+      // Read the target's assignments and status under the lock, so a parallel owner grant,
+      // deactivation or role change for the same user cannot slip between check and write (R8),
+      // and parallel role changes cannot each add a new primary.
+      const current = await loadActiveAssignments(id, tx);
+      const { isActive: wasActive } = await tx.user.findUnique({ where: { id }, select: { isActive: true } });
+      const actions = ['update'];
+      if (requestedActive === false) actions.push('deactivate');
+      if (requestedActive === true && !wasActive) actions.push('reactivate');
+      if (updateData.passwordHash) actions.push('password');
+      if (updateData.email) actions.push('email');
+      for (const action of actions) {
+        await assertMayActOnTarget({ req, targetAssignments: current, isSelf, action, client: tx });
+      }
+
+      if (requestedActive === true && !wasActive) {
         await assertWithinPlanLimit(companyId, 'users', { client: tx });
       }
 
       if (targetRole) {
-        // Read the current assignments under the lock, so parallel role changes for the same
-        // user see each other's result and cannot each add a new primary.
-        const current = await tx.roleAssignment.findMany({
-          where: { userId: id, revokedAt: null },
-          include: { role: ROLE_WITH_TEMPLATE },
-        });
         primary = resolveUserRole({ roleAssignments: current }).matchedAssignment;
         const fallback = primary
           ? { scopeType: primary.scopeType, scopeId: primary.scopeId }
           : { scopeType: 'Company', scopeId: companyId };
-        newScope = await resolveAssignmentScope({ companyId, body, role: targetRole, fallback });
+        newScope = await resolveAssignmentScope({ companyId, body, role: targetRole, fallback, client: tx });
 
         const unchanged =
           primary &&
@@ -541,6 +667,7 @@ export async function updateUser(req, res, next) {
           if (isSelf) {
             throw new ForbiddenError('You cannot change your own role');
           }
+          await assertMayActOnTarget({ req, targetAssignments: current, isSelf, action: 'role', client: tx });
           assertMayGrantRole(req, targetRole);
           await assertOwnerAdminGrantRules({
             companyId,
@@ -563,6 +690,7 @@ export async function updateUser(req, res, next) {
             // Soft revoke keeps the history of who held which role (D-S9).
             await tx.roleAssignment.updateMany({ where: { id: primary.id, revokedAt: null }, data: { revokedAt: new Date() } });
           }
+          revokedManagers = await revokeOtherBranchManagers({ req, role: targetRole, ...newScope, userId: id, client: tx });
           await tx.roleAssignment.create({
             data: {
               companyId,
@@ -598,6 +726,13 @@ export async function updateUser(req, res, next) {
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during user update:', auditErr.message);
+    }
+    if (targetRole) {
+      await auditRoleEvents(req, id, {
+        revoked: primary ? [primary] : [],
+        granted: [{ roleId: targetRole.id, role: targetRole, ...newScope }],
+      });
+      await auditBranchManagerRevokes(req, targetRole, revokedManagers);
     }
 
     res.status(200).json({
@@ -679,10 +814,15 @@ export async function confirmEmailChange(req, res, next) {
       throw new ConflictError('A user with this email address already exists');
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
+    // Conditional on the link's tokenVersion, so two concurrent confirms of one link cannot both
+    // pass the check above and both write: the second matches no row.
+    const { count } = await prisma.user.updateMany({
+      where: { id: user.id, tokenVersion: payload.tokenVersion },
       data: { email: newEmail, tokenVersion: { increment: 1 } },
     });
+    if (count !== 1) {
+      throw new BadRequestError('This email confirmation link is invalid or has expired');
+    }
     sendEmailChangedNotice({ to: user.email, fullName: user.fullName, newEmail });
 
     try {
@@ -719,41 +859,30 @@ export async function deactivateUser(req, res, next) {
       throw new BadRequestError('You cannot deactivate your own administrative account');
     }
 
-    const targetUser = await prisma.user.findFirst({
-      where: { id, companyId: req.user.companyId },
-    });
-
-    if (!targetUser) {
-      throw new NotFoundError(`User with ID ${id} not found in this company`);
-    }
-
-    // Sovereign checks: Non-owners cannot deactivate Company Owner or System Admin
-    const targetAssignments = await prisma.roleAssignment.findMany({
-      where: { userId: id, revokedAt: null },
-      include: { role: ROLE_WITH_TEMPLATE },
-    });
-    const isTargetOwner = targetAssignments.some(
-      (ra) => systemSlugOfRole(ra.role) === 'company_owner'
-    );
-    if (isTargetOwner) {
-      throw new ForbiddenError('The Company Owner account cannot be deactivated');
-    }
-
-    const callerIsOwner = req.user.role === 'company_owner';
-    const isTargetAdmin = targetAssignments.some(
-      (ra) => systemSlugOfRole(ra.role) === 'system_admin'
-    );
-    if (isTargetAdmin && !callerIsOwner) {
-      throw new ForbiddenError('Only the Company Owner can deactivate System Administrators');
-    }
-
-    await prisma.user.update({
-      where: { id },
-      data: {
-        isActive: false,
-        deactivatedAt: new Date(),
-        tokenVersion: { increment: 1 }, // revoke existing sessions immediately
-      },
+    // Check and write under the company lock, so a concurrent owner grant or role change on the
+    // target cannot slip between the check and the deactivation (R8).
+    await withCompanyLock(req.user.companyId, async (tx) => {
+      const targetUser = await tx.user.findFirst({
+        where: { id, companyId: req.user.companyId },
+      });
+      if (!targetUser) {
+        throw new NotFoundError(`User with ID ${id} not found in this company`);
+      }
+      await assertMayActOnTarget({
+        req,
+        targetAssignments: await loadActiveAssignments(id, tx),
+        isSelf: false,
+        action: 'deactivate',
+        client: tx,
+      });
+      await tx.user.update({
+        where: { id },
+        data: {
+          isActive: false,
+          deactivatedAt: new Date(),
+          tokenVersion: { increment: 1 }, // revoke existing sessions immediately
+        },
+      });
     });
 
     // Record audit log
@@ -786,29 +915,31 @@ export async function reactivateUser(req, res, next) {
   try {
     const { id } = req.params;
 
-    const targetUser = await prisma.user.findFirst({
-      where: { id, companyId: req.user.companyId },
-    });
-
-    if (!targetUser) {
-      throw new NotFoundError(`User with ID ${id} not found in this company`);
-    }
-
-    if (targetUser.isActive) {
-      // Return the same safe, list-shaped record as every other user response (never the raw row,
-      // which contains passwordHash).
-      const current = await prisma.user.findUnique({ where: { id }, select: USER_SELECT_FIELDS });
-      return res.status(200).json({
-        success: true,
-        message: `User "${targetUser.fullName}" is already active`,
-        data: formatUserResponse(current),
+    // Target checks, plan seat check and reactivation under the company lock (SEC-M5-09, R1, R8).
+    const outcome = await withCompanyLock(req.user.companyId, async (tx) => {
+      const targetUser = await tx.user.findFirst({
+        where: { id, companyId: req.user.companyId },
       });
-    }
-
-    // Plan seat check and reactivation under the company lock (SEC-M5-09).
-    const updatedUser = await withCompanyLock(req.user.companyId, async (tx) => {
+      if (!targetUser) {
+        throw new NotFoundError(`User with ID ${id} not found in this company`);
+      }
+      // Same target rules as deactivation (R1): an account HR may not deactivate, HR may not
+      // bring back either.
+      await assertMayActOnTarget({
+        req,
+        targetAssignments: await loadActiveAssignments(id, tx),
+        isSelf: req.user.id === id,
+        action: 'reactivate',
+        client: tx,
+      });
+      if (targetUser.isActive) {
+        // Return the same safe, list-shaped record as every other user response (never the raw
+        // row, which contains passwordHash).
+        const current = await tx.user.findUnique({ where: { id }, select: USER_SELECT_FIELDS });
+        return { targetUser, user: current, alreadyActive: true };
+      }
       await assertWithinPlanLimit(req.user.companyId, 'users', { client: tx });
-      return tx.user.update({
+      const user = await tx.user.update({
         where: { id },
         data: {
           isActive: true,
@@ -817,7 +948,17 @@ export async function reactivateUser(req, res, next) {
         },
         select: USER_SELECT_FIELDS,
       });
+      return { targetUser, user, alreadyActive: false };
     });
+
+    const { targetUser, user: updatedUser } = outcome;
+    if (outcome.alreadyActive) {
+      return res.status(200).json({
+        success: true,
+        message: `User "${targetUser.fullName}" is already active`,
+        data: formatUserResponse(updatedUser),
+      });
+    }
 
     // Record audit log
     try {

@@ -84,7 +84,7 @@ function LogDetailModal({ log, onClose }) {
               {log.entityName || `${formatEntityType(log.entityType)} #${String(log.entityId || '').substring(0, 8)}`}
             </p>
             {log.entityType && <p className="text-xs text-slate-500 mt-0.5">{formatEntityType(log.entityType)}</p>}
-            {log.entityId && <p className="text-[11px] text-slate-400 font-mono mt-0.5">ID: {log.entityId}</p>}
+            {log.entityId && <p className="text-[11px] text-slate-500 font-mono mt-0.5">ID: {log.entityId}</p>}
           </div>
         </div>
 
@@ -98,13 +98,13 @@ function LogDetailModal({ log, onClose }) {
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-700">
               {log.ipAddress && (
                 <div>
-                  <span className="text-slate-400 mr-1.5 font-medium">IP Address:</span>
+                  <span className="text-slate-500 mr-1.5 font-medium">IP Address:</span>
                   <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{log.ipAddress}</span>
                 </div>
               )}
               {log.userAgent && (
                 <div className="w-full">
-                  <span className="text-slate-400 mr-1.5 font-medium flex items-center gap-1 mt-1">
+                  <span className="text-slate-500 mr-1.5 font-medium flex items-center gap-1 mt-1">
                     <Laptop size={12} /> User Agent:
                   </span>
                   <p className="font-mono text-[11px] text-slate-600 bg-white p-2 rounded border border-slate-200 mt-1 break-all">
@@ -293,6 +293,7 @@ export default function HrAuditLogs() {
         <div className="flex items-center gap-2 shrink-0">
           <Filter size={15} className="text-slate-400" />
           <select
+            aria-label="Filter by action"
             value={actionFilter}
             onChange={(e) => { setActionFilter(e.target.value); setCurrentPage(1); }}
             className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -303,6 +304,7 @@ export default function HrAuditLogs() {
             ))}
           </select>
           <select
+            aria-label="Filter by entity type"
             value={entityFilter}
             onChange={(e) => { setEntityFilter(e.target.value); setCurrentPage(1); }}
             className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -397,14 +399,14 @@ export default function HrAuditLogs() {
                             {log.ipAddress}
                           </span>
                         ) : (
-                          <span className="text-[11px] text-slate-400 italic">Internal</span>
+                          <span className="text-[11px] text-slate-500 italic">Internal</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
                           onClick={() => setSelectedLog(log)}
-                          className="text-slate-400 hover:text-indigo-600 transition-colors p-1.5 rounded-lg hover:bg-indigo-50/80 cursor-pointer"
+                          className="text-slate-500 hover:text-indigo-600 transition-colors p-1.5 rounded-lg hover:bg-indigo-50/80 cursor-pointer"
                           title="View Details"
                           aria-label="View audit log detail"
                         >

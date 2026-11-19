@@ -200,7 +200,7 @@ function ThreadCommentNode({
               <span className={styles.reportsBadge}>
                 {directReports} {directReports === 1 ? "report" : "reports"}
                 {totalReports > directReports && (
-                  <span className="text-slate-400 font-normal"> ({totalReports} total)</span>
+                  <span className="text-slate-600 font-normal"> ({totalReports} total)</span>
                 )}
               </span>
             )}
@@ -272,6 +272,7 @@ export function ThreadedOrgTree({ users = [], branches = [], teams = [] }) {
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-slate-500" />
             <select
+              aria-label="Filter org tree by branch"
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
               className={styles.branchSelect}

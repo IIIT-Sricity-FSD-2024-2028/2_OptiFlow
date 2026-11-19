@@ -41,6 +41,8 @@ export default function HrBranches() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Secondary lists that failed to load; the page still renders but says so.
+  const [partialFailures, setPartialFailures] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -65,17 +67,28 @@ export default function HrBranches() {
     "superuser",
     "hr_manager",
   ].includes(user?.role);
+  // D2: naming a Branch Manager is a grant above HR's rank; only the Owner and System Admin may.
+  const canNameManager = ["company_owner", "system_admin"].includes(user?.role);
 
   // 1. DATA HYDRATION
   const fetchBranches = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
+    const failed = [];
+    const secondary = (path, name) =>
+      apiClient(path).catch((err) => {
+        console.warn(`[HrBranches] Failed to fetch ${name}:`, err.message);
+        failed.push(name);
+        return [];
+      });
 
     try {
       const [branchesData, usersData] = await Promise.all([
         apiClient("/branches"),
-        apiClient("/users").catch(() => []),
+        secondary("/users", "Users"),
       ]);
+      setPartialFailures(failed);
       setBranches(Array.isArray(branchesData) ? branchesData : []);
       setUsers(Array.isArray(usersData) ? usersData : usersData?.data || []);
     } catch (err) {
@@ -209,7 +222,7 @@ export default function HrBranches() {
           </div>
           <div>
             <div className="font-semibold text-slate-900">{row.name}</div>
-            <div className="text-xs text-slate-400 font-normal">Regional Office Hub</div>
+            <div className="text-xs text-slate-500 font-normal">Regional Office Hub</div>
           </div>
         </div>
       ),
@@ -241,7 +254,7 @@ export default function HrBranches() {
         const manager = row.manager;
         if (!manager) {
           return (
-            <span className="text-xs text-slate-400 italic whitespace-nowrap">
+            <span className="text-xs text-slate-500 italic whitespace-nowrap">
               Unassigned
             </span>
           );
@@ -271,7 +284,7 @@ export default function HrBranches() {
           );
         }
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-slate-50 text-slate-400 border border-slate-200/60">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-slate-50 text-slate-500 border border-slate-200/60">
             <Users className="w-3.5 h-3.5 text-slate-300" />
             <span>0 Teams</span>
           </span>
@@ -362,6 +375,12 @@ export default function HrBranches() {
         </div>
       )}
 
+      {!error && partialFailures.length > 0 && (
+        <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          {partialFailures.join(", ")} could not be loaded; related lists and pickers may be empty.
+        </div>
+      )}
+
       {/* KPI StatCards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <StatCard
@@ -390,13 +409,14 @@ export default function HrBranches() {
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="w-full sm:w-72">
             <Input
+              aria-label="Search branches"
               placeholder="Search branch name or code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
 
-          <div className="text-xs text-slate-400 font-medium">
+          <div className="text-xs text-slate-500 font-medium">
             Showing {filteredBranches.length} of {branches.length} branches
           </div>
         </div>
@@ -484,6 +504,7 @@ export default function HrBranches() {
             error={formError}
           >
             <Input
+              aria-label="Branch Name"
               type="text"
               placeholder="Enter branch name"
               value={branchName}
@@ -501,6 +522,7 @@ export default function HrBranches() {
             hint="Unique identifier slug, e.g. BLR-01, MUM-02"
           >
             <Input
+              aria-label="Branch Code (Optional)"
               type="text"
               placeholder="e.g. BLR-01"
               value={branchCode}
@@ -508,22 +530,25 @@ export default function HrBranches() {
             />
           </FormField>
 
+          {canNameManager && (
           <FormField
             label="Branch Manager (Optional)"
             hint="Designate an employee to lead and oversee this regional branch"
           >
             <Select
+              aria-label="Branch Manager (Optional)"
               value={managerUserId}
               onChange={(e) => setManagerUserId(e.target.value)}
             >
               <option value="">No manager assigned</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.fullName} ({u.jobTitle || u.role || "Member"})
+                  {u.fullName} ({u.jobTitle || u.roleLabel || "Member"})
                 </option>
               ))}
             </Select>
           </FormField>
+          )}
         </form>
       </Modal>
 
@@ -626,6 +651,7 @@ export default function HrBranches() {
                 hint="Choose the operational branch that will take full ownership of the migrated teams"
               >
                 <Select
+                  aria-label="Destination Regional Branch"
                   value={reassignBranchId}
                   onChange={(e) => setReassignBranchId(e.target.value)}
                   disabled={isDeleting}

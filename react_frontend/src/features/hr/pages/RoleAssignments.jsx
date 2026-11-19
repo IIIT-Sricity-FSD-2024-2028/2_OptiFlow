@@ -15,6 +15,21 @@ import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { FormField, Input, Select } from "../../../shared/components/FormField";
 import { Pagination } from "../../../shared/components/Pagination";
 import { formatDate } from "../../../shared/utils/formatDate";
+
+// D2: offer only roles the signed-in user may grant. Same order as the backend's GRANT_RANK
+// (back-end-new/src/utils/roleAssignmentGuards.js); the backend still enforces the rule.
+const GRANT_RANK = ["system_admin", "company_owner", "branch_manager", "hr_manager", "process_admin", "compliance_officer", "project_manager", "team_leader", "team_member"];
+const TEMPLATE_SLUG = { access_governance: "hr_manager", team_lead: "team_leader" };
+const grantableRoles = (roles, callerRole) => {
+  if (["company_owner", "system_admin"].includes(callerRole)) return roles;
+  const callerIndex = GRANT_RANK.includes(callerRole) ? GRANT_RANK.indexOf(callerRole) : GRANT_RANK.length;
+  return roles.filter((r) => {
+    if (r.isSystem !== true) return true;
+    const raw = r.roleTemplate?.slug || r.name;
+    const index = GRANT_RANK.indexOf(TEMPLATE_SLUG[raw] || raw);
+    return index !== -1 && index >= callerIndex;
+  });
+};
 import {
   ShieldCheck,
   Building2,
@@ -43,6 +58,8 @@ export default function HrRoleAssignments() {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Secondary lists that failed to load; the page still renders but says so.
+  const [partialFailures, setPartialFailures] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filters
@@ -87,14 +104,23 @@ export default function HrRoleAssignments() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
+    const failed = [];
+    const secondary = (path, name) =>
+      apiClient(path).catch((err) => {
+        console.warn(`[HrRoleAssignments] Failed to fetch ${name}:`, err.message);
+        failed.push(name);
+        return [];
+      });
 
     try {
       const [assignmentsData, usersData, rolesData, branchesData] = await Promise.all([
         apiClient("/role-assignments"),
-        apiClient("/users").catch(() => []),
-        apiClient("/roles").catch(() => []),
-        apiClient("/branches").catch(() => []),
+        secondary("/users", "Users"),
+        secondary("/roles", "Roles"),
+        secondary("/branches", "Branches"),
       ]);
+      setPartialFailures(failed);
 
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
@@ -377,7 +403,7 @@ export default function HrRoleAssignments() {
               variant="primary"
               onClick={() => {
                 setSelectedUserId(users[0]?.id || "");
-                setSelectedRoleId(roles[0]?.id || "");
+                setSelectedRoleId("");
                 setSelectedScopeType("Company");
                 setSelectedBranchId(branches[0]?.id || "");
                 setModalError("");
@@ -398,6 +424,12 @@ export default function HrRoleAssignments() {
           <Button variant="secondary" size="sm" onClick={fetchData}>
             Retry
           </Button>
+        </div>
+      )}
+
+      {!error && partialFailures.length > 0 && (
+        <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          {partialFailures.join(", ")} could not be loaded; related lists and pickers may be empty.
         </div>
       )}
 
@@ -433,6 +465,7 @@ export default function HrRoleAssignments() {
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="w-full md:w-80">
           <Input
+            aria-label="Search assignments"
             placeholder="Search by user or role..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -446,6 +479,7 @@ export default function HrRoleAssignments() {
               User:
             </span>
             <select
+              aria-label="Filter by user"
               className="px-3 py-2 text-sm text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer max-w-[180px]"
               value={userFilter}
               onChange={(e) => {
@@ -473,6 +507,7 @@ export default function HrRoleAssignments() {
               Role:
             </span>
             <select
+              aria-label="Filter by role"
               className="px-3 py-2 text-sm text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
@@ -492,6 +527,7 @@ export default function HrRoleAssignments() {
               Scope:
             </span>
             <select
+              aria-label="Filter by scope"
               className="px-3 py-2 text-sm text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
               value={scopeFilter}
               onChange={(e) => setScopeFilter(e.target.value)}
@@ -525,7 +561,7 @@ export default function HrRoleAssignments() {
                   variant="primary"
                   onClick={() => {
                     setSelectedUserId(users[0]?.id || "");
-                    setSelectedRoleId(roles[0]?.id || "");
+                    setSelectedRoleId("");
                     setSelectedScopeType("Company");
                     setSelectedBranchId(branches[0]?.id || "");
                     setModalError("");
@@ -575,6 +611,7 @@ export default function HrRoleAssignments() {
 
           <FormField label="Select Employee" required>
             <Select
+              aria-label="Select Employee"
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
               disabled={isSubmitting}
@@ -592,12 +629,13 @@ export default function HrRoleAssignments() {
 
           <FormField label="Select Role" required>
             <Select
+              aria-label="Select Role"
               value={selectedRoleId}
               onChange={(e) => setSelectedRoleId(e.target.value)}
               disabled={isSubmitting}
             >
               <option value="" disabled>Choose a role...</option>
-              {roles.map((r) => (
+              {grantableRoles(roles, currentUser?.role).map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label} {r.isSystem ? "(System)" : "(Custom)"}
                 </option>
@@ -607,6 +645,7 @@ export default function HrRoleAssignments() {
 
           <FormField label="Governance Scope Type" required>
             <Select
+              aria-label="Governance Scope Type"
               value={selectedScopeType}
               onChange={(e) => setSelectedScopeType(e.target.value)}
               disabled={isSubmitting}
@@ -619,6 +658,7 @@ export default function HrRoleAssignments() {
           {selectedScopeType === "Branch" && (
             <FormField label="Select Regional Branch" required>
               <Select
+                aria-label="Select Regional Branch"
                 value={selectedBranchId}
                 onChange={(e) => setSelectedBranchId(e.target.value)}
                 disabled={isSubmitting}
