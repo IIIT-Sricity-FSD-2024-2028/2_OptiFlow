@@ -1,5 +1,6 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import { resetStore } from "./core/resetStore";
+import { createForbiddenListener } from "./core/listener";
 
 // M1
 import complianceRules from "./complianceRules";
@@ -59,8 +60,7 @@ export function makeStore(preloadedState) {
         // Upload thunks receive a File as their argument. Ignore that one path;
         // the check itself stays on.
         serializableCheck: { ignoredActionPaths: ["meta.arg"] },
-      }),
-    // The 403 toast listener middleware is added later with .prepend(listener.middleware).
+      }).prepend(createForbiddenListener().middleware),
   });
 }
 
