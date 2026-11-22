@@ -1,77 +1,16 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { apiClient } from "../../services/api/client";
+import { createSlice } from "@reduxjs/toolkit";
 import { baseState } from "../core/createStubSlice";
-import { isFresh } from "../core/freshness";
-import { normalizeError } from "../core/normalizeError";
+import {
+  fetchComplianceCategories,
+  createComplianceCategory,
+  updateComplianceCategory,
+  deleteComplianceCategory,
+} from "./thunks";
 
 const initialState = {
   ...baseState(),
   items: [],
 };
-
-// 1. Fetch Categories (with 60-second cache check)
-export const fetchComplianceCategories = createAsyncThunk(
-  "complianceCategories/fetchAll",
-  async (force = false, { getState, rejectWithValue }) => {
-    const state = getState().complianceCategories;
-    if (!force && isFresh(state.loadedAt)) {
-      return state.items;
-    }
-    try {
-      const res = await apiClient("/api/compliance-categories");
-      return Array.isArray(res) ? res : res?.data || [];
-    } catch (err) {
-      return rejectWithValue(normalizeError(err));
-    }
-  },
-);
-
-// 2. Create Category
-export const createComplianceCategory = createAsyncThunk(
-  "complianceCategories/create",
-  async (data, { rejectWithValue }) => {
-    try {
-      const res = await apiClient("/api/compliance-categories", {
-        method: "POST",
-        body: data,
-      });
-      return res?.data || res;
-    } catch (err) {
-      return rejectWithValue(normalizeError(err));
-    }
-  },
-);
-
-// 3. Update Category
-export const updateComplianceCategory = createAsyncThunk(
-  "complianceCategories/update",
-  async ({ id, ...data }, { rejectWithValue }) => {
-    try {
-      const res = await apiClient(`/api/compliance-categories/${id}`, {
-        method: "PATCH",
-        body: data,
-      });
-      return res?.data || res;
-    } catch (err) {
-      return rejectWithValue(normalizeError(err));
-    }
-  },
-);
-
-// 4. Delete Category
-export const deleteComplianceCategory = createAsyncThunk(
-  "complianceCategories/delete",
-  async (id, { rejectWithValue }) => {
-    try {
-      await apiClient(`/api/compliance-categories/${id}`, {
-        method: "DELETE",
-      });
-      return { id }; // We return the ID so the reducer knows who to remove
-    } catch (err) {
-      return rejectWithValue(normalizeError(err));
-    }
-  },
-);
 
 export const complianceCategoriesSlice = createSlice({
   name: "complianceCategories",
@@ -83,7 +22,7 @@ export const complianceCategoriesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      //FetchLifeCyle
+      // Fetch Lifecycle
       .addCase(fetchComplianceCategories.pending, (state) => {
         state.status = "loading";
         state.error = null;
@@ -97,7 +36,8 @@ export const complianceCategoriesSlice = createSlice({
         state.status = "failed";
         state.error = action.payload;
       })
-      // Create Lifecycle (optimistic insertion)
+
+      // Create Lifecycle
       .addCase(createComplianceCategory.fulfilled, (state, action) => {
         state.items.unshift(action.payload);
       })
@@ -121,17 +61,10 @@ export const complianceCategoriesSlice = createSlice({
   },
 });
 
-// Selectors
-export const selectAllComplianceCategories = (state) =>
-  state.complianceCategories.items;
+export const { clearComplianceErrors } = complianceCategoriesSlice.actions;
 
-export const selectComplianceCategoriesStatus = (state) =>
-  state.complianceCategories.status;
-
-export const selectComplianceCategoriesError = (state) =>
-  state.complianceCategories.error;
-
-export const selectIsComplianceCategoriesLoading = (state) =>
-  state.complianceCategories.status === "loading";
+// Re-export thunks and selectors so consumers can import directly from this folder
+export * from "./thunks";
+export * from "./selectors";
 
 export default complianceCategoriesSlice.reducer;
