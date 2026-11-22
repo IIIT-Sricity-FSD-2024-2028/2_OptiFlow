@@ -1,4 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchExecutiveMetrics,
+  selectExecutiveMetrics,
+  selectExecutiveStatus,
+  selectExecutiveError,
+} from '../../../store/executive';
 import {
   CreditCard,
   Calendar,
@@ -26,30 +33,25 @@ import { useToast } from '../../../shared/components/Toast';
 export default function ExecutiveBilling() {
   const { user } = useAuth();
   const toast = useToast();
-  const [metrics, setMetrics] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const dispatch = useDispatch();
 
-  const loadBillingData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await executiveApi.getMetrics({});
-      setMetrics(res?.data || res);
-    } catch (err) {
-      setError(
-        err.status === 402
-          ? `${err.message} Contact billing to renew or upgrade: support@officesync.com`
-          : (err.message || 'Failed to load billing telemetry.'),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const metrics = useSelector(selectExecutiveMetrics);
+  const status = useSelector(selectExecutiveStatus);
+  const reduxError = useSelector(selectExecutiveError);
+
+  const loading = status === 'loading' && !metrics;
+  const error =
+    reduxError?.status === 402
+      ? `${reduxError.message} Contact billing to renew or upgrade: support@officesync.com`
+      : (reduxError?.message || '');
+
+  const loadBillingData = useCallback(() => {
+    dispatch(fetchExecutiveMetrics({ force: true }));
+  }, [dispatch]);
 
   useEffect(() => {
-    loadBillingData();
-  }, [loadBillingData]);
+    dispatch(fetchExecutiveMetrics());
+  }, [dispatch]);
 
   if (loading) {
     return (
