@@ -1,1 +1,6 @@
 /Claude outputs
+
+# Local AI-assistant files (not part of the project)
+/.claude/
+/AGENTS.md
+/CLAUDE.md
