@@ -1,9 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PATHS } from '../../app/paths';
 import { useAuth } from '../../context/AuthContext';
 import { getUserAvatarPalette } from '../utils/avatarColor';
-import { apiClient } from '../../services/api/client';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchNotifications, markNotificationRead, markAllNotificationsRead,
+  selectAllNotifications, selectUnreadCount,
+} from '../../store/notifications';
 import { 
   Building2, 
   Shield, 
@@ -27,27 +31,17 @@ export const Topbar = ({ title }) => {
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
 
-  // Notification State
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    try {
-      const res = await apiClient('/notifications');
-      const list = res.data || (Array.isArray(res) ? res : []);
-      setNotifications(list);
-      setUnreadCount(typeof res.unreadCount === 'number' ? res.unreadCount : list.filter(n => !n.isRead).length);
-    } catch (err) {
-      // Fail silently for background bell polling
-    }
-  }, [user]);
+  const dispatch = useDispatch();
+  const notifications = useSelector(selectAllNotifications);
+  const unreadCount = useSelector(selectUnreadCount);
+  const userId = user?.id;
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // 30s background sync
+    if (!userId) return;
+    dispatch(fetchNotifications({ userId }));
+    const interval = setInterval(() => dispatch(fetchNotifications({ userId, force: true })), 30000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [dispatch, userId]);
 
   useEffect(() => {
     setAvatarPalette(getUserAvatarPalette(user));
@@ -73,9 +67,7 @@ export const Topbar = ({ title }) => {
 
   const handleMarkAllRead = async () => {
     try {
-      await apiClient('/notifications/read-all', { method: 'POST' });
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      setUnreadCount(0);
+      await dispatch(markAllNotificationsRead()).unwrap();
     } catch (_) {
       // best effort: the list refreshes on the next poll
     }
@@ -84,9 +76,7 @@ export const Topbar = ({ title }) => {
   const handleNotificationClick = async (n) => {
     try {
       if (!n.isRead) {
-        await apiClient(`/notifications/${n.id}/read`, { method: 'PATCH' });
-        setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, isRead: true } : item));
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        await dispatch(markNotificationRead(n.id)).unwrap();
       }
     } catch (_) {
       // best effort: navigation continues even if marking as read failed

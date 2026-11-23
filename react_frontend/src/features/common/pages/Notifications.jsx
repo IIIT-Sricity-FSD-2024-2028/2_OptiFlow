@@ -1,6 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiClient } from '../../../services/api/client';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchNotifications, markNotificationRead, markAllNotificationsRead,
+  selectAllNotifications, selectUnreadCount,
+  selectNotificationsStatus, selectNotificationsError, selectNotificationMutations,
+} from '../../../store/notifications';
+import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../shared/components/Button';
 import { Loader } from '../../../shared/components/Loader';
 import {
@@ -15,50 +21,27 @@ import {
 
 export default function Notifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'UNREAD' | 'COMPLIANCE' | 'WORK'
-  const [markingId, setMarkingId] = useState(null);
-
-  const fetchNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await apiClient('/notifications');
-      const list = res.data || (Array.isArray(res) ? res : []);
-      setNotifications(list);
-    } catch (err) {
-      console.error('Failed to load notifications:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const dispatch = useDispatch();
+  const { user } = useAuth();
+  const userId = user?.id;
+  const notifications = useSelector(selectAllNotifications);
+  const unreadCount = useSelector(selectUnreadCount);
+  const status = useSelector(selectNotificationsStatus);
+  const error = useSelector(selectNotificationsError);
+  const mutations = useSelector(selectNotificationMutations);
+  const loading = ['idle', 'loading'].includes(status) && !notifications.length;
+  const [activeFilter, setActiveFilter] = useState('ALL');
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchNotifications();
-  }, [fetchNotifications]);
+    if (userId) dispatch(fetchNotifications({ userId }));
+  }, [dispatch, userId]);
 
-  const handleMarkAsRead = async (id, e) => {
+  const handleMarkAsRead = (id, e) => {
     e?.stopPropagation();
-    try {
-      setMarkingId(id);
-      await apiClient(`/notifications/${id}/read`, { method: 'PATCH' });
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch {
-      // Best effort: the item stays unread and the next refresh shows the server state.
-    } finally {
-      setMarkingId(null);
-    }
+    return dispatch(markNotificationRead(id));
   };
 
-  const handleMarkAllRead = async () => {
-    try {
-      await apiClient('/notifications/read-all', { method: 'POST' });
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch {
-      // Best effort: items stay unread and the next refresh shows the server state.
-    }
-  };
+  const handleMarkAllRead = () => dispatch(markAllNotificationsRead());
 
   const handleNavigate = async (n) => {
     if (!n.isRead) {
@@ -76,7 +59,7 @@ export default function Notifications() {
     return true;
   });
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6 text-slate-900">
@@ -150,6 +133,7 @@ export default function Notifications() {
       </div>
 
       {/* Notifications Feed */}
+      {error && <p role="alert">{error.message}</p>}
       {loading ? (
         <div className="p-12 text-center text-slate-500">
           <Loader />
@@ -231,7 +215,7 @@ export default function Notifications() {
                       {!n.isRead && (
                         <button
                           onClick={(e) => handleMarkAsRead(n.id, e)}
-                          disabled={markingId === n.id}
+                          disabled={mutations['read:' + n.id]?.status === 'loading'}
                           className="text-slate-500 hover:text-slate-800 font-medium text-xs px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 transition-colors"
                         >
                           Mark as read
