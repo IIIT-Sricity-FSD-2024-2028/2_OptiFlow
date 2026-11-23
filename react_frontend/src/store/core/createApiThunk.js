@@ -23,11 +23,12 @@ import { normalizeError } from "./normalizeError";
 export function createApiThunk(typePrefix, call, { abortable = false, condition } = {}) {
   return createAsyncThunk(
     typePrefix,
-    async (arg, { signal, rejectWithValue }) => {
+    async (arg, thunkAPI) => {
+      const { signal, rejectWithValue} = thunkAPI;
       const options = { signal };
       if (abortable) options.abortKey = `${typePrefix}:${JSON.stringify(arg ?? null)}`;
       try {
-        return await call(arg, options);
+        return await call(arg, options, thunkAPI);
       } catch (err) {
         return rejectWithValue(normalizeError(err));
       }
