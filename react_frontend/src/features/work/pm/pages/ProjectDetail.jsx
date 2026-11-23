@@ -7,22 +7,31 @@ import { FormField, Select } from '../../../../shared/components/FormField';
 import { Loader } from '../../../../shared/components/Loader';
 import { Button } from '../../../../shared/components/Button';
 import { Pagination } from '../../../../shared/components/Pagination';
-import * as projectsApi from '../../../../services/api/projects';
-import * as tasksApi from '../../../../services/api/tasks';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchProjectById,
+  selectProjectById,
+  selectProjectMutation,
+  updateProject,
+} from '../../../../store/projects';
+import { createTask as createTaskThunk, updateTask } from '../../../../store/tasks';
+// Foreign resources (M5 users, M1 compliance) keep their own fetch until those slices merge.
 import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
 import { ComplianceOverviewModal, CreateProjectTaskModal, TaskReviewDrawer } from '../components/ProjectDetailPanels';
 import { formatDate } from '../components/formatDate';
 
 const STATUSES = ['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'];
-const normalize = (response) => response?.data || response;
 const TASK_PAGE_SIZE = 10;
 
 export default function PmProjectDetail() {
   const { id } = useParams();
-  const [project, setProject] = useState(null);
+  const dispatch = useDispatch();
+  const project = useSelector((state) => selectProjectById(state, id)) || null;
+  const detailLoad = useSelector((state) => selectProjectMutation(state, 'getById'));
+  // The list row has no nested tasks, so wait for the detail row before rendering.
+  const loading = (!project || !Array.isArray(project.tasks)) && detailLoad.status !== 'failed';
   const [currentTaskPage, setCurrentTaskPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [users, setUsers] = useState([]);
@@ -48,15 +57,10 @@ export default function PmProjectDetail() {
 
   useEffect(() => {
     let active = true;
-    projectsApi.get(id)
-      .then((response) => {
-        if (active) setProject(normalize(response));
-      })
+    dispatch(fetchProjectById(id))
+      .unwrap()
       .catch((loadError) => {
-        if (active) setError(loadError.message || 'Failed to load project.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        if (active && loadError?.code !== 'ABORTED') setError(loadError.message || 'Failed to load project.');
       });
 
     usersApi.list()
@@ -88,15 +92,13 @@ export default function PmProjectDetail() {
       });
 
     return () => { active = false; };
-  }, [id]);
+  }, [dispatch, id]);
 
   const updateStatus = async (status) => {
     setSaving(true);
     setError('');
     try {
-      const response = await projectsApi.update(id, { status });
-      const updated = normalize(response);
-      setProject((current) => ({ ...current, ...updated, status }));
+      await dispatch(updateProject({ id, data: { status } })).unwrap();
     } catch (updateError) {
       setError(updateError.message || 'Failed to update project status.');
     } finally {
@@ -206,16 +208,15 @@ export default function PmProjectDetail() {
 
     setSavingTask(true);
     try {
-      await tasksApi.create({
+      await dispatch(createTaskThunk({
         ...taskForm,
         title: taskForm.title.trim(),
         projectId: project.id,
         estimatedHours: taskForm.estimatedHours ? Number(taskForm.estimatedHours) : undefined,
         dueDate: taskForm.dueDate || undefined,
         status: 'Active',
-      });
-      const response = await projectsApi.get(id);
-      setProject(normalize(response));
+      })).unwrap();
+      await dispatch(fetchProjectById(id)).unwrap();
       setTaskForm({ title: '', description: '', priority: 'Medium', estimatedHours: '', dueDate: '' });
       setCreateTaskOpen(false);
     } catch (saveError) {
@@ -228,9 +229,8 @@ export default function PmProjectDetail() {
   const handleMarkTaskComplete = async (task) => {
     try {
       // Not a review approval: compliance rules apply (pmApproval is only for In_Review tasks).
-      await tasksApi.update(task.id, { status: 'Completed' });
-      const response = await projectsApi.get(id);
-      setProject(normalize(response));
+      await dispatch(updateTask({ id: task.id, data: { status: 'Completed' } })).unwrap();
+      await dispatch(fetchProjectById(id)).unwrap();
       setSelectedTask((prev) => prev ? { ...prev, status: 'Completed' } : null);
     } catch (err) {
       setError(err.message || 'Failed to mark task as complete.');
@@ -239,9 +239,8 @@ export default function PmProjectDetail() {
 
   const handleApproveTask = async (task) => {
     try {
-      await tasksApi.update(task.id, { status: 'Completed', pmApproval: true });
-      const response = await projectsApi.get(id);
-      setProject(normalize(response));
+      await dispatch(updateTask({ id: task.id, data: { status: 'Completed', pmApproval: true } })).unwrap();
+      await dispatch(fetchProjectById(id)).unwrap();
       setSelectedTask(null);
     } catch (err) {
       setError(err.message || 'Failed to approve task.');
@@ -250,8 +249,7 @@ export default function PmProjectDetail() {
 
   const handleCompleteProject = async () => {
     try {
-      await projectsApi.update(id, { status: 'Completed' });
-      setProject((prev) => ({ ...prev, status: 'Completed' }));
+      await dispatch(updateProject({ id, data: { status: 'Completed' } })).unwrap();
     } catch (err) {
       setError(err.message || 'Failed to complete project.');
     }

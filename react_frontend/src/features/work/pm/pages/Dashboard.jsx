@@ -16,54 +16,69 @@ import {
   FileCheck,
   ChevronRight,
 } from 'lucide-react';
-import * as escalationsApi from '../../../../services/api/escalations';
-import * as projectsApi from '../../../../services/api/projects';
-import * as tasksApi from '../../../../services/api/tasks';
+import { useDispatch, useSelector } from 'react-redux';
+// Foreign resources (M1 compliance/evidence, M5 teams) keep their own fetch until those slices merge.
 import * as complianceApi from '../../../../services/api/compliance';
 import * as evidenceApi from '../../../../services/api/evidence';
 import * as teamsApi from '../../../../services/api/teams';
+import { fetchProjects, selectAllProjects, selectProjectsError, selectProjectsLoading } from '../../../../store/projects';
+import { fetchTasks, selectAllTasks, selectTasksError, selectTasksLoading } from '../../../../store/tasks';
+import {
+  fetchEscalations,
+  selectAllEscalations,
+  selectEscalationsError,
+  selectEscalationsLoading,
+} from '../../../../store/escalations';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const projectPath = (id) => PATHS.PM.PROJECT_DETAIL.replace(':id', id);
 
 export default function PmDashboard() {
-  const [projects, setProjects] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [escalations, setEscalations] = useState([]);
+  const dispatch = useDispatch();
+  const projects = useSelector(selectAllProjects);
+  const tasks = useSelector(selectAllTasks);
+  const escalations = useSelector(selectAllEscalations);
+  const projectsLoading = useSelector(selectProjectsLoading);
+  const tasksLoading = useSelector(selectTasksLoading);
+  const escalationsLoading = useSelector(selectEscalationsLoading);
+  const projectsError = useSelector(selectProjectsError);
+  const tasksError = useSelector(selectTasksError);
+  const escalationsError = useSelector(selectEscalationsError);
+  const storeError = projectsError || tasksError || escalationsError;
   const [violations, setViolations] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
   const [teams, setTeams] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [foreignLoading, setForeignLoading] = useState(true);
+
+  useEffect(() => {
+    dispatch(fetchProjects());
+    dispatch(fetchTasks());
+    dispatch(fetchEscalations());
+  }, [dispatch]);
 
   useEffect(() => {
     let active = true;
     Promise.all([
-      projectsApi.list(),
-      tasksApi.list(),
-      escalationsApi.list(),
       complianceApi.getViolations().catch(() => []),
       evidenceApi.getEvidenceList().catch(() => []),
       teamsApi.list().catch(() => []),
     ])
-      .then(([projectResponse, taskResponse, escalationResponse, violationResponse, evidenceResponse, teamResponse]) => {
+      .then(([violationResponse, evidenceResponse, teamResponse]) => {
         if (!active) return;
-        setProjects(normalize(projectResponse));
-        setTasks(normalize(taskResponse));
-        setEscalations(normalize(escalationResponse));
         setViolations(normalize(violationResponse));
         setEvidenceList(normalize(evidenceResponse));
         setTeams(normalize(teamResponse));
       })
-      .catch((loadError) => {
-        if (active) setError(loadError.message || 'Failed to load PM dashboard.');
-      })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setForeignLoading(false);
       });
     return () => { active = false; };
   }, []);
 
+  const loading = foreignLoading || projectsLoading || tasksLoading || escalationsLoading;
+  const error = storeError ? storeError.message || 'Failed to load PM dashboard.' : '';
+
+  if (error) return <div className="p-6 text-sm text-red-600" role="alert">{error}</div>;
   if (loading) return <div className="min-h-full flex items-center justify-center p-8"><Loader /></div>;
   if (error) return <div className="p-6 text-sm text-red-600" role="alert">{error}</div>;
 
