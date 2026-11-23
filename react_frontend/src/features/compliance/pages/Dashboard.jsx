@@ -1,11 +1,25 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { PATHS } from "../../../app/paths";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
+import {
+  fetchComplianceRules,
+  runComplianceEngine,
+  selectAllComplianceRules,
+} from "../../../store/complianceRules";
+import {
+  fetchComplianceViolations,
+  selectAllComplianceViolations,
+} from "../../../store/complianceViolations";
+import {
+  fetchEvidence,
+  selectAllEvidence,
+} from "../../../store/evidence";
 import { 
   ShieldCheck, 
   CheckCircle, 
@@ -33,6 +47,11 @@ export default function ComplianceDashboard() {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  const rawRules = useSelector(selectAllComplianceRules);
+  const rawViolations = useSelector(selectAllComplianceViolations);
+  const rawEvidence = useSelector(selectAllEvidence);
 
   const userRole = (user?.role || '').toLowerCase();
   const isGlobalAdmin = ['company_owner', 'system_admin', 'platform_admin', 'superuser'].includes(userRole);
@@ -42,9 +61,6 @@ export default function ComplianceDashboard() {
   const [lastScanTime, setLastScanTime] = useState(null);
 
   // Raw Database Data
-  const [rawRules, setRawRules] = useState([]);
-  const [rawViolations, setRawViolations] = useState([]);
-  const [rawEvidence, setRawEvidence] = useState([]);
   const [rawProjects, setRawProjects] = useState([]);
   const [rawTasks, setRawTasks] = useState([]);
 
@@ -55,17 +71,14 @@ export default function ComplianceDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [rulesResponse, violationsResponse, evidenceResponse, projectsResponse, tasksResponse] = await Promise.all([
-        apiClient("/compliance-rules").catch(() => []),
-        apiClient("/compliance-violations").catch(() => []),
-        apiClient("/evidence").catch(() => []),
+      const [, , , projectsResponse, tasksResponse] = await Promise.all([
+        dispatch(fetchComplianceRules()),
+        dispatch(fetchComplianceViolations()),
+        dispatch(fetchEvidence()),
         apiClient("/projects").catch(() => []),
         apiClient("/tasks").catch(() => []),
       ]);
 
-      setRawRules(Array.isArray(rulesResponse) ? rulesResponse : rulesResponse?.data || []);
-      setRawViolations(Array.isArray(violationsResponse) ? violationsResponse : violationsResponse?.data || []);
-      setRawEvidence(Array.isArray(evidenceResponse) ? evidenceResponse : evidenceResponse?.data || []);
       setRawProjects(Array.isArray(projectsResponse) ? projectsResponse : projectsResponse?.data || []);
       setRawTasks(Array.isArray(tasksResponse) ? tasksResponse : tasksResponse?.data || []);
     } catch (error) {
@@ -279,7 +292,7 @@ export default function ComplianceDashboard() {
   const triggerScan = async () => {
     setIsScanning(true);
     try {
-      await apiClient("/compliance-rules/run-engine", { method: "POST" });
+      await dispatch(runComplianceEngine()).unwrap();
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastScanTime(nowStr);
       await fetchDashboardData();

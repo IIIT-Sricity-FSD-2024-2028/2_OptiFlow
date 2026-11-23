@@ -52,3 +52,6 @@ export async function openEvidenceFile(evidenceId) {
     console.error('openEvidenceFile failed:', err);
   }
 }
+
+export default openEvidenceFile;
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { useAuth } from "../../../context/AuthContext";
 import { apiClient } from "../../../services/api/client";
 import Table from "../../../shared/components/Table";
@@ -7,6 +8,11 @@ import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
+import {
+  fetchComplianceViolations,
+  selectAllComplianceViolations,
+  selectIsComplianceViolationsLoading,
+} from "../../../store/complianceViolations";
 import {
   AlertTriangle,
   Filter,
@@ -23,12 +29,17 @@ const PAGE_SIZE = 10;
 
 export default function ComplianceViolations() {
   const { user } = useAuth();
+  const dispatch = useDispatch();
+  const rawViolations = useSelector(selectAllComplianceViolations);
+  const isViolationsLoading = useSelector(selectIsComplianceViolationsLoading);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const initialProjectId = searchParams.get("projectId") || "All";
   const initialQueue = searchParams.get("queue") || "Active";
 
-  const [violations, setViolations] = useState([]);
+  const [evidenceList, setEvidenceList] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState("All");
@@ -50,82 +61,18 @@ export default function ComplianceViolations() {
     try {
       setLoading(true);
       setError(null);
-      const [res, evidenceRes, projectsRes, tasksRes] = await Promise.all([
-        apiClient("/compliance-violations").catch((err) => {
-          console.error("Failed to load violations:", err);
-          return [];
-        }),
-        apiClient("/evidence").catch(() => []),
-        apiClient("/projects").catch(() => []),
-        apiClient("/tasks").catch(() => []),
+      await Promise.all([
+        dispatch(fetchComplianceViolations({ force: true })),
+        apiClient("/evidence")
+          .then((res) => setEvidenceList(Array.isArray(res) ? res : res?.data || []))
+          .catch(() => []),
+        apiClient("/projects")
+          .then((res) => setProjects(Array.isArray(res) ? res : res?.data || []))
+          .catch(() => []),
+        apiClient("/tasks")
+          .then((res) => setTasks(Array.isArray(res) ? res : res?.data || []))
+          .catch(() => []),
       ]);
-
-      const list = Array.isArray(res) ? res : res?.data || [];
-      const evidenceList = Array.isArray(evidenceRes)
-        ? evidenceRes
-        : evidenceRes?.data || [];
-      const projList = Array.isArray(projectsRes)
-        ? projectsRes
-        : projectsRes?.data || [];
-      const taskList = Array.isArray(tasksRes)
-        ? tasksRes
-        : tasksRes?.data || [];
-
-      setProjects(projList);
-
-      // Maps for project resolution
-      const projMap = new Map();
-      projList.forEach((p) => {
-        if (p?.id) projMap.set(String(p.id), p.name);
-      });
-
-      const taskProjMap = new Map();
-      taskList.forEach((t) => {
-        if (t?.id && t.projectId) {
-          taskProjMap.set(String(t.id), String(t.projectId));
-        }
-      });
-
-      const resolveProject = (entityType, entityId) => {
-        if (!entityId) return { id: null, name: "Company / Global" };
-        const entityIdStr = String(entityId);
-        if (entityType === "Project") {
-          return {
-            id: entityIdStr,
-            name:
-              projMap.get(entityIdStr) ||
-              `Project #${entityIdStr.substring(0, 8)}`,
-          };
-        }
-        if (entityType === "Task") {
-          const pId = taskProjMap.get(entityIdStr);
-          if (pId) {
-            const pIdStr = String(pId);
-            return {
-              id: pIdStr,
-              name: projMap.get(pIdStr) || `Project #${pIdStr.substring(0, 8)}`,
-            };
-          }
-        }
-        return { id: null, name: "Company / Global" };
-      };
-
-      const formatted = list.map((v) => {
-        const parentProj = resolveProject(v?.entityType, v?.entityId);
-        return {
-          ...v,
-          projectId: parentProj.id,
-          projectName: parentProj.name,
-          evidenceCount: evidenceList.filter(
-            (e) =>
-              e &&
-              (e.violationId === v?.id ||
-                (v?.entityId && e.taskId === v.entityId)),
-          ).length,
-        };
-      });
-
-      setViolations(formatted);
     } catch (err) {
       console.error("Failed to load compliance violations:", err);
       setError(err?.message || "Failed to load compliance violations.");
@@ -137,6 +84,59 @@ export default function ComplianceViolations() {
   useEffect(() => {
     fetchViolations();
   }, []);
+
+  const violations = useMemo(() => {
+    const projMap = new Map();
+    projects.forEach((p) => {
+      if (p?.id) projMap.set(String(p.id), p.name);
+    });
+
+    const taskProjMap = new Map();
+    tasks.forEach((t) => {
+      if (t?.id && t.projectId) {
+        taskProjMap.set(String(t.id), String(t.projectId));
+      }
+    });
+
+    const resolveProject = (entityType, entityId) => {
+      if (!entityId) return { id: null, name: "Company / Global" };
+      const entityIdStr = String(entityId);
+      if (entityType === "Project") {
+        return {
+          id: entityIdStr,
+          name:
+            projMap.get(entityIdStr) ||
+            `Project #${entityIdStr.substring(0, 8)}`,
+        };
+      }
+      if (entityType === "Task") {
+        const pId = taskProjMap.get(entityIdStr);
+        if (pId) {
+          const pIdStr = String(pId);
+          return {
+            id: pIdStr,
+            name: projMap.get(pIdStr) || `Project #${pIdStr.substring(0, 8)}`,
+          };
+        }
+      }
+      return { id: null, name: "Company / Global" };
+    };
+
+    return rawViolations.map((v) => {
+      const parentProj = resolveProject(v?.entityType, v?.entityId);
+      return {
+        ...v,
+        projectId: parentProj.id,
+        projectName: parentProj.name,
+        evidenceCount: evidenceList.filter(
+          (e) =>
+            e &&
+            (e.violationId === v?.id ||
+              (v?.entityId && e.taskId === v.entityId)),
+        ).length,
+      };
+    });
+  }, [rawViolations, projects, tasks, evidenceList]);
 
   const filteredViolations = violations.filter((v) => {
     const matchesStatus =
