@@ -391,7 +391,7 @@ export default function MemberTaskDetail() {
         managerId={manager?.id || task?.createdById}
         taskTitle={task?.title}
         currentDeadline={task?.dueDate || task?.deadline}
-        parentTaskDeadline={task?.dueDate || task?.deadline}
+        parentTaskDeadline={null}
       />
 
       <UploadEvidenceModal

@@ -362,13 +362,9 @@ export default function TeamLeadDashboard() {
     const newStatus = 'Resolved';
     try {
       await dispatch(updateEscalation({ id: ext.id, data: { status: newStatus } })).unwrap();
-      if (ext.taskId) {
-        const match = ext.description?.match(/Requested (?:new )?deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-        if (match && match[1]) {
-          await dispatch(updateTask({ id: ext.taskId, data: { dueDate: match[1] } })).unwrap().catch(() => null);
-          dispatch(fetchTasks());
-        }
-      }
+      // The backend auto-updates task.dueDate when an extension escalation is Resolved.
+      // Do NOT also call updateTask here — that would apply the change twice.
+      dispatch(fetchTasks());
       showToast('success', 'Extension approved & member notified.');
     } catch {
       showToast('error', 'Failed to update extension request.');

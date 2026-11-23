@@ -1,5 +1,5 @@
 import * as tasksApi from '../../services/api/tasks';
-import { createApiThunk } from '../core';
+import { createApiThunk } from '../core/createApiThunk';
 import { skipWhileLoading } from '../work/entitySlice';
 
 export const fetchTasks = createApiThunk(

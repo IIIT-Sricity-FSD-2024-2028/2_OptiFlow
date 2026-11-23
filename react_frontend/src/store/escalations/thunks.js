@@ -1,5 +1,5 @@
 import * as escalationsApi from '../../services/api/escalations';
-import { createApiThunk } from '../core';
+import { createApiThunk } from '../core/createApiThunk';
 import { skipWhileLoading } from '../work/entitySlice';
 
 export const fetchEscalations = createApiThunk(

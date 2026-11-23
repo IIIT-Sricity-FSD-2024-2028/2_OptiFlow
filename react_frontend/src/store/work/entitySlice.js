@@ -3,14 +3,26 @@
 // and a per-operation `mutations` map. Updates are pessimistic: the store changes only
 // on `fulfilled`, using the row the server returned.
 import { createEntityAdapter, createSlice } from '@reduxjs/toolkit';
-import {
-  isAbortedAction,
-  mutationFulfilled,
-  mutationPending,
-  mutationRejected,
-  normalizeError,
-  resetStore,
-} from '../core';
+import { normalizeError } from '../core/normalizeError';
+
+// ---------------------------------------------------------------------------
+// Mutation-state helpers (private to M3 slices)
+// ---------------------------------------------------------------------------
+const mutationPending = (state, key) => {
+  state.mutations[key] = { status: 'pending', error: null };
+};
+const mutationFulfilled = (state, key) => {
+  state.mutations[key] = { status: 'fulfilled', error: null };
+};
+const mutationRejected = (state, key, action) => {
+  state.mutations[key] = {
+    status: 'rejected',
+    error: action.payload ?? normalizeError(action.error),
+  };
+};
+/** True when a rejected action is a cancel, not a real failure. */
+const isAbortedAction = (action) =>
+  Boolean(action?.meta?.aborted) || action?.payload?.code === 'ABORTED';
 
 export const idOf = (row) => row?.id;
 
@@ -45,8 +57,6 @@ export const buildWorkSlice = ({ name, adapter, thunks, extra }) =>
       },
     },
     extraReducers: (builder) => {
-      builder.addCase(resetStore, () => initialWorkState(adapter));
-
       // List: replaces the whole collection with what the server returned.
       builder
         .addCase(thunks.list.pending, (state) => {

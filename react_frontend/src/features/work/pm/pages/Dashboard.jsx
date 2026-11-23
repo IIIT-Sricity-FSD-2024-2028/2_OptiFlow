@@ -78,7 +78,6 @@ export default function PmDashboard() {
   const loading = foreignLoading || projectsLoading || tasksLoading || escalationsLoading;
   const error = storeError ? storeError.message || 'Failed to load PM dashboard.' : '';
 
-  if (error) return <div className="p-6 text-sm text-red-600" role="alert">{error}</div>;
   if (loading) return <div className="min-h-full flex items-center justify-center p-8"><Loader /></div>;
   if (error) return <div className="p-6 text-sm text-red-600" role="alert">{error}</div>;
 

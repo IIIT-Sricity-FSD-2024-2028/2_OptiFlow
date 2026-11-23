@@ -1,5 +1,5 @@
 import * as projectsApi from '../../services/api/projects';
-import { createApiThunk } from '../core';
+import { createApiThunk } from '../core/createApiThunk';
 import { skipWhileLoading } from '../work/entitySlice';
 
 export const fetchProjects = createApiThunk(
