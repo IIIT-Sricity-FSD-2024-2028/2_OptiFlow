@@ -13,32 +13,46 @@ import { EscalationForm } from '../../components/EscalationForm';
 import { SubtaskList } from '../../components/SubtaskList';
 import { ReviewQueue } from '../components/ReviewQueue';
 import { EscalationWatch } from '../components/EscalationWatch';
-import { DashboardSubtaskModal, SendBackSubtaskModal } from '../components/DashboardModals';
+import { DashboardSubtaskModal, SendBackSubtaskModal, RejectExtensionModal } from '../components/DashboardModals';
 import { getBadgeStatus, formatStatus } from '../components/statusDisplay';
 
-import * as tasksApi from '../../../../services/api/tasks';
-import * as subtasksApi from '../../../../services/api/subtasks';
-import * as escalationsApi from '../../../../services/api/escalations';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchTasks, isReportableError, selectAllTasks, selectTasksLoading, updateTask } from '../../../../store/tasks';
+import { createSubtask, updateSubtask } from '../../../../store/subtasks';
+import {
+  createEscalation,
+  fetchEscalations,
+  selectAllEscalations,
+  selectEscalationsLoading,
+  updateEscalation,
+} from '../../../../store/escalations';
+import { fetchProjects, selectAllProjects, selectProjectsLoading } from '../../../../store/projects';
+// Foreign resource (M5 users) keeps its own fetch until that slice merges.
 import * as usersApi from '../../../../services/api/users';
-import * as projectsApi from '../../../../services/api/projects';
 import { useAuth } from '../../../../context/AuthContext';
 
 export default function TeamLeadDashboard() {
   const { user } = useAuth();
 
-  const [tasks, setTasks] = useState([]);
-  const [escalations, setEscalations] = useState([]);
+  const dispatch = useDispatch();
+  const tasks = useSelector(selectAllTasks);
+  const escalations = useSelector(selectAllEscalations);
+  const projects = useSelector(selectAllProjects);
+  const tasksLoading = useSelector(selectTasksLoading);
+  const escalationsLoading = useSelector(selectEscalationsLoading);
+  const projectsLoading = useSelector(selectProjectsLoading);
   const [teamMembers, setTeamMembers] = useState([]);
-  const [projects, setProjects] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
 
-  const [project, setProject] = useState({
+  const project = projects.find((p) => p.id === selectedProjectId) || projects[0] || {
     name: '—',
     status: '',
     progress: 0,
     totalTasks: 0,
-  });
+  };
 
-  const [loading, setLoading] = useState(true);
+  const loading = tasksLoading || escalationsLoading || projectsLoading || membersLoading;
 
 
 
@@ -66,6 +80,12 @@ export default function TeamLeadDashboard() {
     message: '',
   });
 
+  const [rejectExtModalOpen, setRejectExtModalOpen] = useState(false);
+  const [rejectExtTarget, setRejectExtTarget] = useState(null);
+  const [rejectExtReason, setRejectExtReason] = useState('');
+  const [rejectingExt, setRejectingExt] = useState(false);
+  const [rejectExtError, setRejectExtError] = useState('');
+
 
   const showToast = (type, message) => {
     setToast({
@@ -92,31 +112,20 @@ export default function TeamLeadDashboard() {
   useEffect(() => {
     let mounted = true;
 
-    const loadDashboard = async () => {
-      setLoading(true);
+    const rethrow = (error) => {
+      if (isReportableError(error)) throw error;
+    };
 
+    const loadDashboard = async () => {
       try {
-        const [
-          tasksResponse,
-          escalationResponse,
-          membersResponse,
-          projectsResponse,
-        ] = await Promise.all([
-          tasksApi.list(),
-          escalationsApi.list(),
+        const [membersResponse] = await Promise.all([
           usersApi.list(),
-          projectsApi.list(),
+          dispatch(fetchTasks()).unwrap().catch(rethrow),
+          dispatch(fetchEscalations()).unwrap().catch(rethrow),
+          dispatch(fetchProjects()).unwrap().catch(rethrow),
         ]);
 
         if (!mounted) return;
-
-        const normalizedTasks = Array.isArray(tasksResponse)
-          ? tasksResponse
-          : tasksResponse?.data || [];
-
-        const normalizedEscalations = Array.isArray(escalationResponse)
-          ? escalationResponse
-          : escalationResponse?.data || [];
 
         const normalizedMembers = Array.isArray(membersResponse)
           ? membersResponse
@@ -131,18 +140,7 @@ export default function TeamLeadDashboard() {
           return sharesTeam || reportsToMe;
         });
 
-        const normalizedProjects = Array.isArray(projectsResponse)
-          ? projectsResponse
-          : projectsResponse?.data || [];
-
-        setTasks(normalizedTasks);
-        setEscalations(normalizedEscalations);
         setTeamMembers(myTeamMembers);
-        setProjects(normalizedProjects);
-
-        if (normalizedProjects.length > 0) {
-          setProject(normalizedProjects[0]);
-        }
       } catch (error) {
         console.error('Failed to load Team Lead dashboard:', error);
 
@@ -154,7 +152,7 @@ export default function TeamLeadDashboard() {
         }
       } finally {
         if (mounted) {
-          setLoading(false);
+          setMembersLoading(false);
         }
       }
     };
@@ -164,7 +162,7 @@ export default function TeamLeadDashboard() {
     return () => {
       mounted = false;
     };
-  }, [user.id, user?.teams]);
+  }, [dispatch, user.id, user?.teams]);
 
   const teamOverviewTasks = tasks.filter(
     (task) => !task.isSubtask && !task.parentId && !task.taskId
@@ -246,10 +244,6 @@ export default function TeamLeadDashboard() {
 
     setSavingSubtask(true);
 
-    const assignedMember = teamMembers.find(
-      (m) => String(m.id || m.userId) === String(subtaskAssignee)
-    );
-
     const newSubtask = {
       taskId: selectedParentTaskId,
       title: subtaskTitle.trim(),
@@ -261,36 +255,8 @@ export default function TeamLeadDashboard() {
     };
 
     try {
-      const response = await subtasksApi.create(newSubtask);
-
-      const createdSubtask =
-        response?.data ||
-        response || {
-          id: Date.now(),
-          ...newSubtask,
-        };
-
-      const subtaskForDisplay = {
-        ...createdSubtask,
-        assignedTo: assignedMember?.fullName ||
-          assignedMember?.name ||
-          (String(subtaskAssignee) === String(user.id) ? user.fullName : subtaskAssignee),
-        assignedToName: assignedMember?.fullName ||
-          assignedMember?.name ||
-          (String(subtaskAssignee) === String(user.id) ? user.fullName : undefined),
-      };
-
-      // 1. Immediately update parent task in local state so its subtasks array reflects the new subtask
-      setTasks((previous) =>
-        previous.map((task) =>
-          task.id === selectedParentTaskId
-            ? {
-                ...task,
-                subtasks: [...(task.subtasks || []), subtaskForDisplay],
-              }
-            : task
-        )
-      );
+      // The tasks slice adds the created subtask to its parent task row.
+      await dispatch(createSubtask(newSubtask)).unwrap();
 
       // Auto-expand the parent task so the user sees the newly created subtask immediately
       setExpandedTaskId(selectedParentTaskId);
@@ -302,13 +268,8 @@ export default function TeamLeadDashboard() {
 
       closeSubtaskModal();
 
-      // 2. Refresh tasks from backend to guarantee complete sync
-      tasksApi.list().then((res) => {
-        const normalized = Array.isArray(res) ? res : res?.data || [];
-        if (normalized.length > 0) {
-          setTasks(normalized);
-        }
-      }).catch(console.error);
+      // Refresh tasks so the new subtask comes back with its assignee details.
+      dispatch(fetchTasks());
     } catch (error) {
       console.error(
         'Create subtask failed:',
@@ -323,21 +284,7 @@ export default function TeamLeadDashboard() {
 
   const handleApproveSubtask = async (subtask) => {
     try {
-      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Completed' });
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === subtask._parentTask?.id
-            ? {
-                ...t,
-                subtasks: (t.subtasks || []).map((st) =>
-                  (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
-                    ? { ...st, status: 'Completed' }
-                    : st
-                ),
-              }
-            : t
-        )
-      );
+      await dispatch(updateSubtask({ id: subtask.id || subtask.subtaskId, data: { status: 'Completed' } })).unwrap();
       showToast('success', `Subtask "${subtask.title}" approved.`);
     } catch {
       showToast('error', 'Failed to approve subtask.');
@@ -364,21 +311,10 @@ export default function TeamLeadDashboard() {
     }
     setSendingBack(true);
     try {
-      await subtasksApi.update(subtask.id || subtask.subtaskId, { status: 'Active', reviewComment: reason });
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === subtask._parentTask?.id
-            ? {
-                ...t,
-                subtasks: (t.subtasks || []).map((st) =>
-                  (st.id || st.subtaskId) === (subtask.id || subtask.subtaskId)
-                    ? { ...st, status: 'Active', reviewComment: reason }
-                    : st
-                ),
-              }
-            : t
-        )
-      );
+      await dispatch(updateSubtask({
+        id: subtask.id || subtask.subtaskId,
+        data: { status: 'Active', reviewComment: reason },
+      })).unwrap();
       setSendBackSubtask(null);
       showToast('success', 'Subtask sent back with your comment.');
     } catch (err) {
@@ -388,17 +324,52 @@ export default function TeamLeadDashboard() {
     }
   };
 
-  const handleExtensionDecision = async (ext, approved) => {
-    const newStatus = approved ? 'Resolved' : 'Closed';
+  const openRejectExtension = (ext) => {
+    setRejectExtTarget(ext);
+    setRejectExtReason('');
+    setRejectExtError('');
+    setRejectExtModalOpen(true);
+  };
+
+  const handleConfirmRejectExtension = async () => {
+    if (!rejectExtReason.trim()) {
+      setRejectExtError('Please enter a rejection comment/reason.');
+      return;
+    }
+    setRejectingExt(true);
     try {
-      await escalationsApi.update(ext.id, { status: newStatus });
-      setEscalations((prev) =>
-        prev.map((e) => (e.id === ext.id ? { ...e, status: newStatus } : e))
-      );
-      showToast(
-        approved ? 'success' : 'info',
-        approved ? 'Extension approved & member notified.' : 'Extension rejected & member notified.'
-      );
+      const desc = rejectExtTarget.description?.trim()
+        ? `${rejectExtTarget.description.trim()}\n\nRejection Comment: ${rejectExtReason.trim()}`
+        : `Rejection Comment: ${rejectExtReason.trim()}`;
+      await dispatch(updateEscalation({
+        id: rejectExtTarget.id,
+        data: { status: 'Closed', description: desc },
+      })).unwrap();
+      setRejectExtModalOpen(false);
+      showToast('info', 'Extension rejected & member notified.');
+    } catch (err) {
+      setRejectExtError(err.message || 'Failed to reject extension.');
+    } finally {
+      setRejectingExt(false);
+    }
+  };
+
+  const handleExtensionDecision = async (ext, approved) => {
+    if (!approved) {
+      openRejectExtension(ext);
+      return;
+    }
+    const newStatus = 'Resolved';
+    try {
+      await dispatch(updateEscalation({ id: ext.id, data: { status: newStatus } })).unwrap();
+      if (ext.taskId) {
+        const match = ext.description?.match(/Requested (?:new )?deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+        if (match && match[1]) {
+          await dispatch(updateTask({ id: ext.taskId, data: { dueDate: match[1] } })).unwrap().catch(() => null);
+          dispatch(fetchTasks());
+        }
+      }
+      showToast('success', 'Extension approved & member notified.');
     } catch {
       showToast('error', 'Failed to update extension request.');
     }
@@ -417,17 +388,7 @@ export default function TeamLeadDashboard() {
     };
 
     try {
-      const response = await escalationsApi.create(newEscalation);
-
-      const createdEscalation = response?.data || response || {
-        id: Date.now(),
-        ...newEscalation,
-      };
-
-      setEscalations((previous) => [
-        createdEscalation,
-        ...previous,
-      ]);
+      await dispatch(createEscalation(newEscalation)).unwrap();
 
       showToast('success', 'Escalation sent to Project Manager.');
     } catch (error) {
@@ -690,7 +651,7 @@ export default function TeamLeadDashboard() {
                       value={project?.id || ''}
                       onChange={(e) => {
                         const sel = projects.find((p) => p.id === e.target.value);
-                        if (sel) setProject(sel);
+                        if (sel) setSelectedProjectId(sel.id);
                       }}
                       className="text-xs border border-gray-200 rounded-lg px-2.5 py-1 bg-white text-gray-700 outline-none focus:ring-1 focus:ring-blue-500 font-medium cursor-pointer"
                     >
@@ -800,6 +761,7 @@ export default function TeamLeadDashboard() {
         onApproveSubtask={handleApproveSubtask}
         onSendBackSubtask={openSendBack}
         onExtensionDecision={handleExtensionDecision}
+        onRejectExtension={openRejectExtension}
       />
 
       {/* Escalation + Watch */}
@@ -851,6 +813,19 @@ export default function TeamLeadDashboard() {
         error={sendBackError}
         reason={sendBackReason}
         onReasonChange={setSendBackReason}
+      />
+
+      {/* Reject extension modal */}
+
+      <RejectExtensionModal
+        extension={rejectExtTarget}
+        isOpen={rejectExtModalOpen}
+        onClose={() => setRejectExtModalOpen(false)}
+        onConfirm={handleConfirmRejectExtension}
+        rejecting={rejectingExt}
+        error={rejectExtError}
+        reason={rejectExtReason}
+        onReasonChange={setRejectExtReason}
       />
 
       {/* Toast */}

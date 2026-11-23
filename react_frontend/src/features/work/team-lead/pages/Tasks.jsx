@@ -15,8 +15,10 @@ import {
   X, 
   RotateCcw,
 } from 'lucide-react';
-import * as tasksApi from '../../../../services/api/tasks';
-import * as projectsApi from '../../../../services/api/projects';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchTasks, selectAllTasks, selectTasksLoading } from '../../../../store/tasks';
+import { fetchProjects, selectAllProjects, selectProjectsLoading } from '../../../../store/projects';
+// Foreign resource (M1 compliance) keeps its own fetch until that slice merges.
 import * as complianceApi from '../../../../services/api/compliance';
 
 const normalize = (res) => Array.isArray(res) ? res : res?.data || [];
@@ -28,10 +30,14 @@ export default function TeamLeadTasks() {
   const activeFilter = searchParams.get('filter') || 'all';
   const selectedProjectParam = searchParams.get('projectId') || 'all';
 
-  const [tasks, setTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
+  const dispatch = useDispatch();
+  const tasks = useSelector(selectAllTasks);
+  const projects = useSelector(selectAllProjects);
+  const tasksLoading = useSelector(selectTasksLoading);
+  const projectsLoading = useSelector(selectProjectsLoading);
   const [complianceBlockedIds, setComplianceBlockedIds] = useState(new Set());
-  const [loading, setLoading] = useState(true);
+  const [violationsLoading, setViolationsLoading] = useState(true);
+  const loading = tasksLoading || projectsLoading || violationsLoading;
   const [currentPage, setCurrentPage] = useState(1);
 
   // Search & filter states
@@ -42,20 +48,16 @@ export default function TeamLeadTasks() {
   useEffect(() => {
     let mounted = true;
 
-    const loadData = async () => {
-      setLoading(true);
+    // A failed task or project load sets that slice's status to failed; the page shows the empty state.
+    dispatch(fetchTasks());
+    dispatch(fetchProjects());
 
+    const loadData = async () => {
       try {
-        const [tasksResponse, projectsResponse, violationsResponse] = await Promise.all([
-          tasksApi.list(),
-          projectsApi.list().catch(() => []),
-          complianceApi.getViolations().catch(() => []),
-        ]);
+        const violationsResponse = await complianceApi.getViolations().catch(() => []);
 
         if (!mounted) return;
 
-        const normalizedTasks = normalize(tasksResponse);
-        const normalizedProjects = normalize(projectsResponse);
         const normalizedViolations = normalize(violationsResponse);
 
         const blockedIds = new Set(
@@ -64,14 +66,9 @@ export default function TeamLeadTasks() {
             .map((v) => String(v.entityId))
         );
 
-        setTasks(normalizedTasks);
-        setProjects(normalizedProjects);
         setComplianceBlockedIds(blockedIds);
-      } catch (error) {
-        console.error('Failed to load team tasks data:', error);
-        if (mounted) setTasks([]);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) setViolationsLoading(false);
       }
     };
 
@@ -80,7 +77,7 @@ export default function TeamLeadTasks() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [dispatch]);
 
   const handleTabChange = (filterKey) => {
     const nextParams = new URLSearchParams(searchParams);

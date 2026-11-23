@@ -14,9 +14,11 @@ import {
   XCircle, 
   Clock,
 } from 'lucide-react';
+import { useDispatch } from 'react-redux';
+import { updateTask } from '../../../../store/tasks';
+import { createEscalation } from '../../../../store/escalations';
+// Foreign resource (M1 evidence) keeps its own fetch until that slice merges.
 import * as evidenceApi from '../../../../services/api/evidence';
-import * as escalationsApi from '../../../../services/api/escalations';
-import * as tasksApi from '../../../../services/api/tasks';
 
 const statusVariant = (s) => {
   s = String(s || '').toLowerCase();
@@ -57,6 +59,7 @@ export default function TeamLeadReviews() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
+  const dispatch = useDispatch();
   const [selected, setSelected] = useState(null);
   const [approving, setApproving] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -136,7 +139,7 @@ export default function TeamLeadReviews() {
       // 2. Revert task status to Active so team member can revise deliverables
       if (taskId) {
         try {
-          await tasksApi.update(taskId, { status: 'Active' });
+          await dispatch(updateTask({ id: taskId, data: { status: 'Active' } })).unwrap();
         } catch {
           // Best effort: the rejection above is already saved.
         }
@@ -145,13 +148,13 @@ export default function TeamLeadReviews() {
       // 3. Create Escalation to PM
       if (taskId) {
         try {
-          await escalationsApi.create({
+          await dispatch(createEscalation({
             taskId,
             title: `Deliverable Rejected: ${selected.title}`,
             blockerType: 'Compliance Blocker',
             description: `Team Lead rejected evidence "${selected.title}". Feedback: ${rejectionReason.trim()}. Work reopened for revision.`,
             priority: 'High',
-          });
+          })).unwrap();
         } catch {
           // Best effort: the rejection above is already saved.
         }

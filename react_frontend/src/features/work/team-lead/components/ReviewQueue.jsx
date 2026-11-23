@@ -15,6 +15,7 @@ export function ReviewQueue({
   onApproveSubtask,
   onSendBackSubtask,
   onExtensionDecision,
+  onRejectExtension,
 }) {
   const openExts = openExtensionRequests(extensionRequests);
 
@@ -169,7 +170,7 @@ export function ReviewQueue({
                     <Button variant="primary" onClick={() => onExtensionDecision(ext, true)}>
                       Approve
                     </Button>
-                    <Button variant="danger" onClick={() => onExtensionDecision(ext, false)}>
+                    <Button variant="danger" onClick={() => onRejectExtension ? onRejectExtension(ext) : onExtensionDecision(ext, false)}>
                       Reject
                     </Button>
                   </div>
