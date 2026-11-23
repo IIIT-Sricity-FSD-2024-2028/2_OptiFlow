@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listTemplates, listInstances, createInstance } from '../../../services/api/process';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchProcessInstances,
+  createProcessInstance,
+  selectAllProcessInstances,
+  selectProcessInstancesStatus,
+  selectProcessInstancesError,
+  selectCreatingProcessInstance,
+} from '../../../store/processInstances';
+import {
+  fetchProcessTemplates,
+  selectAllProcessTemplates,
+  selectProcessTemplatesStatus,
+  selectProcessTemplatesError,
+} from '../../../store/processTemplates';
 import { PATHS } from '../../../app/paths';
 import { StatCard } from '../../../shared/components/StatCard';
 import { Table } from '../../../shared/components/Table';
@@ -12,39 +26,26 @@ import { formatDate } from '../../../shared/utils/formatDate';
 
 export default function ProcessAdminDashboard() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [templates, setTemplates] = useState([]);
-  const [instances, setInstances] = useState([]);
-  const [error, setError] = useState(null);
+  const dispatch = useDispatch();
+  const templates = useSelector(selectAllProcessTemplates);
+  const instances = useSelector(selectAllProcessInstances);
+  const templateStatus = useSelector(selectProcessTemplatesStatus);
+  const instanceStatus = useSelector(selectProcessInstancesStatus);
+  const loading = [templateStatus, instanceStatus].some(status => status === 'idle' || status === 'loading');
+  const templateError = useSelector(selectProcessTemplatesError);
+  const instanceError = useSelector(selectProcessInstancesError);
+  const error = (templateError || instanceError)?.message;
 
   // Launch Instance Modal State
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [launching, setLaunching] = useState(false);
+  const launching = useSelector(selectCreatingProcessInstance);
   const [launchError, setLaunchError] = useState('');
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [templatesRes, instancesRes] = await Promise.all([
-        listTemplates(),
-        listInstances(),
-      ]);
-      const rawT = templatesRes?.data ?? templatesRes;
-      const rawI = instancesRes?.data ?? instancesRes;
-      setTemplates(Array.isArray(rawT) ? rawT : []);
-      setInstances(Array.isArray(rawI) ? rawI : []);
-    } catch (err) {
-      setError(err.message || 'Failed to load dashboard metrics');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    dispatch(fetchProcessTemplates());
+    dispatch(fetchProcessInstances());
+  }, [dispatch]);
 
   const activeInstances = instances.filter((i) => i.status === 'Active');
   const completedInstances = instances.filter((i) => i.status === 'Completed');
@@ -64,21 +65,18 @@ export default function ProcessAdminDashboard() {
     }
 
     try {
-      setLaunching(true);
       setLaunchError('');
-      const res = await createInstance({ templateId: selectedTemplateId });
+      const res = await dispatch(createProcessInstance({ templateId: selectedTemplateId })).unwrap();
       setIsLaunchModalOpen(false);
       setSelectedTemplateId('');
       const instanceId = res?.id || res?.data?.id;
       if (instanceId) {
         navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', instanceId));
       } else {
-        loadDashboardData();
+        dispatch(fetchProcessInstances({ force: true }));
       }
     } catch (err) {
       setLaunchError(err.message || 'Failed to launch process instance');
-    } finally {
-      setLaunching(false);
     }
   };
 

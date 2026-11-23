@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTemplate, updateTemplate, createInstance } from '../../../services/api/process';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchProcessTemplateById,
+  updateProcessTemplate,
+  selectProcessTemplateById,
+  selectProcessTemplateDetailRequest,
+  selectProcessTemplateMutation,
+} from '../../../store/processTemplates';
+import {
+  createProcessInstance,
+  selectCreatingProcessInstance,
+} from '../../../store/processInstances';
 import { PATHS } from '../../../app/paths';
 import { Button } from '../../../shared/components/Button';
 import { Badge } from '../../../shared/components/Badge';
@@ -15,49 +26,43 @@ const STEP_TYPES = [
 
 export default function ProcessAdminTemplateDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
-
-  const [loading, setLoading] = useState(true);
-  const [template, setTemplate] = useState(null);
-  const [templateName, setTemplateName] = useState('');
-  const [templateVersion, setTemplateVersion] = useState(1);
-  const [isActive, setIsActive] = useState(true);
-  const [steps, setSteps] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const [launching, setLaunching] = useState(false);
-  const [feedback, setFeedback] = useState(null);
-
-  const loadTemplate = async () => {
-    try {
-      setLoading(true);
-      setFeedback(null);
-      const res = await getTemplate(id);
-      const data = res?.data ?? res;
-      setTemplate(data);
-      setTemplateName(data.name || '');
-      setTemplateVersion(data.version || 1);
-      setIsActive(Boolean(data.isActive));
-
-      const existingSteps = (data.steps || []).map((s, index) => ({
-        id: s.id || `step-temp-${index}`,
-        name: s.name,
-        stepOrder: s.stepOrder ?? index + 1,
-        stepType: s.stepType || 'Approval',
-        onRejectGotoStepId: s.onRejectGotoStepId || null,
-      }));
-      setSteps(existingSteps);
-    } catch (err) {
-      setFeedback({ type: 'error', message: err.message || 'Failed to load process template' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const dispatch = useDispatch();
+  const template = useSelector(state => selectProcessTemplateById(state, id));
+  const request = useSelector(state => selectProcessTemplateDetailRequest(state, id));
   useEffect(() => {
-    if (id) {
-      loadTemplate();
-    }
-  }, [id]);
+    if (id) dispatch(fetchProcessTemplateById(id));
+  }, [dispatch, id]);
+
+  if (!request || request.status === 'loading') {
+    return <div className="flex items-center justify-center min-h-[400px]"><Loader size="lg" /></div>;
+  }
+  if (request.error || !template) {
+    return <p role="alert" className="p-6">{request.error?.message || 'Process template could not be found.'}</p>;
+  }
+  return <TemplateForm key={id} template={template} />;
+}
+
+function draftSteps(steps = []) {
+  return steps.map((step, index) => ({
+    id: step.id || `step-temp-${index}`,
+    name: step.name,
+    stepOrder: step.stepOrder ?? index + 1,
+    stepType: step.stepType || 'Approval',
+    onRejectGotoStepId: step.onRejectGotoStepId || null,
+  }));
+}
+
+function TemplateForm({ template }) {
+  const { id } = template;
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [templateName, setTemplateName] = useState(template.name || '');
+  const [templateVersion, setTemplateVersion] = useState(template.version || 1);
+  const [isActive, setIsActive] = useState(Boolean(template.isActive));
+  const [steps, setSteps] = useState(() => draftSteps(template.steps));
+  const saving = useSelector(state => selectProcessTemplateMutation(state, 'update:' + id)?.status === 'loading');
+  const launching = useSelector(selectCreatingProcessInstance);
+  const [feedback, setFeedback] = useState(null);
 
   const hasActiveInstances = Boolean(
     (template?.instances || []).some((i) => i.status === 'Active')
@@ -130,7 +135,6 @@ export default function ProcessAdminTemplateDetail() {
     }
 
     try {
-      setSaving(true);
       setFeedback(null);
 
       // Prepare payload for backend update
@@ -149,44 +153,31 @@ export default function ProcessAdminTemplateDetail() {
         };
       });
 
-      await updateTemplate(id, {
+      const saved = await dispatch(updateProcessTemplate({ id, data: {
         name: templateName.trim(),
         version: Number(templateVersion),
         isActive,
         steps: formattedSteps,
-      });
+      } })).unwrap();
 
       setFeedback({ type: 'success', message: 'Process template saved successfully!' });
-      await loadTemplate();
+      setSteps(draftSteps(saved.steps));
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Failed to save process template' });
-    } finally {
-      setSaving(false);
     }
   };
 
   const handleLaunchDirect = async () => {
     try {
-      setLaunching(true);
-      const res = await createInstance({ templateId: id });
+      const res = await dispatch(createProcessInstance({ templateId: id })).unwrap();
       const instanceId = res?.id || res?.data?.id;
       if (instanceId) {
         navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', instanceId));
       }
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Failed to launch instance' });
-    } finally {
-      setLaunching(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
