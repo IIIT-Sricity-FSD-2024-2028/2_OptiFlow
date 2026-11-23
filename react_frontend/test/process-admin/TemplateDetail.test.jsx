@@ -2,11 +2,11 @@ import { expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
-import { makeStore } from '../../../store';
-import * as api from '../../../services/api/process';
-import TemplateDetail from './TemplateDetail';
+import { makeStore } from '../../src/store';
+import * as api from '../../src/services/api/process';
+import TemplateDetail from '../../src/features/process-admin/pages/TemplateDetail';
 
-vi.mock('../../../services/api/process');
+vi.mock('../../src/services/api/process');
 
 function mount() {
   return render(

@@ -2,13 +2,13 @@ import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
-import { makeStore } from '../../../store';
-import { Topbar } from '../../../shared/components/Topbar';
-import Notifications from './Notifications';
-import * as api from '../../../services/api/notifications';
+import { makeStore } from '../../src/store';
+import { Topbar } from '../../src/shared/components/Topbar';
+import Notifications from '../../src/features/common/pages/Notifications';
+import * as api from '../../src/services/api/notifications';
 
-vi.mock('../../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u' } }) }));
-vi.mock('../../../services/api/notifications', () => ({
+vi.mock('../../src/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u' } }) }));
+vi.mock('../../src/services/api/notifications', () => ({
   list: vi.fn(), markRead: vi.fn(), markAllRead: vi.fn(), create: vi.fn(), remove: vi.fn(),
 }));
 function mount() {

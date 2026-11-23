@@ -2,11 +2,11 @@ import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
-import { makeStore } from '../../../store';
-import * as api from '../../../services/api/process';
-import Dashboard from './Dashboard';
+import { makeStore } from '../../src/store';
+import * as api from '../../src/services/api/process';
+import Dashboard from '../../src/features/process-admin/pages/Dashboard';
 
-vi.mock('../../../services/api/process');
+vi.mock('../../src/services/api/process');
 
 function mount(templates = []) {
   api.listTemplates.mockResolvedValue(templates);
