@@ -1,5 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchExecutiveMetrics,
+  fetchExecutiveBranches,
+  selectExecutiveMetrics,
+  selectExecutiveBranches,
+  selectExecutiveStatus,
+  selectExecutiveError,
+} from '../../../store/executive';
 import { useAuth } from '../../../context/AuthContext';
 import { PATHS } from '../../../app/paths';
 import { Loader } from '../../../shared/components/Loader';
@@ -32,39 +41,39 @@ const normalize = (r) => (Array.isArray(r) ? r : r?.data || []);
 export default function ExecutiveDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  const [metrics, setMetrics] = useState(null);
-  const [branches, setBranches] = useState([]);
+  const metrics = useSelector(selectExecutiveMetrics);
+  const branches = useSelector(selectExecutiveBranches);
+  const status = useSelector(selectExecutiveStatus);
+  const reduxError = useSelector(selectExecutiveError);
+
   const [projects, setProjects] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState('');
+
+  const loading = (status === 'loading' && !metrics) || projectsLoading;
+  const error = reduxError?.message || projectsError;
 
   const loadDashboardData = useCallback(async (branchId) => {
-    setLoading(true);
-    setError('');
+    const params = branchId ? { branchId } : {};
+    dispatch(fetchExecutiveMetrics(params));
+    setProjectsLoading(true);
+    setProjectsError('');
     try {
-      const params = branchId ? { branchId } : {};
-      const [metricsRes, projectsRes] = await Promise.all([
-        executiveApi.getMetrics(params),
-        projectsApi.list(params),
-      ]);
-      setMetrics(metricsRes?.data || metricsRes);
+      const projectsRes = await projectsApi.list(params);
       setProjects(normalize(projectsRes));
     } catch (err) {
-      setError(err.message || 'Failed to load executive telemetry.');
+      setProjectsError(err.message || 'Failed to load projects');
     } finally {
-      setLoading(false);
+      setProjectsLoading(false);
     }
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
-    let active = true;
-    executiveApi.getBranches().then((res) => {
-      if (active) setBranches(normalize(res));
-    }).catch(() => {});
-    return () => { active = false; };
-  }, []);
+    dispatch(fetchExecutiveBranches());
+  }, [dispatch]);
 
   useEffect(() => {
     loadDashboardData(selectedBranchId);

@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchComplianceBindings,
+  deleteComplianceBinding,
+  selectAllComplianceBindings,
+  selectComplianceBindingsStatus,
+} from "../../../store/complianceBindings";
+import {
+  fetchComplianceRules,
+  selectAllComplianceRules,
+} from "../../../store/complianceRules";
 import { PATHS } from "../../../app/paths";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
@@ -30,10 +41,13 @@ const PAGE_SIZE = 10;
 export default function ComplianceBindings() {
   const toast = useToast();
   const { user } = useAuth();
+  const dispatch = useDispatch();
 
-  const [bindings, setBindings] = useState([]);
-  const [rules, setRules] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const bindings = useSelector(selectAllComplianceBindings);
+  const rules = useSelector(selectAllComplianceRules);
+  const bindingsStatus = useSelector(selectComplianceBindingsStatus);
+  const loading = bindingsStatus === "loading" && bindings.length === 0;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -43,30 +57,16 @@ export default function ComplianceBindings() {
   // Scope filter: "MyDomain" vs "All"
   const [scopeFilter, setScopeFilter] = useState("MyDomain");
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [bindingsRes, rulesRes] = await Promise.all([
-        apiClient("/compliance-bindings").catch(() => []),
-        apiClient("/compliance-rules").catch(() => []),
-      ]);
-
-      setBindings(Array.isArray(bindingsRes) ? bindingsRes : bindingsRes?.data || []);
-      const rulesList = Array.isArray(rulesRes) ? rulesRes : rulesRes?.data || [];
-      setRules(rulesList);
-      if (rulesList.length > 0 && !selectedRuleId) {
-        setSelectedRuleId(rulesList[0].id);
-      }
-    } catch (err) {
-      console.error("Failed to load compliance bindings:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    dispatch(fetchComplianceBindings());
+    dispatch(fetchComplianceRules());
+  }, [dispatch]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (rules.length > 0 && !selectedRuleId) {
+      setSelectedRuleId(rules[0].id);
+    }
+  }, [rules, selectedRuleId]);
 
   const handleUnbind = (binding) => {
     setBindingToUnbind(binding);
@@ -76,13 +76,16 @@ export default function ComplianceBindings() {
     if (!bindingToUnbind) return;
     try {
       setIsUnbinding(true);
-      await apiClient(`/compliance-bindings/${bindingToUnbind.id}`, { method: "DELETE" });
-      const scopeLabel = bindingToUnbind.scopeName || (bindingToUnbind.scopeType === "Company" ? "All (Company-wide)" : bindingToUnbind.scopeId);
+      await dispatch(deleteComplianceBinding(bindingToUnbind.id)).unwrap();
+      const scopeLabel =
+        bindingToUnbind.scopeName ||
+        (bindingToUnbind.scopeType === "Company"
+          ? "All (Company-wide)"
+          : bindingToUnbind.scopeId);
       toast.success(`Unbound rule from ${scopeLabel}.`);
       setBindingToUnbind(null);
-      fetchData();
     } catch (err) {
-      toast.error("Failed to unbind: " + err.message);
+      toast.error("Failed to unbind: " + (err.message || "Failed"));
     } finally {
       setIsUnbinding(false);
     }
@@ -330,7 +333,7 @@ export default function ComplianceBindings() {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           ruleId={selectedRuleId || rules[0]?.id}
-          onBindingCreated={fetchData}
+          onBindingCreated={() => dispatch(fetchComplianceBindings({ force: true }))}
         />
       )}
 
