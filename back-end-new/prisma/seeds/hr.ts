@@ -308,7 +308,33 @@ export async function seedHr(prisma: PrismaClient, ctx: { passwordHash: string }
     ],
   });
 
-  return { userAlice, userArjun, userSamuel, userBob, userDavid, userEmma, userFrank, userGrace, userIan, userJulia, userKevin, betaCeo, betaMember, betaTeam, teamCore, adminSupportTeam, teamSales };
+  return {
+    userAlice,
+    userVictor,
+    userOlivia,
+    userArjun,
+    userSamuel,
+    userSophia,
+    userBob,
+    userRachel,
+    userCharlie,
+    userLucas,
+    userMarcus,
+    userDavid,
+    userEmma,
+    userFrank,
+    userGrace,
+    userIan,
+    userJulia,
+    userKevin,
+    branch,
+    betaCeo,
+    betaMember,
+    betaTeam,
+    teamCore,
+    adminSupportTeam,
+    teamSales,
+  };
 }
 
 export type HrResult = Awaited<ReturnType<typeof seedHr>>;

@@ -34,13 +34,18 @@ async function hydrateBindings(bindings) {
 
 export async function listComplianceBindings(req, res, next) {
   try {
-    const { ruleId } = req.query;
+    const { ruleId, rule_id, scopeType, scope_type, scopeId, scope_id } = req.query || {};
+    const filterRuleId = ruleId || rule_id;
+    const filterScopeType = scopeType || scope_type;
+    const filterScopeId = scopeId || scope_id;
 
     const where = {
       rule: {
         OR: [{ companyId: null }, { companyId: req.user.companyId }],
       },
-      ...(ruleId ? { ruleId: String(ruleId) } : {}),
+      ...(filterRuleId ? { ruleId: String(filterRuleId) } : {}),
+      ...(filterScopeType ? { scopeType: String(filterScopeType) } : {}),
+      ...(filterScopeId ? { scopeId: String(filterScopeId) } : {}),
     };
 
     const bindings = await prisma.complianceBinding.findMany({

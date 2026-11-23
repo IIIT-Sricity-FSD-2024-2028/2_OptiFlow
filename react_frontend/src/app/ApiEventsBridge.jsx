@@ -12,16 +12,27 @@ import { router } from './router';
 // notice and, for people who can fix it (owner / system admin), takes them to Billing.
 const BILLING_ROLES = [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN];
 const NOTICE_COOLDOWN_MS = 8000;
+const FORBIDDEN_COOLDOWN_MS = 4000;
 
 export function ApiEventsBridge() {
   const toast = useToast();
   const { user } = useAuth();
   const lastShown = useRef(0);
+  const lastForbidden = useRef(0);
   const userRef = useRef(user);
   userRef.current = user;
 
   useEffect(() => {
     const onEvent = (e) => {
+      // The Redux 403 listener (store/core/listener.js) announces a 403 that no page handles itself.
+      if (e.detail?.type === 'forbidden') {
+        const at = Date.now();
+        if (at - lastForbidden.current >= FORBIDDEN_COOLDOWN_MS) {
+          lastForbidden.current = at;
+          toast.error(e.detail.message || "You don't have permission to do that.");
+        }
+        return;
+      }
       if (e.detail?.type !== 'plan-blocked') return;
       const canFix = BILLING_ROLES.includes(userRef.current?.role);
 
