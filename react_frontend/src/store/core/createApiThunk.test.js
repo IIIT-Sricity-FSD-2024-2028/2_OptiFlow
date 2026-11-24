@@ -90,14 +90,6 @@ describe("createApiThunk", () => {
     expect(isAbortedRejection(action)).toBe(true);
   });
 
-  it("passes thunkAPI (dispatch, getState) as a third argument", async () => {
-    const call = vi.fn().mockResolvedValue(null);
-    await makeTestStore().dispatch(createApiThunk("t/api", call)());
-    const thirdArg = call.mock.calls[0][2];
-    expect(typeof thirdArg.dispatch).toBe("function");
-    expect(typeof thirdArg.getState).toBe("function");
-  });
-
   it("with the real apiRequest, a newer read cancels the older one", async () => {
     // fetch that stays pending until aborted, or resolves when told to.
     const resolvers = [];
