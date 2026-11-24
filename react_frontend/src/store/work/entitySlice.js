@@ -69,7 +69,10 @@ export const buildWorkSlice = ({ name, adapter, thunks, extra }) =>
       },
     },
     extraReducers: (builder) => {
-      // List: replaces the whole collection with what the server returned.
+      // List: the collection becomes exactly what the server returned (same rows, same
+      // order), but a row already in the store is merged, not replaced. A detail fetch
+      // stores richer rows (a project with its tasks), and a list response that arrives
+      // later must not wipe those fields, or a detail page would lose its data.
       builder
         .addCase(thunks.list.pending, (state, action) => {
           state.status = 'loading';
@@ -77,7 +80,11 @@ export const buildWorkSlice = ({ name, adapter, thunks, extra }) =>
           state.queryKey = queryKeyOf(action.meta.arg);
         })
         .addCase(thunks.list.fulfilled, (state, action) => {
-          adapter.setAll(state, asRows(action.payload));
+          const rows = asRows(action.payload);
+          const keep = new Set(rows.map(idOf));
+          adapter.removeMany(state, state.ids.filter((id) => !keep.has(id)));
+          adapter.upsertMany(state, rows);
+          state.ids = [...keep]; // server order, no duplicates
           state.status = 'succeeded';
           state.loadedAt = Date.now();
           state.queryKey = queryKeyOf(action.meta.arg);
