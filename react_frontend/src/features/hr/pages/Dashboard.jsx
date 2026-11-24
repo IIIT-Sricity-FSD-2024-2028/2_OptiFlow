@@ -38,36 +38,36 @@ export default function HrDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Secondary lists that failed to load; the page still renders but says so.
+  const [partialFailures, setPartialFailures] = useState([]);
 
   // 1. DATA HYDRATION
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
+    const failed = [];
+    const secondary = (path, name) =>
+      apiClient(path).catch((err) => {
+        console.warn(`[HrDashboard] Failed to fetch ${name}:`, err.message);
+        failed.push(name);
+        return [];
+      });
 
     try {
+      // Users and teams are the page's main data: a failure there shows the error banner.
       const [usersData, branchesData, teamsData, rolesData] = await Promise.all([
-        apiClient("/users").catch((err) => {
-          console.warn("[HrDashboard] Failed to fetch users:", err.message);
-          return [];
-        }),
-        apiClient("/branches").catch((err) => {
-          console.warn("[HrDashboard] Failed to fetch branches:", err.message);
-          return [];
-        }),
-        apiClient("/teams").catch((err) => {
-          console.warn("[HrDashboard] Failed to fetch teams:", err.message);
-          return [];
-        }),
-        apiClient("/roles").catch((err) => {
-          console.warn("[HrDashboard] Failed to fetch roles:", err.message);
-          return [];
-        }),
+        apiClient("/users"),
+        secondary("/branches", "Branches"),
+        apiClient("/teams"),
+        secondary("/roles", "Roles"),
       ]);
 
       setUsers(Array.isArray(usersData) ? usersData : []);
       setBranches(Array.isArray(branchesData) ? branchesData : []);
       setTeams(Array.isArray(teamsData) ? teamsData : []);
       setRoles(Array.isArray(rolesData) ? rolesData : []);
+      setPartialFailures(failed);
     } catch (err) {
       console.error("[HrDashboard] Failed to load dashboard data:", err);
       setError(err.message || "Failed to load HR data from server.");
@@ -220,7 +220,7 @@ export default function HrDashboard() {
           >
             {row.name}
           </Link>
-          <div className="text-[11.5px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">{row.email}</div>
+          <div className="text-[11.5px] text-slate-500 font-mono mt-0.5 whitespace-nowrap">{row.email}</div>
         </div>
       ),
     },
@@ -269,7 +269,7 @@ export default function HrDashboard() {
         return (
           <Link
             to={`${PATHS.HR.TEAMS}?view=table`}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-500 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
             title="Click to assign to a delivery squad"
           >
             + Assign Squad
@@ -296,7 +296,7 @@ export default function HrDashboard() {
         return (
           <Link
             to={PATHS.HR.BRANCHES}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-500 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
             title="Click to assign to a branch office"
           >
             + Assign Branch
@@ -310,14 +310,14 @@ export default function HrDashboard() {
       render: (row) => {
         if (!row.managerId) {
           return (
-            <span className="text-xs text-slate-400 font-medium italic whitespace-nowrap">
+            <span className="text-xs text-slate-500 font-medium italic whitespace-nowrap">
               Executive / Board
             </span>
           );
         }
         const manager = normalizedEmployees.find((e) => e.id === row.managerId);
         if (!manager) {
-          return <span className="text-xs text-slate-400 whitespace-nowrap">Designated Lead</span>;
+          return <span className="text-xs text-slate-500 whitespace-nowrap">Designated Lead</span>;
         }
         return (
           <Link
@@ -387,6 +387,13 @@ export default function HrDashboard() {
         </div>
       )}
 
+      {!error && partialFailures.length > 0 && (
+        <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{partialFailures.join(" and ")} could not be loaded; related figures may show as empty.</span>
+        </div>
+      )}
+
       {/* 4 Core Workforce KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -422,7 +429,7 @@ export default function HrDashboard() {
             <h2 className="text-sm font-bold text-slate-900">
               Operational Status
             </h2>
-            <span className="text-[11px] text-slate-400 font-medium">
+            <span className="text-[11px] text-slate-500 font-medium">
               • Team assignments & account checks
             </span>
           </div>
@@ -495,7 +502,7 @@ export default function HrDashboard() {
             </div>
 
             {squadOverview.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400">
+              <div className="py-8 text-center text-xs text-slate-500">
                 No teams or squads created yet.
               </div>
             ) : (
@@ -552,7 +559,7 @@ export default function HrDashboard() {
             </div>
 
             {branchOverview.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400">
+              <div className="py-8 text-center text-xs text-slate-500">
                 No branch offices registered yet.
               </div>
             ) : (
@@ -562,7 +569,7 @@ export default function HrDashboard() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-slate-800">
                         {branch.name}
-                        <span className="ml-1.5 font-mono text-[10px] text-slate-400 font-normal">
+                        <span className="ml-1.5 font-mono text-[10px] text-slate-500 font-normal">
                           ({branch.code})
                         </span>
                       </span>

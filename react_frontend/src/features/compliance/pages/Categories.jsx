@@ -1,3 +1,12 @@
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchComplianceCategories,
+  createComplianceCategory,
+  updateComplianceCategory,
+  deleteComplianceCategory,
+  selectAllComplianceCategories,
+  selectComplianceCategoriesStatus,
+} from "../../../store/complianceCategories";
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PATHS } from "../../../app/paths";
@@ -9,19 +18,19 @@ import { Modal } from "../../../shared/components/Modal";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { Pagination } from "../../../shared/components/Pagination";
 import { useToast } from "../../../shared/components/Toast";
-import { 
-  Plus, 
-  Loader2, 
-  Trash2, 
-  Edit2, 
-  ExternalLink, 
-  BookOpen, 
-  Tags, 
-  Link2, 
+import {
+  Plus,
+  Loader2,
+  Trash2,
+  Edit2,
+  ExternalLink,
+  BookOpen,
+  Tags,
+  Link2,
   Lock,
   UserCheck,
   Layers,
-  Shield
+  Shield,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -31,12 +40,14 @@ export default function ComplianceCategories() {
   const toast = useToast();
   const { user } = useAuth();
 
-  const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ name: "", description: "", ownerId: "" });
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    ownerId: "",
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -44,27 +55,18 @@ export default function ComplianceCategories() {
   // Scope filter: "MyDomains" vs "All"
   const [scopeFilter, setScopeFilter] = useState("MyDomains");
 
-  const fetchCategories = async () => {
-    try {
-      setLoading(true);
-      const [res, userRes] = await Promise.all([
-        apiClient("/compliance-categories"),
-        apiClient("/users").catch(() => []),
-      ]);
-      const list = Array.isArray(res) ? res : res?.data || [];
-      setCategories(list);
-      const uList = Array.isArray(userRes) ? userRes : userRes?.data || [];
-      setUsers(uList);
-    } catch (error) {
-      console.error("Failed to fetch categories:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const dispatch = useDispatch();
+  const categories = useSelector(selectAllComplianceCategories);
+  const status = useSelector(selectComplianceCategoriesStatus);
+  const loading = status === "loading" && categories.length === 0;
 
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    dispatch(fetchComplianceCategories());
+    // Users list for the "Domain Lead / Owner" dropdown
+    apiClient("/users")
+      .then((res) => setUsers(Array.isArray(res) ? res : res?.data || []))
+      .catch(() => []);
+  }, [dispatch]);
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -86,7 +88,7 @@ export default function ComplianceCategories() {
     const rulesCount = category._count?.rules || 0;
     if (rulesCount > 0) {
       toast.error(
-        `Cannot delete category "${category.name}": it has ${rulesCount} associated rule(s). Reassign or delete those rules first.`
+        `Cannot delete category "${category.name}": it has ${rulesCount} associated rule(s). Reassign or delete those rules first.`,
       );
       return;
     }
@@ -97,10 +99,10 @@ export default function ComplianceCategories() {
     if (!categoryToDelete) return;
     try {
       setIsDeleting(true);
-      await apiClient(`/compliance-categories/${categoryToDelete.id}`, { method: "DELETE" });
+      // Dispatch Redux delete thunk and unwrap payload
+      await dispatch(deleteComplianceCategory(categoryToDelete.id)).unwrap();
       toast.success(`Category "${categoryToDelete.name}" deleted.`);
       setCategoryToDelete(null);
-      fetchCategories();
     } catch (error) {
       toast.error("Failed to delete category: " + error.message);
     } finally {
@@ -112,18 +114,15 @@ export default function ComplianceCategories() {
     e.preventDefault();
     try {
       if (editingId) {
-        await apiClient(`/compliance-categories/${editingId}`, {
-          method: "PATCH",
-          body: JSON.stringify(formData),
-        });
+        await dispatch(
+          updateComplianceCategory({ id: editingId, ...formData }),
+        ).unwrap();
+        toast.success("Category updated successfully.");
       } else {
-        await apiClient("/compliance-categories", {
-          method: "POST",
-          body: JSON.stringify(formData),
-        });
+        await dispatch(createComplianceCategory(formData)).unwrap();
+        toast.success("Category created successfully.");
       }
       setIsOpen(false);
-      fetchCategories();
     } catch (error) {
       toast.error("Failed to save category: " + error.message);
     }
@@ -150,7 +149,11 @@ export default function ComplianceCategories() {
       accessor: "name",
       render: (row) => (
         <button
-          onClick={() => navigate(`/compliance/rules?categoryId=${row.id}&categoryName=${encodeURIComponent(row.name)}`)}
+          onClick={() =>
+            navigate(
+              `/compliance/rules?categoryId=${row.id}&categoryName=${encodeURIComponent(row.name)}`,
+            )
+          }
           className="font-semibold text-[13px] text-blue-600 hover:text-blue-800 text-left hover:underline"
           title={`View rules in ${row.name}`}
         >
@@ -176,10 +179,14 @@ export default function ComplianceCategories() {
                 </span>
               )}
             </div>
-            <span className="text-[11px] text-slate-400">{row.owner.email}</span>
+            <span className="text-[11px] text-slate-400">
+              {row.owner.email}
+            </span>
           </div>
         ) : (
-          <span className="text-xs text-slate-400 italic">Unassigned (Fallback to Org)</span>
+          <span className="text-xs text-slate-400 italic">
+            Unassigned (Fallback to Org)
+          </span>
         );
       },
     },
@@ -232,18 +239,27 @@ export default function ComplianceCategories() {
     );
   }
 
-  const myDomainsCount = categories.filter((c) => (c.ownerId || c.owner?.id) === user?.id).length;
+  const myDomainsCount = categories.filter(
+    (c) => (c.ownerId || c.owner?.id) === user?.id,
+  ).length;
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Regulatory Domains & Categories</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Regulatory Domains & Categories
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Group policies into functional regulatory frameworks and assign dedicated compliance officer ownership.
+            Group policies into functional regulatory frameworks and assign
+            dedicated compliance officer ownership.
           </p>
         </div>
-        <Button variant="primary" onClick={handleOpenCreate} className="flex items-center gap-1.5 self-start">
+        <Button
+          variant="primary"
+          onClick={handleOpenCreate}
+          className="flex items-center gap-1.5 self-start"
+        >
           <Plus size={16} />
           <span>New Regulatory Domain</span>
         </Button>
@@ -304,7 +320,10 @@ export default function ComplianceCategories() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-900">
-            {scopeFilter === "MyDomains" ? "Your Regulatory Domains" : "All Regulatory Frameworks"} ({filteredCategories.length})
+            {scopeFilter === "MyDomains"
+              ? "Your Regulatory Domains"
+              : "All Regulatory Frameworks"}{" "}
+            ({filteredCategories.length})
           </h2>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
             {filteredCategories.length} Active
@@ -334,7 +353,9 @@ export default function ComplianceCategories() {
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        title={editingId ? "Edit Regulatory Domain" : "Create New Regulatory Domain"}
+        title={
+          editingId ? "Edit Regulatory Domain" : "Create New Regulatory Domain"
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsOpen(false)}>
@@ -357,7 +378,9 @@ export default function ComplianceCategories() {
               placeholder="e.g. IT Security & Access Controls"
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
             />
           </div>
 
@@ -368,23 +391,35 @@ export default function ComplianceCategories() {
             <select
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
               value={formData.ownerId}
-              onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, ownerId: e.target.value })
+              }
             >
               <option value="">-- Unassigned (Company Default) --</option>
               {users.map((u) => {
                 const isOfficer = u.roleAssignments?.some((r) => {
                   const roleName = String(r.role?.name || "").toLowerCase();
-                  return roleName.includes("compliance") || roleName.includes("owner") || roleName.includes("admin");
+                  return (
+                    roleName.includes("compliance") ||
+                    roleName.includes("owner") ||
+                    roleName.includes("admin")
+                  );
                 });
                 return (
                   <option key={u.id} value={u.id}>
-                    {u.fullName || u.email} {u.id === user?.id ? "(You)" : isOfficer ? "🛡️ (Compliance Officer)" : ""}
+                    {u.fullName || u.email}{" "}
+                    {u.id === user?.id
+                      ? "(You)"
+                      : isOfficer
+                        ? "🛡️ (Compliance Officer)"
+                        : ""}
                   </option>
                 );
               })}
             </select>
             <p className="text-[11px] text-slate-500">
-              All violations under this category will automatically be routed to this officer's queue.
+              All violations under this category will automatically be routed to
+              this officer's queue.
             </p>
           </div>
 
@@ -397,7 +432,9 @@ export default function ComplianceCategories() {
               placeholder="Describe the scope and regulatory mandate of this domain..."
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
             />
           </div>
 

@@ -17,7 +17,13 @@ import {
   ExternalLink,
   CheckCircle2,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
+
+// Notification.type values; the API has no category or priority fields.
+const WORK_TYPES = ['Task', 'Review', 'Escalation'];
+const isComplianceType = (n) => n.type === 'Compliance' || n.category === 'COMPLIANCE';
+const isWorkType = (n) => WORK_TYPES.includes(n.type) || n.category === 'WORK';
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -45,7 +51,7 @@ export default function Notifications() {
 
   const handleNavigate = async (n) => {
     if (!n.isRead) {
-      await handleMarkAsRead(n.id);
+      handleMarkAsRead(n.id);
     }
     if (n.linkUrl) {
       navigate(n.linkUrl);
@@ -54,12 +60,10 @@ export default function Notifications() {
 
   const filteredList = notifications.filter(n => {
     if (activeFilter === 'UNREAD') return !n.isRead;
-    if (activeFilter === 'COMPLIANCE') return n.category === 'COMPLIANCE';
-    if (activeFilter === 'WORK') return n.category === 'WORK';
+    if (activeFilter === 'COMPLIANCE') return isComplianceType(n);
+    if (activeFilter === 'WORK') return isWorkType(n);
     return true;
   });
-
-
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6 text-slate-900">
@@ -118,7 +122,7 @@ export default function Notifications() {
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Compliance ({notifications.filter(n => n.category === 'COMPLIANCE').length})
+          Compliance ({notifications.filter(isComplianceType).length})
         </button>
         <button
           onClick={() => setActiveFilter('WORK')}
@@ -128,12 +132,29 @@ export default function Notifications() {
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Work Tasks ({notifications.filter(n => n.category === 'WORK').length})
+          Work Tasks ({notifications.filter(isWorkType).length})
         </button>
       </div>
 
       {/* Notifications Feed */}
-      {error && <p role="alert">{error.message}</p>}
+      {error && (
+        <div role="alert" className="bg-white border border-rose-200 rounded-xl p-6 text-center">
+          <AlertTriangle size={32} className="mx-auto text-rose-500 mb-2" />
+          <h3 className="font-bold text-slate-800 text-sm">Notifications could not be loaded</h3>
+          <p className="text-xs text-slate-500 mt-1">{error.message || String(error)}</p>
+          {userId && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => dispatch(fetchNotifications({ userId, force: true }))}
+              className="mt-3"
+            >
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="p-12 text-center text-slate-500">
           <Loader />
@@ -150,8 +171,8 @@ export default function Notifications() {
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 shadow-xs overflow-hidden">
           {filteredList.map((n) => {
-            const isUrgent = n.priority === 'URGENT';
-            const isCompliance = n.category === 'COMPLIANCE';
+            const isUrgent = n.type === 'Escalation' || n.priority === 'URGENT';
+            const isCompliance = isComplianceType(n);
 
             return (
               <div
@@ -185,9 +206,9 @@ export default function Notifications() {
                       <span className="font-bold text-sm text-slate-900">
                         {n.title}
                       </span>
-                      {n.category && (
+                      {(n.type || n.category) && (
                         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {n.category}
+                          {n.type || n.category}
                         </span>
                       )}
                       {isUrgent && (
@@ -196,7 +217,7 @@ export default function Notifications() {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0">
                       <Clock size={12} />
                       {new Date(n.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
@@ -207,7 +228,7 @@ export default function Notifications() {
                   </p>
 
                   <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <span className="text-slate-400 font-medium">
+                    <span className="text-slate-500 font-medium">
                       {n.senderName ? `Attributed to: ${n.senderName}` : 'System Generated'}
                     </span>
 

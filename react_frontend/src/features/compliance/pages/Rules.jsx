@@ -10,6 +10,19 @@ import { Modal } from "../../../shared/components/Modal";
 import { Pagination } from "../../../shared/components/Pagination";
 import { useToast } from "../../../shared/components/Toast";
 import { ManageRuleScopesModal } from "../components/ManageRuleScopesModal";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchComplianceRules,
+  createComplianceRule,
+  updateComplianceRule,
+  selectAllComplianceRules,
+  selectComplianceRulesStatus,
+} from "../../../store/complianceRules";
+import {
+  fetchComplianceCategories,
+  selectAllComplianceCategories,
+} from "../../../store/complianceCategories";
+
 import {
   Plus,
   Loader2,
@@ -44,12 +57,6 @@ export default function ComplianceRules() {
   const activeCategoryId = searchParams.get("categoryId") || "ALL";
   const [activeStatus, setActiveStatus] = useState("ALL"); // "ALL" | "ACTIVE" | "INACTIVE"
   const [scopeFilter, setScopeFilter] = useState("MyRules"); // "MyRules" | "All"
-
-  const [rules, setRules] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Modal states
@@ -57,6 +64,16 @@ export default function ComplianceRules() {
   const [isOpen, setIsOpen] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState(null);
 
+  const dispatch = useDispatch();
+
+  const rules = useSelector(selectAllComplianceRules);
+  const categories = useSelector(selectAllComplianceCategories);
+  const rulesStatus = useSelector(selectComplianceRulesStatus);
+
+  const [users, setUsers] = useState([]);
+  const [projects, setProjects] = useState([]);
+
+  const loading = rulesStatus === "loading" && rules.length === 0;
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -69,43 +86,41 @@ export default function ComplianceRules() {
   });
 
   const fetchData = async () => {
+    // 1. Dispatch Redux thunks (they handle their own caching and status)
+    dispatch(fetchComplianceRules());
+    dispatch(fetchComplianceCategories());
+
+    // 2. Fetch auxiliary users and projects for dropdowns
     try {
-      setLoading(true);
-      const [rulesResponse, categoriesResponse, usersResponse, projectsResponse] = await Promise.all([
-        apiClient("/compliance-rules").catch(() => []),
-        apiClient("/compliance-categories").catch(() => []),
+      const [usersResponse, projectsResponse] = await Promise.all([
         apiClient("/users").catch(() => []),
         apiClient("/projects").catch(() => []),
       ]);
-
-      setRules(Array.isArray(rulesResponse) ? rulesResponse : []);
-      const catList = Array.isArray(categoriesResponse)
-        ? categoriesResponse
-        : categoriesResponse?.data || [];
-      setCategories(catList);
-      const uList = Array.isArray(usersResponse)
-        ? usersResponse
-        : usersResponse?.data || [];
-      setUsers(uList);
-      const pList = Array.isArray(projectsResponse)
-        ? projectsResponse
-        : projectsResponse?.data || [];
-      setProjects(pList);
+      setUsers(
+        Array.isArray(usersResponse)
+          ? usersResponse
+          : usersResponse?.data || [],
+      );
+      setProjects(
+        Array.isArray(projectsResponse)
+          ? projectsResponse
+          : projectsResponse?.data || [],
+      );
     } catch (err) {
-      console.error("Failed to load compliance rules and categories:", err);
-    } finally {
-      setLoading(false);
+      console.error("Failed to load auxiliary users/projects:", err);
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [dispatch]);
 
   // 🟢 DYNAMIC CATEGORIES: Automatically reflects whether we are in "My Assigned Rules" or "All Rules"
   const dynamicCategories = useMemo(() => {
     if (scopeFilter === "MyRules") {
-      const myCats = categories.filter((c) => (c.ownerId || c.owner?.id) === user?.id);
+      const myCats = categories.filter(
+        (c) => (c.ownerId || c.owner?.id) === user?.id,
+      );
       return myCats.length > 0 ? myCats : categories;
     }
     return categories;
@@ -130,7 +145,9 @@ export default function ComplianceRules() {
 
   const handleOpenCreate = () => {
     setEditingRuleId(null);
-    const myCats = categories.filter((c) => (c.ownerId || c.owner?.id) === user?.id);
+    const myCats = categories.filter(
+      (c) => (c.ownerId || c.owner?.id) === user?.id,
+    );
     const defaultCat = myCats[0]?.id || categories[0]?.id || "";
 
     setFormData({
@@ -158,7 +175,8 @@ export default function ComplianceRules() {
       description: rule.description || "",
       severity: rule.severity || "Medium",
       categoryId: rule.categoryId || rule.category?.id || "",
-      assignedOfficerId: rule.assignedOfficerId || rule.assignedOfficer?.id || "",
+      assignedOfficerId:
+        rule.assignedOfficerId || rule.assignedOfficer?.id || "",
       slaHours: rule.slaHours ?? DEFAULT_SLA_BY_SEVERITY[rule.severity] ?? 72,
       isActive: rule.isActive,
       scopeType: existingBinding,
@@ -178,25 +196,21 @@ export default function ComplianceRules() {
 
   const handleToggleActive = async (rule) => {
     const newStatus = !rule.isActive;
-    const previousRules = [...rules];
-
-    setRules(
-      rules.map((r) => (r.id === rule.id ? { ...r, isActive: newStatus } : r))
-    );
-
     try {
-      await apiClient(`/compliance-rules/${rule.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: newStatus }),
-      });
+      // 1. Dispatch updateComplianceRule thunk
+      await dispatch(
+        updateComplianceRule({ id: rule.id, isActive: newStatus }),
+      ).unwrap();
+
+      // 2. UI feedback
       toast.success(
         newStatus
           ? `Rule "${rule.name}" activated and enforcing.`
-          : `Rule "${rule.name}" safely deactivated.`
+          : `Rule "${rule.name}" safely deactivated.`,
       );
-      fetchData();
+      // Notice: NO NEED to call fetchData()!
+      // The reducer in index.js automatically updated state.items[index].isActive!
     } catch (err) {
-      setRules(previousRules);
       toast.error(`Failed to update rule status: ${err.message}`);
     }
   };
@@ -204,73 +218,56 @@ export default function ComplianceRules() {
   const handleSaveRule = async (e) => {
     e.preventDefault();
 
-    const catObj = categories.find((c) => c.id === formData.categoryId);
-    const previousRules = [...rules];
-    const optimisticRule = {
-      id: editingRuleId || `temp-${Date.now()}`,
-      ...formData,
-      category: catObj || null,
-      bindings: [{ scopeType: formData.scopeType }],
+    const rulePayload = {
+      name: formData.name,
+      description: formData.description,
+      severity: formData.severity,
+      categoryId: formData.categoryId || null,
+      assignedOfficerId: formData.assignedOfficerId || null,
+      slaHours: Number(formData.slaHours) || 72,
+      isActive: formData.isActive,
     };
-
-    if (editingRuleId) {
-      setRules(rules.map((r) => (r.id === editingRuleId ? optimisticRule : r)));
-    } else {
-      setRules([...rules, optimisticRule]);
-    }
-
-    setIsOpen(false);
 
     try {
       if (editingRuleId) {
-        await apiClient(`/compliance-rules/${editingRuleId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: formData.name,
-            description: formData.description,
-            severity: formData.severity,
-            categoryId: formData.categoryId || null,
-            assignedOfficerId: formData.assignedOfficerId || null,
-            slaHours: Number(formData.slaHours) || 72,
-            isActive: formData.isActive,
-          }),
-        });
+        // Dispatch Update
+        await dispatch(
+          updateComplianceRule({ id: editingRuleId, ...rulePayload }),
+        ).unwrap();
+        toast.success(`Rule "${formData.name}" updated successfully.`);
       } else {
-        const newRule = await apiClient("/compliance-rules", {
-          method: "POST",
-          body: JSON.stringify({
-            name: formData.name,
-            description: formData.description,
-            severity: formData.severity,
-            categoryId: formData.categoryId || null,
-            assignedOfficerId: formData.assignedOfficerId || null,
-            slaHours: Number(formData.slaHours) || 72,
-            isActive: formData.isActive,
-          }),
-        });
+        // Dispatch Create
+        const newRule = await dispatch(
+          createComplianceRule(rulePayload),
+        ).unwrap();
 
-        await apiClient("/compliance-bindings", {
-          method: "POST",
-          body: JSON.stringify({
-            ruleId: newRule.id,
-            scopeType: formData.scopeType,
-          }),
-        });
+        // If scopeType is selected, bind it
+        if (formData.scopeType) {
+          await apiClient("/compliance-bindings", {
+            method: "POST",
+            body: JSON.stringify({
+              ruleId: newRule.id,
+              scopeType: formData.scopeType,
+            }),
+          }).catch((err) => console.error("Failed to bind rule:", err));
+        }
+        toast.success(`Rule "${formData.name}" registered successfully.`);
       }
 
-      fetchData();
+      setIsOpen(false);
     } catch (error) {
-      setRules(previousRules);
       console.error("Failed to save rule:", error);
-      toast.error("Failed to save rule: " + error.message);
+      toast.error(
+        "Failed to save rule: " + (error.message || "Operation failed."),
+      );
     }
   };
-
   const filteredRules = useMemo(() => {
     return rules.filter((r) => {
       // 1. Scope filter: MyRules vs All
       if (scopeFilter === "MyRules") {
-        const officerId = r.assignedOfficerId || r.assignedOfficer?.id || r.category?.ownerId;
+        const officerId =
+          r.assignedOfficerId || r.assignedOfficer?.id || r.category?.ownerId;
         if (officerId && officerId !== user?.id) {
           return false;
         }
@@ -298,7 +295,8 @@ export default function ComplianceRules() {
   );
 
   const myRulesCount = rules.filter((r) => {
-    const officerId = r.assignedOfficerId || r.assignedOfficer?.id || r.category?.ownerId;
+    const officerId =
+      r.assignedOfficerId || r.assignedOfficer?.id || r.category?.ownerId;
     return !officerId || officerId === user?.id;
   }).length;
 
@@ -316,7 +314,10 @@ export default function ComplianceRules() {
           >
             {row.name}
           </span>
-          <span className="text-xs text-slate-500 line-clamp-1 mt-0.5" title={row.description}>
+          <span
+            className="text-xs text-slate-500 line-clamp-1 mt-0.5"
+            title={row.description}
+          >
             {row.description || "No description provided"}
           </span>
         </div>
@@ -368,7 +369,9 @@ export default function ComplianceRules() {
         const firstBinding = bindingsList[0];
         let label = "Company-Wide (All)";
         if (firstBinding.scopeType === "Project") {
-          label = projectMap.get(firstBinding.scopeId) || `Project #${firstBinding.scopeId.substring(0, 8)}`;
+          label =
+            projectMap.get(firstBinding.scopeId) ||
+            `Project #${firstBinding.scopeId.substring(0, 8)}`;
         } else if (firstBinding.scopeType === "Team") {
           label = `Team #${firstBinding.scopeId.substring(0, 8)}`;
         }
@@ -384,7 +387,11 @@ export default function ComplianceRules() {
               }`}
               title="Click to manage policy scopes"
             >
-              {firstBinding.scopeType === "Company" ? <Building2 size={11} className="text-slate-500" /> : <FolderGit2 size={11} className="text-blue-500" />}
+              {firstBinding.scopeType === "Company" ? (
+                <Building2 size={11} className="text-slate-500" />
+              ) : (
+                <FolderGit2 size={11} className="text-blue-500" />
+              )}
               <span className="truncate max-w-[120px]">{label}</span>
             </button>
 
@@ -514,12 +521,19 @@ export default function ComplianceRules() {
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Compliance Rules Engine</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Compliance Rules Engine
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Configure automated policy constraints, SLA thresholds, and attach scope boundaries to projects.
+            Configure automated policy constraints, SLA thresholds, and attach
+            scope boundaries to projects.
           </p>
         </div>
-        <Button variant="primary" onClick={handleOpenCreate} className="flex items-center gap-1.5 self-start">
+        <Button
+          variant="primary"
+          onClick={handleOpenCreate}
+          className="flex items-center gap-1.5 self-start"
+        >
           <Plus size={16} />
           <span>New Compliance Rule</span>
         </Button>
@@ -565,11 +579,17 @@ export default function ComplianceRules() {
           {/* Automatically Dynamic Category Filter */}
           <select
             value={activeCategoryId}
-            onChange={(e) => setSearchParams(e.target.value === "ALL" ? {} : { categoryId: e.target.value })}
+            onChange={(e) =>
+              setSearchParams(
+                e.target.value === "ALL" ? {} : { categoryId: e.target.value },
+              )
+            }
             className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="ALL">
-              {scopeFilter === "MyRules" ? "All My Domains" : "All Company Domains"}
+              {scopeFilter === "MyRules"
+                ? "All My Domains"
+                : "All Company Domains"}
             </option>
             {dynamicCategories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -602,7 +622,10 @@ export default function ComplianceRules() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-900">
-            {scopeFilter === "MyRules" ? "Rules in Your Regulatory Domain" : "All Organization Rules"} ({filteredRules.length})
+            {scopeFilter === "MyRules"
+              ? "Rules in Your Regulatory Domain"
+              : "All Organization Rules"}{" "}
+            ({filteredRules.length})
           </h2>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
             {filteredRules.length} Rules Enforcing
@@ -641,7 +664,9 @@ export default function ComplianceRules() {
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        title={editingRuleId ? "Edit Compliance Rule" : "Create Compliance Rule"}
+        title={
+          editingRuleId ? "Edit Compliance Rule" : "Create Compliance Rule"
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsOpen(false)}>
@@ -664,7 +689,9 @@ export default function ComplianceRules() {
               placeholder="e.g. Mandatory 2-Reviewer Pull Request Policy"
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
             />
           </div>
 
@@ -677,7 +704,9 @@ export default function ComplianceRules() {
                 required
                 className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white font-medium text-slate-800"
                 value={formData.categoryId}
-                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, categoryId: e.target.value })
+                }
               >
                 <option value="">-- Select Category --</option>
                 {categories.map((c) => (
@@ -695,7 +724,12 @@ export default function ComplianceRules() {
               <select
                 className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white font-medium text-slate-800"
                 value={formData.assignedOfficerId}
-                onChange={(e) => setFormData({ ...formData, assignedOfficerId: e.target.value })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    assignedOfficerId: e.target.value,
+                  })
+                }
               >
                 <option value="">-- Category Default --</option>
                 {users.map((u) => (
@@ -734,7 +768,9 @@ export default function ComplianceRules() {
                 max="720"
                 className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
                 value={formData.slaHours}
-                onChange={(e) => setFormData({ ...formData, slaHours: Number(e.target.value) })}
+                onChange={(e) =>
+                  setFormData({ ...formData, slaHours: Number(e.target.value) })
+                }
               />
             </div>
           </div>
@@ -748,7 +784,9 @@ export default function ComplianceRules() {
               placeholder="What this rule enforces and what evidence or action resolves it..."
               className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
             />
           </div>
 

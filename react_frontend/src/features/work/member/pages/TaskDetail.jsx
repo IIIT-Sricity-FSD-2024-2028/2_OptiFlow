@@ -390,6 +390,7 @@ export default function MemberTaskDetail() {
         projectId={task?.projectId || project?.id}
         managerId={manager?.id || task?.createdById}
         taskTitle={task?.title}
+        currentDeadline={task?.dueDate || task?.deadline}
       />
 
       <UploadEvidenceModal

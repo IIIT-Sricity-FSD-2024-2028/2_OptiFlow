@@ -1,10 +1,11 @@
 import { prisma } from '../config/prisma.js';
-import { NotFoundError, BadRequestError, ForbiddenError, ConflictError } from '../utils/errors.js';
+import { NotFoundError, BadRequestError, ForbiddenError, ConflictError, ValidationError } from '../utils/errors.js';
 import { resolveEffectiveBranchId, assertBranchManagerScope } from '../utils/tenantScope.js';
 import { validateRequired } from '../utils/validation.js';
 import { ROLES } from '../utils/roles.js';
 import { assertWithinPlanLimit, withCompanyLock } from '../utils/planLimits.js';
 import { createSystemAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { assertMayRevokeFromHolders, assertGrantBelowCaller, ROLE_WITH_TEMPLATE } from '../utils/roleAssignmentGuards.js';
 
 async function enrichBranchesWithManagers(branches, companyId) {
   if (!branches || branches.length === 0) return branches;
@@ -12,7 +13,7 @@ async function enrichBranchesWithManagers(branches, companyId) {
   const branchIds = branches.map((b) => b.id);
   const managerAssignments = await prisma.roleAssignment.findMany({
     where: {
-      companyId,
+      user: { companyId },
       scopeType: 'Branch',
       scopeId: { in: branchIds },
       revokedAt: null,
@@ -48,7 +49,7 @@ async function enrichBranchesWithManagers(branches, companyId) {
 const BRANCH_LIST_INCLUDE = {
   teams: {
     include: {
-      _count: { select: { projects: true } },
+      _count: { select: { projects: { where: { deletedAt: null } } } },
     },
   },
   company: { select: { id: true, legalName: true } },
@@ -83,6 +84,9 @@ export async function listBranches(req, res, next) {
   }
 }
 
+// Roles that see the project rows of every team in a branch (branch managers are scope-checked first).
+const BRANCH_DETAIL_ROLES = ['company_owner', 'system_admin', 'hr_manager', 'branch_manager'];
+
 export async function getBranchById(req, res, next) {
   try {
     const { id } = req.params;
@@ -97,7 +101,7 @@ export async function getBranchById(req, res, next) {
       include: {
         teams: {
           include: {
-            projects: true,
+            projects: { where: { deletedAt: null } },
           },
         },
         company: { select: { id: true, legalName: true } },
@@ -108,7 +112,24 @@ export async function getBranchById(req, res, next) {
       throw new NotFoundError(`Branch with ID ${id} not found in this company`);
     }
 
-    const [enriched] = await enrichBranchesWithManagers([branch], req.user.companyId);
+    let [enriched] = await enrichBranchesWithManagers([branch], req.user.companyId);
+
+    // R5: other roles get project rows only for the teams they belong to.
+    if (!BRANCH_DETAIL_ROLES.includes(req.user.role)) {
+      const memberships = await prisma.teamMember.findMany({
+        where: { userId: req.user.id, teamId: { in: enriched.teams.map((t) => t.id) } },
+        select: { teamId: true },
+      });
+      const mine = new Set(memberships.map((m) => m.teamId));
+      enriched = {
+        ...enriched,
+        teams: enriched.teams.map((t) => {
+          if (mine.has(t.id)) return t;
+          const { projects, ...rest } = t;
+          return rest;
+        }),
+      };
+    }
 
     res.status(200).json({
       success: true,
@@ -139,11 +160,15 @@ async function setBranchManager(tx, req, branchId, managerUserId) {
       isSystem: true,
       OR: [{ roleTemplate: { slug: 'branch_manager' } }, { name: 'branch_manager' }],
     },
+    ...ROLE_WITH_TEMPLATE,
   });
   if (!bmRole) return none;
 
   const newManagerId = managerUserId ? String(managerUserId) : null;
   if (newManagerId) {
+    // D2: naming a Branch Manager is a grant. HR (below branch_manager) cannot do it here either,
+    // or it could create an account and make it a Branch Manager with powers HR lacks.
+    assertGrantBelowCaller(req, bmRole);
     if (newManagerId === req.user.id) {
       throw new ForbiddenError('You cannot make yourself the Branch Manager');
     }
@@ -157,7 +182,7 @@ async function setBranchManager(tx, req, branchId, managerUserId) {
   }
 
   const current = await tx.roleAssignment.findMany({
-    where: { companyId, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, revokedAt: null },
+    where: { user: { companyId }, roleId: bmRole.id, scopeType: 'Branch', scopeId: branchId, revokedAt: null },
   });
   if (newManagerId && current.length === 1 && current[0].userId === newManagerId) {
     return none; // unchanged
@@ -165,6 +190,8 @@ async function setBranchManager(tx, req, branchId, managerUserId) {
   if (current.some((ra) => ra.userId === req.user.id)) {
     throw new ForbiddenError('You cannot remove your own Branch Manager role');
   }
+  // D1: the outgoing managers' holder rule, same as /role-assignments and /users.
+  await assertMayRevokeFromHolders(req, current.filter((ra) => ra.userId !== newManagerId).map((ra) => ra.userId), tx);
 
   if (current.length) {
     await tx.roleAssignment.updateMany({
@@ -204,21 +231,63 @@ async function auditBranchManagerChange(req, branchId, { revoked, granted, roleI
   }
 }
 
+/** Soft-revokes every active Branch-scoped grant of a branch being deleted and returns the rows (R13). */
+async function revokeBranchScopedAssignments(tx, req, branchId) {
+  const rows = await tx.roleAssignment.findMany({
+    where: { user: { companyId: req.user.companyId }, scopeType: 'Branch', scopeId: branchId, revokedAt: null },
+    include: { role: { select: { id: true, label: true } } },
+  });
+  if (rows.length) {
+    // revokedAt: null again, so a row revoked concurrently keeps its own timestamp and audit.
+    await tx.roleAssignment.updateMany({ where: { id: { in: rows.map((r) => r.id) }, revokedAt: null }, data: { revokedAt: new Date() } });
+  }
+  return rows;
+}
+
+/**
+ * One PERMISSION_CHANGE ROLE_REVOKED row per grant revoked by a branch deletion, after commit.
+ * No branchId on the row: the branch no longer exists.
+ */
+async function auditBranchScopedRevokes(req, rows) {
+  for (const ra of rows) {
+    try {
+      await createSystemAuditLog({
+        companyId: req.user.companyId,
+        targetUserId: ra.userId,
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        performedById: req.user.id,
+        oldValue: { event: 'ROLE_REVOKED', userId: ra.userId, roleId: ra.roleId, roleLabel: ra.role?.label, scopeType: 'Branch', scopeId: ra.scopeId },
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: Audit record logging during branch deletion revoke:', auditErr.message);
+    }
+  }
+}
+
+/** R10: a field that is present must be a string, so malformed bodies get a 400, not a 500. */
+function assertStringFields(body, fields) {
+  const errors = fields
+    .filter((f) => body[f] !== undefined && body[f] !== null && typeof body[f] !== 'string')
+    .map((f) => ({ field: f, message: `${f} must be a string` }));
+  if (errors.length) throw new ValidationError('Invalid field types', errors);
+}
+
 export async function createBranch(req, res, next) {
   try {
     const body = req.body || {};
+    assertStringFields(body, ['name', 'code', 'managerUserId', 'managerId']);
     const name = (body.name || '').trim();
     const code = (body.code || '').trim() || null;
 
     validateRequired({ name }, ['name']);
-
-    await assertWithinPlanLimit(req.user.companyId, 'branches');
 
     const managerUserId = body.managerUserId || body.managerId;
     // Branch and its manager are written together, so an invalid manager leaves no orphan branch.
     // The company lock is taken before the insert: the insert's foreign-key lock on the company row
     // would otherwise deadlock with setBranchManager's lock when two creates run at once.
     const { branch, managerChange } = await withCompanyLock(req.user.companyId, async (tx) => {
+      // Counted under the company lock, so parallel creates cannot all pass the plan limit.
+      await assertWithinPlanLimit(req.user.companyId, 'branches', { client: tx });
       const created = await tx.branch.create({
         data: {
           name,
@@ -260,6 +329,7 @@ export async function updateBranch(req, res, next) {
   try {
     const { id } = req.params;
     const body = req.body || {};
+    assertStringFields(body, ['name', 'code', 'managerUserId', 'managerId']);
     const name = (body.name || '').trim();
 
     validateRequired({ name }, ['name']);
@@ -326,6 +396,7 @@ export async function deleteBranch(req, res, next) {
     if (!existing) {
       throw new NotFoundError(`Branch with ID ${id} not found in this company`);
     }
+    let revokedRows = [];
 
     const teamsCount = await prisma.team.count({
       where: { branchId: id },
@@ -377,17 +448,7 @@ export async function deleteBranch(req, res, next) {
         }
 
         // Revoke any branch manager assignments for this decommissioned branch
-        await tx.roleAssignment.updateMany({
-          where: {
-            companyId: req.user.companyId,
-            scopeType: 'Branch',
-            scopeId: id,
-            revokedAt: null,
-          },
-          data: {
-            revokedAt: new Date(),
-          },
-        });
+        revokedRows = await revokeBranchScopedAssignments(tx, req, id);
 
         // Nullify branchId on historical systemAuditLogs so deleting branch doesn't hit FK constraint
         await tx.systemAuditLog.updateMany({
@@ -400,6 +461,8 @@ export async function deleteBranch(req, res, next) {
           where: { id },
         });
       });
+
+      await auditBranchScopedRevokes(req, revokedRows);
 
       // Record audit log
       try {
@@ -423,17 +486,7 @@ export async function deleteBranch(req, res, next) {
     // teamsCount === 0: Clean decommission
     await prisma.$transaction(async (tx) => {
       // Revoke any branch manager assignments for this branch
-      await tx.roleAssignment.updateMany({
-        where: {
-          companyId: req.user.companyId,
-          scopeType: 'Branch',
-          scopeId: id,
-          revokedAt: null,
-        },
-        data: {
-          revokedAt: new Date(),
-        },
-      });
+      revokedRows = await revokeBranchScopedAssignments(tx, req, id);
 
       // Nullify branchId on historical systemAuditLogs
       await tx.systemAuditLog.updateMany({
@@ -445,6 +498,8 @@ export async function deleteBranch(req, res, next) {
         where: { id },
       });
     });
+
+    await auditBranchScopedRevokes(req, revokedRows);
 
     // Record audit log
     try {

@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from "react";
+import { useDispatch } from "react-redux";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { Badge } from "../../../shared/components/Badge";
 import { apiClient } from "../../../services/api/client";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
+import {
+  createComplianceBinding,
+  deleteComplianceBinding,
+} from "../../../store/complianceBindings";
 import {
   Plus,
   Trash2,
@@ -23,6 +28,7 @@ import {
 export function ManageRuleScopesModal({ isOpen, onClose, rule, onUpdated }) {
   const { user } = useAuth();
   const toast = useToast();
+  const dispatch = useDispatch();
 
   const [bindings, setBindings] = useState([]);
   const [loadingBindings, setLoadingBindings] = useState(true);
@@ -104,10 +110,7 @@ export function ManageRuleScopesModal({ isOpen, onClose, rule, onUpdated }) {
         scopeId: scopeType === "Company" ? user?.companyId || "" : scopeId,
       };
 
-      await apiClient("/compliance-bindings", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      await dispatch(createComplianceBinding(payload)).unwrap();
 
       toast.success(`Scope successfully attached to ${rule.name}.`);
       setScopeType("Company");
@@ -124,9 +127,7 @@ export function ManageRuleScopesModal({ isOpen, onClose, rule, onUpdated }) {
   const handleUnbind = async (bindingId, targetName) => {
     setUnbindingId(bindingId);
     try {
-      await apiClient(`/compliance-bindings/${bindingId}`, {
-        method: "DELETE",
-      });
+      await dispatch(deleteComplianceBinding(bindingId)).unwrap();
       toast.success(`Removed enforcement on ${targetName}.`);
       await fetchBindings();
       if (onUpdated) onUpdated();

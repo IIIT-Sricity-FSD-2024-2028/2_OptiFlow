@@ -27,12 +27,34 @@ import {
   RefreshCw,
   Ban,
 } from "lucide-react";
+
+// D2: offer only roles the signed-in user may grant. Same order as the backend's GRANT_RANK
+// (back-end-new/src/utils/roleAssignmentGuards.js); the backend still enforces the rule.
+const GRANT_RANK = ["system_admin", "company_owner", "branch_manager", "hr_manager", "process_admin", "compliance_officer", "project_manager", "team_leader", "team_member"];
+const TEMPLATE_SLUG = { access_governance: "hr_manager", team_lead: "team_leader" };
+const grantableRoles = (roles, callerRole) => {
+  if (["company_owner", "system_admin"].includes(callerRole)) return roles;
+  const callerIndex = GRANT_RANK.includes(callerRole) ? GRANT_RANK.indexOf(callerRole) : GRANT_RANK.length;
+  return roles.filter((r) => {
+    if (r.isSystem !== true) return true;
+    const raw = r.roleTemplate?.slug || r.name;
+    const index = GRANT_RANK.indexOf(TEMPLATE_SLUG[raw] || raw);
+    return index !== -1 && index >= callerIndex;
+  });
+};
 import {
   resolveFunctionalTitle,
   ROLE_LEVEL_LABELS,
 } from "../components/orgTreeUtils";
 
 const PAGE_SIZE = 10;
+
+// Role pickers hold the role id; this decides whether the branch picker is needed.
+const isBranchManagerRole = (role) =>
+  Boolean(role) &&
+  // Same rule as the backend's systemSlugOfRole: system roles only, by template slug then name.
+  // A label can be anything (R17), so it must not decide this.
+  role.isSystem === true && (role.roleTemplate?.slug || role.name) === "branch_manager";
 
 /**
  * HrUsers (Users & Access Hub)
@@ -62,6 +84,8 @@ export default function HrUsers() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Secondary lists that failed to load; the page still renders but says so.
+  const [partialFailures, setPartialFailures] = useState([]);
 
   // Filters & Search & Pagination
   const [searchQuery, setSearchQuery] = useState("");
@@ -110,31 +134,29 @@ export default function HrUsers() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
+    const failed = [];
+    const secondary = (path, name) =>
+      apiClient(path).catch((err) => {
+        console.warn(`[HrUsers] Failed to fetch ${name}:`, err.message);
+        failed.push(name);
+        return [];
+      });
 
     try {
+      // Users are the page's main data: a failure there shows the error banner with Retry.
       const [usersData, rolesData, branchesData, assignmentsData] = await Promise.all([
-        apiClient("/users").catch((err) => {
-          console.warn("[HrUsers] Failed to fetch users:", err.message);
-          return [];
-        }),
-        apiClient("/roles").catch((err) => {
-          console.warn("[HrUsers] Failed to fetch roles:", err.message);
-          return [];
-        }),
-        apiClient("/branches").catch((err) => {
-          console.warn("[HrUsers] Failed to fetch branches:", err.message);
-          return [];
-        }),
-        apiClient("/role-assignments").catch((err) => {
-          console.warn("[HrUsers] Failed to fetch role assignments:", err.message);
-          return [];
-        }),
+        apiClient("/users"),
+        secondary("/roles", "Roles"),
+        secondary("/branches", "Branches"),
+        secondary("/role-assignments", "Role assignments"),
       ]);
 
       setUsers(Array.isArray(usersData) ? usersData : []);
       setRoles(Array.isArray(rolesData) ? rolesData : []);
       setBranches(Array.isArray(branchesData) ? branchesData : []);
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+      setPartialFailures(failed);
     } catch (err) {
       console.error("[HrUsers] Hydration failure:", err);
       setError(err.message || "Failed to load directory telemetry from server.");
@@ -242,6 +264,7 @@ export default function HrUsers() {
   // Create User
   const handleCreateUser = async (e) => {
     e.preventDefault();
+    if (isSubmittingUser) return;
     const trimmedName = fullName.trim();
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
@@ -256,10 +279,8 @@ export default function HrUsers() {
       return;
     }
 
-    if (
-      (selectedRole === "Branch Manager" || selectedRole?.toLowerCase().includes("branch")) &&
-      !selectedBranchId
-    ) {
+    const selectedRoleObj = roles.find((r) => r.id === selectedRole);
+    if (isBranchManagerRole(selectedRoleObj) && !selectedBranchId) {
       setFormError("Please select an assigned regional branch for the Branch Manager.");
       return;
     }
@@ -276,8 +297,8 @@ export default function HrUsers() {
           password: trimmedPassword,
           jobTitle: jobTitle.trim() || undefined,
           managerUserId: managerUserId || undefined,
-          role: selectedRole || undefined,
-          branchId: selectedBranchId || undefined,
+          roleId: selectedRole || undefined,
+          branchId: isBranchManagerRole(selectedRoleObj) ? selectedBranchId || undefined : undefined,
         },
       });
 
@@ -301,7 +322,7 @@ export default function HrUsers() {
 
   // Toggle Deactivate User
   const handleToggleDeactivate = async () => {
-    if (!deactivateTarget) return;
+    if (!deactivateTarget || isDeactivating) return;
 
     setIsDeactivating(true);
     const willDeactivate = deactivateTarget.isActive !== false;
@@ -336,6 +357,7 @@ export default function HrUsers() {
   // Assign Role
   const handleAssignRole = async (e) => {
     e.preventDefault();
+    if (isAssigning) return;
     if (!assignUserId) {
       setAssignError("Please select an employee.");
       return;
@@ -383,7 +405,7 @@ export default function HrUsers() {
 
   // Revoke Role
   const handleRevokeRole = async () => {
-    if (!revokeTarget) return;
+    if (!revokeTarget || isRevoking) return;
 
     setIsRevoking(true);
     try {
@@ -419,7 +441,7 @@ export default function HrUsers() {
           >
             {row.fullName}
           </Link>
-          <span className="text-[11.5px] text-slate-400 font-mono block mt-0.5 whitespace-nowrap">{row.email}</span>
+          <span className="text-[11.5px] text-slate-500 font-mono block mt-0.5 whitespace-nowrap">{row.email}</span>
         </div>
       ),
     },
@@ -427,7 +449,7 @@ export default function HrUsers() {
       header: "Job Title",
       className: "w-[15%]",
       render: (row) => {
-        const roleSlug = row.roleAssignments?.[0]?.role?.name || row.role || "team_member";
+        const roleSlug = row.role || row.roleAssignments?.[0]?.role?.name || "team_member";
         const teamName = row.teamMembers?.[0]?.team?.name || null;
         const resolvedTitle = resolveFunctionalTitle(row, roleSlug, teamName);
 
@@ -442,10 +464,12 @@ export default function HrUsers() {
       header: "Primary Role",
       className: "w-[13%]",
       render: (row) => {
+        // The API resolves role (slug) and roleLabel; roleAssignments[0] is only a fallback.
         const primaryRole = row.roleAssignments?.[0]?.role;
-        const rawRole = primaryRole?.name || row.role || "team_member";
+        const rawRole = row.role || primaryRole?.name || "team_member";
         const roleSlug = rawRole.toLowerCase().replace(/[\s-]+/g, "_");
-        const roleLabel = primaryRole?.label || ROLE_LEVEL_LABELS[roleSlug] || "Team Member";
+        const roleLabel =
+          (row.role ? row.roleLabel : primaryRole?.label) || ROLE_LEVEL_LABELS[roleSlug] || "Team Member";
         const isElevated = ["company_owner", "system_admin", "superuser", "access_governance", "hr_manager"].includes(roleSlug);
 
         return (
@@ -483,7 +507,7 @@ export default function HrUsers() {
         return (
           <Link
             to={`${PATHS.HR.TEAMS}?view=table`}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-500 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
             title="Click to assign employee to a delivery squad"
           >
             + Assign Squad
@@ -514,7 +538,7 @@ export default function HrUsers() {
         return (
           <Link
             to={PATHS.HR.BRANCHES}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium border border-dashed border-slate-300 text-slate-500 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap"
             title="Click to assign employee to an office branch"
           >
             + Assign Branch
@@ -527,7 +551,7 @@ export default function HrUsers() {
       className: "w-[13%]",
       render: (row) => {
         if (!row.manager && !row.managerUserId) {
-          return <span className="text-xs text-slate-400 italic whitespace-nowrap">Executive / Direct</span>;
+          return <span className="text-xs text-slate-500 italic whitespace-nowrap">Executive / Direct</span>;
         }
         return (
           <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
@@ -610,7 +634,7 @@ export default function HrUsers() {
           >
             {row.user?.fullName || "Unknown User"}
           </Link>
-          <span className="text-[11.5px] text-slate-400 font-mono block mt-0.5 whitespace-nowrap">{row.user?.email}</span>
+          <span className="text-[11.5px] text-slate-500 font-mono block mt-0.5 whitespace-nowrap">{row.user?.email}</span>
         </div>
       ),
     },
@@ -739,7 +763,7 @@ export default function HrUsers() {
                   setPassword("");
                   setJobTitle("");
                   setManagerUserId("");
-                  setSelectedRole(roles[0]?.label || "");
+                  setSelectedRole("");
                   setFormError("");
                   setIsCreateModalOpen(true);
                 }}
@@ -753,7 +777,7 @@ export default function HrUsers() {
                 size="sm"
                 onClick={() => {
                   setAssignUserId(users[0]?.id || "");
-                  setAssignRoleId(roles[0]?.id || "");
+                  setAssignRoleId("");
                   setAssignScopeType("Company");
                   setAssignBranchId(branches[0]?.id || "");
                   setAssignError("");
@@ -775,6 +799,12 @@ export default function HrUsers() {
           <Button variant="secondary" size="sm" onClick={fetchData}>
             Retry
           </Button>
+        </div>
+      )}
+
+      {!error && partialFailures.length > 0 && (
+        <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          {partialFailures.join(", ")} could not be loaded; related lists and pickers may be empty.
         </div>
       )}
 
@@ -839,6 +869,7 @@ export default function HrUsers() {
           <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="w-full md:w-80">
               <Input
+                aria-label="Search employees"
                 placeholder="Search by name, email, or title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -847,10 +878,11 @@ export default function HrUsers() {
 
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500 uppercase">
+                <label htmlFor="users-role-filter" className="text-xs font-semibold text-slate-600 uppercase">
                   Role:
-                </span>
+                </label>
                 <select
+                  id="users-role-filter"
                   className="px-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
@@ -865,10 +897,11 @@ export default function HrUsers() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500 uppercase">
+                <label htmlFor="users-status-filter" className="text-xs font-semibold text-slate-600 uppercase">
                   Status:
-                </span>
+                </label>
                 <select
+                  id="users-status-filter"
                   className="px-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -943,6 +976,7 @@ export default function HrUsers() {
           <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="w-full md:w-80">
               <Input
+                aria-label="Search role bindings"
                 placeholder="Search by user or role..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -951,10 +985,11 @@ export default function HrUsers() {
 
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500 uppercase">
+                <label htmlFor="assignments-role-filter" className="text-xs font-semibold text-slate-600 uppercase">
                   Role:
-                </span>
+                </label>
                 <select
+                  id="assignments-role-filter"
                   className="px-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
@@ -969,10 +1004,11 @@ export default function HrUsers() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500 uppercase">
+                <label htmlFor="assignments-scope-filter" className="text-xs font-semibold text-slate-600 uppercase">
                   Scope:
-                </span>
+                </label>
                 <select
+                  id="assignments-scope-filter"
                   className="px-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
                   value={scopeFilter}
                   onChange={(e) => setScopeFilter(e.target.value)}
@@ -1031,6 +1067,7 @@ export default function HrUsers() {
 
           <FormField label="Full Name" required>
             <Input
+              aria-label="Full Name"
               placeholder="e.g. Sarah Jenkins"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -1040,6 +1077,7 @@ export default function HrUsers() {
 
           <FormField label="Email Address" required>
             <Input
+              aria-label="Email Address"
               type="email"
               placeholder="sarah.jenkins@company.com"
               value={email}
@@ -1050,6 +1088,7 @@ export default function HrUsers() {
 
           <FormField label="Temporary Password" required hint="Minimum 8 characters">
             <Input
+              aria-label="Temporary Password"
               type="password"
               placeholder="••••••••"
               value={password}
@@ -1060,6 +1099,7 @@ export default function HrUsers() {
 
           <FormField label="Corporate Job Title">
             <Input
+              aria-label="Corporate Job Title"
               placeholder="e.g. Senior Backend Engineer"
               value={jobTitle}
               onChange={(e) => setJobTitle(e.target.value)}
@@ -1068,13 +1108,14 @@ export default function HrUsers() {
 
           <FormField label="Reporting Manager">
             <Select
+              aria-label="Reporting Manager"
               value={managerUserId}
               onChange={(e) => setManagerUserId(e.target.value)}
             >
               <option value="">No Manager (Executive / Direct to Board)</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.fullName} ({u.jobTitle || u.role || "Member"})
+                  {u.fullName} ({u.jobTitle || u.roleLabel || "Member"})
                 </option>
               ))}
             </Select>
@@ -1082,21 +1123,23 @@ export default function HrUsers() {
 
           <FormField label="Primary Role">
             <Select
+              aria-label="Primary Role"
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
             >
               <option value="">Default Member Role</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.label}>
+              {grantableRoles(roles, currentUser?.role).map((r) => (
+                <option key={r.id} value={r.id}>
                   {r.label}
                 </option>
               ))}
             </Select>
           </FormField>
 
-          {(selectedRole === "Branch Manager" || selectedRole?.toLowerCase().includes("branch")) && (
+          {isBranchManagerRole(roles.find((r) => r.id === selectedRole)) && (
             <FormField label="Assigned Branch Hub" required>
               <Select
+                aria-label="Assigned Branch Hub"
                 value={selectedBranchId}
                 onChange={(e) => setSelectedBranchId(e.target.value)}
                 required
@@ -1122,9 +1165,9 @@ export default function HrUsers() {
             <Button
               type="submit"
               variant="primary"
-              loading={isSubmittingUser}
+              disabled={isSubmittingUser}
             >
-              Onboard Employee
+              {isSubmittingUser ? "Onboarding..." : "Onboard Employee"}
             </Button>
           </div>
         </form>
@@ -1143,7 +1186,7 @@ export default function HrUsers() {
             ? `Are you sure you want to suspend active access for ${deactivateTarget?.fullName}? They will be unable to log in until reactivated.`
             : `Reactivating ${deactivateTarget?.fullName} will restore their access privileges immediately.`
         }
-        confirmLabel={
+        confirmText={
           deactivateTarget?.isActive !== false ? "Deactivate Account" : "Reactivate Account"
         }
         variant={deactivateTarget?.isActive !== false ? "danger" : "primary"}
@@ -1169,6 +1212,7 @@ export default function HrUsers() {
 
           <FormField label="Employee" required>
             <Select
+              aria-label="Employee"
               value={assignUserId}
               onChange={(e) => setAssignUserId(e.target.value)}
               required
@@ -1184,12 +1228,13 @@ export default function HrUsers() {
 
           <FormField label="Role to Assign" required>
             <Select
+              aria-label="Role to Assign"
               value={assignRoleId}
               onChange={(e) => setAssignRoleId(e.target.value)}
               required
             >
               <option value="">Select Role...</option>
-              {roles.map((r) => (
+              {grantableRoles(roles, currentUser?.role).map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label}
                 </option>
@@ -1199,6 +1244,7 @@ export default function HrUsers() {
 
           <FormField label="Governance Scope" required>
             <Select
+              aria-label="Governance Scope"
               value={assignScopeType}
               onChange={(e) => setAssignScopeType(e.target.value)}
             >
@@ -1210,6 +1256,7 @@ export default function HrUsers() {
           {assignScopeType === "Branch" && (
             <FormField label="Designated Branch" required>
               <Select
+                aria-label="Designated Branch"
                 value={assignBranchId}
                 onChange={(e) => setAssignBranchId(e.target.value)}
                 required
@@ -1235,9 +1282,9 @@ export default function HrUsers() {
             <Button
               type="submit"
               variant="primary"
-              loading={isAssigning}
+              disabled={isAssigning}
             >
-              Grant Role
+              {isAssigning ? "Granting..." : "Grant Role"}
             </Button>
           </div>
         </form>
@@ -1248,7 +1295,7 @@ export default function HrUsers() {
         isOpen={Boolean(revokeTarget)}
         title={`Revoke Role: ${revokeTarget?.role?.label || "Role"}?`}
         message={`Are you sure you want to revoke the "${revokeTarget?.role?.label || "Role"}" role from ${revokeTarget?.user?.fullName || "this user"}? They will lose permissions associated with this role.`}
-        confirmLabel="Revoke Permission"
+        confirmText="Revoke Permission"
         variant="danger"
         loading={isRevoking}
         onConfirm={handleRevokeRole}

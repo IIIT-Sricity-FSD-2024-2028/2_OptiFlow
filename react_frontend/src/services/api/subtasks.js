@@ -1,7 +1,9 @@
 import { apiClient } from './client';
 
-export const list = () => apiClient('/api/subtasks');
-export const get = (id) => apiClient(`/api/subtasks/${id}`);
-export const create = (data) => apiClient('/api/subtasks', { body: data });
-export const update = (id, data) => apiClient(`/api/subtasks/${id}`, { method: 'PATCH', body: data });
-export const remove = (id) => apiClient(`/api/subtasks/${id}`, { method: 'DELETE' });
+// `opts` passes request options (signal, abortKey) from the Redux thunks.
+export const list = (opts = {}) => apiClient('/api/subtasks', opts);
+export const get = (id, opts = {}) => apiClient(`/api/subtasks/${id}`, opts);
+export const create = (data, opts = {}) => apiClient('/api/subtasks', { ...opts, body: data });
+export const update = (id, data, opts = {}) => apiClient(`/api/subtasks/${id}`, { ...opts, method: 'PATCH', body: data });
+export const remove = (id, opts = {}) => apiClient(`/api/subtasks/${id}`, { ...opts, method: 'DELETE' });
+export const listByTask = (taskId, opts = {}) => apiClient(`/api/subtasks/by-task/${taskId}`, opts);

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { useDispatch } from "react-redux";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
-import { apiClient } from "../../../services/api/client";
 import { useToast } from "../../../shared/components/Toast";
 import { openEvidenceFile } from "../../../shared/utils/evidenceFile";
+import { reviewEvidence } from "../../../store/evidence";
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 
 export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
+  const dispatch = useDispatch();
   const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [decision, setDecision] = useState("approve"); // "approve" | "reject"
@@ -37,15 +39,17 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
     if (!evidence) return;
     setIsSubmitting(true);
     try {
-      await apiClient(`/evidence/${evidence.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "Approved" }),
-      });
+      await dispatch(
+        reviewEvidence({
+          id: evidence.id,
+          status: "Approved",
+        })
+      ).unwrap();
       toast.success("Evidence validated & violation auto-resolved!");
       if (onReviewed) onReviewed();
       handleClose();
     } catch (err) {
-      toast.error("Failed to approve: " + err.message);
+      toast.error("Failed to approve: " + (err.message || err));
     } finally {
       setIsSubmitting(false);
     }
@@ -60,18 +64,18 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
     }
     setIsSubmitting(true);
     try {
-      await apiClient(`/evidence/${evidence.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
+      await dispatch(
+        reviewEvidence({
+          id: evidence.id,
           status: "Rejected",
           rejectionReason: trimmed,
-        }),
-      });
+        })
+      ).unwrap();
       toast.success("Feedback sent to team member. Deliverable flagged for revision.");
       if (onReviewed) onReviewed();
       handleClose();
     } catch (err) {
-      toast.error("Failed to send rejection: " + err.message);
+      toast.error("Failed to send rejection: " + (err.message || err));
     } finally {
       setIsSubmitting(false);
     }

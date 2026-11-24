@@ -5,6 +5,7 @@ import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Toast } from '../../../../shared/components/Toast';
 import { TaskDetailPanel, SubtaskList, EvidenceUploadCard } from '../../components';
+import { minExtensionDateInput } from '../../components/dateLimits';
 import {
   SubmitToPmModal,
   ReportBlockerModal,
@@ -14,11 +15,13 @@ import {
 import { BLOCKER_TYPES } from '../components/taskOptions';
 import { UploadEvidenceModal } from '../../member/components/modals/UploadEvidenceModal';
 import { useAuth } from '../../../../context/AuthContext';
-import * as tasksApi from '../../../../services/api/tasks';
-import * as subtasksApi from '../../../../services/api/subtasks';
-import * as escalationsApi from '../../../../services/api/escalations';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchTaskById, selectTaskById, updateTask } from '../../../../store/tasks';
+import { createSubtask, updateSubtask } from '../../../../store/subtasks';
+import { createEscalation } from '../../../../store/escalations';
+import { fetchProjectById } from '../../../../store/projects';
+// Foreign resources (M5 users, M1 evidence and compliance) keep their own fetch until those slices merge.
 import * as usersApi from '../../../../services/api/users';
-import * as projectsApi from '../../../../services/api/projects';
 import * as evidenceApi from '../../../../services/api/evidence';
 import * as complianceApi from '../../../../services/api/compliance';
 const STAGES = ['Data Collection', 'Work In Progress', 'Team Leader Review', 'Compliance Audit'];
@@ -33,15 +36,17 @@ const toStr = (val, fb = '—') => {
 export default function TeamLeadTaskDetail() {
   const { id: taskId } = useParams();
   const { user } = useAuth();
-  const [task, setTask] = useState(null);
+  const dispatch = useDispatch();
+  const task = useSelector((state) => selectTaskById(state, taskId)) || null;
   const [compliance, setCompliance] = useState({ hasRules: false, evidenceBlocked: false });
   const [complianceReload, setComplianceReload] = useState(0);
   const [taskEvidence, setTaskEvidence] = useState([]);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
-  const [subtasks, setSubtasks] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  // Subtasks live in the task row; the tasks slice keeps them in step with subtask changes.
+  const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
 
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitNotes, setSubmitNotes] = useState('');
@@ -75,17 +80,19 @@ export default function TeamLeadTaskDetail() {
   useEffect(() => {
     if (!taskId) return;
     let active = true;
-    Promise.all([tasksApi.get(taskId).catch(() => null), usersApi.list().catch(() => [])])
-      .then(async ([taskRes, membersRes]) => {
+    Promise.all([
+      dispatch(fetchTaskById(taskId)).unwrap().catch(() => null),
+      usersApi.list().catch(() => []),
+    ])
+      .then(async ([t, membersRes]) => {
         if (!active) return;
-        const t = taskRes?.data || taskRes;
         if (!t) { setNotFound(true); return; }
-        setTask(t);
-        setSubtasks(Array.isArray(t.subtasks) ? t.subtasks : []);
         const membersData = Array.isArray(membersRes) ? membersRes : membersRes?.data || [];
         // Assignable: direct reports plus members of the project's team.
         const projectId = t.projectId || t.project?.id;
-        const projectRes = projectId ? await projectsApi.get(projectId).catch(() => null) : null;
+        const projectRes = projectId
+          ? await dispatch(fetchProjectById(projectId)).unwrap().catch(() => null)
+          : null;
         if (!active) return;
         const teamUserIds = new Set(
           (projectRes?.team?.teamMembers || []).map((m) => String(m.userId || m.user?.id))
@@ -98,7 +105,7 @@ export default function TeamLeadTaskDetail() {
       .catch(() => active && showToast('error', 'Failed to load task.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [taskId, user.id]);
+  }, [dispatch, taskId, user.id]);
 
   // Compliance state comes from the server: open violations recorded for this
   // task (the backend decides what blocks a transition).
@@ -173,11 +180,10 @@ export default function TeamLeadTaskDetail() {
       }
 
       // Handover notes go to the PM with the review notification (and the audit log).
-      const updated = await tasksApi.update(taskId, {
-        status: 'In_Review',
-        submissionNote: submitNotes.trim() || undefined,
-      });
-      setTask((prev) => ({ ...prev, ...(updated?.data || updated) }));
+      await dispatch(updateTask({
+        id: taskId,
+        data: { status: 'In_Review', submissionNote: submitNotes.trim() || undefined },
+      })).unwrap();
       setComplianceReload((n) => n + 1);
       showToast('success', 'Work and deliverables submitted to Project Manager for review!');
       setSubmitOpen(false);
@@ -195,13 +201,13 @@ export default function TeamLeadTaskDetail() {
   const handleReportBlocker = async () => {
     if (!blockerDesc.trim()) return showToast('error', 'Please describe the blocker.');
     try {
-      await escalationsApi.create({
+      await dispatch(createEscalation({
         taskId,
         title: `Blocker: ${blockerType}`,
         blockerType,
         description: blockerDesc.trim(),
         priority: 'High',
-      });
+      })).unwrap();
       showToast('success', 'Blocker reported and escalated to Project Manager.');
       setBlockerOpen(false);
       setBlockerDesc('');
@@ -212,14 +218,20 @@ export default function TeamLeadTaskDetail() {
 
   const handleExtension = async () => {
     if (!extDate || !extReason.trim()) return showToast('error', 'Please fill all fields.');
+    const minDate = minExtensionDateInput(task?.dueDate || task?.deadline);
+    if (minDate && extDate < minDate) {
+      return showToast('error', `Proposed deadline must be on or after ${minDate} (later than the current deadline).`);
+    }
     try {
-      await escalationsApi.create({
+      await dispatch(createEscalation({
         taskId,
+        projectId: task?.projectId,
+        targetManagerId: task?.project?.createdById || task?.createdById,
         title: `Extension request: ${task.title}`,
         blockerType: 'Extension Request',
         description: `Requested deadline: ${extDate}\nReason: ${extReason.trim()}`,
         priority: 'Medium',
-      });
+      })).unwrap();
       showToast('success', 'Extension request submitted.');
       setExtensionOpen(false);
       setExtDate('');
@@ -237,19 +249,16 @@ export default function TeamLeadTaskDetail() {
     }
     setSavingSt(true);
     try {
-      const assignedMember = members.find(m => String(m.id || m.userId) === String(stForm.assignee));
-      const res = await subtasksApi.create({
+      const created = await dispatch(createSubtask({
         taskId: taskId,
         title: stForm.title.trim(),
         assignedToId: stForm.assignee || undefined,
         dueDate: stForm.due || undefined,
         status: 'Active'
-      });
-      const created = res?.data || res;
+      })).unwrap();
       if (!created?.id) throw new Error('Subtask was not saved. Please reload and try again.');
-      const assigneeName = assignedMember?.fullName || assignedMember?.name ||
-        (String(stForm.assignee) === String(user.id) ? user.fullName : undefined);
-      setSubtasks(prev => [...prev, { ...created, assignedToName: assigneeName }]);
+      // Reload the task so the new subtask comes back with its assignee details.
+      dispatch(fetchTaskById(taskId));
       showToast('success', 'Subtask created.');
       setSubtaskOpen(false); setSubtaskError(''); setStForm({ title: '', assignee: '', due: '' });
     } catch (error) {
@@ -266,11 +275,7 @@ export default function TeamLeadTaskDetail() {
     if (assignedId && String(assignedId) !== String(user.id)) return; // only TL's own subtasks
     const newStatus = markComplete ? 'Completed' : 'Active';
     try {
-      const res = await subtasksApi.update(subtaskId, { status: newStatus });
-      const saved = res?.data || res;
-      setSubtasks((prev) =>
-        prev.map((st) => (sameId(st) ? { ...st, ...saved } : st))
-      );
+      await dispatch(updateSubtask({ id: subtaskId, data: { status: newStatus } })).unwrap();
       showToast('success', markComplete ? 'Subtask marked complete.' : 'Subtask reopened.');
     } catch (err) {
       showToast('error', err.message || 'Failed to update subtask.');
@@ -449,6 +454,7 @@ export default function TeamLeadTaskDetail() {
         onDateChange={setExtDate}
         reason={extReason}
         onReasonChange={setExtReason}
+        currentDeadline={task?.dueDate || task?.deadline}
       />
 
       <CreateSubtaskModal

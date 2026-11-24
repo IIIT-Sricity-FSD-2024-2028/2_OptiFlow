@@ -16,8 +16,16 @@ import {
   Search,
   RotateCcw,
 } from 'lucide-react';
-import * as projectsApi from '../../../../services/api/projects';
-import * as tasksApi from '../../../../services/api/tasks';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchProjects, selectAllProjects, selectProjectsError, selectProjectsLoading } from '../../../../store/projects';
+import {
+  createTask,
+  fetchTasks,
+  selectAllTasks,
+  selectTasksError,
+  selectTasksLoading,
+} from '../../../../store/tasks';
+// Foreign resources (M1 compliance, M5 users) keep their own fetch until those slices merge.
 import * as complianceApi from '../../../../services/api/compliance';
 import * as usersApi from '../../../../services/api/users';
 import { CreateTaskForm } from '../components/CreateTaskForm';
@@ -31,13 +39,19 @@ export default function PmTasks() {
   const activeFilter = searchParams.get('filter') || 'all';
   const selectedProjectParam = searchParams.get('projectId') || 'all';
 
-  const [tasks, setTasks] = useState([]);
+  const dispatch = useDispatch();
+  const tasks = useSelector(selectAllTasks);
+  const projects = useSelector(selectAllProjects);
+  const tasksLoading = useSelector(selectTasksLoading);
+  const projectsLoading = useSelector(selectProjectsLoading);
+  const tasksError = useSelector(selectTasksError);
+  const projectsError = useSelector(selectProjectsError);
   const [currentPage, setCurrentPage] = useState(1);
-  const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const loading = tasksLoading || projectsLoading || usersLoading;
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [actionError, setError] = useState('');
   const [complianceError, setComplianceError] = useState('');
   const [complianceBlockedIds, setComplianceBlockedIds] = useState(new Set());
   
@@ -58,25 +72,15 @@ export default function PmTasks() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      tasksApi.list(),
-      projectsApi.list(),
-      usersApi.list().catch(() => []),
-    ])
-      .then(([taskResponse, projectResponse, userResponse]) => {
-        if (!active) return;
-        setTasks(normalize(taskResponse).map((task) => ({
-          ...task,
-          assigneeName: task.assignedTo?.fullName || task.assignedTo?.email,
-        })));
-        setProjects(normalize(projectResponse));
-        setUsers(normalize(userResponse));
-      })
-      .catch((loadError) => {
-        if (active) setError(loadError.message || 'Failed to load task data.');
+    dispatch(fetchTasks());
+    dispatch(fetchProjects());
+    usersApi.list()
+      .catch(() => [])
+      .then((userResponse) => {
+        if (active) setUsers(normalize(userResponse));
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setUsersLoading(false);
       });
     complianceApi.getViolations()
       .then((response) => {
@@ -90,7 +94,10 @@ export default function PmTasks() {
         if (active) setComplianceError(loadError.message || 'Failed to load compliance status.');
       });
     return () => { active = false; };
-  }, []);
+  }, [dispatch]);
+
+  const loadError = tasksError || projectsError;
+  const loadErrorMessage = loadError ? loadError.message || 'Failed to load task data.' : '';
 
   const selectedProjectForForm = useMemo(() => {
     if (!form.projectId) return null;
@@ -163,7 +170,7 @@ export default function PmTasks() {
 
     setSaving(true);
     try {
-      const response = await tasksApi.create({
+      await dispatch(createTask({
         title: form.title.trim(),
         description: form.description?.trim() || undefined,
         projectId: form.projectId,
@@ -172,12 +179,7 @@ export default function PmTasks() {
         estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : undefined,
         priority: form.priority,
         status: 'Active',
-      });
-      const createdTask = response?.data || response;
-      setTasks((current) => [{
-        ...createdTask,
-        assigneeName: createdTask.assignedTo?.fullName || createdTask.assignedTo?.email,
-      }, ...current]);
+      })).unwrap();
       setForm({
         title: '',
         description: '',
@@ -262,7 +264,7 @@ export default function PmTasks() {
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const matchesTitle = String(task.title || '').toLowerCase().includes(query);
-        const matchesAssignee = String(task.assigneeName || '').toLowerCase().includes(query);
+        const matchesAssignee = String(task.assignedTo?.fullName || task.assignedTo?.email || '').toLowerCase().includes(query);
         if (!matchesTitle && !matchesAssignee) return false;
       }
 
@@ -318,6 +320,12 @@ export default function PmTasks() {
         </button>
       </div>
 
+      {loadErrorMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+          {loadErrorMessage}
+        </div>
+      )}
+
       {/* Enterprise Create Task Modal / Card */}
       {showAssignForm && (
         <CreateTaskForm
@@ -326,7 +334,7 @@ export default function PmTasks() {
             setError('');
           }}
           onSubmit={submitTask}
-          error={error}
+          error={actionError}
           saving={saving}
           form={form}
           onFormChange={setForm}

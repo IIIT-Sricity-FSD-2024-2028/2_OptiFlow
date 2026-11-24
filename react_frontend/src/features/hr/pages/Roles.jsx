@@ -51,7 +51,7 @@ const PERMISSION_DOMAINS = {
 };
 
 const AVATAR_PALETTE = [
-  "#2563eb", "#0f172a", "#059669", "#7c3aed", "#0891b2", "#d97706", "#475569", "#dc2626"
+  "#2563eb", "#0f172a", "#047857", "#7c3aed", "#0e7490", "#b45309", "#475569", "#dc2626"
 ];
 
 function getAvatarColor(str = "") {
@@ -74,6 +74,8 @@ export default function HrRoles() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Secondary lists that failed to load; the page still renders but says so.
+  const [partialFailures, setPartialFailures] = useState([]);
 
   // Selected Role & Permissions Workspace
   const [selectedRoleId, setSelectedRoleId] = useState(null);
@@ -120,14 +122,23 @@ export default function HrRoles() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
+    const failed = [];
+    const secondary = (path, name) =>
+      apiClient(path).catch((err) => {
+        console.warn(`[HrRoles] Failed to fetch ${name}:`, err.message);
+        failed.push(name);
+        return [];
+      });
 
     try {
       const [rolesData, assignmentsData, usersData, branchesData] = await Promise.all([
         apiClient("/roles"),
-        apiClient("/role-assignments").catch(() => []),
-        apiClient("/users").catch(() => []),
-        apiClient("/branches").catch(() => []),
+        secondary("/role-assignments", "Role assignments"),
+        secondary("/users", "Users"),
+        secondary("/branches", "Branches"),
       ]);
+      setPartialFailures(failed);
 
       const loadedRoles = Array.isArray(rolesData) ? rolesData : [];
       setRoles(loadedRoles);
@@ -426,6 +437,12 @@ export default function HrRoles() {
         </div>
       )}
 
+      {!error && partialFailures.length > 0 && (
+        <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          {partialFailures.join(", ")} could not be loaded; related lists and pickers may be empty.
+        </div>
+      )}
+
       {/* 3-PANEL STUDIO CONTAINER */}
       <div className={styles.studioContainer}>
         {/* ── PANEL 1: ROLES DIRECTORY (LEFT) ── */}
@@ -441,6 +458,7 @@ export default function HrRoles() {
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
+                aria-label="Search roles"
                 type="text"
                 placeholder="Search roles..."
                 value={roleSearch}
@@ -450,7 +468,12 @@ export default function HrRoles() {
             </div>
           </div>
 
-          <div className={styles.leftListBody}>
+          <div
+            className={styles.leftListBody}
+            tabIndex={0}
+            role="region"
+            aria-label="Roles list"
+          >
             {filteredRoles.map((role) => {
               const isActive = role.id === selectedRoleId;
               const empCount = assignments.filter((a) => a.roleId === role.id).length;
@@ -467,7 +490,9 @@ export default function HrRoles() {
                     <div className="flex items-center gap-1.5">
                       <span className={styles.roleItemTitle}>{role.label}</span>
                     </div>
-                    <div className={styles.roleItemDesc}>
+                    <div
+                      className={`${styles.roleItemDesc} ${isActive ? "text-slate-600!" : ""}`}
+                    >
                       {role.isSystem ? "System Baseline" : "Custom Corporate"}
                     </div>
                   </div>
@@ -550,12 +575,17 @@ export default function HrRoles() {
               )}
 
               {/* Permissions Matrix */}
-              <div className={styles.centerBody}>
+              <div
+                className={styles.centerBody}
+                tabIndex={0}
+                role="region"
+                aria-label="Permission matrix"
+              >
                 {Object.entries(PERMISSION_DOMAINS).map(([domain, perms]) => (
                   <div key={domain} className={styles.permDomainCard}>
                     <div className={styles.permDomainHeader}>
                       <span>{domain}</span>
-                      <span className="text-[11px] font-semibold text-slate-400 font-mono">
+                      <span className="text-[11px] font-semibold text-slate-500 font-mono">
                         {perms.filter((p) => activePermissions.has(p.slug)).length} /{" "}
                         {perms.length} Enabled
                       </span>
@@ -620,7 +650,7 @@ export default function HrRoles() {
               )}
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center p-8 text-center text-slate-400">
+            <div className="flex-1 flex items-center justify-center p-8 text-center text-slate-500">
               Select a role from the left catalog to inspect permissions.
             </div>
           )}
@@ -639,6 +669,7 @@ export default function HrRoles() {
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
+                aria-label="Filter staff"
                 type="text"
                 placeholder="Filter staff..."
                 value={empSearch}
@@ -666,7 +697,7 @@ export default function HrRoles() {
 
           <div className={styles.rightBody}>
             {filteredRoleEmployees.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400 px-4">
+              <div className="py-12 text-center text-xs text-slate-500 px-4">
                 <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 No employees currently assigned to this role.
               </div>
@@ -728,6 +759,7 @@ export default function HrRoles() {
 
           <FormField label="Role Label" required>
             <Input
+              aria-label="Role Label"
               placeholder="e.g. Lead QA Specialist, Regional Pod Lead"
               value={newRoleLabel}
               onChange={(e) => setNewRoleLabel(e.target.value)}
@@ -738,6 +770,7 @@ export default function HrRoles() {
 
           <FormField label="Role Description">
             <Textarea
+              aria-label="Role Description"
               rows={2}
               placeholder="Describe the operational responsibilities and authority boundary..."
               value={newRoleDesc}
@@ -777,7 +810,7 @@ export default function HrRoles() {
 
           <FormField label="Select Employee" required>
             <Select
-              aria-label="Select employee"
+              aria-label="Select Employee"
               value={assignUserId}
               onChange={(e) => setAssignUserId(e.target.value)}
               disabled={isAssigning}

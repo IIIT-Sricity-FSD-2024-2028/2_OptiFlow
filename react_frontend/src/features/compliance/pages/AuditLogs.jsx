@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchAuditLogs,
+  selectAllAuditLogs,
+  selectAuditLogsStatus,
+} from "../../../store/auditLogs";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
@@ -12,26 +17,18 @@ import { GenerateReportModal } from "../components/GenerateReportModal";
 const PAGE_SIZE = 10;
 
 export default function ComplianceAuditLogs() {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const logs = useSelector(selectAllAuditLogs);
+  const status = useSelector(selectAuditLogsStatus);
+  const loading = status === "loading" && logs.length === 0;
+
   const [selectedLog, setSelectedLog] = useState(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        setLoading(true);
-        const data = await apiClient("/audit-logs");
-        setLogs(Array.isArray(data) ? data : data?.data || []);
-      } catch (error) {
-        console.error("Failed to fetch audit logs", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLogs();
-  }, []);
+    dispatch(fetchAuditLogs());
+  }, [dispatch]);
 
   const tableColumns = [
     { 

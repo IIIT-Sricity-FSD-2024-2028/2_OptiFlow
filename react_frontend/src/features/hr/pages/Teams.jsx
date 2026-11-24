@@ -57,7 +57,8 @@ export default function HrTeams() {
       setViewMode("table");
     } else if (currentView === "graph" || currentView === "org-chart") {
       setViewMode("graph");
-    } else if (currentView === "threaded") {
+    } else {
+      // No or unknown view (e.g. Back to plain /hr/teams): same default as initialView.
       setViewMode("threaded");
     }
   }
@@ -68,6 +69,8 @@ export default function HrTeams() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Secondary lists that failed to load; the page still renders but says so.
+  const [partialFailures, setPartialFailures] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const branchParam = searchParams.get("branch");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState(branchParam || "all");
@@ -75,9 +78,7 @@ export default function HrTeams() {
   const [syncedBranchParam, setSyncedBranchParam] = useState(branchParam);
   if (syncedBranchParam !== branchParam) {
     setSyncedBranchParam(branchParam);
-    if (branchParam) {
-      setSelectedBranchFilter(branchParam);
-    }
+    setSelectedBranchFilter(branchParam || "all");
   }
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -121,13 +122,22 @@ export default function HrTeams() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
+    const failed = [];
+    const secondary = (path, name) =>
+      apiClient(path).catch((err) => {
+        console.warn(`[HrTeams] Failed to fetch ${name}:`, err.message);
+        failed.push(name);
+        return [];
+      });
 
     try {
       const [teamsData, branchesData, usersData] = await Promise.all([
         apiClient("/teams"),
         apiClient("/branches"),
-        apiClient("/users").catch(() => []),
+        secondary("/users", "Users"),
       ]);
+      setPartialFailures(failed);
 
       setTeams(Array.isArray(teamsData) ? teamsData : []);
       setBranches(Array.isArray(branchesData) ? branchesData : []);
@@ -159,11 +169,24 @@ export default function HrTeams() {
     });
   }, [teams, searchQuery, selectedBranchFilter]);
 
+  // WHY: Reset to page 1 whenever the filter inputs change (render-time reset,
+  // same pattern as Users.jsx) so a narrowed list never lands on an empty page.
+  const filterKey = JSON.stringify([searchQuery, selectedBranchFilter]);
+  const [pagedFilterKey, setPagedFilterKey] = useState(filterKey);
+  if (pagedFilterKey !== filterKey) {
+    setPagedFilterKey(filterKey);
+    setCurrentPage(1);
+  }
+
+  // Clamp to the last page after deletes/refetch shrink the list.
+  const totalPages = Math.max(1, Math.ceil(filteredTeams.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+
   // Derived Paginated Teams
   const paginatedTeams = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
+    const start = (safePage - 1) * PAGE_SIZE;
     return filteredTeams.slice(start, start + PAGE_SIZE);
-  }, [filteredTeams, currentPage]);
+  }, [filteredTeams, safePage]);
 
   // Derived KPI statistics
   const metrics = useMemo(() => {
@@ -256,7 +279,7 @@ export default function HrTeams() {
 
   // 4. DELETE TEAM HANDLER
   const handleDeleteTeam = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || isDeleting) return;
 
     setIsDeleting(true);
     try {
@@ -297,6 +320,7 @@ export default function HrTeams() {
     setRosterSubmitting(true);
     setRosterError("");
 
+    let added = false;
     try {
       // A team has exactly one Lead. Adding someone as Lead when a Lead exists is a handover:
       // add them as Member, then promote them (the server demotes the current Lead).
@@ -309,6 +333,7 @@ export default function HrTeams() {
           role: handover ? "Member" : newMemberRole,
         },
       });
+      added = true;
       if (handover) {
         await apiClient(`/teams/${rosterTeam.id}/members/${newMemberUserId}`, {
           method: "PATCH",
@@ -318,11 +343,17 @@ export default function HrTeams() {
 
       toast.success(handover ? "Member added and made the new Squad Lead." : "Team member assigned to squad successfully.");
       setNewMemberUserId("");
-      await refreshRoster();
     } catch (err) {
       console.error("[HrTeams] Failed to add squad member:", err);
-      setRosterError(err.message || "Failed to add member to team.");
+      const message = err.message || "Failed to add member to team.";
+      // A handover is two calls: if the promote failed, the add has already succeeded. Say so,
+      // and clear the selection so a retry does not re-add the same person.
+      setRosterError(added ? `${message} They were added as a Member; use Make Lead to try again.` : message);
+      if (added) setNewMemberUserId("");
     } finally {
+      // Refresh whenever the roster changed. A refresh failure must not turn a success into an
+      // error message. The modal's Close is disabled until this finishes, so it cannot reopen.
+      if (added) await refreshRoster().catch(() => {});
       setRosterSubmitting(false);
     }
   };
@@ -400,7 +431,7 @@ export default function HrTeams() {
             (tm.user?.jobTitle || "").toLowerCase().includes("lead")
         );
         if (!lead) {
-          return <span className="text-slate-400 text-xs italic">Unassigned</span>;
+          return <span className="text-slate-500 text-xs italic">Unassigned</span>;
         }
         const leadUser = lead.user || users.find((u) => u.id === (lead.userId || lead.user?.id));
         return (
@@ -436,7 +467,7 @@ export default function HrTeams() {
                 setNewMemberRole("Member");
                 setRosterError("");
               }}
-              className="text-slate-400 text-xs italic hover:text-blue-600 transition-colors"
+              className="text-slate-500 text-xs italic hover:text-blue-600 transition-colors"
             >
               0 members +
             </button>
@@ -482,7 +513,7 @@ export default function HrTeams() {
       render: (row) => {
         const projects = row.projects || [];
         if (projects.length === 0) {
-          return <span className="text-slate-400 text-xs italic">0 Projects</span>;
+          return <span className="text-slate-500 text-xs italic">0 Projects</span>;
         }
         return (
           <div
@@ -643,6 +674,12 @@ export default function HrTeams() {
         </div>
       )}
 
+      {!error && partialFailures.length > 0 && (
+        <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          {partialFailures.join(", ")} could not be loaded; related lists and pickers may be empty.
+        </div>
+      )}
+
       {/* CONDITIONAL VIEW: THREADED HIERARCHY vs VISUAL GRAPH vs SQUADS DIRECTORY */}
       {viewMode === "threaded" ? (
         <ThreadedOrgTree users={users} branches={branches} teams={teams} />
@@ -676,6 +713,7 @@ export default function HrTeams() {
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="w-full sm:w-80">
               <Input
+                aria-label="Search teams"
                 placeholder="Search teams by name or branch..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -683,10 +721,14 @@ export default function HrTeams() {
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <label
+                htmlFor="teams-branch-filter"
+                className="text-xs font-semibold text-slate-600 uppercase tracking-wider"
+              >
                 Branch:
               </label>
               <select
+                id="teams-branch-filter"
                 className="px-3 py-2 text-sm text-slate-800 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-blue-600 cursor-pointer"
                 value={selectedBranchFilter}
                 onChange={(e) => setSelectedBranchFilter(e.target.value)}
@@ -734,7 +776,7 @@ export default function HrTeams() {
                 {filteredTeams.length > PAGE_SIZE && (
                   <div className="border-t border-slate-200/80 px-4 py-3 bg-slate-50/50">
                     <Pagination
-                      currentPage={currentPage}
+                      currentPage={safePage}
                       totalItems={filteredTeams.length}
                       pageSize={PAGE_SIZE}
                       onPageChange={setCurrentPage}
@@ -762,6 +804,7 @@ export default function HrTeams() {
 
           <FormField label="Team / Squad Name" required error={formError && !teamName ? "Required" : ""}>
             <Input
+              aria-label="Team / Squad Name"
               placeholder="e.g. Core Engineering, Compliance Pod 1"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
@@ -772,6 +815,7 @@ export default function HrTeams() {
 
           <FormField label="Assigned Branch" required>
             <Select
+              aria-label="Assigned Branch"
               value={teamBranchId}
               onChange={(e) => setTeamBranchId(e.target.value)}
               disabled={isSubmitting}
@@ -816,6 +860,7 @@ export default function HrTeams() {
 
           <FormField label="Team / Squad Name" required>
             <Input
+              aria-label="Team / Squad Name"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               disabled={isUpdating}
@@ -825,6 +870,7 @@ export default function HrTeams() {
 
           <FormField label="Assigned Branch" required>
             <Select
+              aria-label="Assigned Branch"
               value={editBranchId}
               onChange={(e) => setEditBranchId(e.target.value)}
               disabled={isUpdating}
@@ -882,6 +928,7 @@ export default function HrTeams() {
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
                 <div className="sm:col-span-7">
                   <Select
+                    aria-label="Employee to assign"
                     value={newMemberUserId}
                     onChange={(e) => setNewMemberUserId(e.target.value)}
                     disabled={rosterSubmitting}
@@ -898,6 +945,7 @@ export default function HrTeams() {
                 </div>
                 <div className="sm:col-span-3">
                   <Select
+                    aria-label="Squad role"
                     value={newMemberRole}
                     onChange={(e) => setNewMemberRole(e.target.value)}
                     disabled={rosterSubmitting}
@@ -927,11 +975,11 @@ export default function HrTeams() {
               <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
                 Assigned Members ({rosterTeam?.teamMembers?.length || 0})
               </h4>
-              <span className="text-xs text-slate-400">Branch: {rosterTeam?.branch?.name || "Unassigned"}</span>
+              <span className="text-xs text-slate-500">Branch: {rosterTeam?.branch?.name || "Unassigned"}</span>
             </div>
 
             {(!rosterTeam?.teamMembers || rosterTeam.teamMembers.length === 0) ? (
-              <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+              <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-500 text-xs">
                 No members assigned to this squad yet. Use the dropdown above to assign personnel.
               </div>
             ) : (
@@ -963,7 +1011,7 @@ export default function HrTeams() {
                               {tm.role || "Member"}
                             </span>
                           </div>
-                          <span className="text-[11px] text-slate-400">
+                          <span className="text-[11px] text-slate-500">
                             {memberUser.jobTitle || memberUser.email || "Employee"}
                           </span>
                         </div>
@@ -1004,6 +1052,7 @@ export default function HrTeams() {
           <div className="pt-3 border-t border-slate-100 flex justify-end">
             <Button
               variant="secondary"
+              disabled={rosterSubmitting}
               onClick={() => {
                 setRosterTeam(null);
                 setRosterError("");
@@ -1020,8 +1069,9 @@ export default function HrTeams() {
         isOpen={Boolean(deleteTarget)}
         title="Confirm Team Deletion"
         message={`Are you sure you want to delete "${deleteTarget?.name}"? If there are active projects assigned to this team, deletion will be blocked by system governance.`}
-        confirmLabel={isDeleting ? "Deleting..." : "Delete Team"}
-        confirmVariant="danger"
+        confirmText="Delete Team"
+        variant="danger"
+        loading={isDeleting}
         onConfirm={handleDeleteTeam}
         onCancel={() => !isDeleting && setDeleteTarget(null)}
       />

@@ -11,13 +11,13 @@ export const fetchProcessInstances = createApiThunk('processInstances/list',
   }, {
     abortable: true, condition: (arg, { getState }) => shouldFetch(getState().processInstances, arg),
   });
-export const fetchProcessInstanceById = createApiThunk('processInstances/get', api.getInstance, { abortable: true });
-export const createProcessInstance = createApiThunk('processInstances/create', api.createInstance);
+export const fetchProcessInstanceById = createApiThunk('processInstances/get', (id, options) => api.getInstance(id, options), { abortable: true });
+export const createProcessInstance = createApiThunk('processInstances/create', (data, options) => api.createInstance(data, options));
 export const updateProcessInstance = createApiThunk('processInstances/update',
   ({ id, data }, options) => api.updateInstance(id, data, options));
-export const deleteProcessInstance = createApiThunk('processInstances/delete', api.deleteInstance);
-export const fetchInstanceSteps = createApiThunk('processInstances/listSteps', api.listInstanceSteps, { abortable: true });
-export const fetchInstanceStepById = createApiThunk('processInstances/getStep', api.getInstanceStep, { abortable: true });
-export const createInstanceStep = createApiThunk('processInstances/createStep', api.createInstanceStep);
+export const deleteProcessInstance = createApiThunk('processInstances/delete', (id, options) => api.deleteInstance(id, options));
+export const fetchInstanceSteps = createApiThunk('processInstances/listSteps', (id, options) => api.listInstanceSteps(id, options), { abortable: true });
+export const fetchInstanceStepById = createApiThunk('processInstances/getStep', (id, options) => api.getInstanceStep(id, options), { abortable: true });
+export const createInstanceStep = createApiThunk('processInstances/createStep', (data, options) => api.createInstanceStep(data, options));
 export const actionInstanceStep = createApiThunk('processInstances/actionStep',
   ({ id, data }, options) => api.actionStep(id, data, options));

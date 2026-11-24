@@ -1,16 +1,16 @@
 import { apiClient } from './client';
+import { req, seg, send, withQuery } from './hrRequest';
 
-export const list = (params = {}) => {
-  const query = new URLSearchParams();
-  if (params?.branchId) query.set('branchId', params.branchId);
-  const qs = query.toString();
-  return apiClient(`/api/teams${qs ? `?${qs}` : ''}`);
-};
-export const get = (id) => apiClient(`/api/teams/${id}`);
-export const create = (data) => apiClient('/api/teams', { body: data });
-export const update = (id, data) => apiClient(`/api/teams/${id}`, { method: 'PATCH', body: data });
-export const remove = (id) => apiClient(`/api/teams/${id}`, { method: 'DELETE' });
-export const addMember = (teamId, data) => apiClient(`/api/teams/${teamId}/members`, { method: 'POST', body: data });
-export const updateMemberRole = (teamId, userId, role) =>
-  apiClient(`/api/teams/${teamId}/members/${userId}`, { method: 'PATCH', body: { role } });
-export const removeMember = (teamId, userId) => apiClient(`/api/teams/${teamId}/members/${userId}`, { method: 'DELETE' });
+export const list = (params = {}, options) =>
+  send(() => apiClient(withQuery('/api/teams', { branchId: params?.branchId }), req(options, 'GET')));
+export const get = (id, options) => send(() => apiClient(`/api/teams/${seg(id)}`, req(options, 'GET')));
+export const create = (data, options) => send(() => apiClient('/api/teams', req(options, 'POST', data)));
+export const update = (id, data, options) =>
+  send(() => apiClient(`/api/teams/${seg(id)}`, req(options, 'PATCH', data)));
+export const remove = (id, options) => send(() => apiClient(`/api/teams/${seg(id)}`, req(options, 'DELETE')));
+export const addMember = (teamId, data, options) =>
+  send(() => apiClient(`/api/teams/${seg(teamId)}/members`, req(options, 'POST', data)));
+export const updateMemberRole = (teamId, userId, role, options) =>
+  send(() => apiClient(`/api/teams/${seg(teamId)}/members/${seg(userId)}`, req(options, 'PATCH', { role })));
+export const removeMember = (teamId, userId, options) =>
+  send(() => apiClient(`/api/teams/${seg(teamId)}/members/${seg(userId)}`, req(options, 'DELETE')));
