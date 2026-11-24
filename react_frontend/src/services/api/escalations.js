@@ -1,7 +1,8 @@
 import { apiClient } from './client';
 
-export const list = () => apiClient('/api/escalations');
-export const get = (id) => apiClient(`/api/escalations/${id}`);
-export const create = (data) => apiClient('/api/escalations', { body: data });
-export const update = (id, data) => apiClient(`/api/escalations/${id}`, { method: 'PATCH', body: data });
-export const remove = (id) => apiClient(`/api/escalations/${id}`, { method: 'DELETE' });
+// `opts` passes request options (signal, abortKey) from the Redux thunks.
+export const list = (opts = {}) => apiClient('/api/escalations', opts);
+export const get = (id, opts = {}) => apiClient(`/api/escalations/${id}`, opts);
+export const create = (data, opts = {}) => apiClient('/api/escalations', { ...opts, body: data });
+export const update = (id, data, opts = {}) => apiClient(`/api/escalations/${id}`, { ...opts, method: 'PATCH', body: data });
+export const remove = (id, opts = {}) => apiClient(`/api/escalations/${id}`, { ...opts, method: 'DELETE' });

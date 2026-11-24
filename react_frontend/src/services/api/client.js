@@ -17,7 +17,7 @@
 import { getToken, clearSession } from '../auth/session';
 import { PATHS } from '../../app/paths';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5500/api';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export const API_EVENT = 'optiflow:api-event';
 const DEFAULT_TIMEOUT_MS = 30000;
