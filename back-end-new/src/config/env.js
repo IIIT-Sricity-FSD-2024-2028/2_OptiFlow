@@ -38,7 +38,7 @@ export const env = {
   PLATFORM_JWT_EXPIRES_IN: process.env.PLATFORM_JWT_EXPIRES_IN || '1h',
   FRONTEND_ORIGINS: process.env.FRONTEND_ORIGINS || '',
   // Public URL of the React app. Used to build links sent to users (set-password invites).
-  APP_BASE_URL: (process.env.APP_BASE_URL || 'http://localhost:3000').replace(/\/+$/, ''),
+  APP_BASE_URL: (process.env.APP_BASE_URL || 'http://localhost:5173').replace(/\/+$/, ''),
   SET_PASSWORD_TOKEN_TTL: process.env.SET_PASSWORD_TOKEN_TTL || '24h',
 
   // Transactional email

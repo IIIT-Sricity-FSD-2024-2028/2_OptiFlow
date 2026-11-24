@@ -130,6 +130,25 @@ export const changePasswordLimiter = createRateLimiter({
   message: 'Too many failed attempts. Please try again in a few minutes.',
 });
 
+/**
+ * Forgot password: every request counts (each one notifies the company's administrators).
+ * Per email stops one account's admins being flooded; per IP stops sweeping many addresses.
+ */
+export const forgotPasswordLimiters = [
+  createRateLimiter({
+    windowMs: ONE_HOUR,
+    max: 3,
+    keyGenerator: (req) => (emailOf(req) ? `forgot:email:${emailOf(req)}` : null),
+    message: 'A reset was already requested for this account. Please wait for your administrator.',
+  }),
+  createRateLimiter({
+    windowMs: FIFTEEN_MIN,
+    max: env.AUTH_RATE_LIMIT_MAX,
+    keyGenerator: (req) => `forgot:ip:${req.ip}`,
+    message: 'Too many reset requests from this address. Please try again later.',
+  }),
+];
+
 // Kept for existing imports. Mounted on the sign-in routes themselves now (see auth.routes.js).
 export const authLimiter = (req, res, next) => next();
 
