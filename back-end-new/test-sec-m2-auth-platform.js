@@ -180,6 +180,21 @@ check('12: unknown / inactive plan ids are rejected, active plan works', async (
   assert.equal(assignment.role.name, 'system_admin');
 });
 
+check('12: a newly registered owner can use the API straight away (no forced password change)', async () => {
+  const body = reg({ planId: plan.id });
+  const registered = await call('POST', '/api/auth/register-company', { body });
+  assert.equal(registered.status, 201, JSON.stringify(registered.json));
+  createdCompanyIds.push(registered.json.data.user.companyId);
+  // The owner chose this password at sign-up, so it must not be flagged as temporary.
+  const owner = await prisma.user.findUnique({ where: { id: registered.json.data.user.id } });
+  assert.ok(owner.passwordChangedAt, 'passwordChangedAt must be set when the owner registers');
+  const login = await call('POST', '/api/auth/login', { body: { email: body.ownerEmail, password: body.password } });
+  assert.equal(login.status, 200, JSON.stringify(login.json));
+  const users = await call('GET', '/api/users', { token: login.json.data.token });
+  assert.notEqual(users.json?.code, 'PASSWORD_CHANGE_REQUIRED', 'the new owner must not be blocked');
+  assert.equal(users.status, 200, JSON.stringify(users.json));
+});
+
 check('12: public plan list hides inactive plans', async () => {
   const r = await call('GET', '/api/auth/public-plans');
   assert.equal(r.status, 200);
