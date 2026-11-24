@@ -4,6 +4,8 @@ import evidenceReducer, {
   clearCurrentEvidence,
   fetchEvidence,
   fetchEvidenceById,
+  createEvidence,
+  updateEvidence,
   reviewEvidence,
   uploadEvidenceFile,
   deleteEvidence,
@@ -155,6 +157,52 @@ describe("evidence slice", () => {
       });
       expect(state.status).toBe("failed");
       expect(state.error).toEqual({ message: "Not found" });
+    });
+
+    it("handles createEvidence.fulfilled prepending created item to items list", () => {
+      const state = {
+        ...initialState,
+        items: [{ id: "ev-1", title: "Existing Evidence" }],
+      };
+
+      const newEvidence = { id: "ev-2", title: "New Evidence Upload" };
+      const next = evidenceReducer(state, {
+        type: createEvidence.fulfilled.type,
+        payload: newEvidence,
+      });
+
+      expect(next.items).toHaveLength(2);
+      expect(next.items[0]).toEqual(newEvidence);
+      expect(next.items[1].id).toBe("ev-1");
+    });
+
+    it("handles updateEvidence.fulfilled updating an existing item and currentEvidence", () => {
+      const state = {
+        ...initialState,
+        items: [
+          { id: "ev-1", title: "Old Title", notes: "Old notes" },
+          { id: "ev-2", title: "Doc 2" },
+        ],
+        currentEvidence: { id: "ev-1", title: "Old Title", notes: "Old notes" },
+      };
+
+      const updated = { id: "ev-1", title: "New Title", notes: "Updated notes" };
+      const next = evidenceReducer(state, {
+        type: updateEvidence.fulfilled.type,
+        payload: updated,
+      });
+
+      expect(next.items[0]).toEqual({
+        id: "ev-1",
+        title: "New Title",
+        notes: "Updated notes",
+      });
+      expect(next.currentEvidence).toEqual({
+        id: "ev-1",
+        title: "New Title",
+        notes: "Updated notes",
+      });
+      expect(next.items[1].title).toBe("Doc 2");
     });
 
     it("handles reviewEvidence.fulfilled updating status and rejectionReason", () => {
