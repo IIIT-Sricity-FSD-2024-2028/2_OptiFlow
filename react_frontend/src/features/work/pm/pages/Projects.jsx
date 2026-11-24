@@ -14,8 +14,17 @@ import { Loader } from "../../../../shared/components/Loader";
 import { Modal } from "../../../../shared/components/Modal";
 import { Toast } from "../../../../shared/components/Toast";
 import { Pagination } from "../../../../shared/components/Pagination";
-import * as projectsApi from "../../../../services/api/projects";
-import * as tasksApi from "../../../../services/api/tasks";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  createProject as createProjectThunk,
+  fetchProjectById,
+  fetchProjects,
+  isReportableError,
+  selectAllProjects,
+  selectProjectsLoading,
+} from "../../../../store/projects";
+import { updateTask } from "../../../../store/tasks";
+// Foreign resources (M5 teams, M4 process templates) keep their own fetch until those slices merge.
 import * as teamsApi from "../../../../services/api/teams";
 import {
   createInstance,
@@ -63,12 +72,15 @@ const formatDate = (date) =>
     : "—";
 
 export default function PmProjects() {
-  const [projects, setProjects] = useState([]);
+  const dispatch = useDispatch();
+  const projects = useSelector(selectAllProjects);
+  const projectsLoading = useSelector(selectProjectsLoading);
   const [currentPage, setCurrentPage] = useState(1);
   const [teams, setTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(true);
   const [templates, setTemplates] = useState([]);
   const [templateError, setTemplateError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const loading = projectsLoading || teamsLoading;
   const [isOpen, setIsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("All");
@@ -98,18 +110,23 @@ export default function PmProjects() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([projectsApi.list(), teamsApi.list()])
-      .then(([projectResponse, teamResponse]) => {
-        if (!active) return;
-        setProjects(normalize(projectResponse));
-        setTeams(normalize(teamResponse));
+    dispatch(fetchProjects())
+      .unwrap()
+      .catch((error) => {
+        if (active && isReportableError(error))
+          showToast("error", error.message || "Failed to load projects.");
+      });
+    teamsApi
+      .list()
+      .then((teamResponse) => {
+        if (active) setTeams(normalize(teamResponse));
       })
       .catch((error) => {
         if (active)
           showToast("error", error.message || "Failed to load projects.");
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setTeamsLoading(false);
       });
     listTemplates()
       .then((response) => {
@@ -127,7 +144,7 @@ export default function PmProjects() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [dispatch]);
 
   const filteredProjects = projects.filter((project) => {
     const status = project.status;
@@ -174,16 +191,14 @@ export default function PmProjects() {
     }
     setSaving(true);
     try {
-      const response = await projectsApi.create({
+      const project = await dispatch(createProjectThunk({
         name: form.name.trim(),
         teamId: form.teamId,
         targetDate: form.endDate,
         status: form.status,
         startDate: form.startDate || undefined,
         description: form.description.trim(),
-      });
-      const project = response?.data || response;
-      setProjects((current) => [project, ...current]);
+      })).unwrap();
       setForm({
         name: "",
         teamId: "",
@@ -202,8 +217,7 @@ export default function PmProjects() {
             title: `${selectedTemplate?.name || "Workflow"} - ${project.name}`,
           });
           // Workflow tasks are created unassigned; hand them to the team's lead so they reach the TL dashboard.
-          const freshResponse = await projectsApi.get(project.id);
-          const fresh = freshResponse?.data || freshResponse;
+          const fresh = await dispatch(fetchProjectById(project.id)).unwrap();
           const leads = (fresh?.team?.teamMembers || []).filter((member) =>
             /team.?lead|^lead$/i.test(member.role || ""),
           );
@@ -215,19 +229,18 @@ export default function PmProjects() {
           } else {
             const results = await Promise.allSettled(
               (fresh.tasks || []).map((task) =>
-                tasksApi.update(task.id, { assignedToId: leads[0].userId }),
+                dispatch(
+                  updateTask({
+                    id: task.id,
+                    data: { assignedToId: leads[0].userId },
+                  }),
+                ).unwrap(),
               ),
             );
-            const refreshedResponse = await projectsApi
-              .get(project.id)
+            // Refresh the project row so its nested tasks show the new assignee.
+            await dispatch(fetchProjectById(project.id))
+              .unwrap()
               .catch(() => null);
-            const refreshed = refreshedResponse?.data || refreshedResponse;
-            if (refreshed?.id)
-              setProjects((current) =>
-                current.map((item) =>
-                  item.id === project.id ? refreshed : item,
-                ),
-              );
             if (results.some((result) => result.status === "rejected")) {
               showToast(
                 "warning",

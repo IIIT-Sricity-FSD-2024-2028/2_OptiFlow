@@ -10,18 +10,20 @@ import { Table } from '../../../../shared/components/Table';
 import { Toast } from '../../../../shared/components/Toast';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
-import * as tasksApi from '../../../../services/api/tasks';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchTaskById, selectTaskById, updateTask as updateTaskThunk } from '../../../../store/tasks';
+// Foreign resources (M1 compliance and evidence) keep their own fetch until those slices merge.
 import * as complianceApi from '../../../../services/api/compliance';
 import * as evidenceApi from '../../../../services/api/evidence';
-import { tomorrowInput } from '../../components/dateLimits';
+import { tomorrowInput, minExtensionDateInput, deadlineInput } from '../../components/dateLimits';
 
-const normalize = (response) => response?.data || response;
 const STATUSES = ['Draft', 'Active', 'In_Review', 'Blocked', 'Completed', 'Cancelled'];
 const formatDate = (value) => value ? new Date(value).toLocaleDateString() : '—';
 
 export default function PmTaskDetail() {
   const { id } = useParams();
-  const [task, setTask] = useState(null);
+  const dispatch = useDispatch();
+  const task = useSelector((state) => selectTaskById(state, id)) || null;
   const [violations, setViolations] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
   const [overrideOpen, setOverrideOpen] = useState(false);
@@ -40,13 +42,12 @@ export default function PmTaskDetail() {
   useEffect(() => {
     let active = true;
     Promise.all([
-      tasksApi.get(id),
+      dispatch(fetchTaskById(id)).unwrap(),
       complianceApi.getViolations().catch(() => []),
       evidenceApi.getEvidenceList().catch(() => []),
     ])
-      .then(([taskResponse, violationsRes, evidenceRes]) => {
+      .then(([, violationsRes, evidenceRes]) => {
         if (!active) return;
-        setTask(normalize(taskResponse));
         setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
         setEvidenceList(Array.isArray(evidenceRes) ? evidenceRes : evidenceRes?.data || []);
       })
@@ -57,7 +58,7 @@ export default function PmTaskDetail() {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [id]);
+  }, [dispatch, id]);
 
   const reloadViolations = () => complianceApi.getViolations()
     .then((res) => setViolations(Array.isArray(res) ? res : res?.data || []))
@@ -70,8 +71,7 @@ export default function PmTaskDetail() {
   const updateTask = async (patch) => {
     setSaving(true);
     try {
-      const response = await tasksApi.update(id, patch);
-      setTask((current) => ({ ...current, ...normalize(response) }));
+      await dispatch(updateTaskThunk({ id, data: patch })).unwrap();
       setOverrideOpen(false);
       showToast('success', 'Task updated.');
     } catch (error) {
@@ -134,11 +134,10 @@ export default function PmTaskDetail() {
     }
     setSaving(true);
     try {
-      const response = await tasksApi.update(id, {
-        dueDate: extensionDate,
-        deadlineExtensionReason: reason,
-      });
-      setTask((current) => ({ ...current, ...normalize(response) }));
+      await dispatch(updateTaskThunk({
+        id,
+        data: { dueDate: extensionDate, deadlineExtensionReason: reason },
+      })).unwrap();
       setViolations((current) => current.map((violation) => (
         violation.entityType === 'Task'
         && String(violation.entityId) === String(id)
@@ -379,7 +378,12 @@ export default function PmTaskDetail() {
         <div className="space-y-4">
           <p className="text-sm text-gray-600">The new deadline and reason will be recorded in the task audit history.</p>
           <FormField label="New deadline" required>
-            <Input type="date" min={tomorrowInput()} value={extensionDate} onChange={(event) => setExtensionDate(event.target.value)} />
+            <Input type="date" min={minExtensionDateInput(task.dueDate)} value={extensionDate} onChange={(event) => setExtensionDate(event.target.value)} />
+            {task.dueDate && (
+              <p className="text-xs text-gray-500 mt-1">
+                Current deadline: <span className="font-medium text-gray-700">{deadlineInput(task.dueDate)}</span> (extension must be later than current deadline)
+              </p>
+            )}
           </FormField>
           <FormField label="Reason" required>
             <Textarea value={extensionReason} onChange={(event) => setExtensionReason(event.target.value)} rows={4} placeholder="Explain why the deadline is being extended." />
