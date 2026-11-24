@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import projectsReducer, { projectsAdapter } from './slice';
-import { fetchProjects, createProject, updateProject, deleteProject } from './thunks';
+import { fetchProjects, fetchProjectById, createProject, updateProject, deleteProject } from './thunks';
 import { selectAllProjects, selectProjectById, selectOpenProjects } from './selectors';
 
 vi.mock('../../services/api/projects');
@@ -107,5 +107,26 @@ describe('projects selectors', () => {
     const store = makeStore();
     store.dispatch(fetchProjects.fulfilled([proj1, proj2], '', undefined));
     expect(selectProjectById(store.getState(), 2)).toMatchObject(proj2);
+  });
+});
+
+// ── list fetch vs. detail rows ───────────────────────────────────────────────
+
+describe('projects reducer — list after detail', () => {
+  it('keeps fields a detail fetch stored (project.tasks) when the list arrives later', () => {
+    const detail = { ...proj1, tasks: [{ id: 't1', title: 'Spec' }] };
+    let state = projectsReducer(undefined, fetchProjectById.fulfilled(detail, '', 1));
+    state = projectsReducer(state, fetchProjects.fulfilled([{ ...proj1, name: 'Alpha (renamed)' }, proj2], '', undefined));
+    const row = projectsAdapter.getSelectors().selectById(state, 1);
+    expect(row.tasks).toEqual(detail.tasks); // detail field kept
+    expect(row.name).toBe('Alpha (renamed)'); // list field updated
+  });
+
+  it('drops rows the server no longer returns and keeps the server order', () => {
+    let state = projectsReducer(undefined, fetchProjects.fulfilled([proj1, proj2], '', undefined));
+    const proj3 = { id: 3, name: 'Gamma', status: 'Active' };
+    state = projectsReducer(state, fetchProjects.fulfilled([proj3, proj1], '', undefined));
+    expect(state.ids).toEqual([3, 1]);
+    expect(projectsAdapter.getSelectors().selectById(state, 2)).toBeUndefined();
   });
 });

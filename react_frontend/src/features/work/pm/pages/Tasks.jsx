@@ -97,7 +97,7 @@ export default function PmTasks() {
   }, [dispatch]);
 
   const loadError = tasksError || projectsError;
-  const error = actionError || (loadError ? loadError.message || 'Failed to load task data.' : '');
+  const loadErrorMessage = loadError ? loadError.message || 'Failed to load task data.' : '';
 
   const selectedProjectForForm = useMemo(() => {
     if (!form.projectId) return null;
@@ -320,6 +320,12 @@ export default function PmTasks() {
         </button>
       </div>
 
+      {loadErrorMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+          {loadErrorMessage}
+        </div>
+      )}
+
       {/* Enterprise Create Task Modal / Card */}
       {showAssignForm && (
         <CreateTaskForm
@@ -328,7 +334,7 @@ export default function PmTasks() {
             setError('');
           }}
           onSubmit={submitTask}
-          error={error}
+          error={actionError}
           saving={saving}
           form={form}
           onFormChange={setForm}

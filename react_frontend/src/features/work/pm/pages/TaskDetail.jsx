@@ -15,7 +15,7 @@ import { fetchTaskById, selectTaskById, updateTask as updateTaskThunk } from '..
 // Foreign resources (M1 compliance and evidence) keep their own fetch until those slices merge.
 import * as complianceApi from '../../../../services/api/compliance';
 import * as evidenceApi from '../../../../services/api/evidence';
-import { tomorrowInput, minExtensionDateInput, deadlineInput } from '../../components/dateLimits';
+import { tomorrowInput } from '../../components/dateLimits';
 
 const STATUSES = ['Draft', 'Active', 'In_Review', 'Blocked', 'Completed', 'Cancelled'];
 const formatDate = (value) => value ? new Date(value).toLocaleDateString() : '—';
@@ -378,12 +378,7 @@ export default function PmTaskDetail() {
         <div className="space-y-4">
           <p className="text-sm text-gray-600">The new deadline and reason will be recorded in the task audit history.</p>
           <FormField label="New deadline" required>
-            <Input type="date" min={minExtensionDateInput(task.dueDate)} value={extensionDate} onChange={(event) => setExtensionDate(event.target.value)} />
-            {task.dueDate && (
-              <p className="text-xs text-gray-500 mt-1">
-                Current deadline: <span className="font-medium text-gray-700">{deadlineInput(task.dueDate)}</span> (extension must be later than current deadline)
-              </p>
-            )}
+            <Input type="date" min={tomorrowInput()} value={extensionDate} onChange={(event) => setExtensionDate(event.target.value)} />
           </FormField>
           <FormField label="Reason" required>
             <Textarea value={extensionReason} onChange={(event) => setExtensionReason(event.target.value)} rows={4} placeholder="Explain why the deadline is being extended." />

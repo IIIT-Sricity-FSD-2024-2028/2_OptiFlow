@@ -11,7 +11,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchProjectById,
   selectProjectById,
-  selectProjectMutation,
   updateProject,
 } from '../../../../store/projects';
 import { createTask as createTaskThunk, updateTask } from '../../../../store/tasks';
@@ -28,9 +27,10 @@ export default function PmProjectDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const project = useSelector((state) => selectProjectById(state, id)) || null;
-  const detailLoad = useSelector((state) => selectProjectMutation(state, 'getById'));
-  // The list row has no nested tasks, so wait for the detail row before rendering.
-  const loading = (!project || !Array.isArray(project.tasks)) && detailLoad.status !== 'failed';
+  // The list row has no nested tasks, so the page waits for its own detail fetch of this id.
+  // (Tracked here, not via the slice-wide getById status, which any project's fetch changes.)
+  const [loadedId, setLoadedId] = useState(null);
+  const loading = loadedId !== id;
   const [currentTaskPage, setCurrentTaskPage] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -61,6 +61,9 @@ export default function PmProjectDetail() {
       .unwrap()
       .catch((loadError) => {
         if (active && loadError?.code !== 'ABORTED') setError(loadError.message || 'Failed to load project.');
+      })
+      .finally(() => {
+        if (active) setLoadedId(id);
       });
 
     usersApi.list()
