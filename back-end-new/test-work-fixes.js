@@ -1,5 +1,5 @@
 // Post-merge regression checks: escalation visibility and actions (D-S11), subtask and task
-// status rules (D-S5), project delete clean-up (D-S9), attachment limits and scope (D-S7),
+// status rules (D-S5), deadline extensions, project delete clean-up (D-S9), attachment limits and scope (D-S7),
 // process step actions and template edits (SEC-M4). Runs against a TEST database only.
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
@@ -317,6 +317,91 @@ async function main() {
       assert.equal(dup.status, 409);
       await prisma.complianceViolation.updateMany({ where: { ruleId: rule.id }, data: { status: 'Resolved' } });
       await prisma.complianceViolation.create({ data });
+    });
+  } catch (err) { console.error(err); process.exitCode = 1; }
+
+  console.log('\n--- Deadline extensions (member asks, PM approves) ---');
+  try {
+    const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+    const extTask = await prisma.task.create({
+      data: {
+        companyId: f.company.id, projectId: f.projA.id, title: 'Ext task', status: 'Active',
+        createdById: users.tl1.id, assignedToId: users.m1.id, dueDate: new Date(day(5)),
+      },
+    });
+    const askExtension = (who, date, extra = {}) => call(who, 'POST', '/api/escalations', {
+      taskId: extTask.id,
+      title: 'Extension request: Ext task',
+      blockerType: 'Extension Request',
+      description: date ? `Requested new deadline: ${date}. Reason: Waiting on vendor data` : 'Please extend',
+      ...extra,
+    });
+    const notificationsFor = (userId, text) => prisma.notification.findMany({
+      where: { userId, companyId: f.company.id, message: { contains: text } },
+    });
+    const waitFor = async (fn) => {
+      for (let i = 0; i < 20; i += 1) {
+        if (await fn()) return true;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return fn();
+    };
+
+    await check('an extension request needs a valid date later than the current deadline', async () => {
+      assert.equal((await askExtension('m1', null)).status, 400, 'no date');
+      assert.equal((await askExtension('m1', day(3))).status, 400, 'earlier than the current deadline');
+      assert.equal((await askExtension('m1', day(-1))).status, 400, 'in the past');
+    });
+
+    let ext;
+    await check('an extension request always goes to the project PM, whatever target is sent', async () => {
+      const res = await askExtension('m1', day(12), { targetManagerId: users.tl1.id });
+      assert.equal(res.status, 201);
+      ext = res.body.data;
+      assert.equal(ext.targetManagerId, users.pm.id);
+    });
+
+    await check('the requester cannot edit the request text after sending it', async () => {
+      const res = await call('m1', 'PATCH', `/api/escalations/${ext.id}`, { description: `Requested new deadline: ${day(40)}. Reason: x` });
+      assert.equal(res.status, 403);
+    });
+
+    await check('a team lead cannot approve an extension (not the target, not a PM)', async () => {
+      const res = await call('tl1', 'PATCH', `/api/escalations/${ext.id}`, { status: 'Resolved' });
+      assert.equal(res.status, 403);
+      const task = await prisma.task.findUnique({ where: { id: extTask.id } });
+      assert.equal(task.dueDate.toISOString().slice(0, 10), day(5), 'deadline unchanged');
+    });
+
+    await check('PM approval moves the deadline, resolves Overdue violations, audits and notifies', async () => {
+      const overdueRule = await prisma.complianceRule.create({
+        data: { companyId: f.company.id, name: `Overdue ext ${stamp}`, description: 'd', severity: 'Medium', ruleType: 'Overdue' },
+      });
+      const violation = await prisma.complianceViolation.create({
+        data: { companyId: f.company.id, ruleId: overdueRule.id, entityType: 'Task', entityId: extTask.id, status: 'Open', severity: 'Medium' },
+      });
+      const res = await call('pm', 'PATCH', `/api/escalations/${ext.id}`, { status: 'Resolved' });
+      assert.equal(res.status, 200);
+      const task = await prisma.task.findUnique({ where: { id: extTask.id } });
+      assert.equal(task.dueDate.toISOString().slice(0, 10), day(12));
+      const resolved = await prisma.complianceViolation.findUnique({ where: { id: violation.id } });
+      assert.equal(resolved.status, 'Resolved');
+      const audit = await prisma.processAuditLog.findFirst({ where: { taskId: extTask.id, performedById: users.pm.id } });
+      assert.equal(audit?.newValue?.escalationId, ext.id);
+      assert.ok(await waitFor(async () => (await notificationsFor(users.m1.id, 'was approved')).length > 0), 'member is told');
+    });
+
+    await check('a PM can reject with a comment; the deadline stays and the member sees the reason', async () => {
+      const res = await askExtension('m1', day(30));
+      assert.equal(res.status, 201);
+      const rejected = await call('pm', 'PATCH', `/api/escalations/${res.body.data.id}`, {
+        status: 'Closed',
+        description: `${res.body.data.description}\n\nRejection Comment: Scope is fixed`,
+      });
+      assert.equal(rejected.status, 200);
+      const task = await prisma.task.findUnique({ where: { id: extTask.id } });
+      assert.equal(task.dueDate.toISOString().slice(0, 10), day(12), 'deadline unchanged by a rejection');
+      assert.ok(await waitFor(async () => (await notificationsFor(users.m1.id, 'Reason: Scope is fixed')).length > 0), 'reason reaches the member');
     });
   } catch (err) { console.error(err); process.exitCode = 1; }
 
