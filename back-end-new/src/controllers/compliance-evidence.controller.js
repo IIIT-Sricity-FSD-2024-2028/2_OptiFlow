@@ -40,6 +40,16 @@ function validateUploadedFile(file) {
   }
 }
 
+/**
+ * Fire-and-forget notification helper for compliance & review events.
+ */
+function notify(companyId, userId, title, message, type = 'Review') {
+  if (!companyId || !userId) return;
+  prisma.notification
+    .create({ data: { companyId, userId, title, message, type } })
+    .catch((err) => console.warn('[Notification] Notice:', err.message));
+}
+
 /** Include shared by list, get, create, update and upload so every response has the same shape. */
 const EVIDENCE_LIST_INCLUDE = {
   user: { select: { id: true, fullName: true, email: true } },
@@ -218,6 +228,32 @@ export async function createEvidence(req, res, next) {
       console.warn('[Compliance Evidence] Failed to create audit log for createEvidence:', auditErr.message);
     }
 
+    // Notify the assigned Team Lead or Task Creator that new evidence has been submitted
+    if (newEvidence.taskId) {
+      try {
+        const task = await prisma.task.findUnique({
+          where: { id: newEvidence.taskId },
+          select: { id: true, title: true, assignedToId: true, createdById: true },
+        });
+        if (task) {
+          const recipientId = (task.assignedToId && task.assignedToId !== req.user.id)
+            ? task.assignedToId
+            : (task.createdById !== req.user.id ? task.createdById : null);
+          if (recipientId) {
+            notify(
+              req.user.companyId,
+              recipientId,
+              'New Evidence Submitted',
+              `Evidence "${newEvidence.title}" was submitted by ${req.user.fullName || req.user.email} for review.`,
+              'Review'
+            );
+          }
+        }
+      } catch (notifErr) {
+        console.warn('[Notification] Notice: Failed to send evidence submission notification:', notifErr.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Evidence submitted successfully',
@@ -380,7 +416,58 @@ export async function updateEvidence(req, res, next) {
         } catch (escErr) {
           console.warn('[Escalation] Notice: Auto-resolving compliance escalation:', escErr.message);
         }
+
+        // Also auto-complete any In_Review subtasks for this task submitted by this user
+        try {
+          const inReviewSubtasks = await prisma.subtask.findMany({
+            where: {
+              taskId: existing.taskId,
+              assignedToId: existing.userId,
+              status: 'In_Review',
+            },
+          });
+          if (inReviewSubtasks.length > 0) {
+            await prisma.subtask.updateMany({
+              where: {
+                id: { in: inReviewSubtasks.map((s) => s.id) },
+              },
+              data: {
+                status: 'Completed',
+              },
+            });
+            for (const st of inReviewSubtasks) {
+              notify(
+                req.user.companyId,
+                existing.userId,
+                'Subtask approved',
+                `Your subtask "${st.title}" was approved.`,
+                'Task'
+              );
+            }
+          }
+        } catch (stErr) {
+          console.warn('[Subtask] Notice: Auto-completing subtask for approved evidence:', stErr.message);
+        }
       }
+    }
+
+    // Notify submitter of evidence review decision
+    if (body.status === 'Approved' && existing.userId && existing.userId !== req.user.id) {
+      notify(
+        req.user.companyId,
+        existing.userId,
+        'Evidence Approved',
+        `Your evidence "${existing.title}" was approved by ${req.user.fullName || 'Team Lead'}.`,
+        'Review'
+      );
+    } else if (body.status === 'Rejected' && existing.userId && existing.userId !== req.user.id) {
+      notify(
+        req.user.companyId,
+        existing.userId,
+        'Evidence Returned for Revision',
+        `Your evidence "${existing.title}" was returned for revision.${body.notes ? ` Feedback: ${body.notes}` : ''}`,
+        'Review'
+      );
     }
 
     try {
