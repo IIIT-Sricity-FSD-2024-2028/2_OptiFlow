@@ -10,7 +10,6 @@ import {
   selectAllTasks,
   selectTaskById,
   selectTasksStatus,
-  selectTasksError,
   selectTasksLoading,
   selectOpenTasks,
   selectOverdueTasks,
@@ -21,6 +20,7 @@ import {
 
 vi.mock('../../services/api/tasks');
 import * as tasksApi from '../../services/api/tasks';
+import { isReportableError } from '../work/entitySlice';
 
 const makeStore = () =>
   configureStore({
@@ -216,5 +216,47 @@ describe('tasks selectors', () => {
     store.dispatch(fetchTasks.fulfilled([task1], '', undefined));
     store.dispatch(fetchTasks.pending('', undefined));
     expect(selectTasksLoading(store.getState())).toBe(false); // background refetch
+  });
+});
+
+// ── cancelled detail fetch ──────────────────────────────────────────────────
+
+describe('tasks reducer — cancelled getById after pending', () => {
+  it('goes back to idle instead of staying on loading', () => {
+    const loading = tasksReducer(undefined, fetchTaskById.pending('', 1));
+    expect(loading.mutations.getById.status).toBe('loading');
+    const aborted = fetchTaskById.rejected(null, '', 1, { code: 'ABORTED' });
+    const after = tasksReducer(loading, aborted);
+    expect(after.mutations.getById).toEqual({ status: 'idle', error: null });
+  });
+});
+
+// ── freshness (shouldFetch condition) ───────────────────────────────────────
+
+describe('fetchTasks freshness', () => {
+  it('skips a second fetch while the list is fresh', async () => {
+    tasksApi.list.mockResolvedValue([task1]);
+    const store = makeStore();
+    await store.dispatch(fetchTasks());
+    const second = await store.dispatch(fetchTasks());
+    expect(tasksApi.list).toHaveBeenCalledTimes(1);
+    expect(second.meta.condition).toBe(true);
+  });
+
+  it('refetches with force: true even when fresh', async () => {
+    tasksApi.list.mockResolvedValue([task1]);
+    const store = makeStore();
+    await store.dispatch(fetchTasks());
+    await store.dispatch(fetchTasks({ force: true }));
+    expect(tasksApi.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('a skipped fetch is not a reportable error for pages', async () => {
+    tasksApi.list.mockResolvedValue([task1]);
+    const store = makeStore();
+    await store.dispatch(fetchTasks());
+    const err = await store.dispatch(fetchTasks()).unwrap().catch((e) => e);
+    expect(err.name).toBe('ConditionError');
+    expect(isReportableError(err)).toBe(false);
   });
 });

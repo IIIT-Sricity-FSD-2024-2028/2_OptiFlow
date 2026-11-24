@@ -20,11 +20,15 @@ const mutationFulfilled = (state, key) => {
   state.mutations[key] = { status: 'succeeded', error: null };
 };
 /**
- * Sets rejected state for a mutation, but silently ignores a cancelled request.
- * Plan section 3: a cancelled request must never set an error.
+ * Sets rejected state for a mutation. A cancelled request never sets an error
+ * (plan section 3), but it must not leave the entry stuck on 'loading' either,
+ * so an entry that `pending` already created goes back to idle.
  */
 const mutationRejected = (state, key, action) => {
-  if (isAbortedRejection(action)) return;
+  if (isAbortedRejection(action)) {
+    if (state.mutations[key]) state.mutations[key] = { status: 'idle', error: null };
+    return;
+  }
   state.mutations[key] = {
     status: 'failed',
     error: action.payload ?? normalizeError(action.error),

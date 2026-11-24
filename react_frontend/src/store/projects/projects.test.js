@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import projectsReducer, { projectsAdapter } from './slice';
 import { fetchProjects, createProject, updateProject, deleteProject } from './thunks';
-import { selectAllProjects, selectProjectById, selectProjectsStatus, selectOpenProjects } from './selectors';
+import { selectAllProjects, selectProjectById, selectOpenProjects } from './selectors';
 
 vi.mock('../../services/api/projects');
 import * as projectsApi from '../../services/api/projects';

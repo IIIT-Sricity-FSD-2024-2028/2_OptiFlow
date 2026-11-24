@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import subtasksReducer, { subtasksAdapter } from './slice';
 import { fetchSubtasks, fetchSubtasksByTask, createSubtask, updateSubtask, deleteSubtask } from './thunks';
-import { selectAllSubtasks, selectSubtasksByTaskId, selectSubtasksStatus } from './selectors';
+import { selectAllSubtasks, selectSubtasksByTaskId } from './selectors';
 
 vi.mock('../../services/api/subtasks');
 import * as subtasksApi from '../../services/api/subtasks';

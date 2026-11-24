@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import escalationsReducer, { escalationsAdapter } from './slice';
 import { fetchEscalations, createEscalation, updateEscalation } from './thunks';
-import { selectAllEscalations, selectEscalationsStatus, selectOpenEscalations } from './selectors';
+import { selectAllEscalations, selectOpenEscalations } from './selectors';
 
 vi.mock('../../services/api/escalations');
 import * as escalationsApi from '../../services/api/escalations';
