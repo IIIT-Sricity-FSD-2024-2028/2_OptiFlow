@@ -101,6 +101,82 @@ function formatDay(date) {
   return date.toISOString().slice(0, 10);
 }
 
+// ---- deadline extensions (escalations with blockerType "Extension Request") ----
+// A member or team lead asks; the project's PM approves. Only a PM approval moves the
+// deadline, with the same rules as a PM extending it through PATCH /tasks/:id.
+const EXTENSION_BLOCKER_TYPE = 'Extension Request';
+
+function isExtensionRequest(escalation) {
+  return escalation?.blockerType === EXTENSION_BLOCKER_TYPE;
+}
+
+// Both request forms write "Requested deadline: YYYY-MM-DD" (or "Requested new deadline: ...").
+function parseRequestedDeadline(description) {
+  const match = String(description || '').match(/Requested (?:new )?deadline:\s*(\d{4}-\d{2}-\d{2})/i);
+  if (!match) return null;
+  const date = new Date(match[1]);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// The text after "Reason:", or the whole description when there is no such label.
+function extensionReasonOf(description) {
+  const text = String(description || '').trim();
+  const match = text.match(/Reason:\s*([\s\S]+)$/i);
+  return (match ? match[1] : text).trim();
+}
+
+function assertValidExtensionDate(requested, currentDueDate) {
+  if (!requested) {
+    throw new BadRequestError('An extension request needs "Requested deadline: YYYY-MM-DD" in its description');
+  }
+  if (requested <= new Date()) {
+    throw new BadRequestError('The requested deadline must be in the future');
+  }
+  if (currentDueDate && requested <= currentDueDate) {
+    throw new BadRequestError('The requested deadline must be later than the current deadline');
+  }
+}
+
+function shorten(text, max = 200) {
+  const value = String(text || '').trim();
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+// An extended deadline ends the task's open Overdue violations. Runs inside the caller's transaction.
+async function resolveOverdueViolations(transaction, req, taskId, newDueDate, reason) {
+  const violations = await transaction.complianceViolation.findMany({
+    where: {
+      companyId: req.user.companyId,
+      entityType: 'Task',
+      entityId: taskId,
+      status: { in: ['Open', 'Under_Review'] },
+    },
+    include: { rule: true },
+  });
+  for (const violation of violations.filter((item) => item.rule?.ruleType === 'Overdue')) {
+    const resolutionRemarks = `Deadline extended to ${newDueDate.toISOString().slice(0, 10)}. Reason: ${reason}`;
+    await transaction.complianceViolation.update({
+      where: { id: violation.id },
+      data: {
+        status: 'Resolved',
+        resolvedById: req.user.id,
+        resolvedAt: new Date(),
+        resolutionRemarks,
+      },
+    });
+    await transaction.complianceAuditLog.create({
+      data: {
+        companyId: req.user.companyId,
+        violationId: violation.id,
+        action: AUDIT_ACTIONS.STATUS_CHANGE,
+        performedById: req.user.id,
+        oldValue: { status: violation.status },
+        newValue: { status: 'Resolved', resolutionRemarks },
+      },
+    });
+  }
+}
+
 // A subtask must be due on or before its parent task's due date.
 function assertWithinParentDeadline(subtaskDue, parentDue) {
   if (subtaskDue && parentDue && subtaskDue > parentDue) {
@@ -698,37 +774,7 @@ export async function updateTask(req, res, next) {
     if (deadlineExtensionReason) {
       updated = await prisma.$transaction(async (transaction) => {
         const task = await transaction.task.update({ where: { id }, data: updateData, include });
-        const violations = await transaction.complianceViolation.findMany({
-          where: {
-            companyId: req.user.companyId,
-            entityType: 'Task',
-            entityId: id,
-            status: { in: ['Open', 'Under_Review'] },
-          },
-          include: { rule: true },
-        });
-        for (const violation of violations.filter((item) => item.rule?.ruleType === 'Overdue')) {
-          const resolutionRemarks = `Deadline extended to ${task.dueDate.toISOString().slice(0, 10)}. Reason: ${deadlineExtensionReason}`;
-          await transaction.complianceViolation.update({
-            where: { id: violation.id },
-            data: {
-              status: 'Resolved',
-              resolvedById: req.user.id,
-              resolvedAt: new Date(),
-              resolutionRemarks,
-            },
-          });
-          await transaction.complianceAuditLog.create({
-            data: {
-              companyId: req.user.companyId,
-              violationId: violation.id,
-              action: AUDIT_ACTIONS.STATUS_CHANGE,
-              performedById: req.user.id,
-              oldValue: { status: violation.status },
-              newValue: { status: 'Resolved', resolutionRemarks },
-            },
-          });
-        }
+        await resolveOverdueViolations(transaction, req, id, task.dueDate, deadlineExtensionReason);
         await transaction.processAuditLog.create({
           data: {
             companyId: req.user.companyId,
@@ -1177,12 +1223,9 @@ function isEscalationViewerOfAll(user) {
   return isCompanyAdmin(user) || hasRole(user?.role, [ROLES.COMPLIANCE_OFFICER, ROLES.PROCESS_ADMIN]);
 }
 // Escalation actions that close the loop (resolve / close) belong to whoever it was sent to
-// and to managers (including Team Leaders for team scope); deleting is a manager-only action.
+// and to managers; deleting is a manager-only action.
 function canManageEscalations(user) {
   return isCompanyAdmin(user) || isProjectManagerRole(user) || isBranchManager(user);
-}
-function canCloseEscalations(user) {
-  return canManageEscalations(user) || isTeamLeadRole(user);
 }
 export async function buildEscalationWhere(req) {
   const companyId = req.user.companyId;
@@ -1306,9 +1349,15 @@ export async function createEscalation(req, res, next) {
       if (projectId && task.projectId && task.projectId !== projectId) {
         throw new BadRequestError('taskId does not belong to the given projectId');
       }
-      // Extension date validation is left to the approver (TL/PM).
-      // The backend does not impose a ceiling here — the member's requested date
-      // may intentionally exceed the current task deadline (that is the whole point).
+    }
+
+    // A deadline extension always goes to the project's PM (only a PM can grant one),
+    // whatever target the client sent, and must ask for a valid later date.
+    let extensionApproverId = null;
+    if (blockerType === EXTENSION_BLOCKER_TYPE) {
+      if (!task) throw new BadRequestError('An extension request must name its task (taskId)');
+      assertValidExtensionDate(parseRequestedDeadline(description), task.dueDate);
+      extensionApproverId = task.project?.createdById || task.createdById || null;
     }
 
     if (projectId) {
@@ -1319,7 +1368,7 @@ export async function createEscalation(req, res, next) {
     }
 
     // Validate targetManagerId belongs to the same company
-    if (targetManagerId) {
+    if (targetManagerId && !extensionApproverId) {
       const targetUser = await prisma.user.findFirst({
         where: { id: targetManagerId, companyId: req.user.companyId },
         select: { id: true },
@@ -1337,19 +1386,20 @@ export async function createEscalation(req, res, next) {
         blockerType,
         priority,
         reportedById: req.user.id,
-        targetManagerId: targetManagerId || null,
+        targetManagerId: extensionApproverId || targetManagerId || null,
         status: 'Open',
       },
     });
 
-    const escalationRecipient = targetManagerId
+    const escalationRecipient = extensionApproverId
+      || targetManagerId
       || (task?.createdById && task.createdById !== req.user.id ? task.createdById : task?.project?.createdById);
 
     if (escalationRecipient && escalationRecipient !== req.user.id) {
-      const isExtension = blockerType === 'Extension Request';
+      const isExtension = blockerType === EXTENSION_BLOCKER_TYPE;
       const notifTitle = isExtension ? 'Deadline extension requested' : 'New escalation';
       const notifMessage = isExtension
-        ? `Deadline extension requested for "${task?.title || title}". Reason: ${description || 'No reason provided.'}`
+        ? `Deadline extension requested for "${task?.title || title}". Reason: ${shorten(extensionReasonOf(description)) || 'No reason provided.'}`
         : `"${escalation.title}" needs your attention.`;
       const notifType = isExtension ? 'Task' : 'Escalation';
 
@@ -1385,10 +1435,11 @@ export async function updateEscalation(req, res, next) {
     }
 
     const updateData = {};
+    const isExt = isExtensionRequest(existing);
     if (body.status) {
       validateEnum(body.status, ALLOWED_ESCALATION_STATUSES, 'status');
       const closesLoop = body.status === 'Resolved' || body.status === 'Closed';
-      if (closesLoop && !canCloseEscalations(req.user) && existing.targetManagerId !== req.user.id) {
+      if (closesLoop && !canManageEscalations(req.user) && existing.targetManagerId !== req.user.id) {
         throw new ForbiddenError('Only the escalation target or a manager can resolve or close an escalation');
       }
       updateData.status = body.status;
@@ -1400,42 +1451,67 @@ export async function updateEscalation(req, res, next) {
     }
     if (body.description) {
       // Editing the text is for the reporter, the target and managers.
-      if (!canCloseEscalations(req.user) && existing.reportedById !== req.user.id && existing.targetManagerId !== req.user.id) {
+      const isManagerOrTarget = canManageEscalations(req.user) || existing.targetManagerId === req.user.id;
+      if (!isManagerOrTarget && existing.reportedById !== req.user.id) {
         throw new ForbiddenError('You cannot edit this escalation');
+      }
+      // The requested date is read from this text, so the requester cannot change it once sent.
+      if (isExt && !isManagerOrTarget) {
+        throw new ForbiddenError('An extension request cannot be edited after it is sent');
       }
       updateData.description = body.description;
     }
 
-    const updated = await prisma.escalation.update({
-      where: { id },
-      data: updateData,
+    // Approving an extension moves the task deadline. Only a Project Manager may do that,
+    // with the same checks as PATCH /tasks/:id, and in the same transaction as the approval.
+    let extension = null;
+    if (isExt && updateData.status === 'Resolved' && existing.status !== 'Resolved' && existing.taskId) {
+      if (!isProjectManagerRole(req.user)) {
+        throw new ForbiddenError('Only Project Managers can approve deadline extensions');
+      }
+      const task = await prisma.task.findFirst({
+        where: { id: existing.taskId, companyId: req.user.companyId, deletedAt: null },
+        select: { id: true, projectId: true, dueDate: true },
+      });
+      if (!task) throw new NotFoundError(`Task ${existing.taskId} not found in this company`);
+      const requested = parseRequestedDeadline(existing.description);
+      assertValidExtensionDate(requested, task.dueDate);
+      extension = { task, requested, reason: extensionReasonOf(existing.description) || 'Extension request approved' };
+    }
+
+    const updated = await prisma.$transaction(async (transaction) => {
+      const row = await transaction.escalation.update({ where: { id }, data: updateData });
+      if (extension) {
+        const { task, requested, reason } = extension;
+        await transaction.task.update({ where: { id: task.id }, data: { dueDate: requested } });
+        await resolveOverdueViolations(transaction, req, task.id, requested, reason);
+        await transaction.processAuditLog.create({
+          data: {
+            companyId: req.user.companyId,
+            projectId: task.projectId,
+            taskId: task.id,
+            action: AUDIT_ACTIONS.UPDATE,
+            performedById: req.user.id,
+            oldValue: { dueDate: task.dueDate?.toISOString() || null },
+            newValue: { dueDate: requested.toISOString(), deadlineExtensionReason: reason, escalationId: id },
+          },
+        });
+      }
+      return row;
     });
 
     if (updateData.status && updateData.status !== existing.status && existing.reportedById !== req.user.id) {
-      const isExt = existing.blockerType === 'Extension Request';
       const action = updateData.status === 'Resolved' ? 'approved' : updateData.status === 'Closed' ? 'rejected' : updateData.status.toLowerCase();
       const notifTitle = isExt ? `Deadline extension ${action}` : `Escalation ${updateData.status.toLowerCase()}`;
-      
+
       const rejectMatch = updateData.description?.match(/Rejection Comment:\s*([\s\S]+)$/i);
-      const commentSnippet = rejectMatch ? ` Reason: ${rejectMatch[1].trim()}` : '';
+      const commentSnippet = rejectMatch ? ` Reason: ${shorten(rejectMatch[1])}` : '';
+      const newDeadline = extension ? ` New deadline: ${formatDay(extension.requested)}.` : '';
 
       const notifMessage = isExt
-        ? `Your deadline extension request for "${existing.title}" was ${action}.${commentSnippet}`
+        ? `Your deadline extension request for "${existing.title}" was ${action}.${newDeadline}${commentSnippet}`
         : `"${existing.title}" is now ${updateData.status}.`;
       notify(req.user.companyId, existing.reportedById, notifTitle, notifMessage, isExt ? 'Task' : 'Escalation');
-    }
-
-    if (updateData.status === 'Resolved' && existing.blockerType === 'Extension Request' && existing.taskId) {
-      const match = existing.description?.match(/Requested (?:new )?deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-      if (match && match[1]) {
-        await prisma.task.update({
-          where: { id: existing.taskId },
-          data: {
-            dueDate: new Date(match[1]),
-            deadlineExtensionReason: existing.description,
-          },
-        }).catch((err) => console.warn('[Extension] Could not auto-update task deadline:', err.message));
-      }
     }
 
     res.status(200).json({
