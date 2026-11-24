@@ -1306,16 +1306,9 @@ export async function createEscalation(req, res, next) {
       if (projectId && task.projectId && task.projectId !== projectId) {
         throw new BadRequestError('taskId does not belong to the given projectId');
       }
-      if (blockerType === 'Extension Request' && isMemberRole(req.user) && task.dueDate) {
-        const match = description?.match(/Requested (?:new )?deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-        if (match && match[1]) {
-          const reqDue = new Date(match[1]);
-          const parentDue = new Date(task.dueDate);
-          if (reqDue > parentDue) {
-            throw new BadRequestError(`Extension cannot be given beyond the task due date (${formatDay(parentDue)}) set by the Project Manager`);
-          }
-        }
-      }
+      // Extension date validation is left to the approver (TL/PM).
+      // The backend does not impose a ceiling here — the member's requested date
+      // may intentionally exceed the current task deadline (that is the whole point).
     }
 
     if (projectId) {
@@ -1353,7 +1346,7 @@ export async function createEscalation(req, res, next) {
       || (task?.createdById && task.createdById !== req.user.id ? task.createdById : task?.project?.createdById);
 
     if (escalationRecipient && escalationRecipient !== req.user.id) {
-      const isExtension = blockerType === 'Extension Request' || title.toLowerCase().includes('extension');
+      const isExtension = blockerType === 'Extension Request';
       const notifTitle = isExtension ? 'Deadline extension requested' : 'New escalation';
       const notifMessage = isExtension
         ? `Deadline extension requested for "${task?.title || title}". Reason: ${description || 'No reason provided.'}`
@@ -1419,7 +1412,7 @@ export async function updateEscalation(req, res, next) {
     });
 
     if (updateData.status && updateData.status !== existing.status && existing.reportedById !== req.user.id) {
-      const isExt = existing.blockerType === 'Extension Request' || existing.title.toLowerCase().includes('extension');
+      const isExt = existing.blockerType === 'Extension Request';
       const action = updateData.status === 'Resolved' ? 'approved' : updateData.status === 'Closed' ? 'rejected' : updateData.status.toLowerCase();
       const notifTitle = isExt ? `Deadline extension ${action}` : `Escalation ${updateData.status.toLowerCase()}`;
       
@@ -1432,7 +1425,7 @@ export async function updateEscalation(req, res, next) {
       notify(req.user.companyId, existing.reportedById, notifTitle, notifMessage, isExt ? 'Task' : 'Escalation');
     }
 
-    if (updateData.status === 'Resolved' && (existing.blockerType === 'Extension Request' || existing.title.toLowerCase().includes('extension')) && existing.taskId) {
+    if (updateData.status === 'Resolved' && existing.blockerType === 'Extension Request' && existing.taskId) {
       const match = existing.description?.match(/Requested (?:new )?deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
       if (match && match[1]) {
         await prisma.task.update({
