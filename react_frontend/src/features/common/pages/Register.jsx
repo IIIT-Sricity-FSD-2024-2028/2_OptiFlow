@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { PATHS } from "../../../app/paths";
 import { Link } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
-import { setSession } from "../../../services/auth/session";
+import { useDispatch } from 'react-redux';
+import { registerCompany } from "../../../store/auth";
 import {
   Eye,
   EyeOff,
@@ -43,6 +43,7 @@ const FREE_EMAIL_PROVIDERS = [
 ];
 
 export default function Register() {
+  const dispatch = useDispatch();
   const [companyLegalName, setCompanyLegalName] = useState("");
   const [ownerFullName, setOwnerFullName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
@@ -123,14 +124,8 @@ export default function Register() {
         industry,
       };
 
-      const response = await apiClient("/auth/register-company", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      if (response?.token) {
-        setSession(response.token, false);
-      }
+      //The thunk keeps the token (session.js) but doesnt sign the user in.
+      await dispatch(registerCompany(payload)).unwrap();
 
       setIsProcessing(false);
       setRegistrationComplete(true);
