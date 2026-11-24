@@ -1,97 +1,32 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
-import { useToast } from '../../../../shared/components/Toast';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { TaskTable } from '../../components/TaskTable';
-import * as tasksApi from '../../../../services/api/tasks';
-import * as subtasksApi from '../../../../services/api/subtasks';
-import * as projectsApi from '../../../../services/api/projects';
-import * as usersApi from '../../../../services/api/users';
+import { useSelector } from 'react-redux';
+import { memberReads, useMemberReads } from '../useMemberReads';
+import { selectMemberDeliverables } from '../memberSelectors';
+import { selectAllProjects } from '../../../../store/projects';
 import { Search, CheckSquare } from 'lucide-react';
+
+const reads = [memberReads.tasks, memberReads.subtasks, memberReads.projects];
 
 export default function MemberTasks() {
   const { user } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [allTasks, setAllTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [, setUsers] = useState([]);
+  const { loading, error } = useMemberReads(reads);
+  const allTasks = useSelector(state => selectMemberDeliverables(state, user?.id || user?.userId));
+  const projects = useSelector(selectAllProjects);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadTasksData() {
-      setLoading(true);
-      try {
-        const [tasksRes, subtasksRes, projRes, usersRes] = await Promise.allSettled([
-          tasksApi.list(),
-          subtasksApi.list(),
-          projectsApi.list(),
-          usersApi.list(),
-        ]);
-
-        if (!isMounted) return;
-
-        const rawTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
-        const rawSubtasks = subtasksRes.status === 'fulfilled' && subtasksRes.value ? (Array.isArray(subtasksRes.value) ? subtasksRes.value : subtasksRes.value.data || []) : [];
-        const rawProjects = projRes.status === 'fulfilled' && projRes.value ? (Array.isArray(projRes.value) ? projRes.value : projRes.value.data || []) : [];
-        const rawUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
-
-        setProjects(rawProjects);
-        setUsers(rawUsers);
-
-        const currentUserId = String(user?.id || user?.userId || '');
-
-        const memberTasks = rawTasks
-          .filter((t) => {
-            const assigneeId = String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '');
-            return Boolean(currentUserId && assigneeId === currentUserId);
-          })
-          .map((t) => ({ ...t, isSubtask: false }));
-
-        const memberSubtasks = rawSubtasks
-          .filter((st) => String(st.assignedTo || st.assignedToId || '') === currentUserId)
-          .map((st) => {
-            const parent = rawTasks.find((pt) => String(pt.id || pt.taskId) === String(st.taskId));
-            return {
-              ...st,
-              id: st.id || st.subtaskId,
-              title: st.title || 'Subtask',
-              projectId: parent?.projectId || parent?.project?.id,
-              project: parent?.project,
-              isSubtask: true,
-              parentTaskId: st.taskId,
-              dueDate: st.dueDate || st.due_date || parent?.dueDate,
-              priority: st.priority || parent?.priority || 'Medium',
-            };
-          });
-
-        setAllTasks([...memberTasks, ...memberSubtasks]);
-      } catch (err) {
-        console.error('Error fetching member tasks:', err);
-        if (isMounted) toast.error('Could not load task list');
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }
-
-    loadTasksData();
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.id]);
 
   const statusCounts = useMemo(() => {
     return {
@@ -147,6 +82,7 @@ export default function MemberTasks() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
       <div>
         <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1">
           <Link to={PATHS.MEMBER.DASHBOARD} className="hover:text-blue-600 transition-colors">

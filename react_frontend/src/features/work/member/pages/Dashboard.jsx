@@ -1,20 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
-import { useToast } from '../../../../shared/components/Toast';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { TaskTable } from '../../components/TaskTable';
 import { ReportBlockerModal } from '../components/modals/ReportBlockerModal';
 import { resolveTeamLead } from '../../utils/userUtils';
-import * as tasksApi from '../../../../services/api/tasks';
-import * as subtasksApi from '../../../../services/api/subtasks';
-import * as escalationsApi from '../../../../services/api/escalations';
-import * as evidenceApi from '../../../../services/api/evidence';
-import * as usersApi from '../../../../services/api/users';
-import * as projectsApi from '../../../../services/api/projects';
+import { useSelector } from 'react-redux';
+import { memberReads, useMemberReads } from '../useMemberReads';
+import { selectMemberDeliverables } from '../memberSelectors';
+import { selectAllUsers } from '../../../../store/users';
 import {
   CheckSquare,
   Clock,
@@ -23,100 +20,20 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+const reads = [memberReads.tasks, memberReads.subtasks, memberReads.users];
+
 export default function MemberDashboard() {
   const { user } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState([]);
-  const [subtasks, setSubtasks] = useState([]);
-  const [, setEscalations] = useState([]);
-  const [, setEvidenceList] = useState([]);
-  const [manager, setManager] = useState(null);
-  const [, setActiveProject] = useState(null);
+  const { loading, error } = useMemberReads(reads);
+  const allDeliverables = useSelector(state => selectMemberDeliverables(state, user?.id || user?.userId));
+  const users = useSelector(selectAllUsers);
+  const manager = resolveTeamLead(user, users);
+  const subtaskCount = allDeliverables.filter(row => row.isSubtask).length;
 
   // Blocker Modal state
   const [isBlockerModalOpen, setIsBlockerModalOpen] = useState(false);
-
-  const loadDashboardData = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const [tasksRes, subtasksRes, escRes, evRes, usersRes, projRes] = await Promise.allSettled([
-        tasksApi.list(),
-        subtasksApi.list(),
-        escalationsApi.list(),
-        evidenceApi.list(),
-        usersApi.list(),
-        projectsApi.list(),
-      ]);
-
-      const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
-      const allSubtasks = subtasksRes.status === 'fulfilled' && subtasksRes.value ? (Array.isArray(subtasksRes.value) ? subtasksRes.value : subtasksRes.value.data || []) : [];
-      const allEsc = escRes.status === 'fulfilled' && escRes.value ? (Array.isArray(escRes.value) ? escRes.value : escRes.value.data || []) : [];
-      const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
-      const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
-      const allProjects = projRes.status === 'fulfilled' && projRes.value ? (Array.isArray(projRes.value) ? projRes.value : projRes.value.data || []) : [];
-
-      const currentUserId = String(user?.id || user?.userId || '');
-
-      // Resolve Team Leader using reusable helper
-      const myLeader = resolveTeamLead(user, allUsers);
-      setManager(myLeader);
-
-      // Filter tasks assigned strictly to current user
-      const myTasks = allTasks.filter((t) => {
-        const assigneeId = String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '');
-        return Boolean(currentUserId && assigneeId === currentUserId);
-      });
-
-      const mySubtasks = allSubtasks
-        .filter((st) => String(st.assignedTo || st.assignedToId || '') === currentUserId)
-        .map((st) => {
-          const parent = allTasks.find((pt) => String(pt.id || pt.taskId) === String(st.taskId));
-          return {
-            ...st,
-            id: st.id || st.subtaskId,
-            title: st.title || 'Subtask',
-            projectId: parent?.projectId || parent?.project?.id,
-            project: parent?.project,
-            isSubtask: true,
-            parentTaskId: st.taskId,
-            dueDate: st.dueDate || st.due_date || parent?.dueDate,
-            priority: st.priority || parent?.priority || 'Medium',
-          };
-        });
-
-      setTasks(myTasks);
-      setSubtasks(mySubtasks);
-      setEscalations(allEsc);
-      setEvidenceList(allEv);
-
-      if (myTasks.length > 0) {
-        const firstTaskProjId = myTasks[0]?.projectId || (typeof myTasks[0]?.project === 'object' ? myTasks[0]?.project?.id : null);
-        const foundProj = allProjects.find((p) => String(p.id || p.projectId) === String(firstTaskProjId)) || myTasks[0]?.project;
-        setActiveProject(foundProj || allProjects[0] || null);
-      } else if (allProjects.length > 0) {
-        setActiveProject(allProjects[0]);
-      }
-    } catch (err) {
-      console.error('Error loading member dashboard:', err);
-      toast.error('Failed to load workspace data');
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
-
-  const allDeliverables = React.useMemo(() => {
-    return [
-      ...tasks.map((t) => ({ ...t, isSubtask: false })),
-      ...subtasks,
-    ];
-  }, [tasks, subtasks]);
 
   const totalAssigned = allDeliverables.length;
   const completedTasks = allDeliverables.filter((t) => String(t.status || '').toLowerCase().includes('complete')).length;
@@ -143,6 +60,7 @@ export default function MemberDashboard() {
 
   return (
     <div className="space-y-6 max-w-[1240px] mx-auto pb-8">
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -204,7 +122,7 @@ export default function MemberDashboard() {
         <StatCard
           title="Assigned Tasks"
           value={totalAssigned}
-          subtitle={`${tasks.length} deliverables, ${subtasks.length} subtasks`}
+          subtitle={`${allDeliverables.length - subtaskCount} deliverables, ${subtaskCount} subtasks`}
           icon={<CheckSquare className="w-5 h-5 text-blue-600" />}
         />
         <StatCard
@@ -257,9 +175,6 @@ export default function MemberDashboard() {
         onClose={() => setIsBlockerModalOpen(false)}
         tasks={allDeliverables}
         managerId={manager?.id || manager?.userId}
-        onSuccess={() => {
-          loadDashboardData();
-        }}
       />
     </div>
   );
