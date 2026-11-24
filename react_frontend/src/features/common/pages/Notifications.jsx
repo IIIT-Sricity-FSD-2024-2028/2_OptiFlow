@@ -22,8 +22,8 @@ import {
 
 // Notification.type values; the API has no category or priority fields.
 const WORK_TYPES = ['Task', 'Review', 'Escalation'];
-const isComplianceType = (n) => n.type === 'Compliance' || n.category === 'COMPLIANCE';
-const isWorkType = (n) => WORK_TYPES.includes(n.type) || n.category === 'WORK';
+const isComplianceType = (n) => n.type === 'Compliance';
+const isWorkType = (n) => WORK_TYPES.includes(n.type);
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -206,9 +206,9 @@ export default function Notifications() {
                       <span className="font-bold text-sm text-slate-900">
                         {n.title}
                       </span>
-                      {(n.type || n.category) && (
+                      {n.type && (
                         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {n.type || n.category}
+                          {n.type}
                         </span>
                       )}
                       {isUrgent && (
