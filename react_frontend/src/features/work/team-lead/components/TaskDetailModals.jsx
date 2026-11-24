@@ -3,7 +3,7 @@
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
-import { todayInput, tomorrowInput, deadlineInput, minExtensionDateInput } from '../../components/dateLimits';
+import { todayInput, deadlineInput, minExtensionDateInput } from '../../components/dateLimits';
 import { BLOCKER_TYPES, EVIDENCE_TYPES } from './taskOptions';
 
 /** Team Lead submits the parent task to the Project Manager for review. */

@@ -15,7 +15,6 @@ export function RequestExtensionModal({
   managerId,
   taskTitle = 'Task',
   currentDeadline,
-  parentTaskDeadline,
   onSuccess,
 }) {
   const { user } = useAuth();
@@ -26,7 +25,6 @@ export function RequestExtensionModal({
   const [submitting, setSubmitting] = useState(false);
 
   const minDate = minExtensionDateInput(currentDeadline);
-  const maxDate = deadlineInput(parentTaskDeadline);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -37,11 +35,6 @@ export function RequestExtensionModal({
 
     if (minDate && extDate < minDate) {
       toast.warning(`Proposed deadline must be on or after ${minDate} (later than the current deadline).`);
-      return;
-    }
-
-    if (maxDate && extDate > maxDate) {
-      toast.warning(`Proposed deadline cannot exceed the parent task deadline (${maxDate}) set by the Project Manager.`);
       return;
     }
 
@@ -82,7 +75,6 @@ export function RequestExtensionModal({
           <Input
             type="date"
             min={minDate}
-            max={maxDate}
             value={extDate}
             onChange={(e) => setExtDate(e.target.value)}
             disabled={submitting}
@@ -91,11 +83,6 @@ export function RequestExtensionModal({
           {currentDeadline && (
             <p className="text-xs text-slate-500 mt-1">
               Current deadline: <span className="font-medium text-slate-700">{deadlineInput(currentDeadline)}</span> (extension must be later than current deadline)
-            </p>
-          )}
-          {maxDate && (
-            <p className="text-xs text-amber-700 mt-1">
-              Task deadline (PM limit): <span className="font-semibold text-amber-900">{maxDate}</span> (cannot extend beyond this)
             </p>
           )}
         </FormField>

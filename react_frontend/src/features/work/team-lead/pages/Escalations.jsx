@@ -175,9 +175,9 @@ export default function TeamLeadEscalations() {
                   {['High', 'Medium', 'Low'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
                 </Select>
               </FormField>
-              <Button type="submit" variant="primary" disabled={creating || !form.taskId || form.title.trim().length < 5}
-                className="transition-all duration-200 hover:scale-105 hover:shadow-lg disabled:hover:scale-100 disabled:hover:shadow-none">
-                {creating ? 'Sending…' : 'Send escalation'}
+              <Button type="submit"  variant="primary" disabled={creating || !form.taskId || form.title.trim().length < 5} 
+              className="transition-all duration-200 hover:scale-105 hover:shadow-lg disabled:hover:scale-100 disabled:hover:shadow-none">
+                {creating ? 'Sending…' : 'Send escalation' }
               </Button>
             </div>
             <FormField label="Details">

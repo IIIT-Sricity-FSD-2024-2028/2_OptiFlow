@@ -16,8 +16,8 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchTasks, selectAllTasks, selectTasksLoading } from '../../../../store/tasks';
-import { fetchProjects, selectAllProjects, selectProjectsLoading } from '../../../../store/projects';
+import { fetchTasks, selectAllTasks, selectTasksError, selectTasksLoading } from '../../../../store/tasks';
+import { fetchProjects, selectAllProjects, selectProjectsError, selectProjectsLoading } from '../../../../store/projects';
 // Foreign resource (M1 compliance) keeps its own fetch until that slice merges.
 import * as complianceApi from '../../../../services/api/compliance';
 
@@ -35,6 +35,9 @@ export default function TeamLeadTasks() {
   const projects = useSelector(selectAllProjects);
   const tasksLoading = useSelector(selectTasksLoading);
   const projectsLoading = useSelector(selectProjectsLoading);
+  const tasksError = useSelector(selectTasksError);
+  const projectsError = useSelector(selectProjectsError);
+  const loadError = tasksError || projectsError;
   const [complianceBlockedIds, setComplianceBlockedIds] = useState(new Set());
   const [violationsLoading, setViolationsLoading] = useState(true);
   const loading = tasksLoading || projectsLoading || violationsLoading;
@@ -48,7 +51,7 @@ export default function TeamLeadTasks() {
   useEffect(() => {
     let mounted = true;
 
-    // A failed task or project load sets that slice's status to failed; the page shows the empty state.
+    // A failed task or project load sets that slice's error; the page shows it above the list.
     dispatch(fetchTasks());
     dispatch(fetchProjects());
 
@@ -192,6 +195,12 @@ export default function TeamLeadTasks() {
           </p>
         </div>
       </div>
+
+      {loadError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+          {loadError.message || 'Failed to load team tasks.'}
+        </div>
+      )}
 
       {/* Triage Tabs with Enterprise SVGs & Clean Badges */}
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3">

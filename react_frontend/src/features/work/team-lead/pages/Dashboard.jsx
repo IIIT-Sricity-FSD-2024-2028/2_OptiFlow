@@ -17,7 +17,7 @@ import { DashboardSubtaskModal, SendBackSubtaskModal, RejectExtensionModal } fro
 import { getBadgeStatus, formatStatus } from '../components/statusDisplay';
 
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchTasks, isReportableError, selectAllTasks, selectTasksLoading, updateTask } from '../../../../store/tasks';
+import { fetchTasks, isReportableError, selectAllTasks, selectTasksLoading } from '../../../../store/tasks';
 import { createSubtask, updateSubtask } from '../../../../store/subtasks';
 import {
   createEscalation,
@@ -261,7 +261,8 @@ export default function TeamLeadDashboard() {
       closeSubtaskModal();
 
       // Refresh tasks so the new subtask comes back with its assignee details.
-      dispatch(fetchTasks());
+      // `force`: the list was loaded moments ago, so the freshness check would skip a plain fetch.
+      dispatch(fetchTasks({ force: true }));
     } catch (error) {
       console.error(
         'Create subtask failed:',
@@ -354,9 +355,10 @@ export default function TeamLeadDashboard() {
     const newStatus = 'Resolved';
     try {
       await dispatch(updateEscalation({ id: ext.id, data: { status: newStatus } })).unwrap();
-      // The backend auto-updates task.dueDate when an extension escalation is Resolved.
-      // Do NOT also call updateTask here — that would apply the change twice.
-      dispatch(fetchTasks());
+      // Approving only resolves the request for now. Updating task.dueDate from the requested
+      // date belongs to the backend (follow-up backend PR), so the page does not change it here.
+      // `force`: refetch even though the list is fresh, so the task rows match the server.
+      dispatch(fetchTasks({ force: true }));
       showToast('success', 'Extension approved & member notified.');
     } catch {
       showToast('error', 'Failed to update extension request.');
