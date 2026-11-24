@@ -23,6 +23,8 @@ import {
   ShieldAlert,
   UserCheck,
   Lock,
+  Download,
+  RefreshCw,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -48,6 +50,46 @@ export default function ComplianceViolations() {
   const [queueFilter, setQueueFilter] = useState(initialQueue);
   const [selectedViolation, setSelectedViolation] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCheckingSla, setIsCheckingSla] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    try {
+      setIsExporting(true);
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/compliance-violations/export/csv", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) throw new Error("Failed to export compliance violations");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `compliance-violations-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Failed to download CSV");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleCheckSlas = async () => {
+    try {
+      setIsCheckingSla(true);
+      await apiClient.post("/api/compliance-violations/check-slas");
+      dispatch(fetchComplianceViolations({ force: true }));
+    } catch (err) {
+      setError(err.message || "Failed to run SLA check");
+    } finally {
+      setIsCheckingSla(false);
+    }
+  };
 
   const userRole = (user?.role || "").toLowerCase();
   const isGlobalAdmin = [
@@ -289,12 +331,12 @@ export default function ComplianceViolations() {
           return (
             <span className="text-xs font-medium text-emerald-700 inline-flex items-center gap-1">
               <ShieldCheck size={13} />
-              Resolved
+              {row.slaRemainingLabel || "SLA Met"}
             </span>
           );
         }
 
-        const isBreached = Boolean(
+        const isBreached = row.slaStatus === "Breached" || Boolean(
           row.breachedAt ||
             (row.status === "Open" &&
               row.dueDate &&
@@ -303,9 +345,24 @@ export default function ComplianceViolations() {
 
         if (isBreached) {
           return (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+            <span
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full"
+              title={row.dueDate ? new Date(row.dueDate).toLocaleString() : ""}
+            >
               <ShieldAlert size={12} className="text-rose-600" />
-              SLA BREACHED
+              {row.slaRemainingLabel ? `OVERDUE (${row.slaRemainingLabel})` : "SLA BREACHED"}
+            </span>
+          );
+        }
+
+        if (row.slaStatus === "At_Risk") {
+          return (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full"
+              title={row.dueDate ? new Date(row.dueDate).toLocaleString() : ""}
+            >
+              <Clock size={12} className="text-amber-600" />
+              {row.slaRemainingLabel || "At Risk (<24h)"}
             </span>
           );
         }
@@ -313,22 +370,11 @@ export default function ComplianceViolations() {
         if (row.dueDate) {
           const due = new Date(row.dueDate);
           if (!isNaN(due.getTime())) {
-            const hoursRemaining = Math.max(
-              0,
-              Math.round((due.getTime() - Date.now()) / (1000 * 3600)),
-            );
             return (
               <div className="flex flex-col">
                 <span className="text-xs font-semibold text-slate-800 flex items-center gap-1">
-                  <Clock
-                    size={12}
-                    className={
-                      hoursRemaining <= 24
-                        ? "text-amber-600"
-                        : "text-slate-400"
-                    }
-                  />
-                  {hoursRemaining}h left
+                  <Clock size={12} className="text-slate-400" />
+                  {row.slaRemainingLabel || `${Math.max(0, Math.round((due.getTime() - Date.now()) / (1000 * 3600)))}h left`}
                 </span>
                 <span className="text-[10px] text-slate-400">
                   {due.toLocaleDateString([], {
@@ -412,6 +458,30 @@ export default function ComplianceViolations() {
               ? "Track, audit, and force-resolve compliance flags across all organizational departments."
               : `Review and resolve compliance violations specifically assigned to your regulatory domain (${user?.fullName || user?.email || "Officer"}).`}
           </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExportCsv}
+            disabled={isExporting}
+            className="inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Download size={14} className={isExporting ? "animate-bounce" : ""} />
+            <span>{isExporting ? "Exporting..." : "Export Audit CSV"}</span>
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleCheckSlas}
+            disabled={isCheckingSla}
+            className="inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <RefreshCw size={14} className={isCheckingSla ? "animate-spin" : ""} />
+            <span>{isCheckingSla ? "Checking SLAs..." : "Check SLAs"}</span>
+          </Button>
         </div>
       </div>
 

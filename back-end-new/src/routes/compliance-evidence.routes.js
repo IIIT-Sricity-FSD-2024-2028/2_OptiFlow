@@ -13,7 +13,8 @@ import {
   updateEvidence,
   deleteEvidence,
   uploadEvidenceFile,
-  streamEvidenceFile
+  streamEvidenceFile,
+  exportComplianceEvidenceCsv,
 } from '../controllers/compliance-evidence.controller.js';
 
 const router = Router();
@@ -27,6 +28,7 @@ const upload = multer({
 });
 
 // Evidence
+router.get(['/evidence/export/csv', '/api/evidence/export/csv'], authenticate, exportComplianceEvidenceCsv);
 router.get(['/evidence', '/api/evidence'], authenticate, listEvidence);
 router.get(['/evidence/:id', '/api/evidence/:id'], authenticate, getEvidenceById);
 router.get(['/evidence/:id/file', '/api/evidence/:id/file'], authenticate, streamEvidenceFile);

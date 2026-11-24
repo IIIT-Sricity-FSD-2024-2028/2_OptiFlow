@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma.js';
 import { recordViolationOnce } from '../services/compliance.service.js';
 import { createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
+import { checkAndEscalateViolationSlas } from '../controllers/compliance-violations.controller.js';
 
 /**
  * Builds the Prisma where-clause for a task given a binding scope (SEC-M1-13).
@@ -262,9 +263,20 @@ export async function runComplianceEngine(companyId = null) {
   console.log(
     `[Compliance Engine] Engine finished. Generated ${totalNewViolations} new violations, auto-resolved ${totalResolvedViolations}.`
   );
+
+  let escalatedViolations = 0;
+  if (companyId) {
+    try {
+      escalatedViolations = await checkAndEscalateViolationSlas(companyId);
+    } catch (escErr) {
+      console.warn('[Compliance Engine] Notice: SLA escalation check:', escErr.message);
+    }
+  }
+
   return {
     success: true,
     newViolations: totalNewViolations,
     resolvedViolations: totalResolvedViolations,
+    escalatedViolations,
   };
 }

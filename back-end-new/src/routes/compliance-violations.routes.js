@@ -8,12 +8,21 @@ import {
   createComplianceViolation,
   updateComplianceViolation,
   deleteComplianceViolation,
-  notifyViolationOwner
+  notifyViolationOwner,
+  checkViolationSlasHandler,
+  exportComplianceViolationsCsv,
 } from '../controllers/compliance-violations.controller.js';
 
 const router = Router();
 
 // Violations
+router.get(['/compliance-violations/export/csv', '/api/compliance-violations/export/csv'], authenticate, exportComplianceViolationsCsv);
+router.post(
+  ['/compliance-violations/check-slas', '/api/compliance-violations/check-slas'],
+  authenticate,
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
+  checkViolationSlasHandler
+);
 router.get(['/compliance-violations', '/api/compliance-violations'], authenticate, listComplianceViolations);
 router.get(['/compliance-violations/:id', '/api/compliance-violations/:id'], authenticate, getComplianceViolationById);
 router.post(

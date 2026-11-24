@@ -13,6 +13,7 @@ import {
 import { validateRequired, validateEnum } from "../utils/validation.js";
 import { ROLES, normalizeRole } from "../utils/roles.js";
 import { createComplianceAuditLog, AUDIT_ACTIONS } from "../utils/audit.js";
+import { calculateSlaDueDate } from "../services/compliance.service.js";
 
 const ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -105,11 +106,52 @@ async function hydrateViolations(violations) {
 
       const assignedOfficer = v.assignedOfficer || v.rule?.category?.owner || null;
 
+      // SLA computation
+      const detectedAt = v.detectedAt ? new Date(v.detectedAt) : new Date();
+      let dueDate = v.dueDate ? new Date(v.dueDate) : null;
+      if (!dueDate) {
+        dueDate = calculateSlaDueDate(v.severity || "Medium", detectedAt);
+      }
+
+      const now = new Date();
+      let slaStatus = "On_Track";
+      let slaRemainingLabel = "";
+
+      if (v.status === "Resolved") {
+        const resolvedAt = v.resolvedAt ? new Date(v.resolvedAt) : now;
+        if (resolvedAt <= dueDate) {
+          slaStatus = "Met";
+          slaRemainingLabel = "SLA Met";
+        } else {
+          slaStatus = "Resolved_Late";
+          slaRemainingLabel = "Resolved Past SLA";
+        }
+      } else {
+        const diffMs = dueDate.getTime() - now.getTime();
+        const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffMs < 0) {
+          slaStatus = "Breached";
+          const overdueHours = Math.abs(diffHours);
+          slaRemainingLabel = overdueHours < 24 ? `${overdueHours}h overdue` : `${Math.abs(diffDays)}d overdue`;
+        } else if (diffHours <= 24) {
+          slaStatus = "At_Risk";
+          slaRemainingLabel = `${Math.max(1, diffHours)}h left`;
+        } else {
+          slaStatus = "On_Track";
+          slaRemainingLabel = `${diffDays}d left`;
+        }
+      }
+
       return {
         ...v,
         entityName,
         entityOwner,
         assignedOfficer,
+        dueDate: dueDate.toISOString(),
+        slaStatus,
+        slaRemainingLabel,
       };
     });
 }
@@ -239,7 +281,7 @@ export async function createComplianceViolation(req, res, next) {
         severity,
         status: "Open",
         reportedById: req.user.id,
-        dueDate: dueDate ? new Date(dueDate) : null,
+        dueDate: dueDate ? new Date(dueDate) : calculateSlaDueDate(severity),
       },
       include: VIOLATION_LIST_INCLUDE,
     });
@@ -417,3 +459,176 @@ export async function notifyViolationOwner(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * Checks all active violations past their SLA dueDate and creates auto-escalations for Critical/High violations.
+ */
+export async function checkAndEscalateViolationSlas(companyId) {
+  const now = new Date();
+  const openViolations = await prisma.complianceViolation.findMany({
+    where: {
+      companyId,
+      status: { in: ['Open', 'Under_Review'] },
+      dueDate: { lt: now },
+      severity: { in: ['Critical', 'High'] },
+      entityType: 'Task',
+    },
+    include: {
+      rule: true,
+    },
+  });
+
+  let escalatedCount = 0;
+  for (const v of openViolations) {
+    const existingEsc = await prisma.escalation.findFirst({
+      where: {
+        taskId: v.entityId,
+        companyId,
+        status: 'Open',
+        title: { contains: 'SLA Breached' },
+      },
+    });
+
+    if (!existingEsc) {
+      const task = await prisma.task.findUnique({
+        where: { id: v.entityId },
+        select: { id: true, title: true, projectId: true, assignedToId: true, createdById: true },
+      });
+
+      if (task) {
+        try {
+          await prisma.escalation.create({
+            data: {
+              companyId,
+              taskId: task.id,
+              projectId: task.projectId || null,
+              reportedById: v.reportedById || task.createdById || task.assignedToId || null,
+              title: `SLA Breached: Critical Compliance Violation (${v.rule?.name || 'Policy'})`,
+              description: `Violation ${v.id} on task "${task.title}" breached its ${v.severity} SLA deadline on ${v.dueDate ? new Date(v.dueDate).toISOString() : 'now'}. Immediate remediation or waiver required.`,
+              blockerType: 'Compliance Blocker',
+              priority: 'Critical',
+              status: 'Open',
+            },
+          });
+
+          const targetUserId = task.assignedToId || task.createdById;
+          if (targetUserId) {
+            await prisma.notification.create({
+              data: {
+                companyId,
+                userId: targetUserId,
+                title: 'SLA Breached: Compliance Violation',
+                message: `A ${v.severity} compliance violation on task "${task.title}" has breached its SLA deadline.`,
+                type: 'Compliance',
+              },
+            }).catch(() => {});
+          }
+
+          escalatedCount++;
+        } catch (escErr) {
+          console.warn('[Escalation] Could not auto-create SLA escalation:', escErr.message);
+        }
+      }
+    }
+  }
+
+  return escalatedCount;
+}
+
+/**
+ * POST /api/compliance-violations/check-slas
+ * Triggers SLA checking and escalations on demand.
+ */
+export async function checkViolationSlasHandler(req, res, next) {
+  try {
+    const escalatedCount = await checkAndEscalateViolationSlas(req.user.companyId);
+    res.status(200).json({
+      success: true,
+      message: `SLA check completed. ${escalatedCount} violation(s) escalated.`,
+      escalatedCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/compliance-violations/export/csv
+ * Exports compliance violations to an audit-ready CSV file.
+ */
+export async function exportComplianceViolationsCsv(req, res, next) {
+  try {
+    const where = await buildViolationReadWhere(req);
+    const { status, severity, entityType } = req.query || {};
+    if (status) where.status = status;
+    if (severity) where.severity = severity;
+    if (entityType) where.entityType = entityType;
+
+    const rawList = await prisma.complianceViolation.findMany({
+      where,
+      include: VIOLATION_LIST_INCLUDE,
+      orderBy: { detectedAt: 'desc' },
+    });
+
+    const hydrated = await hydrateViolations(rawList);
+
+    const headers = [
+      'Violation ID',
+      'Rule Name',
+      'Rule Type',
+      'Category',
+      'Severity',
+      'Status',
+      'SLA Status',
+      'SLA Time Remaining',
+      'Due Date',
+      'Entity Type',
+      'Entity Name',
+      'Entity Owner',
+      'Assigned Officer',
+      'Detected At',
+      'Resolved At',
+      'Resolved By',
+      'Resolution Remarks',
+    ];
+
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return '""';
+      let str = String(val).replace(/"/g, '""');
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str}"`;
+    };
+
+    const rows = hydrated.map((v) => [
+      escapeCsv(v.id),
+      escapeCsv(v.rule?.name || 'N/A'),
+      escapeCsv(v.rule?.ruleType || 'N/A'),
+      escapeCsv(v.rule?.category?.name || 'General'),
+      escapeCsv(v.severity),
+      escapeCsv(v.status),
+      escapeCsv(v.slaStatus || 'N/A'),
+      escapeCsv(v.slaRemainingLabel || 'N/A'),
+      escapeCsv(v.dueDate || 'N/A'),
+      escapeCsv(v.entityType),
+      escapeCsv(v.entityName || 'N/A'),
+      escapeCsv(v.entityOwner ? (v.entityOwner.fullName || v.entityOwner.email) : 'Unassigned'),
+      escapeCsv(v.assignedOfficer ? (v.assignedOfficer.fullName || v.assignedOfficer.email) : 'Global Compliance Team'),
+      escapeCsv(v.detectedAt ? new Date(v.detectedAt).toISOString() : ''),
+      escapeCsv(v.resolvedAt ? new Date(v.resolvedAt).toISOString() : ''),
+      escapeCsv(v.resolvedBy ? (v.resolvedBy.fullName || v.resolvedBy.email) : ''),
+      escapeCsv(v.resolutionRemarks || ''),
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+
+    const filename = `compliance-violations-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    next(err);
+  }
+}
+
