@@ -38,7 +38,15 @@ const ALLOWED_EVIDENCE_STATUSES = [
 ];
 
 const VIOLATION_LIST_INCLUDE = {
-  rule: true,
+  rule: {
+    include: {
+      category: {
+        include: {
+          owner: { select: { id: true, fullName: true, email: true } },
+        },
+      },
+    },
+  },
   reportedBy: { select: { id: true, fullName: true, email: true } },
   resolvedBy: { select: { id: true, fullName: true, email: true } },
   evidence: true,
@@ -146,12 +154,7 @@ export async function getComplianceViolationById(req, res, next) {
 
     const violation = await prisma.complianceViolation.findFirst({
       where: { AND: [{ id }, await buildViolationReadWhere(req)] },
-      include: {
-        rule: true,
-        reportedBy: { select: { id: true, fullName: true, email: true } },
-        resolvedBy: { select: { id: true, fullName: true, email: true } },
-        evidence: true,
-      },
+      include: VIOLATION_LIST_INCLUDE,
     });
 
     if (!violation) {
