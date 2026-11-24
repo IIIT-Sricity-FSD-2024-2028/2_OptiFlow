@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useDispatch } from "react-redux";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { apiClient } from "../../../services/api/client";
+import { createComplianceBinding } from "../../../store/complianceBindings";
 import { Loader2 } from "lucide-react";
 
 export function CreateBindingModal({
@@ -10,6 +12,7 @@ export function CreateBindingModal({
   ruleId,
   onBindingCreated,
 }) {
+  const dispatch = useDispatch();
   const [scopeType, setScopeType] = useState("Company");
   const [scopeId, setScopeId] = useState("");
   
@@ -66,10 +69,7 @@ export function CreateBindingModal({
         payload.scopeId = scopeId;
       }
 
-      await apiClient("/compliance-bindings", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      await dispatch(createComplianceBinding(payload)).unwrap();
       
       onBindingCreated();
       onClose();

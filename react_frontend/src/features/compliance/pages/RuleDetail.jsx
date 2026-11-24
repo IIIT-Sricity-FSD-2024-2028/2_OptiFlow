@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchComplianceRuleById,
+  updateComplianceRule,
+  clearCurrentRule,
+  selectCurrentComplianceRule,
+  selectComplianceRulesStatus,
+} from "../../../store/complianceRules";
+import {
+  fetchComplianceCategories,
+  selectAllComplianceCategories,
+} from "../../../store/complianceCategories";
 import { apiClient } from "../../../services/api/client";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
@@ -63,13 +75,16 @@ const RuleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const [rule, setRule] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const rule = useSelector(selectCurrentComplianceRule);
+  const categories = useSelector(selectAllComplianceCategories);
+  const status = useSelector(selectComplianceRulesStatus);
+  const loading = status === "loading" && !rule;
+
   const [activeTab, setActiveTab] = useState("overview");
   const [isBindingModalOpen, setIsBindingModalOpen] = useState(false);
   const [selectedViolation, setSelectedViolation] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [categories, setCategories] = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
   const [bindingToUnbind, setBindingToUnbind] = useState(null);
   const [isUnbinding, setIsUnbinding] = useState(false);
@@ -82,24 +97,16 @@ const RuleDetail = () => {
   });
 
   useEffect(() => {
-    fetchRule();
-  }, [id]);
+    dispatch(fetchComplianceRuleById(id));
+    dispatch(fetchComplianceCategories());
 
-  const fetchRule = async () => {
-    try {
-      setLoading(true);
-      const [data, catRes] = await Promise.all([
-        apiClient(`/compliance-rules/${id}`),
-        apiClient("/compliance-categories").catch(() => []),
-      ]);
-      setRule(data);
-      const catList = Array.isArray(catRes) ? catRes : catRes?.data || [];
-      setCategories(catList);
-    } catch (err) {
-      console.error("Failed to load rule details", err);
-    } finally {
-      setLoading(false);
-    }
+    return () => {
+      dispatch(clearCurrentRule());
+    };
+  }, [dispatch, id]);
+
+  const fetchRule = () => {
+    dispatch(fetchComplianceRuleById(id));
   };
 
   const handleToggleActive = async () => {
@@ -107,17 +114,14 @@ const RuleDetail = () => {
     const newStatus = !rule.isActive;
     try {
       setStatusLoading(true);
-      await apiClient(`/compliance-rules/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: newStatus }),
-      });
-      setRule((prev) => ({ ...prev, isActive: newStatus }));
+      await dispatch(
+        updateComplianceRule({ id, isActive: newStatus })
+      ).unwrap();
       toast.success(
         newStatus
           ? `Rule activated. Enforcing in compliance engine.`
           : `Rule safely deactivated. Evaluation paused.`
       );
-      fetchRule();
     } catch (err) {
       toast.error(`Failed to update status: ${err.message}`);
     } finally {
@@ -160,22 +164,21 @@ const RuleDetail = () => {
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     try {
-      await apiClient(`/compliance-rules/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
+      await dispatch(
+        updateComplianceRule({
+          id,
           name: editFormData.name,
           description: editFormData.description,
           severity: editFormData.severity,
           categoryId: editFormData.categoryId || null,
           isActive: editFormData.isActive,
-        }),
-      });
+        })
+      ).unwrap();
       setIsEditModalOpen(false);
       toast.success("Rule configuration saved.");
-      fetchRule();
     } catch (err) {
       console.error("Failed to update rule:", err);
-      toast.error("Failed to update rule: " + err.message);
+      toast.error("Failed to update rule: " + (err.message || "Failed to update"));
     }
   };
 

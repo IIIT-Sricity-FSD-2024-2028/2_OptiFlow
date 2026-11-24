@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
 import { useAuth } from "../../../context/AuthContext";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
+import {
+  fetchEvidence,
+  selectAllEvidence,
+  selectIsEvidenceLoading,
+} from "../../../store/evidence";
 import { 
   Loader2, 
   ShieldAlert, 
@@ -25,8 +30,9 @@ const PAGE_SIZE = 10;
 
 export default function ComplianceEvidence() {
   const { user } = useAuth();
-  const [evidenceList, setEvidenceList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const evidenceList = useSelector(selectAllEvidence);
+  const loading = useSelector(selectIsEvidenceLoading);
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -43,21 +49,13 @@ export default function ComplianceEvidence() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchEvidence = async () => {
-    try {
-      setLoading(true);
-      const data = await apiClient("/evidence");
-      setEvidenceList(Array.isArray(data) ? data : data?.data || []);
-    } catch (error) {
-      console.error("Failed to fetch evidence", error);
-    } finally {
-      setLoading(false);
-    }
+  const loadEvidence = () => {
+    dispatch(fetchEvidence({ force: true }));
   };
 
   useEffect(() => {
-    fetchEvidence();
-  }, []);
+    dispatch(fetchEvidence());
+  }, [dispatch]);
 
   // Filter evidence based on queue tab, status dropdown, and search query
   const filteredEvidence = useMemo(() => {
@@ -368,7 +366,7 @@ export default function ComplianceEvidence() {
         isOpen={!!selectedEvidence}
         onClose={() => setSelectedEvidence(null)}
         evidence={selectedEvidence}
-        onReviewed={fetchEvidence}
+        onReviewed={loadEvidence}
       />
     </div>
   );
