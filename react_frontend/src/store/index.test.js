@@ -19,12 +19,10 @@ describe("store", () => {
 
   it("resetStore returns every slice to its initial state", () => {
     const store = makeStore({
-      users: { status: "succeeded", error: null, loadedAt: 123, mutations: {} },
+      users: { ...makeStore().getState().users, status: "succeeded", loadedAt: 123 },
     });
     expect(store.getState().users.status).toBe("succeeded");
     store.dispatch(resetStore());
-    expect(store.getState().users).toEqual({
-      status: "idle", error: null, loadedAt: null, mutations: {},
-    });
+    expect(store.getState().users).toEqual(makeStore().getState().users);
   });
 });
