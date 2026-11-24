@@ -3,7 +3,7 @@
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
-import { todayInput, tomorrowInput, deadlineInput } from '../../components/dateLimits';
+import { todayInput, deadlineInput, minExtensionDateInput } from '../../components/dateLimits';
 import { BLOCKER_TYPES, EVIDENCE_TYPES } from './taskOptions';
 
 /** Team Lead submits the parent task to the Project Manager for review. */
@@ -148,7 +148,17 @@ export function ReportBlockerModal({ isOpen, onClose, onSubmit, blockerType, onB
   );
 }
 
-export function ExtensionRequestModal({ isOpen, onClose, onSubmit, date, onDateChange, reason, onReasonChange }) {
+export function ExtensionRequestModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  date,
+  onDateChange,
+  reason,
+  onReasonChange,
+  currentDeadline,
+}) {
+  const minDate = minExtensionDateInput(currentDeadline);
   return (
     <Modal
       isOpen={isOpen}
@@ -161,7 +171,12 @@ export function ExtensionRequestModal({ isOpen, onClose, onSubmit, date, onDateC
     >
       <div className="space-y-4">
         <FormField label="New Deadline" required>
-          <Input type="date" min={tomorrowInput()} value={date} onChange={(e) => onDateChange(e.target.value)} />
+          <Input type="date" min={minDate} value={date} onChange={(e) => onDateChange(e.target.value)} />
+          {currentDeadline && (
+            <p className="text-xs text-gray-500 mt-1">
+              Current deadline: <span className="font-medium text-gray-700">{deadlineInput(currentDeadline)}</span> (extension must be later than current deadline)
+            </p>
+          )}
         </FormField>
         <FormField label="Reason" required>
           <Textarea

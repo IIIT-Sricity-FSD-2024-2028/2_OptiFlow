@@ -8,11 +8,18 @@ import { Modal } from '../../../../shared/components/Modal';
 import { Table } from '../../../../shared/components/Table';
 import { Toast } from '../../../../shared/components/Toast';
 import { Pagination } from '../../../../shared/components/Pagination';
-import * as escalationsApi from '../../../../services/api/escalations';
-import * as projectsApi from '../../../../services/api/projects';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchProjects, selectAllProjects, selectProjectsLoading } from '../../../../store/projects';
+import {
+  createEscalation as createEscalationThunk,
+  fetchEscalations,
+  selectAllEscalations,
+  isReportableError,
+  selectEscalationsLoading,
+  updateEscalation,
+} from '../../../../store/escalations';
 
 const FILTERS = ['all', 'high', 'medium', 'resolved'];
-const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const formatStatus = (status) => String(status || 'Open').replace(/_/g, ' ');
 const isResolved = (escalation) => ['Resolved', 'Closed'].includes(String(escalation.status));
 const PAGE_SIZE = 10;
@@ -22,12 +29,15 @@ const formatDate = (date) => date
   : '—';
 
 export default function PmEscalations() {
-  const [escalations, setEscalations] = useState([]);
+  const dispatch = useDispatch();
+  const escalations = useSelector(selectAllEscalations);
+  const projects = useSelector(selectAllProjects);
+  const escalationsLoading = useSelector(selectEscalationsLoading);
+  const projectsLoading = useSelector(selectProjectsLoading);
+  const loading = escalationsLoading || projectsLoading;
   const [currentPage, setCurrentPage] = useState(1);
-  const [projects, setProjects] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [filter, setFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [isCreateOpen, setCreateOpen] = useState(false);
@@ -47,21 +57,12 @@ export default function PmEscalations() {
   };
 
   useEffect(() => {
-    let active = true;
-    Promise.all([escalationsApi.list(), projectsApi.list()])
-      .then(([escalationResponse, projectResponse]) => {
-        if (!active) return;
-        setEscalations(normalize(escalationResponse));
-        setProjects(normalize(projectResponse));
-      })
-      .catch((error) => {
-        if (active) showToast('error', error.message || 'Failed to load escalations.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => { active = false; };
-  }, []);
+    const onError = (error) => {
+      if (isReportableError(error)) showToast('error', error.message || 'Failed to load escalations.');
+    };
+    dispatch(fetchEscalations()).unwrap().catch(onError);
+    dispatch(fetchProjects()).unwrap().catch(onError);
+  }, [dispatch]);
 
   const counts = useMemo(() => ({
     all: escalations.filter((item) => !isResolved(item)).length,
@@ -122,10 +123,7 @@ export default function PmEscalations() {
       const description = previousDescription
         ? `${previousDescription}\n\nResolution: ${notes}`
         : `Resolution: ${notes}`;
-      await escalationsApi.update(selectedEscalation.id, { status: 'Resolved', description });
-      setEscalations((current) => current.map((item) =>
-        item.id === selectedEscalation.id ? { ...item, status: 'Resolved', description } : item
-      ));
+      await dispatch(updateEscalation({ id: selectedEscalation.id, data: { status: 'Resolved', description } })).unwrap();
       setResolutionNotes('');
       showToast('success', 'Escalation resolved.');
     } catch (error) {
@@ -144,15 +142,13 @@ export default function PmEscalations() {
 
     setCreating(true);
     try {
-      const response = await escalationsApi.create({
+      const created = await dispatch(createEscalationThunk({
         title: createForm.title.trim(),
         description: createForm.description.trim(),
         projectId: createForm.projectId,
         blockerType: createForm.blockerType.trim() || undefined,
         priority: createForm.priority,
-      });
-      const created = response?.data || response;
-      setEscalations((current) => [created, ...current]);
+      })).unwrap();
       setFilter('all');
       setSelectedId(created.id);
       setCreateForm({ title: '', description: '', projectId: '', blockerType: '', priority: 'High' });

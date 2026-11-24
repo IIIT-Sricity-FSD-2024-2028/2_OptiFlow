@@ -8,8 +8,16 @@ import { EmptyState } from '../../../../shared/components/EmptyState';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
 import { Loader } from '../../../../shared/components/Loader';
 import { Toast } from '../../../../shared/components/Toast';
-import * as escalationsApi from '../../../../services/api/escalations';
-import * as tasksApi from '../../../../services/api/tasks';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  createEscalation,
+  fetchEscalations,
+  isReportableError,
+  selectAllEscalations,
+  selectEscalationsLoading,
+} from '../../../../store/escalations';
+import { fetchTasks, selectAllTasks, selectTasksLoading } from '../../../../store/tasks';
+// Foreign resource (M5 users) keeps its own fetch until that slice merges.
 import * as usersApi from '../../../../services/api/users';
 
 const BLOCKER_TYPES = [
@@ -25,10 +33,14 @@ const normalize = (response) => Array.isArray(response) ? response : response?.d
 
 export default function TeamLeadEscalations() {
   const { user } = useAuth();
-  const [escalations, setEscalations] = useState([]);
-  const [tasks, setTasks] = useState([]);
+  const dispatch = useDispatch();
+  const escalations = useSelector(selectAllEscalations);
+  const tasks = useSelector(selectAllTasks);
+  const escalationsLoading = useSelector(selectEscalationsLoading);
+  const tasksLoading = useSelector(selectTasksLoading);
   const [teamUserIds, setTeamUserIds] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const loading = escalationsLoading || tasksLoading || usersLoading;
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     taskId: '',
@@ -46,11 +58,16 @@ export default function TeamLeadEscalations() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([escalationsApi.list(), tasksApi.list(), usersApi.list()])
-      .then(([escalationResponse, taskResponse, userResponse]) => {
+    const rethrow = (error) => {
+      if (isReportableError(error)) throw error;
+    };
+    Promise.all([
+      usersApi.list(),
+      dispatch(fetchEscalations()).unwrap().catch(rethrow),
+      dispatch(fetchTasks()).unwrap().catch(rethrow),
+    ])
+      .then(([userResponse]) => {
         if (!active) return;
-        setEscalations(normalize(escalationResponse));
-        setTasks(normalize(taskResponse));
         const reports = normalize(userResponse)
           .filter((member) => String(member.managerUserId || member.managerId || '') === String(user.id))
           .map((member) => String(member.id || member.userId));
@@ -60,10 +77,10 @@ export default function TeamLeadEscalations() {
         if (active) showToast('error', error.message || 'Failed to load escalation data.');
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setUsersLoading(false);
       });
     return () => { active = false; };
-  }, [user.id]);
+  }, [dispatch, user.id]);
 
   const teamEscalations = escalations.filter((escalation) => {
     const reporterId = escalation.reportedById || escalation.reportedBy?.id;
@@ -79,14 +96,13 @@ export default function TeamLeadEscalations() {
 
     setCreating(true);
     try {
-      const response = await escalationsApi.create({
+      await dispatch(createEscalation({
         taskId: form.taskId,
         title: form.title.trim(),
         blockerType: form.blockerType,
         priority: form.priority,
         description: form.description.trim() || undefined,
-      });
-      setEscalations((current) => [response?.data || response, ...current]);
+      })).unwrap();
       setForm({ taskId: '', title: '', blockerType: BLOCKER_TYPES[0], priority: 'Medium', description: '' });
       showToast('success', 'Escalation sent to the Project Manager.');
     } catch (error) {

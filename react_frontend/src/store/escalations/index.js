@@ -1,4 +1,5 @@
-import { createStubSlice } from "../core/createStubSlice";
-
-// STUB: owner (M3) replaces this file with the real slice, thunks and selectors.
-export default createStubSlice("escalations").reducer;
+export { default } from "./slice";
+export * from "./slice";
+export * from "./thunks";
+export * from "./selectors";
+export { isReportableError } from "../work/entitySlice";
