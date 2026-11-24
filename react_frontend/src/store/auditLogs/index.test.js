@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import reducer, {
   fetchAuditLogs,
   fetchAuditLogById,
+  fetchProcessAuditLogs,
   clearAuditLogErrors,
   clearCurrentAuditLog,
   selectAllAuditLogs,
@@ -19,10 +20,27 @@ describe("auditLogs slice", () => {
     error: null,
     loadedAt: null,
     mutations: {},
+    processFeed: {
+      items: [], status: "idle", error: null, loadedAt: null, queryKey: null, requestId: null,
+    },
   };
 
   it("returns initial state by default", () => {
     expect(reducer(undefined, { type: "UNKNOWN" })).toEqual(initialState);
+  });
+
+  it("ignores late responses and keeps process requests separate from Compliance", () => {
+    const compliance = { id: "compliance" };
+    const seeded = { ...initialState, items: [compliance], currentLog: compliance };
+    const pending = reducer(seeded, fetchProcessAuditLogs.pending("active"));
+    expect(reducer(pending, fetchProcessAuditLogs.fulfilled([], "older"))).toBe(pending);
+    const cancelled = reducer(pending, fetchProcessAuditLogs.rejected({ name: "AbortError" }, "active"));
+    expect(cancelled.processFeed).toMatchObject({ status: "idle", error: null });
+    const done = reducer(pending, fetchProcessAuditLogs.fulfilled([{ id: "process" }], "active"));
+    expect(done.processFeed.items).toEqual([{ id: "process" }]);
+    expect(done.items).toEqual([compliance]);
+    expect(done.currentLog).toEqual(compliance);
+    expect(selectAuditLogsError({ auditLogs: done })).toBeNull();
   });
 
   describe("fetchAuditLogs", () => {

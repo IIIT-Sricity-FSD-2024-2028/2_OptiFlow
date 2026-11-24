@@ -21,9 +21,9 @@ export const getSystemAuditLogs = (params = {}) => {
   return apiClient(`${BASE_PATH}/system${queryString ? `?${queryString}` : ''}`);
 };
 
-export const getProcessAuditLogs = (params = {}) => {
+export const getProcessAuditLogs = (params = {}, options) => {
   const queryString = new URLSearchParams(params).toString();
-  return apiClient(`${BASE_PATH}/process${queryString ? `?${queryString}` : ''}`);
+  return apiClient(`${BASE_PATH}/process${queryString ? `?${queryString}` : ''}`, options);
 };
 
 export const getAuditLogsByUser = (userId, params = {}) => {
