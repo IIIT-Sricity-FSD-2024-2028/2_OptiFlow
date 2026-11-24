@@ -1177,9 +1177,12 @@ function isEscalationViewerOfAll(user) {
   return isCompanyAdmin(user) || hasRole(user?.role, [ROLES.COMPLIANCE_OFFICER, ROLES.PROCESS_ADMIN]);
 }
 // Escalation actions that close the loop (resolve / close) belong to whoever it was sent to
-// and to managers; deleting is a manager-only action.
+// and to managers (including Team Leaders for team scope); deleting is a manager-only action.
 function canManageEscalations(user) {
   return isCompanyAdmin(user) || isProjectManagerRole(user) || isBranchManager(user);
+}
+function canCloseEscalations(user) {
+  return canManageEscalations(user) || isTeamLeadRole(user);
 }
 export async function buildEscalationWhere(req) {
   const companyId = req.user.companyId;
@@ -1297,10 +1300,21 @@ export async function createEscalation(req, res, next) {
       // Members and leads may only escalate work they can see; managers anything in their scope.
       task = await prisma.task.findFirst({
         where: { ...await scopedTaskWhere(req), id: taskId, companyId: req.user.companyId, deletedAt: null },
+        include: { project: { select: { id: true, createdById: true } } },
       });
       if (!task) throw new NotFoundError(`Task ${taskId} not found in this company`);
       if (projectId && task.projectId && task.projectId !== projectId) {
         throw new BadRequestError('taskId does not belong to the given projectId');
+      }
+      if (blockerType === 'Extension Request' && isMemberRole(req.user) && task.dueDate) {
+        const match = description?.match(/Requested (?:new )?deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+        if (match && match[1]) {
+          const reqDue = new Date(match[1]);
+          const parentDue = new Date(task.dueDate);
+          if (reqDue > parentDue) {
+            throw new BadRequestError(`Extension cannot be given beyond the task due date (${formatDay(parentDue)}) set by the Project Manager`);
+          }
+        }
       }
     }
 
@@ -1335,9 +1349,18 @@ export async function createEscalation(req, res, next) {
       },
     });
 
-    const escalationRecipient = targetManagerId || task?.createdById;
+    const escalationRecipient = targetManagerId
+      || (task?.createdById && task.createdById !== req.user.id ? task.createdById : task?.project?.createdById);
+
     if (escalationRecipient && escalationRecipient !== req.user.id) {
-      notify(req.user.companyId, escalationRecipient, 'New escalation', `"${escalation.title}" needs your attention.`, 'Escalation');
+      const isExtension = blockerType === 'Extension Request' || title.toLowerCase().includes('extension');
+      const notifTitle = isExtension ? 'Deadline extension requested' : 'New escalation';
+      const notifMessage = isExtension
+        ? `Deadline extension requested for "${task?.title || title}". Reason: ${description || 'No reason provided.'}`
+        : `"${escalation.title}" needs your attention.`;
+      const notifType = isExtension ? 'Task' : 'Escalation';
+
+      notify(req.user.companyId, escalationRecipient, notifTitle, notifMessage, notifType);
     }
 
     res.status(201).json({
@@ -1372,7 +1395,7 @@ export async function updateEscalation(req, res, next) {
     if (body.status) {
       validateEnum(body.status, ALLOWED_ESCALATION_STATUSES, 'status');
       const closesLoop = body.status === 'Resolved' || body.status === 'Closed';
-      if (closesLoop && !canManageEscalations(req.user) && existing.targetManagerId !== req.user.id) {
+      if (closesLoop && !canCloseEscalations(req.user) && existing.targetManagerId !== req.user.id) {
         throw new ForbiddenError('Only the escalation target or a manager can resolve or close an escalation');
       }
       updateData.status = body.status;
@@ -1384,7 +1407,7 @@ export async function updateEscalation(req, res, next) {
     }
     if (body.description) {
       // Editing the text is for the reporter, the target and managers.
-      if (!canManageEscalations(req.user) && existing.reportedById !== req.user.id && existing.targetManagerId !== req.user.id) {
+      if (!canCloseEscalations(req.user) && existing.reportedById !== req.user.id && existing.targetManagerId !== req.user.id) {
         throw new ForbiddenError('You cannot edit this escalation');
       }
       updateData.description = body.description;
@@ -1396,8 +1419,30 @@ export async function updateEscalation(req, res, next) {
     });
 
     if (updateData.status && updateData.status !== existing.status && existing.reportedById !== req.user.id) {
-      notify(req.user.companyId, existing.reportedById, `Escalation ${updateData.status.toLowerCase()}`,
-        `"${existing.title}" is now ${updateData.status}.`, 'Escalation');
+      const isExt = existing.blockerType === 'Extension Request' || existing.title.toLowerCase().includes('extension');
+      const action = updateData.status === 'Resolved' ? 'approved' : updateData.status === 'Closed' ? 'rejected' : updateData.status.toLowerCase();
+      const notifTitle = isExt ? `Deadline extension ${action}` : `Escalation ${updateData.status.toLowerCase()}`;
+      
+      const rejectMatch = updateData.description?.match(/Rejection Comment:\s*([\s\S]+)$/i);
+      const commentSnippet = rejectMatch ? ` Reason: ${rejectMatch[1].trim()}` : '';
+
+      const notifMessage = isExt
+        ? `Your deadline extension request for "${existing.title}" was ${action}.${commentSnippet}`
+        : `"${existing.title}" is now ${updateData.status}.`;
+      notify(req.user.companyId, existing.reportedById, notifTitle, notifMessage, isExt ? 'Task' : 'Escalation');
+    }
+
+    if (updateData.status === 'Resolved' && (existing.blockerType === 'Extension Request' || existing.title.toLowerCase().includes('extension')) && existing.taskId) {
+      const match = existing.description?.match(/Requested (?:new )?deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+      if (match && match[1]) {
+        await prisma.task.update({
+          where: { id: existing.taskId },
+          data: {
+            dueDate: new Date(match[1]),
+            deadlineExtensionReason: existing.description,
+          },
+        }).catch((err) => console.warn('[Extension] Could not auto-update task deadline:', err.message));
+      }
     }
 
     res.status(200).json({
