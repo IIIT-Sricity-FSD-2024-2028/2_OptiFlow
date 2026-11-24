@@ -343,6 +343,7 @@ export async function handleRegisterCompany(req, res, next) {
           fullName: ownerFullName,
           email: ownerEmail.toLowerCase(),
           passwordHash,
+          passwordChangedAt: new Date(),
         },
       });
 
