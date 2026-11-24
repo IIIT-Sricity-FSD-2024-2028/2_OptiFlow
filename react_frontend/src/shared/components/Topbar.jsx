@@ -38,9 +38,14 @@ export const Topbar = ({ title }) => {
 
   useEffect(() => {
     if (!userId) return;
-    dispatch(fetchNotifications({ userId }));
-    const interval = setInterval(() => dispatch(fetchNotifications({ userId, force: true })), 30000);
-    return () => clearInterval(interval);
+    dispatch(fetchNotifications({ userId, force: true }));
+    const interval = setInterval(() => dispatch(fetchNotifications({ userId, force: true })), 10000);
+    const handleFocus = () => dispatch(fetchNotifications({ userId, force: true }));
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [dispatch, userId]);
 
   useEffect(() => {
@@ -64,6 +69,14 @@ export const Topbar = ({ title }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleToggleNotif = () => {
+    const nextState = !isNotifOpen;
+    setIsNotifOpen(nextState);
+    if (nextState && userId) {
+      dispatch(fetchNotifications({ userId, force: true }));
+    }
+  };
 
   const handleMarkAllRead = async () => {
     try {
@@ -149,7 +162,7 @@ export const Topbar = ({ title }) => {
         <div className="relative" ref={notifRef}>
           <button
             type="button"
-            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            onClick={handleToggleNotif}
             className="relative p-2 rounded-full text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600/20"
             aria-label="View notifications"
           >

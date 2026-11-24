@@ -228,30 +228,40 @@ export async function createEvidence(req, res, next) {
       console.warn('[Compliance Evidence] Failed to create audit log for createEvidence:', auditErr.message);
     }
 
-    // Notify the assigned Team Lead or Task Creator that new evidence has been submitted
-    if (newEvidence.taskId) {
-      try {
+    // Notify the submitter's Team Lead/Manager and Task Creator/Assignee that new evidence has been submitted
+    try {
+      const submitter = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { id: true, fullName: true, email: true, managerUserId: true },
+      });
+
+      const recipients = new Set();
+      if (submitter?.managerUserId && submitter.managerUserId !== req.user.id) {
+        recipients.add(submitter.managerUserId);
+      }
+
+      if (newEvidence.taskId) {
         const task = await prisma.task.findUnique({
           where: { id: newEvidence.taskId },
           select: { id: true, title: true, assignedToId: true, createdById: true },
         });
         if (task) {
-          const recipientId = (task.assignedToId && task.assignedToId !== req.user.id)
-            ? task.assignedToId
-            : (task.createdById !== req.user.id ? task.createdById : null);
-          if (recipientId) {
-            notify(
-              req.user.companyId,
-              recipientId,
-              'New Evidence Submitted',
-              `Evidence "${newEvidence.title}" was submitted by ${req.user.fullName || req.user.email} for review.`,
-              'Review'
-            );
-          }
+          if (task.assignedToId && task.assignedToId !== req.user.id) recipients.add(task.assignedToId);
+          if (task.createdById && task.createdById !== req.user.id) recipients.add(task.createdById);
         }
-      } catch (notifErr) {
-        console.warn('[Notification] Notice: Failed to send evidence submission notification:', notifErr.message);
       }
+
+      for (const recipientId of recipients) {
+        notify(
+          req.user.companyId,
+          recipientId,
+          'New Evidence Submitted',
+          `Evidence "${newEvidence.title}" was submitted by ${req.user.fullName || req.user.email} for review.`,
+          'Review'
+        );
+      }
+    } catch (notifErr) {
+      console.warn('[Notification] Notice: Failed to send evidence submission notification:', notifErr.message);
     }
 
     res.status(201).json({
@@ -422,8 +432,11 @@ export async function updateEvidence(req, res, next) {
           const inReviewSubtasks = await prisma.subtask.findMany({
             where: {
               taskId: existing.taskId,
-              assignedToId: existing.userId,
               status: 'In_Review',
+              OR: [
+                { assignedToId: existing.userId },
+                { assignedToId: null },
+              ],
             },
           });
           if (inReviewSubtasks.length > 0) {

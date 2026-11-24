@@ -39,7 +39,7 @@ export default function Notifications() {
   const [activeFilter, setActiveFilter] = useState('ALL');
 
   useEffect(() => {
-    if (userId) dispatch(fetchNotifications({ userId }));
+    if (userId) dispatch(fetchNotifications({ userId, force: true }));
   }, [dispatch, userId]);
 
   const handleMarkAsRead = (id, e) => {
