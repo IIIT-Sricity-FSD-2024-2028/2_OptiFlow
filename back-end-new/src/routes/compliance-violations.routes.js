@@ -7,7 +7,8 @@ import {
   getComplianceViolationById,
   createComplianceViolation,
   updateComplianceViolation,
-  deleteComplianceViolation
+  deleteComplianceViolation,
+  notifyViolationOwner
 } from '../controllers/compliance-violations.controller.js';
 
 const router = Router();
@@ -20,6 +21,12 @@ router.post(
   authenticate,
   requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
   createComplianceViolation
+);
+router.post(
+  ['/compliance-violations/:id/notify-owner', '/api/compliance-violations/:id/notify-owner'],
+  authenticate,
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, 'compliance_officer'),
+  notifyViolationOwner
 );
 router.patch(
   ['/compliance-violations/:id', '/api/compliance-violations/:id'],

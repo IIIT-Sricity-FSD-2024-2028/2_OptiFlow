@@ -199,6 +199,7 @@ export default function ComplianceViolations() {
           </span>
           <span className="text-xs text-slate-500">
             {row.entityType || "Entity"}
+            {row.entityOwner ? ` • Owner: ${row.entityOwner.fullName || row.entityOwner.email}` : ''}
           </span>
         </div>
       ),
@@ -364,7 +365,7 @@ export default function ComplianceViolations() {
           disabled={row.status === "Resolved"}
           onClick={() => setSelectedViolation(row)}
         >
-          {row.status === "Resolved" ? "Resolved" : "Fast-Track Waiver"}
+          {row.status === "Resolved" ? "Resolved" : "Review & Remediate"}
         </Button>
       ),
     },

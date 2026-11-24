@@ -819,6 +819,58 @@ export async function updateTask(req, res, next) {
       notify(req.user.companyId, existing.assignedToId, 'Task approved', `"${updated.title}" was approved and marked Completed.`, 'Task');
     }
 
+    // Auto-resolve compliance violations in real time when condition is cleared
+    if (updateData.status === 'Completed' || updateData.status === 'Cancelled') {
+      try {
+        const openTaskViolations = await prisma.complianceViolation.findMany({
+          where: {
+            companyId: req.user.companyId,
+            entityType: 'Task',
+            entityId: id,
+            status: { in: ['Open', 'Under_Review'] },
+          },
+        });
+        if (openTaskViolations.length > 0) {
+          await prisma.complianceViolation.updateMany({
+            where: { id: { in: openTaskViolations.map((v) => v.id) } },
+            data: {
+              status: 'Resolved',
+              resolvedById: req.user.id,
+              resolvedAt: new Date(),
+              resolutionRemarks: `Auto-resolved on task lifecycle transition to ${updateData.status}`,
+            },
+          });
+        }
+      } catch (violErr) {
+        console.warn('[Compliance] Notice: Auto-resolving task violations on status change:', violErr.message);
+      }
+    } else if (updateData.assignedToId && !existing.assignedToId) {
+      try {
+        const unassignedViolations = await prisma.complianceViolation.findMany({
+          where: {
+            companyId: req.user.companyId,
+            entityType: 'Task',
+            entityId: id,
+            status: { in: ['Open', 'Under_Review'] },
+            rule: { ruleType: 'Unassigned' },
+          },
+        });
+        if (unassignedViolations.length > 0) {
+          await prisma.complianceViolation.updateMany({
+            where: { id: { in: unassignedViolations.map((v) => v.id) } },
+            data: {
+              status: 'Resolved',
+              resolvedById: req.user.id,
+              resolvedAt: new Date(),
+              resolutionRemarks: 'Auto-resolved: Task has been assigned to a team member',
+            },
+          });
+        }
+      } catch (violErr) {
+        console.warn('[Compliance] Notice: Auto-resolving unassigned violation on assignment:', violErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: 'Task updated successfully',
@@ -872,6 +924,25 @@ export async function deleteTask(req, res, next) {
       });
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during task deletion:', auditErr.message);
+    }
+
+    try {
+      await prisma.complianceViolation.updateMany({
+        where: {
+          companyId: req.user.companyId,
+          entityType: 'Task',
+          entityId: id,
+          status: { in: ['Open', 'Under_Review'] },
+        },
+        data: {
+          status: 'Resolved',
+          resolvedById: req.user.id,
+          resolvedAt: new Date(),
+          resolutionRemarks: 'Auto-resolved: Task was deleted',
+        },
+      });
+    } catch (violErr) {
+      console.warn('[Compliance] Notice: Auto-resolving task violations on delete:', violErr.message);
     }
 
     res.status(200).json({

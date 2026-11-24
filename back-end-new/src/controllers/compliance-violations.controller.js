@@ -52,7 +52,7 @@ const VIOLATION_LIST_INCLUDE = {
   evidence: true,
 };
 
-/** Adds entityName to violations; shared by list, create and update. */
+/** Adds entityName and entityOwner to violations; shared by list, create and update. */
 async function hydrateViolations(violations) {
     // O(N) Single-pass ID extraction
     const projectIds = new Set();
@@ -67,24 +67,49 @@ async function hydrateViolations(violations) {
       }
     }
 
-    const projects = await prisma.project.findMany({ where: { id: { in: Array.from(projectIds) } }, select: { id: true, name: true } });
-    const tasks = await prisma.task.findMany({ where: { id: { in: Array.from(taskIds) } }, select: { id: true, title: true } });
-    const users = await prisma.user.findMany({ where: { id: { in: Array.from(userIds) } }, select: { id: true, fullName: true, email: true } });
+    const projects = await prisma.project.findMany({
+      where: { id: { in: Array.from(projectIds) } },
+      select: { id: true, name: true, createdById: true },
+    });
+    const tasks = await prisma.task.findMany({
+      where: { id: { in: Array.from(taskIds) } },
+      select: {
+        id: true,
+        title: true,
+        assignedTo: { select: { id: true, fullName: true, email: true } },
+        createdBy: { select: { id: true, fullName: true, email: true } },
+      },
+    });
+    const users = await prisma.user.findMany({
+      where: { id: { in: Array.from(userIds) } },
+      select: { id: true, fullName: true, email: true },
+    });
 
-    // O(N) Single-pass mapping
-    const projectMap = new Map(projects.map(p => [p.id, p.name]));
-    const taskMap = new Map(tasks.map(t => [t.id, t.title]));
-    const userMap = new Map(users.map(u => [u.id, u.fullName || u.email]));
+    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, createdById: p.createdById }]));
+    const taskMap = new Map(tasks.map(t => [t.id, { title: t.title, owner: t.assignedTo || t.createdBy }]));
+    const userMap = new Map(users.map(u => [u.id, { name: u.fullName || u.email, owner: u }]));
 
     return violations.map((v) => {
-      if (v.entityType === "Project" && projectMap.has(v.entityId)) return { ...v, entityName: projectMap.get(v.entityId) };
-      if (v.entityType === "Task" && taskMap.has(v.entityId)) return { ...v, entityName: taskMap.get(v.entityId) };
-      if (v.entityType === "User" && userMap.has(v.entityId)) return { ...v, entityName: userMap.get(v.entityId) };
-      
-      // Fallback
+      let entityName = `${v.entityType || "General"} #${(v.entityId || "N/A").substring(0, 8)}`;
+      let entityOwner = null;
+
+      if (v.entityType === "Project" && projectMap.has(v.entityId)) {
+        entityName = projectMap.get(v.entityId).name;
+      } else if (v.entityType === "Task" && taskMap.has(v.entityId)) {
+        entityName = taskMap.get(v.entityId).title;
+        entityOwner = taskMap.get(v.entityId).owner;
+      } else if (v.entityType === "User" && userMap.has(v.entityId)) {
+        entityName = userMap.get(v.entityId).name;
+        entityOwner = userMap.get(v.entityId).owner;
+      }
+
+      const assignedOfficer = v.assignedOfficer || v.rule?.category?.owner || null;
+
       return {
         ...v,
-        entityName: `${v.entityType || "General"} #${(v.entityId || "N/A").substring(0, 8)}`,
+        entityName,
+        entityOwner,
+        assignedOfficer,
       };
     });
 }
@@ -331,6 +356,62 @@ export async function deleteComplianceViolation(req, res, next) {
     res.status(200).json({
       success: true,
       message: "Compliance violation deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/compliance-violations/:id/notify-owner
+ * Dispatches an urgent remediation notification to the owner of the violating entity.
+ */
+export async function notifyViolationOwner(req, res, next) {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const violation = await prisma.complianceViolation.findFirst({
+      where: { id, companyId: req.user.companyId },
+      include: {
+        rule: true,
+      },
+    });
+    if (!violation) {
+      throw new NotFoundError(`Compliance violation with ID ${id} not found`);
+    }
+
+    let targetUserId = body.targetUserId || null;
+    let targetName = 'Entity Owner';
+    if (!targetUserId && violation.entityType === 'Task') {
+      const task = await prisma.task.findUnique({
+        where: { id: violation.entityId },
+        select: { assignedToId: true, createdById: true },
+      });
+      targetUserId = task?.assignedToId || task?.createdById || null;
+    } else if (!targetUserId && violation.entityType === 'User') {
+      targetUserId = violation.entityId;
+    }
+
+    if (!targetUserId) {
+      throw new BadRequestError('No owner found for this violating entity to notify');
+    }
+
+    const title = body.title?.trim() || `Compliance Remediation: ${violation.rule?.name || 'Action Required'}`;
+    const message = body.message?.trim() || `Compliance Officer ${req.user.fullName || req.user.email} requested remediation for policy "${violation.rule?.name}". Please complete the required deliverable.`;
+
+    await prisma.notification.create({
+      data: {
+        companyId: req.user.companyId,
+        userId: targetUserId,
+        title,
+        message,
+        type: 'Compliance',
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Remediation notice dispatched to entity owner successfully',
     });
   } catch (err) {
     next(err);
