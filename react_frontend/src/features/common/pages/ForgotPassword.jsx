@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
+import { useDispatch } from 'react-redux';
 import { PATHS } from '../../../app/paths';
 import { Link } from 'react-router-dom';
+import { requestPasswordReset } from '../../../store/auth';
+
+// There is no outgoing email yet, so recovery is admin-assisted: the request notifies the
+// company's administrators (Owner / System Admin / HR), who set a temporary password that the
+// user must replace at first sign-in. The answer is the same whether or not the email exists.
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
   const [message, setMessage] = useState('');
+  const dispatch = useDispatch();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -13,15 +20,16 @@ export default function ForgotPassword() {
     setMessage('');
 
     try {
-      // Simulate an API call to the backend
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      const result = await dispatch(requestPasswordReset({ email: email.trim() })).unwrap();
       setStatus('success');
-      setMessage('If an account exists for that email, we have sent password reset instructions.');
+      setMessage(
+        result?.message ||
+          'If an account exists for that email, your company administrator has been notified and will send you a temporary password.',
+      );
       setEmail('');
     } catch (error) {
       setStatus('error');
-      setMessage('Something went wrong. Please try again.');
+      setMessage(error?.message || 'Something went wrong. Please try again.');
     }
   };
 
@@ -49,7 +57,8 @@ export default function ForgotPassword() {
               Reset your password
             </h1>
             <p className="text-sm text-gray-500 mt-2">
-              Enter your work email address and we'll send you a link to reset your password.
+              Enter your work email address. We'll ask your company administrator to reset your
+              password; they will share a temporary password with you, which you change when you sign in.
             </p>
           </div>
 
@@ -98,7 +107,7 @@ export default function ForgotPassword() {
                   Sending...
                 </>
               ) : (
-                'Send Reset Link'
+                'Request Password Reset'
               )}
             </button>
           </form>

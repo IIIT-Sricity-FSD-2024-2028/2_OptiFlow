@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import {
   login as loginThunk,
+  changePassword as changePasswordThunk,
   platformLogin as platformLoginThunk,
   logout as logoutThunk,
   restoreSession,
@@ -31,6 +32,11 @@ export const AuthProvider = ({ children }) =>{
     [dispatch]
   );
 
+  const changePassword = useCallback(
+    (body)=>dispatch(changePasswordThunk(body)).unwrap(),
+    [dispatch]
+  );
+
   const logout = useCallback(async ()=>{
     await dispatch(logoutThunk()).unwrap();
     window.location.href = '/login';
@@ -42,9 +48,10 @@ export const AuthProvider = ({ children }) =>{
     platformLogin,
     logout,
     platformLogout:logout,
+    changePassword,
     loading,
     sessionNotice,
-  }),[user,login,platformLogin,logout,loading,sessionNotice]);
+  }),[user,login,platformLogin,logout,changePassword,loading,sessionNotice]);
 
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>
 };

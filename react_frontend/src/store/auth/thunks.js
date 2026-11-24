@@ -45,6 +45,27 @@ export const registerCompany = createApiThunk("auth/registerCompany", async (pay
   return null;
 });
 
+// Replaces the password (the first-login step for admin-created users). The API revokes older
+// sessions and returns a fresh token, which becomes this tab's session.
+export const changePassword = createApiThunk("auth/changePassword", async (body, options) => {
+  const response = await authApi.changePassword(body, options);
+  if (response?.token) setSession(response.token, false);
+  return null;
+});
+
+// Forgot password: notifies the account's administrators. The answer never says whether the
+// email exists, so the thunk just passes the server's message on.
+export const requestPasswordReset = createApiThunk("auth/requestPasswordReset", async (body, options) => {
+  const response = await authApi.forgotPassword(body, options);
+  return { message: response?.message || null };
+});
+
+// Set-password link (owner invite). The user is not signed in afterwards; they go to Login.
+export const setPasswordWithToken = createApiThunk("auth/setPasswordWithToken", async (body, options) => {
+  const response = await authApi.setPassword(body, options);
+  return { message: response?.message || null };
+});
+
 export const restoreSession = createApiThunk(
   "auth/restoreSession",
   async (_arg, options) => {
