@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '../../../../shared/components/Button';
@@ -27,8 +27,8 @@ import {
   updateEscalation,
 } from '../../../../store/escalations';
 import { fetchProjects, selectAllProjects, selectProjectsLoading } from '../../../../store/projects';
-// Foreign resource (M5 users) keeps its own fetch until that slice merges.
-import * as usersApi from '../../../../services/api/users';
+import { fetchUsers, selectAllUsers, selectUsersStatus } from '../../../../store/users';
+import { isPendingStatus } from '../../utils/storeStatus';
 import { useAuth } from '../../../../context/AuthContext';
 
 export default function TeamLeadDashboard() {
@@ -41,8 +41,18 @@ export default function TeamLeadDashboard() {
   const tasksLoading = useSelector(selectTasksLoading);
   const escalationsLoading = useSelector(selectEscalationsLoading);
   const projectsLoading = useSelector(selectProjectsLoading);
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [membersLoading, setMembersLoading] = useState(true);
+  const users = useSelector(selectAllUsers);
+  const membersLoading = isPendingStatus(useSelector(selectUsersStatus));
+  // Users belonging to the current Team Lead's team(s) or reporting to them.
+  const teamMembers = useMemo(() => {
+    const myTeamIds = (user?.teams || []).map(t => t.id || t.teamId).filter(Boolean);
+    return users.filter(member => {
+      if (member.id === user?.id) return false;
+      const sharesTeam = myTeamIds.length > 0 && (member.teams || []).some(t => myTeamIds.includes(t.id || t.teamId));
+      const reportsToMe = member.managerUserId === user?.id;
+      return sharesTeam || reportsToMe;
+    });
+  }, [users, user]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
 
   const project = projects.find((p) => p.id === selectedProjectId) || projects[0] || {
@@ -118,29 +128,12 @@ export default function TeamLeadDashboard() {
 
     const loadDashboard = async () => {
       try {
-        const [membersResponse] = await Promise.all([
-          usersApi.list(),
+        await Promise.all([
+          dispatch(fetchUsers()).unwrap().catch(rethrow),
           dispatch(fetchTasks()).unwrap().catch(rethrow),
           dispatch(fetchEscalations()).unwrap().catch(rethrow),
           dispatch(fetchProjects()).unwrap().catch(rethrow),
         ]);
-
-        if (!mounted) return;
-
-        const normalizedMembers = Array.isArray(membersResponse)
-          ? membersResponse
-          : membersResponse?.data || [];
-
-        // Filter to include users belonging to the current Team Lead's team(s) or reporting to them
-        const myTeamIds = (user?.teams || []).map(t => t.id || t.teamId).filter(Boolean);
-        const myTeamMembers = normalizedMembers.filter(member => {
-          if (member.id === user?.id) return false;
-          const sharesTeam = myTeamIds.length > 0 && (member.teams || []).some(t => myTeamIds.includes(t.id || t.teamId));
-          const reportsToMe = member.managerUserId === user?.id;
-          return sharesTeam || reportsToMe;
-        });
-
-        setTeamMembers(myTeamMembers);
       } catch (error) {
         console.error('Failed to load Team Lead dashboard:', error);
 
@@ -150,10 +143,6 @@ export default function TeamLeadDashboard() {
             'Failed to load dashboard data.'
           );
         }
-      } finally {
-        if (mounted) {
-          setMembersLoading(false);
-        }
       }
     };
 
@@ -162,7 +151,7 @@ export default function TeamLeadDashboard() {
     return () => {
       mounted = false;
     };
-  }, [dispatch, user.id, user?.teams]);
+  }, [dispatch]);
 
   const teamOverviewTasks = tasks.filter(
     (task) => !task.isSubtask && !task.parentId && !task.taskId

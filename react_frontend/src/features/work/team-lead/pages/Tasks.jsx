@@ -18,10 +18,13 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTasks, selectAllTasks, selectTasksError, selectTasksLoading } from '../../../../store/tasks';
 import { fetchProjects, selectAllProjects, selectProjectsError, selectProjectsLoading } from '../../../../store/projects';
-// Foreign resource (M1 compliance) keeps its own fetch until that slice merges.
-import * as complianceApi from '../../../../services/api/compliance';
+import {
+  fetchComplianceViolations,
+  selectAllComplianceViolations,
+  selectComplianceViolationsStatus,
+} from '../../../../store/complianceViolations';
+import { isPendingStatus } from '../../utils/storeStatus';
 
-const normalize = (res) => Array.isArray(res) ? res : res?.data || [];
 const PAGE_SIZE = 10;
 
 export default function TeamLeadTasks() {
@@ -38,8 +41,14 @@ export default function TeamLeadTasks() {
   const tasksError = useSelector(selectTasksError);
   const projectsError = useSelector(selectProjectsError);
   const loadError = tasksError || projectsError;
-  const [complianceBlockedIds, setComplianceBlockedIds] = useState(new Set());
-  const [violationsLoading, setViolationsLoading] = useState(true);
+  // A failed violations load marks no task as blocked, as before.
+  const violations = useSelector(selectAllComplianceViolations);
+  const violationsLoading = isPendingStatus(useSelector(selectComplianceViolationsStatus));
+  const complianceBlockedIds = useMemo(() => new Set(
+    violations
+      .filter((v) => ['Open', 'Under_Review'].includes(v.status) && v.entityType === 'Task')
+      .map((v) => String(v.entityId)),
+  ), [violations]);
   const loading = tasksLoading || projectsLoading || violationsLoading;
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -49,37 +58,10 @@ export default function TeamLeadTasks() {
   const selectedProjectId = selectedProjectParam;
 
   useEffect(() => {
-    let mounted = true;
-
     // A failed task or project load sets that slice's error; the page shows it above the list.
     dispatch(fetchTasks());
     dispatch(fetchProjects());
-
-    const loadData = async () => {
-      try {
-        const violationsResponse = await complianceApi.getViolations().catch(() => []);
-
-        if (!mounted) return;
-
-        const normalizedViolations = normalize(violationsResponse);
-
-        const blockedIds = new Set(
-          normalizedViolations
-            .filter((v) => ['Open', 'Under_Review'].includes(v.status) && v.entityType === 'Task')
-            .map((v) => String(v.entityId))
-        );
-
-        setComplianceBlockedIds(blockedIds);
-      } finally {
-        if (mounted) setViolationsLoading(false);
-      }
-    };
-
-    loadData();
-
-    return () => {
-      mounted = false;
-    };
+    dispatch(fetchComplianceViolations());
   }, [dispatch]);
 
   const handleTabChange = (filterKey) => {
