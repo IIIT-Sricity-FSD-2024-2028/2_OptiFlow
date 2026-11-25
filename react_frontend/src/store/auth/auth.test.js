@@ -16,7 +16,7 @@ describe("auth slice (initial state)", () => {
 
   it("has an idle entry for every operation", () => {
     expect(Object.keys(initialState().mutations).sort()).toEqual(
-      ["login", "logout", "platformLogin", "registerCompany"],
+      ["changePassword", "login", "logout", "platformLogin", "registerCompany", "requestPasswordReset", "setPasswordWithToken"],
     );
   });
 

@@ -4,11 +4,13 @@ export const PATHS = {
     CONTACT: "/contact",
     LOGIN: "/login",
     FORGOT_PASSWORD: "/forgot-password",
+    SET_PASSWORD: "/set-password",
     REGISTER: "/register",
   },
   COMMON: {
     NOTIFICATIONS: "/notifications",
     PROFILE: "/profile",
+    CHANGE_PASSWORD: "/change-password",
     UNAUTHORIZED: "/unauthorized",
     NOT_FOUND: "*",
   },

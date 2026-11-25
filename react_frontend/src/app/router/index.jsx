@@ -6,7 +6,7 @@ import { ProtectedRoute, RoleRedirect } from '../guards';
 import { ROLE_GROUPS } from '../../roles';
 import { PATHS } from '../paths';
 
-import { commonRoutes } from '../routes/common.jsx';
+import { commonRoutes, passwordRoutes } from '../routes/common.jsx';
 import { platformRoutes } from '../routes/platform.jsx';
 import { executiveRoutes } from '../routes/executive.jsx';
 import { complianceRoutes } from '../routes/compliance.jsx';
@@ -35,6 +35,7 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute allowedRoles={ROLE_GROUPS.ALL_TENANT} />,
     children: [
+      ...wrapSuspense(passwordRoutes),
       {
         element: <DashboardLayout />,
         children: [

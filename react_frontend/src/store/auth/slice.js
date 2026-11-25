@@ -2,7 +2,16 @@ import { createSlice } from "@reduxjs/toolkit";
 import { baseState } from "../core/createStubSlice";
 import { isAbortedRejection } from "../core/createApiThunk";
 import { normalizeError } from "../core/normalizeError";
-import { login, logout, platformLogin, registerCompany, restoreSession } from "./thunks";
+import {
+    changePassword,
+    login,
+    logout,
+    platformLogin,
+    registerCompany,
+    requestPasswordReset,
+    restoreSession,
+    setPasswordWithToken,
+} from "./thunks";
 
 const idleMutation = () => ({status:"idle",error:null});
 
@@ -12,6 +21,8 @@ const idleMutation = () => ({status:"idle",error:null});
 // │    ├─ login           { status, error }
 // │    ├─ platformLogin   { status, error }
 // │    ├─ registerCompany { status, error }
+// │    ├─ changePassword  { status, error }
+// │    ├─ requestPasswordReset / setPasswordWithToken { status, error }
 // │    └─ logout          { status, error }
 // ├─ user            null | { ...identity, role, isPlatform }
 // ├─ sessionNotice   null | "session_expired" | "plan_expired"
@@ -23,6 +34,9 @@ export const initialState = () =>({
         login:idleMutation(),
         platformLogin: idleMutation(),
         registerCompany: idleMutation(),
+        changePassword: idleMutation(),
+        requestPasswordReset: idleMutation(),
+        setPasswordWithToken: idleMutation(),
         logout: idleMutation(),
     },
     user:null,
@@ -95,6 +109,13 @@ const slice = createSlice({
         addMutationCases(builder, platformLogin, "platformLogin", signIn);
         // Registering keeps the user signed out: they see a success screen first.
         addMutationCases(builder, registerCompany, "registerCompany");
+        // The first-login gate lifts once the API has accepted the new password.
+        addMutationCases(builder, changePassword, "changePassword", (state) => {
+            if (state.user) state.user.mustChangePassword = false;
+        });
+        // Public password-recovery steps: they never sign anyone in.
+        addMutationCases(builder, requestPasswordReset, "requestPasswordReset");
+        addMutationCases(builder, setPasswordWithToken, "setPasswordWithToken");
         // logout dispatches resetStore before it finishes, so by now every slice (this one
         // included) is back to its initial state. Keep the app initialised so there is no
         // blank "starting up" flash before the redirect to Login.
