@@ -1,7 +1,6 @@
 import { createApiThunk } from "../core/createApiThunk";
 import { shouldFetch } from "../core/shouldFetch";
 import * as platformApi from "../../services/api/platform";
-import { should } from "vitest";
 
 //Read only Thunk, can be cancelled. Skippped if the same query is loading or fresh
 export const fetchPlans = createApiThunk("platformPlans/fetch",

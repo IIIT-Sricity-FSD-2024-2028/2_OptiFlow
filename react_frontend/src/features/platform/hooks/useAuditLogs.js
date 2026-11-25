@@ -1,13 +1,18 @@
-import { getToken } from '../../../services/auth/session';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { apiClient } from '../../../services/api/client';
+import { compactQuery, exportAuditLogsCsv } from '../../../services/api/platform';
+import { fetchAuditLogs, selectAuditLogsEntry } from '../../../store/platformAuditLogs';
+import { useKeyedList } from './useKeyedList';
+
+const PRESET_MS = {
+  '24h': 24 * 3600 * 1000,
+  '7d': 7 * 24 * 3600 * 1000,
+  '30d': 30 * 24 * 3600 * 1000,
+};
 
 export function useAuditLogs(initialPageSize = 20) {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [logs, setLogs] = useState([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(() => Number(searchParams.get('page')) || 1);
   const [pageSize, setPageSize] = useState(() => Number(searchParams.get('pageSize')) || initialPageSize);
 
@@ -21,9 +26,10 @@ export function useAuditLogs(initialPageSize = 20) {
   const [datePreset, setDatePreset] = useState(() => searchParams.get('preset') || 'all');
   const [startDate, setStartDate] = useState(() => searchParams.get('from') || '');
   const [endDate, setEndDate] = useState(() => searchParams.get('to') || '');
+  // "Last 24h" counts back from the moment the preset was chosen. It is fixed until the user picks
+  // a preset again, so the query (and its cache entry) does not change on every render.
+  const [presetAnchor, setPresetAnchor] = useState(() => Date.now());
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -52,46 +58,28 @@ export function useAuditLogs(initialPageSize = 20) {
     setSearchParams(params, { replace: true });
   }, [page, pageSize, debouncedQ, action, entityType, entityId, adminId, companyId, datePreset, startDate, endDate, initialPageSize, setSearchParams]);
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams();
-      params.append('page', String(page));
-      params.append('pageSize', String(pageSize));
-      if (debouncedQ.trim()) params.append('q', debouncedQ.trim());
-      if (action) params.append('action', action);
-      if (entityType) params.append('entityType', entityType);
-      if (entityId) params.append('entityId', entityId);
-      if (adminId) params.append('adminUserId', adminId);
-      if (companyId) params.append('companyId', companyId);
+  // The filters shared by the list and the CSV export, so an export always matches the table.
+  const filters = useMemo(() => {
+    const presetMs = PRESET_MS[datePreset];
+    return compactQuery({
+      q: debouncedQ,
+      action,
+      entityType,
+      entityId,
+      adminUserId: adminId,
+      companyId,
+      startDate: presetMs ? new Date(presetAnchor - presetMs).toISOString() : startDate,
+      endDate,
+    });
+  }, [debouncedQ, action, entityType, entityId, adminId, companyId, datePreset, presetAnchor, startDate, endDate]);
 
-      let effectiveStart = startDate;
-      let effectiveEnd = endDate;
-      if (datePreset === '24h') {
-        effectiveStart = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-      } else if (datePreset === '7d') {
-        effectiveStart = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-      } else if (datePreset === '30d') {
-        effectiveStart = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-      }
+  const query = useMemo(() => ({ page: String(page), pageSize: String(pageSize), ...filters }), [page, pageSize, filters]);
 
-      if (effectiveStart) params.append('startDate', effectiveStart);
-      if (effectiveEnd) params.append('endDate', effectiveEnd);
-
-      const res = await apiClient(`/api/platform/audit-logs?${params.toString()}`);
-      setLogs(res?.items || (Array.isArray(res) ? res : []));
-      setTotal(res?.total ?? 0);
-    } catch (err) {
-      setError(err?.message || 'Failed to load platform audit logs');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, debouncedQ, action, entityType, entityId, adminId, companyId, datePreset, startDate, endDate]);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+  const { items, total, loading, error, refetch } = useKeyedList({
+    fetchList: fetchAuditLogs,
+    selectEntry: selectAuditLogsEntry,
+    query,
+  });
 
   const resetFilters = () => {
     setQ('');
@@ -107,22 +95,7 @@ export function useAuditLogs(initialPageSize = 20) {
   };
 
   const exportCsv = async () => {
-    const params = new URLSearchParams();
-    if (debouncedQ.trim()) params.append('q', debouncedQ.trim());
-    if (action) params.append('action', action);
-    if (entityType) params.append('entityType', entityType);
-    if (entityId) params.append('entityId', entityId);
-    if (adminId) params.append('adminUserId', adminId);
-    if (companyId) params.append('companyId', companyId);
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-
-    const token = getToken();
-    const res = await fetch(`/api/platform/audit-logs/export?${params.toString()}`, {
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    });
-    if (!res.ok) throw new Error('Failed to export audit logs');
-    const blob = await res.blob();
+    const blob = await exportAuditLogsCsv(filters);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -130,18 +103,37 @@ export function useAuditLogs(initialPageSize = 20) {
     document.body.appendChild(a);
     a.click();
     a.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   return {
-    logs, total, page, setPage, pageSize, setPageSize,
+    logs: items, total, page, setPage, pageSize, setPageSize,
     q, setQ, action, setAction: (val) => { setAction(val); setPage(1); },
     entityType, setEntityType: (val) => { setEntityType(val); setPage(1); },
     entityId, setEntityId: (val) => { setEntityId(val); setPage(1); },
     adminId, setAdminId: (val) => { setAdminId(val); setPage(1); },
     companyId, setCompanyId: (val) => { setCompanyId(val); setPage(1); },
-    datePreset, setDatePreset: (val) => { setDatePreset(val); setPage(1); },
+    datePreset, setDatePreset: (val) => { setDatePreset(val); setPresetAnchor(Date.now()); setPage(1); },
     startDate, setStartDate: (val) => { setStartDate(val); setPage(1); },
     endDate, setEndDate: (val) => { setEndDate(val); setPage(1); },
-    loading, error, refetch: fetchLogs, resetFilters, exportCsv,
+    loading, error, refetch, resetFilters, exportCsv,
   };
+}
+
+// A fixed slice of the audit log (one admin, one company, one subscription) for a detail panel.
+// `scope` is e.g. { adminUserId } and is compared by value, so passing a new object each render is fine.
+export function useScopedAuditLogs(scope, { pageSize = 20, enabled = true } = {}) {
+  const scopeKey = JSON.stringify(scope ?? {});
+  const query = useMemo(
+    () => ({ ...compactQuery(JSON.parse(scopeKey)), pageSize: String(pageSize) }),
+    [scopeKey, pageSize],
+  );
+  const { items, loading, error, refetch } = useKeyedList({
+    fetchList: fetchAuditLogs,
+    selectEntry: selectAuditLogsEntry,
+    query,
+    keepPrevious: false,
+    enabled,
+  });
+  return { logs: items, loading, error, refetch };
 }

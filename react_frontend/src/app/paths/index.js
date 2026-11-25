@@ -5,11 +5,13 @@ export const PATHS = {
     LOGIN: "/login",
     FORGOT_PASSWORD: "/forgot-password",
     REGISTER: "/register",
+    SET_PASSWORD: "/set-password",
   },
   COMMON: {
     NOTIFICATIONS: "/notifications",
     PROFILE: "/profile",
     UNAUTHORIZED: "/unauthorized",
+    CHANGE_PASSWORD: "/change-password",
     NOT_FOUND: "*",
   },
   PLATFORM: {

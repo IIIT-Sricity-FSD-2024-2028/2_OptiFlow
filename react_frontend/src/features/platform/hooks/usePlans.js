@@ -5,6 +5,7 @@ import {
     createPlan,
     updatePlan,
     selectPlans,
+    selectActivePlans,
     selectPlansStatus,
     selectPlansError,
 } from '../../../store/platformPlans';
@@ -62,4 +63,21 @@ export function usePlans() {
         savePlan,
         setPlanActiveStatus,
     };
+}
+
+// Plans for a dropdown or a filter (modals, filter bars). Shares the one list in the store with
+// the Plans page. `enabled` = false does not fetch (a modal that is closed).
+export function usePlanOptions(enabled = true) {
+    const dispatch = useDispatch();
+    const plans = useSelector(selectPlans);
+    const activePlans = useSelector(selectActivePlans);
+    const status = useSelector(selectPlansStatus);
+    const error = useSelector(selectPlansError);
+
+    useEffect(() => {
+        if (enabled) dispatch(fetchPlans());
+    }, [dispatch, enabled]);
+
+    const loading = enabled && (status === 'idle' || (status === 'loading' && plans.length === 0));
+    return { plans, activePlans, loading, error: error?.message ?? null };
 }

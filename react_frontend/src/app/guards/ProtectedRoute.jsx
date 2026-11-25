@@ -23,6 +23,13 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
 
   const isPlatformUser = Boolean(user.isPlatform || user.role === ROLES.PLATFORM_ADMIN);
 
+  // A temporary password (a company owner provisioned by a platform admin, a user created by HR,
+  // a new platform administrator) must be replaced before anything else. The server refuses every
+  // other request until then.
+  if (user.mustChangePassword) {
+    return <Navigate to={PATHS.COMMON.CHANGE_PASSWORD} replace />;
+  }
+
   // 2. Is this a platform route but the user is a standard tenant? Kick to unauthorized
   if (isPlatform && !isPlatformUser) {
     return <Navigate to={PATHS.COMMON.UNAUTHORIZED} replace />;

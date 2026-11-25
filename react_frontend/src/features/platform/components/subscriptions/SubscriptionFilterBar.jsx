@@ -1,21 +1,12 @@
-import { useState, useEffect } from 'react';
 import { Search, Filter, X, AlertCircle, Clock } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { usePlanOptions } from '../../hooks/usePlans';
 
 export function SubscriptionFilterBar({
   search, onSearchChange, statusFilter, onStatusChange,
   planFilter, onPlanChange, cycleFilter, onCycleChange,
   quickFilter, onQuickFilterChange,
 }) {
-  const [plans, setPlans] = useState([]);
-
-  useEffect(() => {
-    let isMounted = true;
-    apiClient('/api/platform/plans')
-      .then((res) => { if (isMounted) setPlans(res?.items || []); })
-      .catch((err) => console.error('Failed to load plans:', err));
-    return () => { isMounted = false; };
-  }, []);
+  const { plans } = usePlanOptions();
 
   const hasActive = search.trim() !== '' || statusFilter !== 'All' || planFilter !== 'All' || cycleFilter !== 'All' || quickFilter !== 'none';
 

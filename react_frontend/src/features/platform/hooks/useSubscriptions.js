@@ -1,17 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiClient } from '../../../services/api/client';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useDispatch } from 'react-redux';
+import { compactQuery } from '../../../services/api/platform';
+import {
+  fetchSubscriptions,
+  createSubscription,
+  updateSubscription,
+  selectSubscriptionsEntry,
+} from '../../../store/platformSubscriptions';
+import { useKeyedList } from './useKeyedList';
+
+const EMPTY_SUMMARY = { total: 0, active: 0, trialing: 0, pastDue: 0, cancelled: 0, expiringSoon: 0 };
 
 export function useSubscriptions(initialPageSize = 10) {
-  const [subscriptions, setSubscriptions] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState({
-    total: 0,
-    active: 0,
-    trialing: 0,
-    pastDue: 0,
-    cancelled: 0,
-    expiringSoon: 0,
-  });
+  const dispatch = useDispatch();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [search, setSearch] = useState('');
@@ -20,8 +21,6 @@ export function useSubscriptions(initialPageSize = 10) {
   const [planFilter, setPlanFilter] = useState('All');
   const [cycleFilter, setCycleFilter] = useState('All');
   const [quickFilter, setQuickFilter] = useState('none'); // 'none' | 'pastDue' | 'expiring30'
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const debounceTimerRef = useRef(null);
 
@@ -34,60 +33,30 @@ export function useSubscriptions(initialPageSize = 10) {
     return () => clearTimeout(debounceTimerRef.current);
   }, [search]);
 
-  const fetchSubscriptions = useCallback(async (isInitial = false) => {
-    try {
-      if (!isInitial) setLoading(true);
-      setError(null);
+  const query = useMemo(
+    () =>
+      compactQuery({
+        page,
+        pageSize,
+        q: debouncedSearch,
+        status: statusFilter,
+        planId: planFilter,
+        billingCycle: cycleFilter,
+        pastDue: quickFilter === 'pastDue' ? 'true' : '',
+        expiringWithin: quickFilter === 'expiring30' ? '30' : '',
+      }),
+    [page, pageSize, debouncedSearch, statusFilter, planFilter, cycleFilter, quickFilter],
+  );
 
-      const params = new URLSearchParams();
-      params.append('page', String(page));
-      params.append('pageSize', String(pageSize));
-      if (debouncedSearch.trim()) params.append('q', debouncedSearch.trim());
-      if (statusFilter && statusFilter !== 'All') params.append('status', statusFilter);
-      if (planFilter && planFilter !== 'All') params.append('planId', planFilter);
-      if (cycleFilter && cycleFilter !== 'All') params.append('billingCycle', cycleFilter);
+  const { items, total, summary, loading, error, refetch } = useKeyedList({
+    fetchList: fetchSubscriptions,
+    selectEntry: selectSubscriptionsEntry,
+    query,
+  });
 
-      if (quickFilter === 'pastDue') {
-        params.append('pastDue', 'true');
-      } else if (quickFilter === 'expiring30') {
-        params.append('expiringWithin', '30');
-      }
-
-      const res = await apiClient(`/api/platform/subscriptions?${params.toString()}`);
-      setSubscriptions(res?.items || []);
-      setTotal(res?.total || 0);
-      if (res?.summary) {
-        setSummary(res.summary);
-      }
-    } catch (err) {
-      console.error('Failed to fetch subscriptions:', err);
-      setError(err.message || 'Failed to load subscriptions');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, debouncedSearch, statusFilter, planFilter, cycleFilter, quickFilter]);
-
-  useEffect(() => {
-    fetchSubscriptions(true);
-  }, [fetchSubscriptions]);
-
-  const updateSub = async (id, payload) => {
-    const res = await apiClient(`/api/platform/subscriptions/${id}`, {
-      method: 'PATCH',
-      body: payload,
-    });
-    await fetchSubscriptions();
-    return res;
-  };
-
-  const createSub = async (payload) => {
-    const res = await apiClient('/api/platform/subscriptions', {
-      method: 'POST',
-      body: payload,
-    });
-    await fetchSubscriptions();
-    return res;
-  };
+  // The slice marks the list stale after a write, and useKeyedList fetches it again.
+  const updateSub = (id, payload) => dispatch(updateSubscription({ id, body: payload })).unwrap();
+  const createSub = (payload) => dispatch(createSubscription(payload)).unwrap();
 
   const handleStatusFilterChange = (status) => {
     setStatusFilter(status);
@@ -102,9 +71,9 @@ export function useSubscriptions(initialPageSize = 10) {
   };
 
   return {
-    subscriptions,
+    subscriptions: items,
     total,
-    summary,
+    summary: summary ?? EMPTY_SUMMARY,
     page,
     setPage,
     pageSize,
@@ -121,7 +90,7 @@ export function useSubscriptions(initialPageSize = 10) {
     setQuickFilter: handleQuickFilterChange,
     loading,
     error,
-    refetch: fetchSubscriptions,
+    refetch,
     updateSubscription: updateSub,
     createSubscription: createSub,
   };

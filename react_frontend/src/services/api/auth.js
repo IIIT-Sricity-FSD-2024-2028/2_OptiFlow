@@ -25,3 +25,16 @@ export const platformLogout = (options) =>
     credentials: "include",
     skipAuthRedirect: true,
   });
+
+// Public: the one-time token from an owner invite link is the proof, there is no session yet.
+export const setPassword = ({ token, password }, options) =>
+  apiClient("/auth/set-password", { ...options, method: "POST", body: { token, password }, skipAuthRedirect: true });
+
+// Signed-in user replaces their password (also lifts the first-login gate). The answer carries a
+// fresh token: the old one is revoked by the change.
+export const changePassword = ({ currentPassword, newPassword }, options) =>
+  apiClient("/auth/change-password", { ...options, method: "POST", body: { currentPassword, newPassword } });
+
+// Platform administrator replaces a temporary password (the server requires at least 10 characters).
+export const platformChangePassword = ({ currentPassword, newPassword }, options) =>
+  apiClient("/platform/auth/change-password", { ...options, method: "POST", body: { currentPassword, newPassword } });

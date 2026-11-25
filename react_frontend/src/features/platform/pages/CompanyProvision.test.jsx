@@ -3,7 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
-import * as client from "../../../services/api/client";
 import * as platformApi from "../../../services/api/platform";
 import { makeStore } from "../../../store";
 import CompanyProvision from "./CompanyProvision";
@@ -44,27 +43,26 @@ describe("CompanyProvision plans", () => {
     expect(await screen.findByText(/failed to load active plans tier list/i)).toBeInTheDocument();
   });
 
-    it("no longer loads plans through apiClient", () => {
-    expect(source).not.toMatch(/platform\/plans/);
+  it("no longer calls apiClient directly", () => {
+    expect(source).not.toMatch(/apiClient/);
   });
 });
 
 describe("CompanyProvision owner invite", () => {
-  it("has no password field: the owner sets one through the invite link", async () => {
+  it("has no password field: the system generates a temporary one", async () => {
     vi.spyOn(platformApi, "listPlans").mockResolvedValue(PLANS);
     setup();
     await screen.findByRole("option", { name: /basic/i });
     expect(screen.queryByText(/initial login password/i)).not.toBeInTheDocument();
   });
 
-  it("submits without a password and shows the invite link", async () => {
+  it("submits without a password and shows the temporary password once", async () => {
     vi.spyOn(platformApi, "listPlans").mockResolvedValue(PLANS);
-    const post = vi.spyOn(client, "apiClient").mockResolvedValue({
+    const post = vi.spyOn(platformApi, "createCompany").mockResolvedValue({
       company: { id: "c1", legalName: "Acme Ltd" },
       owner: { email: "jane@acme.com" },
       subscription: { plan: { name: "Basic" } },
-      setPasswordUrl: "http://app.test/set-password?token=abc123",
-      setPasswordExpiresAt: "2026-11-26T10:00:00Z",
+      temporaryPassword: "Kd7mPq2xWn4Z",
       inviteEmail: { delivered: false },
     });
     const user = userEvent.setup();
@@ -76,11 +74,10 @@ describe("CompanyProvision owner invite", () => {
     await user.click(screen.getByRole("button", { name: /provision company/i }));
 
     await waitFor(() => expect(post).toHaveBeenCalled());
-    const [url, options] = post.mock.calls[0];
-    expect(url).toBe("/api/platform/companies");
-    expect(options.method).toBe("POST");
-    expect(options.body).not.toHaveProperty("password");
-    expect(options.body).toMatchObject({ legalName: "Acme Ltd", ownerEmail: "jane@acme.com", planId: "p1" });
-    expect(await screen.findByText(/set-password\?token=abc123/)).toBeInTheDocument();
+    const [body] = post.mock.calls[0];
+    expect(body).not.toHaveProperty("password");
+    expect(body).toMatchObject({ legalName: "Acme Ltd", ownerEmail: "jane@acme.com", planId: "p1" });
+    expect(await screen.findByText("Kd7mPq2xWn4Z")).toBeInTheDocument();
+    expect(screen.getByText(/must choose a new password at first sign-in/i)).toBeInTheDocument();
   });
 });

@@ -7,6 +7,8 @@ const ForgotPassword = React.lazy(() => import("../../features/common/pages/Forg
 const Register = React.lazy(
   () => import("../../features/common/pages/Register"),
 );
+const SetPassword = React.lazy(() => import("../../features/common/pages/SetPassword"));
+const ChangePassword = React.lazy(() => import("../../features/common/pages/ChangePassword"));
 const Notifications = React.lazy(
   () => import("../../features/common/pages/Notifications"),
 );
@@ -25,9 +27,11 @@ export const commonRoutes = [
   { path: PATHS.PUBLIC.LOGIN, element: <Login /> },
   { path: PATHS.PUBLIC.FORGOT_PASSWORD, element: <ForgotPassword /> },
   { path: PATHS.PUBLIC.REGISTER, element: <Register /> },
+  { path: PATHS.PUBLIC.SET_PASSWORD, element: <SetPassword /> },
   { path: PATHS.COMMON.NOTIFICATIONS, element: <Notifications /> },
   { path: PATHS.COMMON.PROFILE, element: <Profile /> },
   { path: PATHS.COMMON.UNAUTHORIZED, element: <Unauthorized /> },
+  { path: PATHS.COMMON.CHANGE_PASSWORD, element: <ChangePassword /> },
   { path: "/components", element: <ComponentShowcase /> },
   { path: PATHS.COMMON.NOT_FOUND, element: <NotFound /> },
 ];

@@ -4,7 +4,7 @@ import { ArrowLeft, Building2, User, CreditCard, Sparkles, AlertCircle } from 'l
 import { PATHS } from '../../../app/paths';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPlans, selectActivePlans, selectPlansStatus } from '../../../store/platformPlans';
-import { apiClient } from '../../../services/api/client';
+import { createCompany } from '../../../store/platformCompanies';
 import { CompanyProvisionSuccessModal } from '../components/CompanyProvisionSuccessModal';
 
 export default function CompanyProvision() {
@@ -93,10 +93,7 @@ export default function CompanyProvision() {
 
     try {
       setSubmitting(true);
-      const res = await apiClient('/api/platform/companies', {
-        method: 'POST',
-        body: form,
-      });
+      const res = await dispatch(createCompany(form)).unwrap();
       setSuccessResult(res);
     } catch (err) {
       setFormError(err.message || 'Failed to provision company');

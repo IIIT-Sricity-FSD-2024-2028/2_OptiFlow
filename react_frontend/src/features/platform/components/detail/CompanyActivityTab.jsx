@@ -1,30 +1,8 @@
-import { useState, useEffect } from 'react';
 import { History, Activity, Clock } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { useScopedAuditLogs } from '../../hooks/useAuditLogs';
 
 export function CompanyActivityTab({ company }) {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    async function loadLogs() {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await apiClient(`/api/platform/audit-logs?companyId=${company.id}&pageSize=20`).catch(() => null);
-        const items = res?.items || (Array.isArray(res) ? res : []);
-        setLogs(items);
-      } catch (err) {
-        setError('Audit logs could not be loaded');
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (company?.id) {
-      loadLogs();
-    }
-  }, [company?.id]);
+  const { logs, loading, error, refetch } = useScopedAuditLogs({ companyId: company?.id }, { enabled: Boolean(company?.id) });
 
   return (
     <div className="space-y-4">
@@ -43,7 +21,12 @@ export function CompanyActivityTab({ company }) {
 
         {loading ? (
           <div className="text-center py-8 text-xs text-slate-400">Loading audit history...</div>
-        ) : error || logs.length === 0 ? (
+        ) : error ? (
+          <div className="text-center py-8 text-red-600 text-xs space-y-2">
+            <div>Audit logs could not be loaded: {error}</div>
+            <button type="button" onClick={refetch} className="font-bold underline cursor-pointer">Retry</button>
+          </div>
+        ) : logs.length === 0 ? (
           <div className="text-center py-8 text-slate-400 text-xs space-y-2">
             <Activity className="w-8 h-8 mx-auto text-slate-300" />
             <div>No audit log events recorded yet for this organization.</div>
