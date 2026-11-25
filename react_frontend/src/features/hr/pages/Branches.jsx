@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
+import { createBranch, removeBranch, selectAllBranches } from "../../../store/branches";
+import { selectAllUsers } from "../../../store/users";
+import { hrReads, useHrReads, toastWriteError, writeErrorMessage } from "../useHrReads";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { StatCard } from "../../../shared/components/StatCard";
@@ -29,20 +32,25 @@ import {
 
 const PAGE_SIZE = 10;
 
+// What the page loads (see useHrReads). Constants, so the arrays stay stable.
+const PRIMARY = [hrReads.branches];
+const SECONDARY = [hrReads.users];
+
 // WHY: HrBranches provides the organizational foundation for multi-branch companies.
 // It allows HR Administrators to manage physical branches, territorial office hubs,
 // and track team allocation across regions, while respecting role authorization boundaries.
 export default function HrBranches() {
+  const dispatch = useDispatch();
+  const branches = useSelector(selectAllBranches);
+  const users = useSelector(selectAllUsers);
+  // `error` is the main data failing; `partialFailures` are secondary lists: the page still renders but says so.
+  const { loading, error: loadError, partialFailures, reload, reloading, reloadAfterFailure } = useHrReads(PRIMARY, SECONDARY);
+  const error = loadError && (loadError.message || "Failed to load company branches from server.");
+
   const { user } = useAuth();
   const toast = useToast();
 
   // Raw branch records loaded from backend API
-  const [branches, setBranches] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Secondary lists that failed to load; the page still renders but says so.
-  const [partialFailures, setPartialFailures] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -70,40 +78,6 @@ export default function HrBranches() {
   // D2: naming a Branch Manager is a grant above HR's rank; only the Owner and System Admin may.
   const canNameManager = ["company_owner", "system_admin"].includes(user?.role);
 
-  // 1. DATA HYDRATION
-  const fetchBranches = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setPartialFailures([]);
-    const failed = [];
-    const secondary = (path, name) =>
-      apiClient(path).catch((err) => {
-        console.warn(`[HrBranches] Failed to fetch ${name}:`, err.message);
-        failed.push(name);
-        return [];
-      });
-
-    try {
-      const [branchesData, usersData] = await Promise.all([
-        apiClient("/branches"),
-        secondary("/users", "Users"),
-      ]);
-      setPartialFailures(failed);
-      setBranches(Array.isArray(branchesData) ? branchesData : []);
-      setUsers(Array.isArray(usersData) ? usersData : usersData?.data || []);
-    } catch (err) {
-      console.error("[HrBranches] Failed to load branches:", err);
-      setError(err.message || "Failed to load company branches from server.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchBranches();
-  }, [fetchBranches]);
-
   // Reset to first page when search changes
   const filterKey = JSON.stringify([searchQuery]);
   const [pagedFilterKey, setPagedFilterKey] = useState(filterKey);
@@ -125,25 +99,23 @@ export default function HrBranches() {
     setFormError("");
 
     try {
-      await apiClient("/branches", {
-        method: "POST",
-        body: {
-          name: trimmedName,
-          ...(branchCode.trim() ? { code: branchCode.trim() } : {}),
-          ...(managerUserId ? { managerUserId } : {}),
-        },
-      });
+      await dispatch(createBranch({
+        name: trimmedName,
+        ...(branchCode.trim() ? { code: branchCode.trim() } : {}),
+        ...(managerUserId ? { managerUserId } : {}),
+      })).unwrap();
 
       toast.success(`Branch "${trimmedName}" created successfully!`);
+      await reload();
       setIsCreateModalOpen(false);
       setBranchName("");
       setBranchCode("");
       setManagerUserId("");
-      await fetchBranches();
     } catch (err) {
       console.error("[HrBranches] Creation failed:", err);
-      setFormError(err.message || "Failed to create branch. Please check inputs.");
-      toast.error(err.message || "Failed to create branch.");
+      reloadAfterFailure(err);
+      setFormError(writeErrorMessage(err, "Failed to create branch. Please check inputs."));
+      toastWriteError(toast, err, "Failed to create branch.");
     } finally {
       setIsSubmitting(false);
     }
@@ -170,20 +142,18 @@ export default function HrBranches() {
 
     setIsDeleting(true);
     try {
-      const queryParam = targetTeamsCount > 0 && reassignBranchId ? `?reassignBranchId=${encodeURIComponent(reassignBranchId)}` : "";
-      const payload = targetTeamsCount > 0 ? { reassignBranchId } : undefined;
-      const res = await apiClient(`/branches/${deleteTarget.id}${queryParam}`, {
-        method: "DELETE",
-        body: payload,
-      });
+      const res = await dispatch(
+        removeBranch({ id: deleteTarget.id, ...(targetTeamsCount > 0 ? { reassignBranchId } : {}) }),
+      ).unwrap();
 
       toast.success(res?.message || `Branch "${deleteTarget.name}" deleted successfully.`);
+      await reload();
       setDeleteTarget(null);
       setReassignBranchId("");
-      await fetchBranches();
     } catch (err) {
       console.error("[HrBranches] Deletion failed:", err);
-      toast.error(err.message || "Failed to delete branch.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to delete branch."));
     } finally {
       setIsDeleting(false);
     }
@@ -341,7 +311,7 @@ export default function HrBranches() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button variant="secondary" size="sm" onClick={() => fetchBranches()}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             <RotateCw className="w-3.5 h-3.5 mr-1.5" />
             Refresh
           </Button>
@@ -369,7 +339,7 @@ export default function HrBranches() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" size="sm" onClick={() => fetchBranches()}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             Retry
           </Button>
         </div>
