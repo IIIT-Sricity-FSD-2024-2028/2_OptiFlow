@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, User, CreditCard, Sparkles, AlertCircle } from 'lucide-react';
 import { PATHS } from '../../../app/paths';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchPlans, selectActivePlans, selectPlansStatus } from '../../../store/platformPlans';
 import { apiClient } from '../../../services/api/client';
 import { CompanyProvisionSuccessModal } from '../components/CompanyProvisionSuccessModal';
 
 export default function CompanyProvision() {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState([]);
-  const [loadingPlans, setLoadingPlans] = useState(true);
+  const dispatch = useDispatch();
+  const plans = useSelector(selectActivePlans);
+  const plansStatus = useSelector(selectPlansStatus);
+  const loadingPlans = plansStatus === 'idle' || (plansStatus === 'loading' && plans.length === 0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
   const [successResult, setSuccessResult] = useState(null);
@@ -26,24 +30,20 @@ export default function CompanyProvision() {
   const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
-    async function loadPlans() {
-      try {
-        setLoadingPlans(true);
-        const res = await apiClient('/api/platform/plans?isActive=true');
-        const activePlans = res?.items || [];
-        setPlans(activePlans);
-        if (activePlans.length > 0) {
-          setForm((prev) => ({ ...prev, planId: activePlans[0].id }));
-        }
-      } catch (err) {
-        console.error('Failed to load plans:', err);
-        setFormError('Failed to load active plans tier list');
-      } finally {
-        setLoadingPlans(false);
-      }
+    dispatch(fetchPlans());
+  }, [dispatch]);
+
+  // Preselect the first active plan once the list is available.
+  useEffect(() => {
+    if (plans.length > 0) {
+      setForm((prev) => (prev.planId ? prev : { ...prev, planId: plans[0].id }));
     }
-    loadPlans();
-  }, []);
+  }, [plans]);
+
+  useEffect(() => {
+    if (plansStatus === 'failed') setFormError('Failed to load active plans tier list');
+  }, [plansStatus]);
+
 
   const validate = () => {
     const errors = {};

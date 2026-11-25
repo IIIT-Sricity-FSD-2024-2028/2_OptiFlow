@@ -1,32 +1,30 @@
-import { useState, useEffect, useCallback } from 'react';
-import { apiClient } from '../../../services/api/client';
+import { useCallback, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+    fetchPlans,
+    createPlan,
+    updatePlan,
+    selectPlans,
+    selectPlansStatus,
+    selectPlansError,
+} from '../../../store/platformPlans';
 
+// The hook keeps the same return keys as before, so Plans.jsx does not change.
+// The data now lives in the store: other pages (CompanyProvision) share the same list.
 export function usePlans() {
-    const [plans, setPlans] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
-    //code for fetching all plans
-    const fetchPlans = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const res = await apiClient('/platform/plans');
-            setPlans(res?.items || []);
-        }
-        catch (err) {
-            console.error(err.message || 'Failed to fetch subscription plans');
-            setError(err.message || 'Failed to fetch subscription plans');
-        }
-        finally {
-            setLoading(false);
-        }
-    }, []);
+    const dispatch = useDispatch();
+    const plans = useSelector(selectPlans);
+    const status = useSelector(selectPlansStatus);
+    const error = useSelector(selectPlansError);
 
     useEffect(() => {
-        fetchPlans();
-    }, [fetchPlans]);
+        dispatch(fetchPlans());
+    }, [dispatch]);
 
+    // Table shows "loading" only before the first data arrives, not during a refresh.
+    const loading = status === 'idle' || (status === 'loading' && plans.length === 0);
+
+    const refreshPlans = useCallback(() => dispatch(fetchPlans({ force: true })), [dispatch]);
 
     //code for creating or updating plan
     const savePlan = async (formData, editingPlanId = null) => {
@@ -43,36 +41,25 @@ export function usePlans() {
             auditLogRetentionDays: Number(formData.auditLogRetentionDays || 90),
         };
 
+        // unwrap() throws the plain { message, status, code } error, which the drawer shows.
         if (editingPlanId) {
-            await apiClient(`/platform/plans/${editingPlanId}`, {
-                method: 'PATCH',
-                body: payload,
-            });
+            await dispatch(updatePlan({ id: editingPlanId, body: payload })).unwrap();
         } else {
-            await apiClient('/platform/plans', {
-                method: 'POST',
-                body: payload,
-            });
+            await dispatch(createPlan(payload)).unwrap();
         }
-
-        await fetchPlans();
     };
 
     //Code for toggling archive
     const setPlanActiveStatus = async (planId, isActive) => {
-        await apiClient(`/platform/plans/${planId}`, {
-            method: 'PATCH',
-            body: { isActive },
-        });
-        await fetchPlans();
+        await dispatch(updatePlan({ id: planId, body: { isActive } })).unwrap();
     };
 
     return {
         plans,
         loading,
-        error,
-        refreshPlans: fetchPlans,
+        error: error?.message ?? null,
+        refreshPlans,
         savePlan,
-        setPlanActiveStatus
+        setPlanActiveStatus,
     };
-};
+}
