@@ -1,6 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
+import { createRole, setRolePermissions, removeRole, selectAllRoles } from "../../../store/roles";
+import { createRoleAssignment, removeRoleAssignment, selectAllRoleAssignments } from "../../../store/roleAssignments";
+import { selectAllUsers } from "../../../store/users";
+import { selectAllBranches } from "../../../store/branches";
+import { hrReads, useHrReads, writeErrorMessage } from "../useHrReads";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { PATHS } from "../../../app/paths";
@@ -63,19 +68,25 @@ function getAvatarColor(str = "") {
 function getInitials(name = "") {
   return name.split(" ").map((n) => n[0] || "").join("").substring(0, 2).toUpperCase() || "??";
 }
+// What the page loads (see useHrReads). Constants, so the arrays stay stable.
+const PRIMARY = [hrReads.roles];
+const SECONDARY = [hrReads.roleAssignments, hrReads.users, hrReads.branches];
+
 
 export default function HrRoles() {
+  const dispatch = useDispatch();
+  const roles = useSelector(selectAllRoles);
+  const assignments = useSelector(selectAllRoleAssignments);
+  const users = useSelector(selectAllUsers);
+  const branches = useSelector(selectAllBranches);
+  // `error` is the main data failing; `partialFailures` are secondary lists: the page still renders but says so.
+  const { loading, error: loadError, partialFailures, reload, reloading, reloadAfterFailure } = useHrReads(PRIMARY, SECONDARY);
+  const error = loadError && (loadError.message || "Failed to load roles from server.");
+
   const { user: currentUser } = useAuth();
   const toast = useToast();
 
   // Core Data
-  const [roles, setRoles] = useState([]);
-  const [assignments, setAssignments] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Secondary lists that failed to load; the page still renders but says so.
-  const [partialFailures, setPartialFailures] = useState([]);
 
   // Selected Role & Permissions Workspace
   const [selectedRoleId, setSelectedRoleId] = useState(null);
@@ -99,7 +110,6 @@ export default function HrRoles() {
   const [assignUserId, setAssignUserId] = useState("");
   // A Branch Manager is assigned to one branch; every other role here is company-wide.
   const [assignBranchId, setAssignBranchId] = useState("");
-  const [branches, setBranches] = useState([]);
   const [assignError, setAssignError] = useState("");
   const [isAssigning, setIsAssigning] = useState(false);
 
@@ -118,71 +128,28 @@ export default function HrRoles() {
     "hr_manager",
   ].includes(currentUser?.role);
 
-  // 1. DATA HYDRATION
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setPartialFailures([]);
-    const failed = [];
-    const secondary = (path, name) =>
-      apiClient(path).catch((err) => {
-        console.warn(`[HrRoles] Failed to fetch ${name}:`, err.message);
-        failed.push(name);
-        return [];
-      });
-
-    try {
-      const [rolesData, assignmentsData, usersData, branchesData] = await Promise.all([
-        apiClient("/roles"),
-        secondary("/role-assignments", "Role assignments"),
-        secondary("/users", "Users"),
-        secondary("/branches", "Branches"),
-      ]);
-      setPartialFailures(failed);
-
-      const loadedRoles = Array.isArray(rolesData) ? rolesData : [];
-      setRoles(loadedRoles);
-      setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setBranches(Array.isArray(branchesData) ? branchesData : []);
-
-      // Preserve active role or default to first role
-      setSelectedRoleId((prev) => {
-        if (prev && loadedRoles.some((r) => r.id === prev)) return prev;
-        return loadedRoles[0]?.id || null;
-      });
-    } catch (err) {
-      console.error("[HrRoles] Failed to load role telemetry:", err);
-      setError(err.message || "Failed to load roles from server.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchData();
-  }, [fetchData]);
+  // Keep the chosen role; when it is gone (or none is chosen yet) fall back to the first one.
+  if (roles.length > 0 && !roles.some((r) => r.id === selectedRoleId)) {
+    setSelectedRoleId(roles[0].id);
+  }
 
   // Active Role Record
   const activeRole = useMemo(() => {
     return roles.find((r) => r.id === selectedRoleId) || roles[0] || null;
   }, [roles, selectedRoleId]);
 
-  // Synchronize permissions state whenever active role switches
-  // (adjusted during render instead of in an effect)
-  const [syncedRole, setSyncedRole] = useState(null);
-  if (activeRole && syncedRole !== activeRole) {
-    setSyncedRole(activeRole);
-    const currentPerms = new Set();
-    if (Array.isArray(activeRole.permissions)) {
-      activeRole.permissions.forEach((p) => {
-        const slug = p.permission?.slug || p.permission?.code || p.slug || p.code;
-        if (slug) currentPerms.add(slug);
-      });
-    }
-    setActivePermissions(new Set(currentPerms));
-    setSavedPermissions(new Set(currentPerms));
+  // Synchronize permissions state whenever the active role or its saved permissions change
+  // (adjusted during render instead of in an effect). Compared by value: a reload that brings the
+  // same permissions back must not discard unsaved ticks.
+  const rolePermissions = (Array.isArray(activeRole?.permissions) ? activeRole.permissions : [])
+    .map((p) => p.permission?.slug || p.permission?.code || p.slug || p.code)
+    .filter(Boolean);
+  const roleKey = activeRole && JSON.stringify([activeRole.id, [...rolePermissions].sort()]);
+  const [syncedRoleKey, setSyncedRoleKey] = useState(null);
+  if (activeRole && syncedRoleKey !== roleKey) {
+    setSyncedRoleKey(roleKey);
+    setActivePermissions(new Set(rolePermissions));
+    setSavedPermissions(new Set(rolePermissions));
   }
 
   // Employees assigned to active role
@@ -243,17 +210,14 @@ export default function HrRoles() {
 
     try {
       const permissionSlugs = Array.from(activePermissions);
-      await apiClient(`/roles/${activeRole.id}/permissions`, {
-        method: "PUT",
-        body: { permissionSlugs },
-      });
+      await dispatch(setRolePermissions({ id: activeRole.id, permissionSlugs })).unwrap();
 
       toast.success(`Permissions updated for role "${activeRole.label}".`);
-      setSavedPermissions(new Set(activePermissions));
-      await fetchData();
+      await reload();
     } catch (err) {
       console.error("[HrRoles] Failed to save permissions:", err);
-      toast.error(err.message || "Failed to update permissions.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to update permissions."));
     } finally {
       setIsSavingPerms(false);
     }
@@ -276,26 +240,24 @@ export default function HrRoles() {
     setCreateRoleError("");
 
     try {
-      const res = await apiClient("/roles", {
-        method: "POST",
-        body: {
-          label: trimmed,
-          description: newRoleDesc.trim() || undefined,
-          permissionSlugs: Array.from(activePermissions),
-        },
-      });
+      const created = await dispatch(createRole({
+        label: trimmed,
+        description: newRoleDesc.trim() || undefined,
+        permissionSlugs: Array.from(activePermissions),
+      })).unwrap();
 
       toast.success(`Custom role "${trimmed}" registered successfully.`);
+      await reload();
       setIsCreateRoleOpen(false);
       setNewRoleLabel("");
       setNewRoleDesc("");
-      await fetchData();
-      if (res?.data?.id) {
-        setSelectedRoleId(res.data.id);
+      if (created?.id) {
+        setSelectedRoleId(created.id);
       }
     } catch (err) {
       console.error("[HrRoles] Creation failed:", err);
-      setCreateRoleError(err.message || "Failed to create role.");
+      reloadAfterFailure(err);
+      setCreateRoleError(writeErrorMessage(err, "Failed to create role."));
     } finally {
       setIsCreatingRole(false);
     }
@@ -321,24 +283,22 @@ export default function HrRoles() {
     setAssignError("");
 
     try {
-      await apiClient("/role-assignments", {
-        method: "POST",
-        body: {
-          userId: assignUserId,
-          roleId: activeRole.id,
-          scopeType: activeRoleNeedsBranch ? "Branch" : "Company",
-          scopeId: activeRoleNeedsBranch ? assignBranchId : currentUser?.companyId,
-        },
-      });
+      await dispatch(createRoleAssignment({
+        userId: assignUserId,
+        roleId: activeRole.id,
+        scopeType: activeRoleNeedsBranch ? "Branch" : "Company",
+        scopeId: activeRoleNeedsBranch ? assignBranchId : currentUser?.companyId,
+      })).unwrap();
 
       toast.success("Employee assigned to role successfully.");
+      await reload();
       setIsAssignModalOpen(false);
       setAssignUserId("");
       setAssignBranchId("");
-      await fetchData();
     } catch (err) {
       console.error("[HrRoles] Role assignment failed:", err);
-      setAssignError(err.message || "Failed to assign role.");
+      reloadAfterFailure(err);
+      setAssignError(writeErrorMessage(err, "Failed to assign role."));
     } finally {
       setIsAssigning(false);
     }
@@ -350,16 +310,15 @@ export default function HrRoles() {
 
     setIsRevoking(true);
     try {
-      await apiClient(`/role-assignments/${revokeTarget.id}`, {
-        method: "DELETE",
-      });
+      await dispatch(removeRoleAssignment(revokeTarget.id)).unwrap();
 
       toast.success(`Role revoked from ${revokeTarget.user?.fullName}.`);
+      await reload();
       setRevokeTarget(null);
-      await fetchData();
     } catch (err) {
       console.error("[HrRoles] Revocation failed:", err);
-      toast.error(err.message || "Failed to revoke assignment.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to revoke assignment."));
     } finally {
       setIsRevoking(false);
     }
@@ -371,17 +330,16 @@ export default function HrRoles() {
 
     setIsDeletingRole(true);
     try {
-      await apiClient(`/roles/${roleToDelete.id}`, {
-        method: "DELETE",
-      });
+      await dispatch(removeRole(roleToDelete.id)).unwrap();
 
       toast.success(`Custom role "${roleToDelete.label}" deleted successfully.`);
+      await reload();
       setRoleToDelete(null);
       setSelectedRoleId(null);
-      await fetchData();
     } catch (err) {
       console.error("[HrRoles] Delete failed:", err);
-      toast.error(err.message || "Failed to delete role.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to delete role."));
     } finally {
       setIsDeletingRole(false);
     }
@@ -405,7 +363,7 @@ export default function HrRoles() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={fetchData}>
+          <Button variant="secondary" disabled={reloading} onClick={() => reload()}>
             <RotateCw className="w-4 h-4 mr-1.5" />
             Refresh
           </Button>
@@ -431,7 +389,7 @@ export default function HrRoles() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700 flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" size="sm" onClick={fetchData}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             Retry
           </Button>
         </div>
