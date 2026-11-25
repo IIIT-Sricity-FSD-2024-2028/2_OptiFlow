@@ -4,8 +4,9 @@ import { Button } from '../../../../../shared/components/Button';
 import { FormField, Textarea, Input } from '../../../../../shared/components/FormField';
 import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../shared/components/Toast';
-import * as subtasksApi from '../../../../../services/api/subtasks';
-import * as evidenceApi from '../../../../../services/api/evidence';
+import { useDispatch } from 'react-redux';
+import { useSaveEvidence } from './useSaveEvidence';
+import { updateSubtask } from '../../../../../store/subtasks';
 import { Upload, FileText, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export function SubmitWorkModal({
@@ -20,6 +21,8 @@ export function SubmitWorkModal({
 }) {
   const { user } = useAuth();
   const toast = useToast();
+  const dispatch = useDispatch();
+  const saveEvidence = useSaveEvidence(isOpen, null, taskId);
   const fileInputRef = useRef(null);
 
   const [submitNotes, setSubmitNotes] = useState('');
@@ -72,18 +75,13 @@ export function SubmitWorkModal({
           userId: user?.id,
         };
 
-        const res = await evidenceApi.create(evidencePayload);
-        const evidenceId = res?.data?.id || res?.id;
-        if (evidenceId) {
-          await evidenceApi.uploadFile(evidenceId, selectedFile);
-          createdEvidence = res?.data || res;
-        }
+        createdEvidence = await saveEvidence(evidencePayload, selectedFile);
       }
 
       // 2. Send the member's own open subtasks to In_Review. The parent task belongs to
       //    the Team Lead, who submits it to the PM once all subtasks are approved.
       const results = await Promise.allSettled(
-        subtaskIds.map((id) => subtasksApi.update(id, { status: 'In_Review' }))
+        subtaskIds.map((id) => dispatch(updateSubtask({ id, data: { status: 'In_Review' } })).unwrap())
       );
       const submittedIds = subtaskIds.filter((_, index) => results[index].status === 'fulfilled');
       const failedCount = subtaskIds.length - submittedIds.length;

@@ -646,7 +646,7 @@ export async function createPlatformCompany(req, res, next) {
           companyId: company.id,
           name: "Headquarters",
           code: "HQ",
-          description: "Primary corporate headquarters branch",
+          // Branch has no description column; passing one made every provisioning fail.
         },
       });
 

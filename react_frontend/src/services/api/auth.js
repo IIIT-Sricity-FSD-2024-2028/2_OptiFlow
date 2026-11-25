@@ -15,6 +15,18 @@ export const registerCompany = (payload, options) =>
 
 export const getMe = (options) => apiClient("/auth/me", options);
 
+// Public: asks the company's administrators to reset this account's password (no email yet).
+export const forgotPassword = (body, options) =>
+  apiClient("/auth/forgot-password", { ...options, method: "POST", body, skipAuthRedirect: true });
+
+// Public: redeems a one-time set-password link (company owner invite).
+export const setPassword = (body, options) =>
+  apiClient("/auth/set-password", { ...options, method: "POST", body, skipAuthRedirect: true });
+
+// skipAuthRedirect: a wrong current password answers 401; it must show an error, not sign out.
+export const changePassword = (body, options) =>
+  apiClient("/auth/change-password", { ...options, method: "POST", body, skipAuthRedirect: true });
+
 export const getPlatformMe = (options) => apiClient("/platform/auth/me", options);
 
 // skipAuthRedirect: a 401 while logging out must not bounce the user anywhere.

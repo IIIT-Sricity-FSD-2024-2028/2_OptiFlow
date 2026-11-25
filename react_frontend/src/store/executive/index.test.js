@@ -18,6 +18,9 @@ describe("executive slice", () => {
     error: null,
     loadedAt: null,
     mutations: {},
+    portfolio: { data: { summary: null, projects: [] }, status: "idle", error: null },
+    branchPerformance: { data: [], status: "idle", error: null },
+    projectManagers: { data: [], status: "idle", error: null },
   };
 
   it("returns initial state by default", () => {

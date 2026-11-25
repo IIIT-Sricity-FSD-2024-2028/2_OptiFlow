@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { CheckCircle2, Copy, Check, ExternalLink, LogIn, Key, User, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Copy, Check, ExternalLink, LogIn, Link2, User, ShieldCheck, Clock } from 'lucide-react';
 import { Modal } from '../../../shared/components/Modal';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../app/paths';
 
+// The owner never gets a password from the platform: the account is created with a random one
+// and the owner chooses their own through a one-time set-password link. With no outgoing email
+// yet, this screen is where the platform admin picks the link up to send it to the owner.
+// (It used to show a hard-coded "OptiFlow@2026!" that was never the real password.)
 export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
   const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
@@ -11,14 +15,21 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
   if (!result) return null;
 
   const email = result.owner?.email || '';
-  const inviteUrl = result.setPasswordUrl || '';
-  const expiresAt = result.setPasswordExpiresAt ? new Date(result.setPasswordExpiresAt).toLocaleString() : null;
-  const emailDelivered = Boolean(result.inviteEmail?.delivered);
+  const link = result.setPasswordUrl || '';
+  const expiresAt = result.setPasswordExpiresAt ? new Date(result.setPasswordExpiresAt) : null;
+  const emailed = Boolean(result.inviteEmail?.delivered) && result.inviteEmail?.provider !== 'console';
 
-  const handleCopyInvite = () => {
-    navigator.clipboard.writeText(inviteUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const handleCopyInvite = async () => {
+    const text = `Your OptiFlow account is ready.\nSign-in email: ${email}\nChoose your password here (one-time link${
+      expiresAt ? `, valid until ${expiresAt.toLocaleString()}` : ''
+    }):\n${link}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      /* clipboard blocked: the link stays selectable on screen */
+    }
   };
 
   const handleGoToLogin = () => {
@@ -84,15 +95,16 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
               <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              <span>Owner Invite</span>
+              <span>Company Owner Invitation</span>
             </div>
             <button
               type="button"
               onClick={handleCopyInvite}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
+              disabled={!link}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs disabled:opacity-50"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy Link'}</span>
+              <span>{copied ? 'Copied' : 'Copy Invitation'}</span>
             </button>
           </div>
 
@@ -107,33 +119,32 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
 
             <div className="py-1 border-b border-slate-200/60 space-y-1">
               <span className="text-slate-500 flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-slate-400" />
-                Set-password link (shown once)
+                <Link2 className="w-3.5 h-3.5 text-slate-400" />
+                Set-password link (one-time)
               </span>
-              <span className="block font-mono text-[11px] text-slate-900 break-all select-all">{inviteUrl}</span>
+              {link ? (
+                <p className="font-mono text-[11px] text-slate-900 break-all select-all">{link}</p>
+              ) : (
+                <p className="text-rose-600">No link was returned. Re-issue the invite from the company page.</p>
+              )}
             </div>
 
             {expiresAt && (
-              <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-                <span className="text-slate-500">Link expires</span>
-                <span className="font-semibold text-slate-900">{expiresAt}</span>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-slate-500 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  Expires
+                </span>
+                <span className="font-semibold text-slate-900">{expiresAt.toLocaleString()}</span>
               </div>
             )}
-
-            <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-              <span className="text-slate-500">Invite email</span>
-              <span className="font-semibold text-slate-900">
-                {emailDelivered ? 'Sent to the owner' : 'Not sent - share the link yourself'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between py-1">
-              <span className="text-slate-500">Landing Portal</span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700">
-                Executive Dashboard
-              </span>
-            </div>
           </div>
+
+          <p className="text-[11px] text-slate-500">
+            {emailed
+              ? 'The invitation was also emailed to the owner.'
+              : 'Email is not set up, so send this link to the owner yourself. It is shown only once.'}
+          </p>
         </div>
       </div>
     </Modal>

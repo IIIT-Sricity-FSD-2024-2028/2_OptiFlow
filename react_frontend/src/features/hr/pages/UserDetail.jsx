@@ -26,6 +26,7 @@ import {
   ROLE_BADGE_STYLES,
   ROLE_LEVEL_LABELS,
 } from "../components/orgTreeUtils";
+import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 
 // WHY: HrUserDetail provides a 360-degree profile view of any individual employee.
 // It exposes organizational reporting lines, assigned roles & permissions, active operational tasks,
@@ -55,6 +56,9 @@ export default function HrUserDetail() {
   // Deactivate / Reactivate Dialog State
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Admin-assisted password reset (Forgot Password notifies the admins; no email yet)
+  const [isResetOpen, setIsResetOpen] = useState(false);
 
   // WHY: Zero-Clutter Hard Action Suppression ensures only HR Managers and Admins
   // can view and trigger administrative mutation actions.
@@ -370,6 +374,12 @@ export default function HrUserDetail() {
                 >
                   Edit Profile
                 </Button>
+
+                {employee.id !== currentUser?.id && employee.isActive !== false && (
+                  <Button variant="warning" onClick={() => setIsResetOpen(true)}>
+                    Reset Password
+                  </Button>
+                )}
 
                 {employee.id !== currentUser?.id && (
                   <Button
@@ -852,6 +862,14 @@ export default function HrUserDetail() {
         onConfirm={handleToggleStatus}
         onCancel={() => !isUpdatingStatus && setIsDeactivateOpen(false)}
       />
+
+      {isResetOpen && (
+        <ResetPasswordDialog
+          employee={employee}
+          onClose={() => setIsResetOpen(false)}
+          onReset={() => toast.success(`Temporary password issued for ${employee.fullName}.`)}
+        />
+      )}
     </div>
   );
 }

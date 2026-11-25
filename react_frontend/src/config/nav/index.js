@@ -1,6 +1,6 @@
 import { ROLES } from '../../roles';
 import { platformNav } from './platform.nav';
-import { executiveNav } from './executive.nav';
+import { executiveNav, getExecutiveNav } from './executive.nav';
 import { complianceNav } from './compliance.nav';
 import { hrNav } from './hr.nav';
 import { processAdminNav } from './process-admin.nav';
@@ -17,7 +17,8 @@ export function getNavForRole(roleSlug) {
         case ROLES.SYSTEM_ADMIN:
         case ROLES.COMPANY_OWNER:
         case ROLES.BRANCH_MANAGER:
-            return executiveNav;
+            // Role-aware: a Branch Manager does not get links to pages their guard refuses.
+            return getExecutiveNav(roleSlug);
         case ROLES.COMPLIANCE_OFFICER:
             return complianceNav;
         case ROLES.HR_MANAGER:
