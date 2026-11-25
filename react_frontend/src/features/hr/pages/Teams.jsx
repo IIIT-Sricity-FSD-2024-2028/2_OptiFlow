@@ -1,6 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
+import { createTeam, updateTeam, removeTeam, addTeamMember, updateTeamMemberRole, removeTeamMember, selectAllTeams } from "../../../store/teams";
+import { selectAllBranches } from "../../../store/branches";
+import { selectAllUsers } from "../../../store/users";
+import { hrReads, useHrReads, writeErrorMessage } from "../useHrReads";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { StatCard } from "../../../shared/components/StatCard";
@@ -30,9 +34,23 @@ import {
 
 const PAGE_SIZE = 10;
 
+// What the page loads (see useHrReads). Constants, so the arrays stay stable.
+const PRIMARY = [hrReads.teams, hrReads.branches];
+const SECONDARY = [hrReads.users];
+
+const REFRESH_FAILED = "Saved, but the roster could not be refreshed. Close it and use Refresh.";
+
 // WHY: HrTeams allows HR Administrators and Branch Managers to organize company squads,
 // view the Reddit-style threaded reporting hierarchy, visual org graph, and balance work allocations.
 export default function HrTeams() {
+  const dispatch = useDispatch();
+  const teams = useSelector(selectAllTeams);
+  const branches = useSelector(selectAllBranches);
+  const users = useSelector(selectAllUsers);
+  // `error` is the main data failing; `partialFailures` are secondary lists: the page still renders but says so.
+  const { loading, error: loadError, partialFailures, reload, reloading, reloadAfterFailure } = useHrReads(PRIMARY, SECONDARY);
+  const error = loadError && (loadError.message || "Failed to load team telemetry from server.");
+
   const { user } = useAuth();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -64,13 +82,6 @@ export default function HrTeams() {
   }
 
   // Core state
-  const [teams, setTeams] = useState([]);
-  const [branches, setBranches] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Secondary lists that failed to load; the page still renders but says so.
-  const [partialFailures, setPartialFailures] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const branchParam = searchParams.get("branch");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState(branchParam || "all");
@@ -102,7 +113,9 @@ export default function HrTeams() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Squad Roster Management State
-  const [rosterTeam, setRosterTeam] = useState(null);
+  // Only the id is kept: the open roster always shows the store's current team.
+  const [rosterTeamId, setRosterTeamId] = useState(null);
+  const rosterTeam = teams.find((t) => t.id === rosterTeamId) || null;
   const [newMemberUserId, setNewMemberUserId] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("Member");
   const [rosterSubmitting, setRosterSubmitting] = useState(false);
@@ -117,43 +130,6 @@ export default function HrTeams() {
     "hr_manager",
     "branch_manager",
   ].includes(user?.role);
-
-  // 1. DATA HYDRATION
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setPartialFailures([]);
-    const failed = [];
-    const secondary = (path, name) =>
-      apiClient(path).catch((err) => {
-        console.warn(`[HrTeams] Failed to fetch ${name}:`, err.message);
-        failed.push(name);
-        return [];
-      });
-
-    try {
-      const [teamsData, branchesData, usersData] = await Promise.all([
-        apiClient("/teams"),
-        apiClient("/branches"),
-        secondary("/users", "Users"),
-      ]);
-      setPartialFailures(failed);
-
-      setTeams(Array.isArray(teamsData) ? teamsData : []);
-      setBranches(Array.isArray(branchesData) ? branchesData : []);
-      setUsers(Array.isArray(usersData) ? usersData : []);
-    } catch (err) {
-      console.error("[HrTeams] Failed to load teams, branches, or users:", err);
-      setError(err.message || "Failed to load team telemetry from server.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchData();
-  }, [fetchData]);
 
   // Filtered teams list based on search term and branch filter
   const filteredTeams = useMemo(() => {
@@ -213,22 +189,20 @@ export default function HrTeams() {
     setFormError("");
 
     try {
-      await apiClient("/teams", {
-        method: "POST",
-        body: {
-          name: trimmedName,
-          branchId: teamBranchId,
-        },
-      });
+      await dispatch(createTeam({
+        name: trimmedName,
+        branchId: teamBranchId,
+      })).unwrap();
 
       toast.success(`Team "${trimmedName}" created successfully!`);
+      await reload();
       setIsCreateModalOpen(false);
       setTeamName("");
       setTeamBranchId("");
-      await fetchData();
     } catch (err) {
       console.error("[HrTeams] Creation failed:", err);
-      setFormError(err.message || "Failed to create team.");
+      reloadAfterFailure(err);
+      setFormError(writeErrorMessage(err, "Failed to create team."));
     } finally {
       setIsSubmitting(false);
     }
@@ -258,20 +232,17 @@ export default function HrTeams() {
     setEditError("");
 
     try {
-      await apiClient(`/teams/${editingTeam.id}`, {
-        method: "PATCH",
-        body: {
-          name: trimmedName,
-          branchId: editBranchId,
-        },
-      });
+      await dispatch(
+        updateTeam({ id: editingTeam.id, data: { name: trimmedName, branchId: editBranchId } }),
+      ).unwrap();
 
       toast.success(`Team "${trimmedName}" updated successfully!`);
+      await reload();
       setEditingTeam(null);
-      await fetchData();
     } catch (err) {
       console.error("[HrTeams] Update failed:", err);
-      setEditError(err.message || "Failed to update team.");
+      reloadAfterFailure(err);
+      setEditError(writeErrorMessage(err, "Failed to update team."));
     } finally {
       setIsUpdating(false);
     }
@@ -283,33 +254,21 @@ export default function HrTeams() {
 
     setIsDeleting(true);
     try {
-      await apiClient(`/teams/${deleteTarget.id}`, {
-        method: "DELETE",
-      });
+      await dispatch(removeTeam(deleteTarget.id)).unwrap();
 
       toast.success(`Team "${deleteTarget.name}" deleted successfully.`);
+      await reload();
       setDeleteTarget(null);
-      await fetchData();
     } catch (err) {
       console.error("[HrTeams] Deletion failed:", err);
-      toast.error(err.message || "Failed to delete team.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to delete team."));
     } finally {
       setIsDeleting(false);
     }
   };
 
   // 5. SQUAD ROSTER HANDLERS
-  // Refresh teams data and update the open roster modal.
-  const refreshRoster = async () => {
-    const updatedTeams = await apiClient("/teams");
-    const teamList = Array.isArray(updatedTeams) ? updatedTeams : [];
-    setTeams(teamList);
-    const refreshedTeam = teamList.find((t) => t.id === rosterTeam.id);
-    if (refreshedTeam) {
-      setRosterTeam(refreshedTeam);
-    }
-  };
-
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!rosterTeam || !newMemberUserId) {
@@ -326,34 +285,34 @@ export default function HrTeams() {
       // add them as Member, then promote them (the server demotes the current Lead).
       const hasLead = (rosterTeam.teamMembers || []).some((tm) => /lead/i.test(tm.role || ""));
       const handover = newMemberRole === "Lead" && hasLead;
-      await apiClient(`/teams/${rosterTeam.id}/members`, {
-        method: "POST",
-        body: {
+      await dispatch(
+        addTeamMember({
+          teamId: rosterTeam.id,
           userId: newMemberUserId,
           role: handover ? "Member" : newMemberRole,
-        },
-      });
+        }),
+      ).unwrap();
       added = true;
       if (handover) {
-        await apiClient(`/teams/${rosterTeam.id}/members/${newMemberUserId}`, {
-          method: "PATCH",
-          body: { role: "Lead" },
-        });
+        await dispatch(
+          updateTeamMemberRole({ teamId: rosterTeam.id, userId: newMemberUserId, role: "Lead" }),
+        ).unwrap();
       }
 
       toast.success(handover ? "Member added and made the new Squad Lead." : "Team member assigned to squad successfully.");
       setNewMemberUserId("");
     } catch (err) {
       console.error("[HrTeams] Failed to add squad member:", err);
-      const message = err.message || "Failed to add member to team.";
+      reloadAfterFailure(err);
+      const message = writeErrorMessage(err, "Failed to add member to team.");
       // A handover is two calls: if the promote failed, the add has already succeeded. Say so,
       // and clear the selection so a retry does not re-add the same person.
       setRosterError(added ? `${message} They were added as a Member; use Make Lead to try again.` : message);
       if (added) setNewMemberUserId("");
     } finally {
-      // Refresh whenever the roster changed. A refresh failure must not turn a success into an
-      // error message. The modal's Close is disabled until this finishes, so it cannot reopen.
-      if (added) await refreshRoster().catch(() => {});
+      // Refresh whenever the roster changed (reload never rejects, so a refresh failure cannot turn
+      // a success into an error message). The modal's Close is disabled until this finishes, so it cannot reopen.
+      if (added && !(await reload())) setRosterError(REFRESH_FAILED);
       setRosterSubmitting(false);
     }
   };
@@ -365,15 +324,14 @@ export default function HrTeams() {
     setRosterError("");
 
     try {
-      await apiClient(`/teams/${rosterTeam.id}/members/${userId}`, {
-        method: "DELETE",
-      });
+      await dispatch(removeTeamMember({ teamId: rosterTeam.id, userId })).unwrap();
 
       toast.success("Team member removed from squad.");
-      await refreshRoster();
+      if (!(await reload())) setRosterError(REFRESH_FAILED);
     } catch (err) {
       console.error("[HrTeams] Failed to remove squad member:", err);
-      setRosterError(err.message || "Failed to remove member.");
+      reloadAfterFailure(err);
+      setRosterError(writeErrorMessage(err, "Failed to remove member."));
     } finally {
       setRosterSubmitting(false);
     }
@@ -387,15 +345,13 @@ export default function HrTeams() {
     setRosterError("");
 
     try {
-      await apiClient(`/teams/${rosterTeam.id}/members/${userId}`, {
-        method: "PATCH",
-        body: { role: "Lead" },
-      });
+      await dispatch(updateTeamMemberRole({ teamId: rosterTeam.id, userId, role: "Lead" })).unwrap();
       toast.success("Squad Lead handed over.");
-      await refreshRoster();
+      if (!(await reload())) setRosterError(REFRESH_FAILED);
     } catch (err) {
       console.error("[HrTeams] Failed to hand over squad lead:", err);
-      setRosterError(err.message || "Failed to change the Squad Lead.");
+      reloadAfterFailure(err);
+      setRosterError(writeErrorMessage(err, "Failed to change the Squad Lead."));
     } finally {
       setRosterSubmitting(false);
     }
@@ -462,7 +418,7 @@ export default function HrTeams() {
             <button
               type="button"
               onClick={() => {
-                setRosterTeam(row);
+                setRosterTeamId(row.id);
                 setNewMemberUserId("");
                 setNewMemberRole("Member");
                 setRosterError("");
@@ -477,7 +433,7 @@ export default function HrTeams() {
           <button
             type="button"
             onClick={() => {
-              setRosterTeam(row);
+              setRosterTeamId(row.id);
               setNewMemberUserId("");
               setNewMemberRole("Member");
               setRosterError("");
@@ -572,7 +528,7 @@ export default function HrTeams() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button variant="secondary" size="sm" onClick={fetchData}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             <RotateCw className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
             Refresh
           </Button>
@@ -668,7 +624,7 @@ export default function HrTeams() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700 flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" size="sm" onClick={fetchData}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             Retry
           </Button>
         </div>
@@ -905,7 +861,7 @@ export default function HrTeams() {
         isOpen={Boolean(rosterTeam)}
         onClose={() => {
           if (!rosterSubmitting) {
-            setRosterTeam(null);
+            setRosterTeamId(null);
             setRosterError("");
             setNewMemberUserId("");
           }
@@ -1054,7 +1010,7 @@ export default function HrTeams() {
               variant="secondary"
               disabled={rosterSubmitting}
               onClick={() => {
-                setRosterTeam(null);
+                setRosterTeamId(null);
                 setRosterError("");
               }}
             >
