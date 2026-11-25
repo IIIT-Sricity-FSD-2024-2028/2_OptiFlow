@@ -2,6 +2,8 @@ import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiClient } from "../../services/api/client";
 import { isFresh } from "../core/freshness";
 import { normalizeError } from "../core/normalizeError";
+import * as evidenceApi from "../../services/api/evidence";
+import { downloadBlob } from "../../shared/utils/downloadBlob";
 
 // 1. Fetch All Evidence (with caching & query parameters)
 export const fetchEvidence = createAsyncThunk(
@@ -123,6 +125,22 @@ export const deleteEvidence = createAsyncThunk(
         method: "DELETE",
       });
       return id;
+    } catch (err) {
+      return rejectWithValue(normalizeError(err));
+    }
+  }
+);
+
+// 8. Export the evidence audit log as CSV. The file is saved straight away and never stored:
+// the action payload is only the filename, so the store stays serializable.
+export const exportEvidenceCsv = createAsyncThunk(
+  "evidence/exportCsv",
+  async (_arg, { signal, rejectWithValue }) => {
+    try {
+      const blob = await evidenceApi.exportCsv({ signal });
+      const filename = `compliance-evidence-${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadBlob(blob, filename);
+      return { filename };
     } catch (err) {
       return rejectWithValue(normalizeError(err));
     }

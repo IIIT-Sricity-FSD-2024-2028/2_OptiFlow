@@ -15,11 +15,17 @@ import {
   Clock,
   Download,
 } from 'lucide-react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { updateTask } from '../../../../store/tasks';
 import { createEscalation } from '../../../../store/escalations';
-// Foreign resource (M1 evidence) keeps its own fetch until that slice merges.
-import * as evidenceApi from '../../../../services/api/evidence';
+import {
+  exportEvidenceCsv,
+  fetchEvidence,
+  selectAllEvidence,
+  selectEvidenceStatus,
+  updateEvidence,
+} from '../../../../store/evidence';
+import { isPendingStatus } from '../../utils/storeStatus';
 
 const statusVariant = (s) => {
   s = String(s || '').toLowerCase();
@@ -57,11 +63,18 @@ const getDocumentName = (evidence) => {
 };
 
 export default function TeamLeadReviews() {
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const list = useSelector(selectAllEvidence);
+  const loading = isPendingStatus(useSelector(selectEvidenceStatus));
   const [tab, setTab] = useState('pending');
   const dispatch = useDispatch();
-  const [selected, setSelected] = useState(null);
+  // Only the id is kept: the row itself comes from the store, so the list and the detail
+  // panel always show the same status.
+  const [selectedId, setSelectedId] = useState(null);
+  const selected = useMemo(
+    () => (selectedId == null ? null : list.find((e) => e.id === selectedId) || null),
+    [list, selectedId],
+  );
+  const setSelected = (item) => setSelectedId(item?.id ?? null);
   const [approving, setApproving] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -77,22 +90,7 @@ export default function TeamLeadReviews() {
   const handleExportEvidenceCsv = async () => {
     try {
       setIsExporting(true);
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/evidence/export/csv', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) throw new Error('Failed to export evidence data');
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `compliance-evidence-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      await dispatch(exportEvidenceCsv()).unwrap();
       showToast('success', 'Evidence audit log exported successfully.');
     } catch (err) {
       showToast('error', err.message || 'Failed to download CSV');
@@ -103,12 +101,11 @@ export default function TeamLeadReviews() {
 
   useEffect(() => {
     let active = true;
-    evidenceApi.getEvidenceList()
-      .then(r => active && setList(Array.isArray(r) ? r : r?.data || []))
-      .catch(() => active && showToast('error', 'Failed to load evidence.'))
-      .finally(() => active && setLoading(false));
+    dispatch(fetchEvidence())
+      .unwrap()
+      .catch(() => active && showToast('error', 'Failed to load evidence.'));
     return () => { active = false; };
-  }, []);
+  }, [dispatch]);
 
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
@@ -139,10 +136,7 @@ export default function TeamLeadReviews() {
   const handleApprove = async (item) => {
     setApproving(true);
     try {
-      await evidenceApi.updateEvidence(item.id, { status: 'Approved' });
-      const update = e => e.id === item.id ? { ...e, status: 'Approved' } : e;
-      setList(l => l.map(update));
-      setSelected(s => s?.id === item.id ? { ...s, status: 'Approved' } : s);
+      await dispatch(updateEvidence({ id: item.id, data: { status: 'Approved' } })).unwrap();
       showToast('success', 'Evidence approved.');
     } catch (error) {
       showToast('error', error.message || 'Failed to approve evidence.');
@@ -160,10 +154,11 @@ export default function TeamLeadReviews() {
     try {
       const taskId = selected?.taskId || selected?.task_id;
       // 1. Update evidence to Rejected with rejection feedback
-      await evidenceApi.updateEvidence(selected.id, {
-        status: 'Rejected',
-        notes: rejectionReason.trim(),
-      });
+      // The working payload sends the feedback as `notes` (not reviewEvidence's rejectionReason).
+      await dispatch(updateEvidence({
+        id: selected.id,
+        data: { status: 'Rejected', notes: rejectionReason.trim() },
+      })).unwrap();
 
       // 2. Revert task status to Active so team member can revise deliverables
       if (taskId) {
@@ -189,10 +184,7 @@ export default function TeamLeadReviews() {
         }
       }
 
-      // 4. Update local state
-      const update = e => e.id === selected.id ? { ...e, status: 'Rejected', notes: rejectionReason.trim() } : e;
-      setList(l => l.map(update));
-      setSelected(s => s ? { ...s, status: 'Rejected', notes: rejectionReason.trim() } : null);
+      // 4. The evidence slice already holds the rejected row returned by the server.
       showToast('success', 'Evidence rejected, work reopened, and escalated to PM.');
       setRejectModalOpen(false);
       setRejectionReason('');
