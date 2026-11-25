@@ -23,7 +23,6 @@ export default function CompanyProvision() {
     size: '1-50',
     ownerFullName: '',
     ownerEmail: '',
-    password: 'OptiFlow@2026!',
     planId: '',
     billingCycle: 'Monthly',
   });
@@ -64,10 +63,6 @@ export default function CompanyProvision() {
       errors.ownerEmail = 'Corporate email address is required';
     } else if (!emailRegex.test(form.ownerEmail.trim())) {
       errors.ownerEmail = 'Please provide a valid corporate email address';
-    }
-
-    if (!form.password || form.password.length < 8) {
-      errors.password = 'Initial password must be at least 8 characters long';
     }
 
     if (!form.planId) {
@@ -212,26 +207,9 @@ export default function CompanyProvision() {
               )}
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Login Password *</label>
-            <input
-              type="text"
-              required
-              value={form.password}
-              onChange={(e) => handleChange('password', e.target.value)}
-              placeholder="Minimum 8 characters"
-              className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none font-mono ${
-                fieldErrors.password ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-              }`}
-            />
-            {fieldErrors.password ? (
-              <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
-            ) : (
-              <p className="text-xs text-slate-500 mt-1">
-                Direct credentials for the company administrator. Default: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">OptiFlow@2026!</code>
-              </p>
-            )}
-          </div>
+          <p className="text-xs text-slate-500">
+            The owner sets their own password through a one-time invite link, which is shown to you once after the company is created.
+          </p>
         </div>
 
         {/* Plan Selection */}

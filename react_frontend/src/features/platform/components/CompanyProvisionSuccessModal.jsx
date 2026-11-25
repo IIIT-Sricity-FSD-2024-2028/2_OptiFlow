@@ -11,11 +11,12 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
   if (!result) return null;
 
   const email = result.owner?.email || '';
-  const password = result.initialPassword || 'OptiFlow@2026!';
+  const inviteUrl = result.setPasswordUrl || '';
+  const expiresAt = result.setPasswordExpiresAt ? new Date(result.setPasswordExpiresAt).toLocaleString() : null;
+  const emailDelivered = Boolean(result.inviteEmail?.delivered);
 
-  const handleCopyCredentials = () => {
-    const credText = `Email: ${email}\nPassword: ${password}\nRole: Executive (System Admin)\nPortal: Executive Dashboard`;
-    navigator.clipboard.writeText(credText);
+  const handleCopyInvite = () => {
+    navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -83,15 +84,15 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
               <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              <span>Executive Administrator Credentials</span>
+              <span>Owner Invite</span>
             </div>
             <button
               type="button"
-              onClick={handleCopyCredentials}
+              onClick={handleCopyInvite}
               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy All'}</span>
+              <span>{copied ? 'Copied' : 'Copy Link'}</span>
             </button>
           </div>
 
@@ -104,12 +105,26 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
               <span className="font-mono font-semibold text-slate-900 select-all">{email}</span>
             </div>
 
-            <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
+            <div className="py-1 border-b border-slate-200/60 space-y-1">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5 text-slate-400" />
-                Password
+                Set-password link (shown once)
               </span>
-              <span className="font-mono font-semibold text-slate-900 select-all">{password}</span>
+              <span className="block font-mono text-[11px] text-slate-900 break-all select-all">{inviteUrl}</span>
+            </div>
+
+            {expiresAt && (
+              <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500">Link expires</span>
+                <span className="font-semibold text-slate-900">{expiresAt}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
+              <span className="text-slate-500">Invite email</span>
+              <span className="font-semibold text-slate-900">
+                {emailDelivered ? 'Sent to the owner' : 'Not sent - share the link yourself'}
+              </span>
             </div>
 
             <div className="flex items-center justify-between py-1">
