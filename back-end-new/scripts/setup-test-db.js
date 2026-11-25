@@ -37,12 +37,14 @@ export async function setupTestDatabase() {
     update: {
       passwordHash,
       isActive: true,
+      passwordChangedAt: new Date(),
     },
     create: {
       email: 'admin@platform.com',
       passwordHash,
       fullName: 'Global Platform Administrator',
       isActive: true,
+      passwordChangedAt: new Date(),
     },
   });
 

@@ -3,7 +3,13 @@ import { baseState } from "../core/createStubSlice";
 import { isAbortedRejection } from "../core/createApiThunk";
 import { normalizeError } from "../core/normalizeError";
 import { queryKeyOf } from "../core/shouldFetch";
+import { addInvalidateOn } from "../core/keyedList";
 import { fetchPlatformMetrics } from "./thunks";
+import { createCompany, updateCompany } from "../platformCompanies/thunks";
+import { createPlan, updatePlan } from "../platformPlans/thunks";
+import { createSubscription, updateSubscription } from "../platformSubscriptions/thunks";
+import { createAdminUser, updateAdminUser } from "../platformAdminUsers/thunks";
+import { createSupportGrant, revokeSupportGrant } from "../platformSupportAccess/thunks";
 
 // The shared envelope (status, error, loadedAt, mutations) plus what a read slice needs:
 //   data       the last result (kept while a refresh is running, so the page does not blank out)
@@ -44,6 +50,22 @@ const slice = createSlice({
         state.status = "failed";
         state.error = action.payload ?? normalizeError(action.error);
       });
+
+    // The numbers on the dashboard (companies, plan distribution, needs attention, recent
+    // activity) change with these writes, so the next read of the metrics must fetch again.
+    addInvalidateOn(
+      builder,
+      [
+        createCompany, updateCompany,
+        createPlan, updatePlan,
+        createSubscription, updateSubscription,
+        createAdminUser, updateAdminUser,
+        createSupportGrant, revokeSupportGrant,
+      ],
+      (state) => {
+        state.loadedAt = null;
+      },
+    );
   },
 });
 

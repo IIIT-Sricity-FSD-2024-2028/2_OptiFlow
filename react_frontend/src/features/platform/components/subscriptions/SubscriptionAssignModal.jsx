@@ -1,47 +1,44 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Plus } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { useCompanyOptions } from '../../hooks/useCompanies';
+import { usePlanOptions } from '../../hooks/usePlans';
+
+const LIVE = ['Active', 'Trialing', 'PastDue'];
 
 export function SubscriptionAssignModal({ isOpen, onClose, onConfirm }) {
-  const [companies, setCompanies] = useState([]);
-  const [plans, setPlans] = useState([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const { companies: allCompanies, loading: loadingCompanies, error: companiesError } = useCompanyOptions(isOpen);
+  const { activePlans: plans, loading: loadingPlans, error: plansError } = usePlanOptions(isOpen);
+  const [chosenCompanyId, setChosenCompanyId] = useState('');
+  const [chosenPlanId, setChosenPlanId] = useState('');
   const [cycle, setCycle] = useState('Monthly');
   const [status, setStatus] = useState('Active');
-  const [loadingData, setLoadingData] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [formError, setFormError] = useState(null);
 
+  // Only companies that are not closed and have no live subscription can be assigned one.
+  const companies = useMemo(
+    () =>
+      allCompanies.filter(
+        (c) => c.status !== 'Closed' && !(c.subscriptions || []).some((s) => LIVE.includes(s.status)),
+      ),
+    [allCompanies],
+  );
+
+  // The user's choice, or the first option until they choose.
+  const selectedCompanyId = companies.some((c) => c.id === chosenCompanyId) ? chosenCompanyId : companies[0]?.id || '';
+  const selectedPlanId = plans.some((p) => p.id === chosenPlanId) ? chosenPlanId : plans[0]?.id || '';
+  const setSelectedCompanyId = setChosenCompanyId;
+  const setSelectedPlanId = setChosenPlanId;
+
+  const loadingData = loadingCompanies || loadingPlans;
+  const loadError = companiesError || plansError ? 'Failed to load eligible companies or plans.' : null;
+
   useEffect(() => {
     if (isOpen) {
-      setLoadingData(true);
       setFormError(null);
-      Promise.all([
-        apiClient('/api/platform/companies?pageSize=100'),
-        apiClient('/api/platform/plans'),
-      ])
-        .then(([companiesRes, plansRes]) => {
-          const all = companiesRes?.items || [];
-          const eligible = all.filter((c) => {
-            if (c.status === 'Closed') return false;
-            return !(c.subscriptions || []).some(
-              (s) => s.status === 'Active' || s.status === 'Trialing' || s.status === 'PastDue'
-            );
-          });
-          setCompanies(eligible);
-          if (eligible[0]) setSelectedCompanyId(eligible[0].id);
-
-          const activePlans = (plansRes?.items || []).filter((p) => p.isActive !== false);
-          setPlans(activePlans);
-          if (activePlans[0]) setSelectedPlanId(activePlans[0].id);
-        })
-        .catch((err) => {
-          console.error('Failed to load options:', err);
-          setFormError('Failed to load eligible companies or plans.');
-        })
-        .finally(() => setLoadingData(false));
+      setChosenCompanyId('');
+      setChosenPlanId('');
     }
   }, [isOpen]);
 
@@ -82,9 +79,9 @@ export function SubscriptionAssignModal({ isOpen, onClose, onConfirm }) {
           </button>
         </div>
 
-        {formError && (
+        {(formError || loadError) && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
-            {formError}
+            {formError || loadError}
           </div>
         )}
 

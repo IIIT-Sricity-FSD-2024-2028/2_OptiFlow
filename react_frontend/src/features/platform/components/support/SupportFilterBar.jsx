@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
 import { Search, X, Calendar } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { useCompanyOptions } from '../../hooks/useCompanies';
 
 export function SupportFilterBar({
   search, onSearchChange,
@@ -9,15 +8,7 @@ export function SupportFilterBar({
   startDate, onStartDateChange,
   endDate, onEndDateChange,
 }) {
-  const [companies, setCompanies] = useState([]);
-
-  useEffect(() => {
-    let isMounted = true;
-    apiClient('/api/platform/companies?pageSize=100')
-      .then((res) => { if (isMounted) setCompanies(res?.items || []); })
-      .catch((err) => console.error('Failed to load companies for filter:', err));
-    return () => { isMounted = false; };
-  }, []);
+  const { companies } = useCompanyOptions();
 
   const hasActiveFilters =
     search.trim() !== '' ||

@@ -238,6 +238,8 @@ export async function handleLogin(req, res, next) {
           scopeType: matchedAssignment?.scopeType || null,
           scopeId: matchedAssignment?.scopeId || null,
           branchName,
+          // null passwordChangedAt = a temporary password the user has not replaced yet
+          mustChangePassword: user.passwordChangedAt === null,
           teams: (user.teamMembers || []).map((tm) => ({
             teamId: tm.team?.id,
             teamName: tm.team?.name,

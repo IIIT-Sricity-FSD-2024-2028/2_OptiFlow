@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { X, AlertTriangle, Layers } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { usePlanOptions } from '../../hooks/usePlans';
 
 export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm }) {
-  const [plans, setPlans] = useState([]);
+  const { activePlans: plans, error: plansError } = usePlanOptions(Boolean(isOpen && subscription));
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [cycle, setCycle] = useState('Monthly');
   const [reason, setReason] = useState('');
@@ -16,12 +16,6 @@ export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm
       setCycle(subscription.billingCycle || 'Monthly');
       setReason('');
       setFormError(null);
-      apiClient('/api/platform/plans')
-        .then((res) => setPlans((res?.items || []).filter((p) => p.isActive !== false)))
-        .catch((err) => {
-          console.error('Failed to load active plans:', err);
-          setFormError('Failed to load active plans.');
-        });
     }
   }, [isOpen, subscription]);
 
@@ -74,9 +68,9 @@ export function SubscriptionPlanModal({ isOpen, subscription, onClose, onConfirm
           </button>
         </div>
 
-        {formError && (
+        {(formError || plansError) && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
-            {formError}
+            {formError || 'Failed to load active plans.'}
           </div>
         )}
 

@@ -1,26 +1,29 @@
 import { useState } from 'react';
+import { useDispatch } from 'react-redux';
 import { CreditCard, Calendar, Sparkles, Plus } from 'lucide-react';
 import { Badge } from '../../../../shared/components/Badge';
-import { apiClient } from '../../../../services/api/client';
+import { createSubscription, updateSubscription } from '../../../../store/platformSubscriptions';
 import { SubscriptionModals } from '../subscriptions/SubscriptionModals';
 
 export function CompanySubscriptionTab({ company, onRefresh }) {
+  const dispatch = useDispatch();
   const subscriptions = company.subscriptions || [];
   const activeSub = subscriptions.find((s) => s.status === 'Active' || s.status === 'Trialing' || s.status === 'PastDue') || subscriptions[0];
   const isClosedCompany = company.status === 'Closed';
+  const isCancelled = activeSub?.status === 'Cancelled';
   const [activeModal, setActiveModal] = useState(null);
 
+  // The slices mark the company stale after a write, so the page above loads it again. A failure
+  // is thrown to the modal, which shows it.
   const handleUpdate = async (payload) => {
     if (!activeSub) return;
-    await apiClient(`/api/platform/subscriptions/${activeSub.id}`, { method: 'PATCH', body: payload });
+    await dispatch(updateSubscription({ id: activeSub.id, body: payload })).unwrap();
     if (onRefresh) onRefresh();
-    else window.location.reload();
   };
 
   const handleCreate = async (payload) => {
-    await apiClient('/api/platform/subscriptions', { method: 'POST', body: { ...payload, companyId: company.id } });
+    await dispatch(createSubscription({ ...payload, companyId: company.id })).unwrap();
     if (onRefresh) onRefresh();
-    else window.location.reload();
   };
 
   return (
@@ -48,9 +51,9 @@ export function CompanySubscriptionTab({ company, onRefresh }) {
           <div className="flex items-center gap-2">
             {activeSub ? (
               <div className="flex flex-wrap gap-1.5">
-                <button type="button" disabled={isClosedCompany} onClick={() => setActiveModal('plan')} className="px-3 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-40">Change Plan</button>
+                <button type="button" disabled={isClosedCompany || isCancelled} onClick={() => setActiveModal('plan')} className="px-3 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-40">Change Plan</button>
                 <button type="button" disabled={isClosedCompany || activeSub.status === 'Cancelled'} onClick={() => setActiveModal('status')} className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl disabled:opacity-40">Status</button>
-                <button type="button" disabled={isClosedCompany} onClick={() => setActiveModal('period')} className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl disabled:opacity-40">Extend</button>
+                <button type="button" disabled={isClosedCompany || isCancelled} onClick={() => setActiveModal('period')} className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl disabled:opacity-40">Extend</button>
                 <button type="button" disabled={isClosedCompany || activeSub.status === 'Cancelled'} onClick={() => setActiveModal('cancel')} className="px-3 py-1.5 text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl disabled:opacity-40">Cancel</button>
               </div>
             ) : (
