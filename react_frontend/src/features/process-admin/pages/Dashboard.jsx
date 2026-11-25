@@ -3,17 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchProcessInstances,
-  createProcessInstance,
   selectAllProcessInstances,
   selectProcessInstancesStatus,
   selectProcessInstancesError,
-  selectCreatingProcessInstance,
 } from '../../../store/processInstances';
 import {
   fetchProcessTemplates,
+  createProcessTemplate,
   selectAllProcessTemplates,
   selectProcessTemplatesStatus,
   selectProcessTemplatesError,
+  selectCreatingProcessTemplate,
 } from '../../../store/processTemplates';
 import { PATHS } from '../../../app/paths';
 import { StatCard } from '../../../shared/components/StatCard';
@@ -21,7 +21,7 @@ import { Table } from '../../../shared/components/Table';
 import { Button } from '../../../shared/components/Button';
 import { Badge } from '../../../shared/components/Badge';
 import { Modal } from '../../../shared/components/Modal';
-import { FormField, Select } from '../../../shared/components/FormField';
+import { FormField, Input } from '../../../shared/components/FormField';
 import { formatDate } from '../../../shared/utils/formatDate';
 
 export default function ProcessAdminDashboard() {
@@ -36,11 +36,15 @@ export default function ProcessAdminDashboard() {
   const instanceError = useSelector(selectProcessInstancesError);
   const error = (templateError || instanceError)?.message;
 
-  // Launch Instance Modal State
-  const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const launching = useSelector(selectCreatingProcessInstance);
-  const [launchError, setLaunchError] = useState('');
+  // Create Template Modal State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    version: 1,
+    isActive: true,
+  });
+  const [formErrors, setFormErrors] = useState({});
+  const submitting = useSelector(selectCreatingProcessTemplate);
 
   useEffect(() => {
     dispatch(fetchProcessTemplates());
@@ -57,37 +61,65 @@ export default function ProcessAdminDashboard() {
     return acc + pendingInThis;
   }, 0);
 
-  const handleLaunchSubmit = async (e) => {
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedTemplateId) {
-      setLaunchError('Please select a template to launch');
+    const errs = {};
+    if (!formData.name.trim()) errs.name = 'Template name is required';
+    if (!formData.version || Number(formData.version) < 1) {
+      errs.version = 'Version must be at least 1';
+    }
+    if (Object.keys(errs).length > 0) {
+      setFormErrors(errs);
       return;
     }
 
     try {
-      setLaunchError('');
-      const res = await dispatch(createProcessInstance({ templateId: selectedTemplateId })).unwrap();
-      setIsLaunchModalOpen(false);
-      setSelectedTemplateId('');
-      const instanceId = res?.id || res?.data?.id;
-      if (instanceId) {
-        navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', instanceId));
+      const res = await dispatch(createProcessTemplate({
+        name: formData.name.trim(),
+        version: Number(formData.version),
+        isActive: formData.isActive,
+      })).unwrap();
+
+      setIsCreateModalOpen(false);
+      setFormData({ name: '', version: 1, isActive: true });
+
+      const templateId = res?.id || res?.data?.id;
+      if (templateId) {
+        navigate(PATHS.PROCESS_ADMIN.TEMPLATE_DETAIL.replace(':id', templateId));
       } else {
-        dispatch(fetchProcessInstances({ force: true }));
+        dispatch(fetchProcessTemplates({ force: true }));
       }
     } catch (err) {
-      setLaunchError(err.message || 'Failed to launch process instance');
+      setFormErrors({ submit: err.message || 'Failed to create template' });
     }
   };
 
   const instanceColumns = [
     {
       key: 'template',
-      header: 'Workflow Template',
+      header: 'Process Instance',
       render: (row) => (
-        <span className="font-semibold text-slate-900">
-          {row.template?.name || row.title || 'Standard Workflow'}
-        </span>
+        <div>
+          <div className="font-semibold text-slate-900">
+            {row.title || row.template?.name || 'Standard Workflow'}
+          </div>
+          {(row.project?.name || (row.title && row.template?.name)) && (
+            <div className="text-xs text-slate-500">
+              {[row.template?.name, row.project?.name].filter(Boolean).join(' • ')}
+            </div>
+          )}
+        </div>
       ),
     },
     {
@@ -136,9 +168,13 @@ export default function ProcessAdminDashboard() {
           </Button>
           <Button
             variant="primary"
-            onClick={() => setIsLaunchModalOpen(true)}
+            onClick={() => {
+              setFormData({ name: '', version: 1, isActive: true });
+              setFormErrors({});
+              setIsCreateModalOpen(true);
+            }}
           >
-            + Launch Instance
+            + Create Template
           </Button>
         </div>
       </div>
@@ -183,7 +219,7 @@ export default function ProcessAdminDashboard() {
           <div>
             <h2 className="text-base font-semibold text-slate-900">Recent Workflow Instances</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Click any instance to inspect its live step progress and perform review actions.
+              Click any instance to inspect its live step progress.
             </p>
           </div>
           <Button
@@ -198,66 +234,85 @@ export default function ProcessAdminDashboard() {
           columns={instanceColumns}
           data={instances.slice(0, 5)}
           loading={loading}
-          emptyMessage="No active process instances found. Launch a new instance to begin."
+          emptyMessage="No active process instances found."
           onRowClick={(row) => navigate(`/process-admin/instances/${row.id}`)}
         />
       </div>
 
-      {/* Launch Process Instance Modal */}
+      {/* Create Template Modal */}
       <Modal
-        isOpen={isLaunchModalOpen}
-        onClose={() => {
-          setIsLaunchModalOpen(false);
-          setLaunchError('');
-        }}
-        title="Launch New Process Instance"
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Create New Process Template"
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setIsLaunchModalOpen(false)}
-              disabled={launching}
+              onClick={() => setIsCreateModalOpen(false)}
+              disabled={submitting}
             >
               Cancel
             </Button>
             <Button
               variant="primary"
-              onClick={handleLaunchSubmit}
-              disabled={launching}
+              onClick={handleCreateSubmit}
+              disabled={submitting}
             >
-              {launching ? 'Starting...' : 'Start Workflow'}
+              {submitting ? 'Creating...' : 'Create & Open Builder'}
             </Button>
           </>
         }
       >
-        <form onSubmit={handleLaunchSubmit} className="space-y-4">
-          <p className="text-sm text-slate-600">
-            Select a configured process template. The engine will instantiate all defined steps and assign the initial action.
-          </p>
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
+          {formErrors.submit && (
+            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-md">
+              {formErrors.submit}
+            </div>
+          )}
 
           <FormField
-            label="Process Template"
+            label="Template Name"
             required
-            error={launchError}
-            hint="Only active templates with defined steps can be launched."
+            error={formErrors.name}
+            hint="E.g., High Value Purchase Order Approval"
           >
-            <Select
-              value={selectedTemplateId}
-              onChange={(e) => {
-                setSelectedTemplateId(e.target.value);
-                setLaunchError('');
-              }}
-              placeholder="Choose a template..."
-            >
-              {templates
-                .filter((t) => t.isActive && (t.steps?.length || 0) > 0)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} (v{t.version || 1}) - {t.steps?.length || 0} steps
-                  </option>
-                ))}
-            </Select>
+            <Input
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              placeholder="Enter descriptive template name"
+              error={Boolean(formErrors.name)}
+            />
           </FormField>
+
+          <FormField
+            label="Version"
+            required
+            error={formErrors.version}
+          >
+            <Input
+              type="number"
+              name="version"
+              min="1"
+              value={formData.version}
+              onChange={handleInputChange}
+              error={Boolean(formErrors.version)}
+            />
+          </FormField>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="dashboardIsActive"
+              name="isActive"
+              checked={formData.isActive}
+              onChange={handleInputChange}
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="dashboardIsActive" className="text-sm font-medium text-slate-700">
+              Active (Available for launching instances immediately)
+            </label>
+          </div>
         </form>
       </Modal>
     </div>

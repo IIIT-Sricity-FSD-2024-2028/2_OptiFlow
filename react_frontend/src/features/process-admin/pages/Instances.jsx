@@ -57,6 +57,7 @@ export default function ProcessAdminInstances() {
         statusFilter === 'ALL' || item.status?.toLowerCase() === statusFilter.toLowerCase();
       const matchesSearch =
         item.template?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.project?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.id?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesStatus && matchesSearch;
@@ -66,13 +67,17 @@ export default function ProcessAdminInstances() {
   const columns = [
     {
       key: 'template',
-      header: 'Workflow Template',
+      header: 'Process Instance',
       render: (row) => (
         <div>
           <div className="font-semibold text-slate-900">
-            {row.template?.name || row.title || 'Standard Process'}
+            {row.title || row.template?.name || 'Standard Process'}
           </div>
-          <div className="text-xs text-slate-400 font-mono">ID: {row.id?.slice(-8)}</div>
+          <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-2">
+            {row.template?.name && <span>Template: {row.template.name}</span>}
+            {row.project?.name && <span>• Project: {row.project.name}</span>}
+            <span className="text-slate-400 font-mono">• ID: {row.id?.slice(-8)}</span>
+          </div>
         </div>
       ),
     },
@@ -140,7 +145,7 @@ export default function ProcessAdminInstances() {
             className="text-xs py-1 px-2.5"
             onClick={() => navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', row.id))}
           >
-            Inspect & Action
+            View
           </Button>
           {row.status !== 'Active' && (
             <Button
