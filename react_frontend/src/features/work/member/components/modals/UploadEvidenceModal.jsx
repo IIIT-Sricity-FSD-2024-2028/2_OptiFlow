@@ -19,11 +19,13 @@ function EvidenceForm({
   taskId = '',
   tasks = [],
   initialData = null,
+  violationId = null,
   onSuccess,
 }) {
   const { user } = useAuth();
   const toast = useToast();
 
+  const finalViolationId = violationId || initialData?.violationId || initialData?.violation_id || null;
   const [selectedTaskId, setSelectedTaskId] = useState(initialData?.taskId || initialData?.task_id || taskId || tasks[0]?.id || '');
   const [title, setTitle] = useState(initialData?.title || initialData?.name || '');
   const [type, setType] = useState(initialData?.type || initialData?.evidenceType || EVIDENCE_TYPES[0]);
@@ -56,6 +58,9 @@ function EvidenceForm({
         fileUrl: selectedFile ? selectedFile.name : (fileUrl.trim() || 'deliverable_artifact.pdf'),
         userId: user?.id,
       };
+      if (finalViolationId) {
+        payload.violationId = String(finalViolationId);
+      }
 
       const result = await saveEvidence(payload, selectedFile);
       toast.success(initialData?.id ? 'Evidence updated successfully.' : 'Evidence artifact uploaded for compliance verification!');

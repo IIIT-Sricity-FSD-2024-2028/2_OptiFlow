@@ -14,8 +14,9 @@ export function useSaveEvidence(isOpen, existingId, taskId) {
   return async (data, file) => {
     const id = existingId || savedId.current;
     const record = await dispatch(id ? updateEvidence({ id, data }) : createEvidence(data)).unwrap();
-    savedId.current = record.id;
-    if (file) await dispatch(uploadEvidenceFile({ id: record.id, file })).unwrap();
+    const recordId = record?.id || record?.data?.id || id;
+    savedId.current = recordId;
+    if (file && recordId) await dispatch(uploadEvidenceFile({ id: recordId, file })).unwrap();
     return record;
   };
 }

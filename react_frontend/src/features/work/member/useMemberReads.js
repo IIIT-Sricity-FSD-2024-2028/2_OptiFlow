@@ -26,6 +26,10 @@ export function useMemberReads(reads) {
     for (const read of reads) dispatch(read.action());
   }, [dispatch, reads]);
   const loading = useSelector(state => reads.some(read => ['idle', 'loading'].includes(read.status(state))));
-  const error = useSelector(state => reads.map(read => read.error(state)).find(Boolean)?.message);
+  const error = useSelector(state => {
+    const err = reads.map(read => read.error(state)).find(Boolean);
+    if (!err) return null;
+    return typeof err === 'string' ? err : err.message || 'Failed to load member data.';
+  });
   return { loading, error };
 }

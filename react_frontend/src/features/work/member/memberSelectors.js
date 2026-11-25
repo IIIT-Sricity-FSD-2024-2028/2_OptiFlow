@@ -3,6 +3,7 @@ import { selectAllTasks } from '../../../store/tasks';
 import { selectAllSubtasks } from '../../../store/subtasks';
 
 function assigneeId(row) {
+  if (!row) return '';
   return String(row.assignedToId || row.assignedTo?.id || row.assignedTo || '');
 }
 
@@ -15,7 +16,8 @@ export const selectMemberDeliverables = createSelector(
       .map(task => ({ ...task, isSubtask: false }));
     const assignedSubtasks = subtasks.filter(step => assigneeId(step) === userId)
       .map(step => {
-        const parent = parents.get(String(step.taskId));
+        const parentId = String(step.taskId || step.task_id || '');
+        const parent = parents.get(parentId);
         return {
           ...step,
           id: step.id || step.subtaskId,
@@ -23,7 +25,7 @@ export const selectMemberDeliverables = createSelector(
           projectId: parent?.projectId || parent?.project?.id,
           project: parent?.project,
           isSubtask: true,
-          parentTaskId: step.taskId,
+          parentTaskId: step.taskId || step.task_id,
           dueDate: step.dueDate || step.due_date || parent?.dueDate,
           priority: step.priority || parent?.priority || 'Medium',
         };
