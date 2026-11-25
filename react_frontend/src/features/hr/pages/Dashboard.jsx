@@ -1,6 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
+import { useSelector } from "react-redux";
+import { selectAllUsers } from "../../../store/users";
+import { selectAllTeams } from "../../../store/teams";
+import { selectAllBranches } from "../../../store/branches";
+import { selectAllRoles } from "../../../store/roles";
+import { hrReads, useHrReads } from "../useHrReads";
 import { PATHS } from "../../../app/paths";
 import { StatCard } from "../../../shared/components/StatCard";
 import { Button } from "../../../shared/components/Button";
@@ -22,6 +27,10 @@ import {
   normalizeEmployees,
 } from "../components/orgTreeUtils";
 
+// What the page loads (see useHrReads). Constants, so the arrays stay stable.
+const PRIMARY = [hrReads.users, hrReads.teams];
+const SECONDARY = [hrReads.branches, hrReads.roles];
+
 /**
  * HrDashboard
  * Practical HR & Workforce Overview.
@@ -29,57 +38,15 @@ import {
  * operational attention items, and recent employee directory access.
  */
 export default function HrDashboard() {
+  const users = useSelector(selectAllUsers);
+  const teams = useSelector(selectAllTeams);
+  const branches = useSelector(selectAllBranches);
+  const roles = useSelector(selectAllRoles);
+  // `error` is the main data failing; `partialFailures` are secondary lists: the page still renders but says so.
+  const { loading, error: loadError, partialFailures, reload, reloading } = useHrReads(PRIMARY, SECONDARY);
+  const error = loadError && (loadError.message || "Failed to load HR data from server.");
+
   const navigate = useNavigate();
-
-  const [users, setUsers] = useState([]);
-  const [branches, setBranches] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [roles, setRoles] = useState([]);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Secondary lists that failed to load; the page still renders but says so.
-  const [partialFailures, setPartialFailures] = useState([]);
-
-  // 1. DATA HYDRATION
-  const fetchDashboardData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setPartialFailures([]);
-    const failed = [];
-    const secondary = (path, name) =>
-      apiClient(path).catch((err) => {
-        console.warn(`[HrDashboard] Failed to fetch ${name}:`, err.message);
-        failed.push(name);
-        return [];
-      });
-
-    try {
-      // Users and teams are the page's main data: a failure there shows the error banner.
-      const [usersData, branchesData, teamsData, rolesData] = await Promise.all([
-        apiClient("/users"),
-        secondary("/branches", "Branches"),
-        apiClient("/teams"),
-        secondary("/roles", "Roles"),
-      ]);
-
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setBranches(Array.isArray(branchesData) ? branchesData : []);
-      setTeams(Array.isArray(teamsData) ? teamsData : []);
-      setRoles(Array.isArray(rolesData) ? rolesData : []);
-      setPartialFailures(failed);
-    } catch (err) {
-      console.error("[HrDashboard] Failed to load dashboard data:", err);
-      setError(err.message || "Failed to load HR data from server.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchDashboardData();
-  }, [fetchDashboardData]);
 
   // 2. WORKFORCE NORMALIZATION
   const normalizedEmployees = useMemo(() => {
@@ -366,7 +333,7 @@ export default function HrDashboard() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button variant="secondary" size="sm" onClick={() => fetchDashboardData()}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Refresh
           </Button>
@@ -381,7 +348,7 @@ export default function HrDashboard() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" size="sm" onClick={() => fetchDashboardData()}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             Retry
           </Button>
         </div>
