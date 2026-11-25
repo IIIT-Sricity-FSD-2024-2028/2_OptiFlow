@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PATHS } from "../../../../app/paths";
 import { Badge } from "../../../../shared/components/Badge";
@@ -24,16 +24,16 @@ import {
   selectProjectsLoading,
 } from "../../../../store/projects";
 import { updateTask } from "../../../../store/tasks";
-// Foreign resources (M5 teams, M4 process templates) keep their own fetch until those slices merge.
-import * as teamsApi from "../../../../services/api/teams";
+import { fetchTeams, selectAllTeams, selectTeamsStatus } from "../../../../store/teams";
 import {
-  createInstance,
-  listTemplates,
-} from "../../../../services/api/process";
+  fetchProcessTemplates,
+  selectAllProcessTemplates,
+  selectProcessTemplatesError,
+} from "../../../../store/processTemplates";
+import { createProcessInstance } from "../../../../store/processInstances";
+import { isPendingStatus } from "../../utils/storeStatus";
 import { todayInput } from "../../components/dateLimits";
 
-const normalize = (response) =>
-  Array.isArray(response) ? response : response?.data || [];
 const projectPath = (id) => PATHS.PM.PROJECT_DETAIL.replace(":id", id);
 const PAGE_SIZE = 9;
 
@@ -76,11 +76,21 @@ export default function PmProjects() {
   const projects = useSelector(selectAllProjects);
   const projectsLoading = useSelector(selectProjectsLoading);
   const [currentPage, setCurrentPage] = useState(1);
-  const [teams, setTeams] = useState([]);
-  const [teamsLoading, setTeamsLoading] = useState(true);
-  const [templates, setTemplates] = useState([]);
-  const [templateError, setTemplateError] = useState("");
+  const teams = useSelector(selectAllTeams);
+  const teamsLoading = isPendingStatus(useSelector(selectTeamsStatus));
+  const allTemplates = useSelector(selectAllProcessTemplates);
+  const templatesError = useSelector(selectProcessTemplatesError);
+  const templates = useMemo(
+    () => allTemplates.filter((template) => template && template.isActive !== false),
+    [allTemplates],
+  );
+  const templateError = templatesError
+    ? templatesError.message || "Failed to load workflow templates."
+    : "";
   const loading = projectsLoading || teamsLoading;
+  // Set when the project was created but its workflow did not start: retry reuses the project.
+  const [workflowRetry, setWorkflowRetry] = useState(null);
+  const [retrying, setRetrying] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("All");
@@ -116,31 +126,14 @@ export default function PmProjects() {
         if (active && isReportableError(error))
           showToast("error", error.message || "Failed to load projects.");
       });
-    teamsApi
-      .list()
-      .then((teamResponse) => {
-        if (active) setTeams(normalize(teamResponse));
-      })
+    dispatch(fetchTeams())
+      .unwrap()
       .catch((error) => {
-        if (active)
+        if (active && isReportableError(error))
           showToast("error", error.message || "Failed to load projects.");
-      })
-      .finally(() => {
-        if (active) setTeamsLoading(false);
       });
-    listTemplates()
-      .then((response) => {
-        if (!active) return;
-        setTemplates(
-          normalize(response).filter((template) => template.isActive !== false),
-        );
-      })
-      .catch((error) => {
-        if (active)
-          setTemplateError(
-            error.message || "Failed to load workflow templates.",
-          );
-      });
+    // A template failure is shown under the template picker (selectProcessTemplatesError).
+    dispatch(fetchProcessTemplates());
     return () => {
       active = false;
     };
@@ -174,6 +167,83 @@ export default function PmProjects() {
   );
   const templateSteps =
     selectedTemplate?.steps || selectedTemplate?.stages || [];
+
+  // Starts the template's workflow on an existing project. Returns true when the workflow
+  // instance was created; on failure the project stays and the page offers a retry.
+  const startWorkflow = async (project, template) => {
+    try {
+      await dispatch(
+        createProcessInstance({
+          templateId: template.id,
+          projectId: project.id,
+          title: `${template.name || "Workflow"} - ${project.name}`,
+        }),
+      ).unwrap();
+    } catch (error) {
+      setWorkflowRetry({ project, template });
+      showToast(
+        "warning",
+        `Project created, but its workflow could not be started: ${error.message || "Request failed."}`,
+      );
+      return false;
+    }
+    setWorkflowRetry(null);
+    try {
+      // Workflow tasks are created unassigned; hand them to the team's lead so they reach the TL dashboard.
+      const fresh = await dispatch(fetchProjectById(project.id)).unwrap();
+      const leads = (fresh?.team?.teamMembers || []).filter((member) =>
+        /team.?lead|^lead$/i.test(member.role || ""),
+      );
+      if (leads.length !== 1) {
+        showToast(
+          "warning",
+          "Workflow started, but its tasks are unassigned: the team needs exactly one Team Lead.",
+        );
+        return true;
+      }
+      const results = await Promise.allSettled(
+        (fresh.tasks || []).map((task) =>
+          dispatch(
+            updateTask({
+              id: task.id,
+              data: { assignedToId: leads[0].userId },
+            }),
+          ).unwrap(),
+        ),
+      );
+      // Refresh the project row so its nested tasks show the new assignee.
+      await dispatch(fetchProjectById(project.id))
+        .unwrap()
+        .catch(() => null);
+      if (results.some((result) => result.status === "rejected")) {
+        showToast(
+          "warning",
+          "Workflow started, but some tasks could not be assigned to the Team Lead.",
+        );
+      } else {
+        showToast(
+          "success",
+          "Project created with its workflow; tasks assigned to the Team Lead.",
+        );
+      }
+    } catch (error) {
+      showToast(
+        "warning",
+        `Workflow started, but its tasks could not be assigned: ${error.message || "Request failed."}`,
+      );
+    }
+    return true;
+  };
+
+  const retryWorkflow = async () => {
+    if (!workflowRetry || retrying) return;
+    setRetrying(true);
+    try {
+      await startWorkflow(workflowRetry.project, workflowRetry.template);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const createProject = async (event) => {
     event.preventDefault();
@@ -210,55 +280,10 @@ export default function PmProjects() {
       });
       setIsOpen(false);
       if (form.templateId) {
-        try {
-          await createInstance({
-            templateId: form.templateId,
-            projectId: project.id,
-            title: `${selectedTemplate?.name || "Workflow"} - ${project.name}`,
-          });
-          // Workflow tasks are created unassigned; hand them to the team's lead so they reach the TL dashboard.
-          const fresh = await dispatch(fetchProjectById(project.id)).unwrap();
-          const leads = (fresh?.team?.teamMembers || []).filter((member) =>
-            /team.?lead|^lead$/i.test(member.role || ""),
-          );
-          if (leads.length !== 1) {
-            showToast(
-              "warning",
-              "Workflow started, but its tasks are unassigned: the team needs exactly one Team Lead.",
-            );
-          } else {
-            const results = await Promise.allSettled(
-              (fresh.tasks || []).map((task) =>
-                dispatch(
-                  updateTask({
-                    id: task.id,
-                    data: { assignedToId: leads[0].userId },
-                  }),
-                ).unwrap(),
-              ),
-            );
-            // Refresh the project row so its nested tasks show the new assignee.
-            await dispatch(fetchProjectById(project.id))
-              .unwrap()
-              .catch(() => null);
-            if (results.some((result) => result.status === "rejected")) {
-              showToast(
-                "warning",
-                "Workflow started, but some tasks could not be assigned to the Team Lead.",
-              );
-            } else {
-              showToast(
-                "success",
-                "Project created with its workflow; tasks assigned to the Team Lead.",
-              );
-            }
-          }
-        } catch (error) {
-          showToast(
-            "warning",
-            `Project created, but its workflow could not be started: ${error.message || "Request failed."}`,
-          );
-        }
+        await startWorkflow(project, {
+          id: form.templateId,
+          name: selectedTemplate?.name,
+        });
       } else {
         showToast("success", "Project created.");
       }
@@ -290,6 +315,35 @@ export default function PmProjects() {
           + New Project
         </Button>
       </header>
+
+      {workflowRetry && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"
+          role="alert"
+        >
+          <p className="text-sm text-amber-800">
+            Project <strong>{workflowRetry.project.name}</strong> was created,
+            but its workflow ({workflowRetry.template.name || "template"}) did
+            not start.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setWorkflowRetry(null)}
+              disabled={retrying}
+            >
+              Dismiss
+            </Button>
+            <Button
+              variant="primary"
+              onClick={retryWorkflow}
+              disabled={retrying}
+            >
+              {retrying ? "Retrying..." : "Retry workflow"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
         <div className="flex-1">

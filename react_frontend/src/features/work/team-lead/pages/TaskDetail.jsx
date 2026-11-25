@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
@@ -19,11 +19,16 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchTaskById, selectTaskById, updateTask } from '../../../../store/tasks';
 import { createSubtask, updateSubtask } from '../../../../store/subtasks';
 import { createEscalation } from '../../../../store/escalations';
-import { fetchProjectById } from '../../../../store/projects';
-// Foreign resources (M5 users, M1 evidence and compliance) keep their own fetch until those slices merge.
-import * as usersApi from '../../../../services/api/users';
-import * as evidenceApi from '../../../../services/api/evidence';
-import * as complianceApi from '../../../../services/api/compliance';
+import { fetchProjectById, selectProjectById } from '../../../../store/projects';
+import { fetchUsers, selectAllUsers } from '../../../../store/users';
+import {
+  createEvidence,
+  deleteEvidence,
+  fetchEvidence,
+  selectAllEvidence,
+  uploadEvidenceFile,
+} from '../../../../store/evidence';
+import { fetchComplianceViolations, selectAllComplianceViolations } from '../../../../store/complianceViolations';
 const STAGES = ['Data Collection', 'Work In Progress', 'Team Leader Review', 'Compliance Audit'];
 const STAGE_MAP = { Active: 1, In_Review: 2, Pending_TL_Review: 2, Completed: 3 };
 
@@ -38,12 +43,41 @@ export default function TeamLeadTaskDetail() {
   const { user } = useAuth();
   const dispatch = useDispatch();
   const task = useSelector((state) => selectTaskById(state, taskId)) || null;
-  const [compliance, setCompliance] = useState({ hasRules: false, evidenceBlocked: false });
   const [complianceReload, setComplianceReload] = useState(0);
-  const [taskEvidence, setTaskEvidence] = useState([]);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
-  const [members, setMembers] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
+  const users = useSelector(selectAllUsers);
+  const projectId = task?.projectId || task?.project?.id;
+  const project = useSelector((state) => (projectId ? selectProjectById(state, projectId) : null));
+  const allEvidence = useSelector(selectAllEvidence);
+  const violations = useSelector(selectAllComplianceViolations);
+
+  // Assignable: direct reports plus members of the project's team.
+  const members = useMemo(() => {
+    const teamUserIds = new Set(
+      (project?.team?.teamMembers || []).map((m) => String(m.userId || m.user?.id))
+    );
+    return users.filter((member) => (
+      String(member.id) !== String(user.id)
+      && (String(member.managerUserId) === String(user.id) || teamUserIds.has(String(member.id)))
+    ));
+  }, [users, project, user.id]);
+
+  const taskEvidence = useMemo(() => allEvidence.filter((item) => (
+    String(item.taskId || item.task_id || item.task?.id) === String(taskId)
+  )), [allEvidence, taskId]);
+
+  // Compliance state comes from the server: open violations recorded for this
+  // task (the backend decides what blocks a transition).
+  const compliance = useMemo(() => {
+    const open = violations.filter((violation) => (
+      ['Open', 'Under_Review'].includes(violation.status)
+      && violation.entityType === 'Task'
+      && String(violation.entityId) === String(taskId)
+    ));
+    return { hasRules: open.length > 0, evidenceBlocked: open.length > 0 };
+  }, [violations, taskId]);
+  // Every user (main's allUsers): resolves subtask assignee names beyond the assignable members.
+  const allUsers = users;
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   // Subtasks live in the task row; the tasks slice keeps them in step with subtask changes.
@@ -91,68 +125,40 @@ export default function TeamLeadTaskDetail() {
     let active = true;
     Promise.all([
       dispatch(fetchTaskById(taskId)).unwrap().catch(() => null),
-      usersApi.list().catch(() => []),
+      // Never rejects when dispatched: a failed user load leaves the assignee list empty.
+      dispatch(fetchUsers()),
     ])
-      .then(async ([t, membersRes]) => {
+      .then(async ([t]) => {
         if (!active) return;
         if (!t) { setNotFound(true); return; }
-        const membersData = Array.isArray(membersRes) ? membersRes : membersRes?.data || [];
-        setAllUsers(membersData);
-        // Assignable: direct reports plus members of the project's team.
-        const projectId = t.projectId || t.project?.id;
-        const projectRes = projectId
-          ? await dispatch(fetchProjectById(projectId)).unwrap().catch(() => null)
-          : null;
-        if (!active) return;
-        const teamUserIds = new Set(
-          (projectRes?.team?.teamMembers || []).map((m) => String(m.userId || m.user?.id))
-        );
-        setMembers(membersData.filter((member) => (
-          String(member.id) !== String(user.id)
-          && (String(member.managerUserId) === String(user.id) || teamUserIds.has(String(member.id)))
-        )));
+        const taskProjectId = t.projectId || t.project?.id;
+        if (taskProjectId) await dispatch(fetchProjectById(taskProjectId)).unwrap().catch(() => null);
       })
       .catch(() => active && showToast('error', 'Failed to load task.'))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [dispatch, taskId, user.id]);
+  }, [dispatch, taskId]);
 
-  // Compliance state comes from the server: open violations recorded for this
-  // task (the backend decides what blocks a transition).
+  // Violations and evidence; after a submit or upload, bypass the freshness window.
   useEffect(() => {
     if (!taskId) return undefined;
     let active = true;
+    const force = complianceReload > 0;
     Promise.all([
-      complianceApi.getViolations().catch(() => null),
-      evidenceApi.getEvidenceList().catch(() => null),
-    ]).then(([violationResponse, evidenceResponse]) => {
+      dispatch(fetchComplianceViolations(force ? { force: true } : undefined)),
+      dispatch(fetchEvidence(force ? { force: true } : undefined)),
+    ]).then(([violationsAction, evidenceAction]) => {
       if (!active) return;
-      if (evidenceResponse) {
-        const evidence = Array.isArray(evidenceResponse) ? evidenceResponse : evidenceResponse?.data || [];
-        setTaskEvidence(evidence.filter((item) => (
-          String(item.taskId || item.task_id || item.task?.id) === String(taskId)
-        )));
-      }
-      if (violationResponse) {
-        const violations = Array.isArray(violationResponse) ? violationResponse : violationResponse?.data || [];
-        const openViolations = violations.filter((violation) => (
-          ['Open', 'Under_Review'].includes(violation.status)
-          && violation.entityType === 'Task'
-          && String(violation.entityId) === String(taskId)
-        ));
-        setCompliance({ hasRules: openViolations.length > 0, evidenceBlocked: openViolations.length > 0 });
-      }
-      if (!violationResponse || !evidenceResponse) {
+      if (fetchComplianceViolations.rejected.match(violationsAction) || fetchEvidence.rejected.match(evidenceAction)) {
         showToast('error', 'Some compliance details could not be loaded.');
       }
     });
     return () => { active = false; };
-  }, [taskId, complianceReload]);
+  }, [dispatch, taskId, complianceReload]);
 
   const handleDeleteEvidence = async (evId) => {
     try {
-      await evidenceApi.remove(evId);
-      setTaskEvidence((prev) => prev.filter((e) => e.id !== evId));
+      await dispatch(deleteEvidence(evId)).unwrap();
       showToast('success', 'Evidence removed.');
     } catch {
       showToast('error', 'Failed to delete evidence.');
@@ -174,23 +180,22 @@ export default function TeamLeadTaskDetail() {
     try {
       if (submitFile) {
         const title = submitFileTitle.trim() || submitFile.name || 'Deliverable Artifact';
-        const res = await evidenceApi.create({
+        const created = await dispatch(createEvidence({
           taskId: String(taskId),
           title,
           evidenceType: submitFileType,
           notes: submitNotes.trim() || undefined,
           fileUrl: submitFile.name,
           userId: user?.id,
-        });
-        const created = res?.data || res;
+        })).unwrap();
         try {
-          await evidenceApi.uploadFile(created.id, submitFile);
+          await dispatch(uploadEvidenceFile({ id: created.id, file: submitFile })).unwrap();
         } catch (uploadError) {
-          // Do not leave an evidence row that points at no file.
-          await evidenceApi.remove(created.id).catch(() => { });
+          // Do not leave an evidence row that points at no file; a successful delete
+          // also removes the row from the store.
+          await dispatch(deleteEvidence(created.id)).unwrap().catch(() => {});
           throw uploadError;
         }
-        setTaskEvidence((prev) => [created, ...prev]);
       }
 
       // Handover notes go to the PM with the review notification (and the audit log).
@@ -505,9 +510,8 @@ export default function TeamLeadTaskDetail() {
         isOpen={isEvidenceModalOpen}
         onClose={() => setIsEvidenceModalOpen(false)}
         taskId={taskId}
-        onSuccess={(newEv) => {
-          setTaskEvidence((prev) => [newEv, ...prev]);
-          // Evidence starts Pending; re-read compliance instead of unblocking locally.
+        onSuccess={() => {
+          // The new row is already in the evidence slice. Evidence starts Pending; re-read compliance instead of unblocking locally.
           setComplianceReload((n) => n + 1);
         }}
       />

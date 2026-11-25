@@ -12,9 +12,8 @@ import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTaskById, selectTaskById, updateTask as updateTaskThunk } from '../../../../store/tasks';
-// Foreign resources (M1 compliance and evidence) keep their own fetch until those slices merge.
-import * as complianceApi from '../../../../services/api/compliance';
-import * as evidenceApi from '../../../../services/api/evidence';
+import { fetchComplianceViolations, selectAllComplianceViolations } from '../../../../store/complianceViolations';
+import { fetchEvidence, selectAllEvidence } from '../../../../store/evidence';
 import { tomorrowInput } from '../../components/dateLimits';
 
 const STATUSES = ['Draft', 'Active', 'In_Review', 'Blocked', 'Completed', 'Cancelled'];
@@ -24,8 +23,9 @@ export default function PmTaskDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const task = useSelector((state) => selectTaskById(state, id)) || null;
-  const [violations, setViolations] = useState([]);
-  const [evidenceList, setEvidenceList] = useState([]);
+  // A failed compliance or evidence load leaves that list empty, as before.
+  const violations = useSelector(selectAllComplianceViolations);
+  const evidenceList = useSelector(selectAllEvidence);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -43,14 +43,10 @@ export default function PmTaskDetail() {
     let active = true;
     Promise.all([
       dispatch(fetchTaskById(id)).unwrap(),
-      complianceApi.getViolations().catch(() => []),
-      evidenceApi.getEvidenceList().catch(() => []),
+      // These two never reject when dispatched: a failure stays in their slice.
+      dispatch(fetchComplianceViolations()),
+      dispatch(fetchEvidence()),
     ])
-      .then(([, violationsRes, evidenceRes]) => {
-        if (!active) return;
-        setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
-        setEvidenceList(Array.isArray(evidenceRes) ? evidenceRes : evidenceRes?.data || []);
-      })
       .catch((error) => {
         if (active) showToast('error', error.message || 'Failed to load task details.');
       })
@@ -60,9 +56,8 @@ export default function PmTaskDetail() {
     return () => { active = false; };
   }, [dispatch, id]);
 
-  const reloadViolations = () => complianceApi.getViolations()
-    .then((res) => setViolations(Array.isArray(res) ? res : res?.data || []))
-    .catch(() => {});
+  // After a compliance block, bypass the freshness window so the message reflects current data.
+  const reloadViolations = () => dispatch(fetchComplianceViolations({ force: true }));
 
   // Prefer the backend code; the message check stays until the API client
   // passes `code` through (A4).
@@ -143,13 +138,8 @@ export default function PmTaskDetail() {
         id,
         data: { dueDate: extensionDate, deadlineExtensionReason: reason },
       })).unwrap();
-      setViolations((current) => current.map((violation) => (
-        violation.entityType === 'Task'
-        && String(violation.entityId) === String(id)
-        && violation.rule?.name?.toLowerCase().includes('overdue')
-          ? { ...violation, status: 'Resolved' }
-          : violation
-      )));
+      // The server resolves the overdue violations; read them back instead of patching locally.
+      reloadViolations();
       showToast('success', 'Deadline extended and overdue violations cleared.');
       setExtensionOpen(false);
       setExtensionDate('');

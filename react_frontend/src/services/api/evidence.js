@@ -1,4 +1,5 @@
-import { apiClient } from './client';
+import { apiClient, ApiError, buildUrl } from './client';
+import { getToken } from '../auth/session';
 
 // Centralized API calls for compliance evidence
 
@@ -50,3 +51,26 @@ export const createEvidence = create;
 export const updateEvidence = update;
 export const removeEvidence = remove;
 export const uploadEvidenceFile = uploadFile;
+
+// Authenticated CSV export of the evidence audit log. Resolves to a Blob: the caller saves it,
+// it never goes into the store. Uses the same base URL and session token as apiClient.
+export const exportCsv = async ({ signal } = {}) => {
+  const token = getToken();
+  let response;
+  try {
+    response = await fetch(buildUrl(`${BASE_PATH}/export/csv`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+      signal,
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new ApiError('Request cancelled', { code: 'ABORTED' });
+    throw new ApiError('Cannot reach the server. Check your connection and try again.', { code: 'NETWORK_ERROR' });
+  }
+  // An HTML body means the request reached the app shell (e.g. a dev proxy miss), not the API.
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || contentType.includes('text/html')) {
+    throw new ApiError('Failed to export evidence data: invalid response from server', { status: response.status });
+  }
+  return response.blob();
+};

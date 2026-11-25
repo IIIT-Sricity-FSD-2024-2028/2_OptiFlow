@@ -25,13 +25,17 @@ import {
   selectTasksError,
   selectTasksLoading,
 } from '../../../../store/tasks';
-// Foreign resources (M1 compliance, M5 users) keep their own fetch until those slices merge.
-import * as complianceApi from '../../../../services/api/compliance';
-import * as usersApi from '../../../../services/api/users';
+import {
+  fetchComplianceViolations,
+  selectAllComplianceViolations,
+  selectComplianceViolationsError,
+  selectComplianceViolationsStatus,
+} from '../../../../store/complianceViolations';
+import { fetchUsers, selectAllUsers, selectUsersStatus } from '../../../../store/users';
+import { isPendingStatus } from '../../utils/storeStatus';
 import { CreateTaskForm } from '../components/CreateTaskForm';
 import { todayInput } from '../../components/dateLimits';
 
-const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const PAGE_SIZE = 10;
 
 export default function PmTasks() {
@@ -48,13 +52,23 @@ export default function PmTasks() {
   const tasksError = useSelector(selectTasksError);
   const projectsError = useSelector(selectProjectsError);
   const [currentPage, setCurrentPage] = useState(1);
-  const [users, setUsers] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(true);
+  // A failed user load leaves the assignee list empty, as before.
+  const users = useSelector(selectAllUsers);
+  const usersLoading = isPendingStatus(useSelector(selectUsersStatus));
   const loading = tasksLoading || projectsLoading || usersLoading;
   const [saving, setSaving] = useState(false);
   const [actionError, setError] = useState('');
-  const [complianceError, setComplianceError] = useState('');
-  const [complianceBlockedIds, setComplianceBlockedIds] = useState(new Set());
+  const violations = useSelector(selectAllComplianceViolations);
+  const violationsStatus = useSelector(selectComplianceViolationsStatus);
+  const violationsError = useSelector(selectComplianceViolationsError);
+  const complianceError = violationsStatus === 'failed'
+    ? violationsError?.message || 'Failed to load compliance status.'
+    : '';
+  const complianceBlockedIds = useMemo(() => new Set(
+    violations
+      .filter((violation) => ['Open', 'Under_Review'].includes(violation.status) && violation.entityType === 'Task')
+      .map((violation) => String(violation.entityId)),
+  ), [violations]);
   
   // Interactive filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,29 +86,10 @@ export default function PmTasks() {
   });
 
   useEffect(() => {
-    let active = true;
     dispatch(fetchTasks());
     dispatch(fetchProjects());
-    usersApi.list()
-      .catch(() => [])
-      .then((userResponse) => {
-        if (active) setUsers(normalize(userResponse));
-      })
-      .finally(() => {
-        if (active) setUsersLoading(false);
-      });
-    complianceApi.getViolations()
-      .then((response) => {
-        if (!active) return;
-        const violations = normalize(response).filter((violation) => (
-          ['Open', 'Under_Review'].includes(violation.status) && violation.entityType === 'Task'
-        ));
-        setComplianceBlockedIds(new Set(violations.map((violation) => String(violation.entityId))));
-      })
-      .catch((loadError) => {
-        if (active) setComplianceError(loadError.message || 'Failed to load compliance status.');
-      });
-    return () => { active = false; };
+    dispatch(fetchUsers());
+    dispatch(fetchComplianceViolations());
   }, [dispatch]);
 
   const loadError = tasksError || projectsError;

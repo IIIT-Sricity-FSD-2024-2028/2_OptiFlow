@@ -14,9 +14,18 @@ import {
   updateProject,
 } from '../../../../store/projects';
 import { createTask as createTaskThunk, updateTask } from '../../../../store/tasks';
-// Foreign resources (M5 users, M1 compliance) keep their own fetch until those slices merge.
-import * as usersApi from '../../../../services/api/users';
-import * as complianceApi from '../../../../services/api/compliance';
+import { fetchUsers, selectAllUsers, selectUsersError, selectUsersStatus } from '../../../../store/users';
+import {
+  fetchComplianceViolations,
+  selectAllComplianceViolations,
+  selectComplianceViolationsStatus,
+} from '../../../../store/complianceViolations';
+import {
+  fetchComplianceBindings,
+  selectAllComplianceBindings,
+  selectComplianceBindingsStatus,
+} from '../../../../store/complianceBindings';
+import { isPendingStatus } from '../../utils/storeStatus';
 import { ComplianceOverviewModal, CreateProjectTaskModal, TaskReviewDrawer } from '../components/ProjectDetailPanels';
 import { formatDate } from '../components/formatDate';
 import { todayInput } from '../../components/dateLimits';
@@ -35,13 +44,17 @@ export default function PmProjectDetail() {
   const [currentTaskPage, setCurrentTaskPage] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [users, setUsers] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(true);
-  const [teamError, setTeamError] = useState('');
-  const [violations, setViolations] = useState([]);
-  const [bindings, setBindings] = useState([]);
-  const [complianceLoading, setComplianceLoading] = useState(true);
-  const [complianceError, setComplianceError] = useState('');
+  const users = useSelector(selectAllUsers);
+  const usersStatus = useSelector(selectUsersStatus);
+  const usersError = useSelector(selectUsersError);
+  const usersLoading = isPendingStatus(usersStatus);
+  const teamError = usersStatus === 'failed' ? usersError?.message || 'Failed to load team members.' : '';
+  // A failed compliance load shows as "no violations", as before.
+  const violations = useSelector(selectAllComplianceViolations);
+  const bindings = useSelector(selectAllComplianceBindings);
+  const violationsStatus = useSelector(selectComplianceViolationsStatus);
+  const bindingsStatus = useSelector(selectComplianceBindingsStatus);
+  const complianceLoading = isPendingStatus(violationsStatus) || isPendingStatus(bindingsStatus);
   const [complianceOpen, setComplianceOpen] = useState(false);
   const [complianceTab, setComplianceTab] = useState('rules');
   const [selectedTask, setSelectedTask] = useState(null);
@@ -67,33 +80,9 @@ export default function PmProjectDetail() {
         if (active) setLoadedId(id);
       });
 
-    usersApi.list()
-      .then((response) => {
-        if (active) setUsers(Array.isArray(response) ? response : response?.data || []);
-      })
-      .catch((loadError) => {
-        if (active) setTeamError(loadError.message || 'Failed to load team members.');
-      })
-      .finally(() => {
-        if (active) setUsersLoading(false);
-      });
-
-    Promise.all([
-      complianceApi.getViolations().catch(() => []),
-      complianceApi.getBindings().catch(() => []),
-    ])
-      .then(([violationsRes, bindingsRes]) => {
-        if (active) {
-          setViolations(Array.isArray(violationsRes) ? violationsRes : violationsRes?.data || []);
-          setBindings(Array.isArray(bindingsRes) ? bindingsRes : bindingsRes?.data || []);
-        }
-      })
-      .catch((loadError) => {
-        if (active) setComplianceError(loadError.message || 'Failed to load compliance information.');
-      })
-      .finally(() => {
-        if (active) setComplianceLoading(false);
-      });
+    dispatch(fetchUsers());
+    dispatch(fetchComplianceViolations());
+    dispatch(fetchComplianceBindings());
 
     return () => { active = false; };
   }, [dispatch, id]);
@@ -464,9 +453,7 @@ export default function PmProjectDetail() {
               <h2 className="font-bold text-slate-900">Compliance</h2>
               <button type="button" onClick={() => setComplianceOpen(true)} className="text-sm font-semibold text-blue-600 hover:text-blue-700">Full view →</button>
             </div>
-            {complianceError ? (
-              <p className="p-4 text-sm text-rose-600">{complianceError}</p>
-            ) : complianceLoading ? (
+            {complianceLoading ? (
               <p className="p-4 text-sm text-slate-500">Loading compliance...</p>
             ) : activeProjectViolations.length === 0 ? (
               <div className="flex items-center gap-3 p-4">

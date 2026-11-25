@@ -17,10 +17,10 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
-// Foreign resources (M1 compliance/evidence, M5 teams) keep their own fetch until those slices merge.
-import * as complianceApi from '../../../../services/api/compliance';
-import * as evidenceApi from '../../../../services/api/evidence';
-import * as teamsApi from '../../../../services/api/teams';
+import { fetchComplianceViolations, selectAllComplianceViolations, selectComplianceViolationsStatus } from '../../../../store/complianceViolations';
+import { fetchEvidence, selectAllEvidence, selectEvidenceStatus } from '../../../../store/evidence';
+import { fetchTeams, selectAllTeams, selectTeamsStatus } from '../../../../store/teams';
+import { isPendingStatus } from '../../utils/storeStatus';
 import { fetchProjects, selectAllProjects, selectProjectsError, selectProjectsLoading } from '../../../../store/projects';
 import { fetchTasks, selectAllTasks, selectTasksError, selectTasksLoading, updateTask } from '../../../../store/tasks';
 import {
@@ -35,7 +35,6 @@ import { selectAuthUser } from '../../../../store/auth';
 import { PmReviewQueue } from '../components/PmReviewQueue';
 import { SendBackTaskModal, RejectExtensionModal } from '../components/PmReviewModals';
 
-const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const projectPath = (id) => PATHS.PM.PROJECT_DETAIL.replace(':id', id);
 
 export default function PmDashboard() {
@@ -51,10 +50,14 @@ export default function PmDashboard() {
   const tasksError = useSelector(selectTasksError);
   const escalationsError = useSelector(selectEscalationsError);
   const storeError = projectsError || tasksError || escalationsError;
-  const [violations, setViolations] = useState([]);
-  const [evidenceList, setEvidenceList] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [foreignLoading, setForeignLoading] = useState(true);
+  // Supporting data: a failed load leaves the list empty, so the dashboard still renders.
+  const violations = useSelector(selectAllComplianceViolations);
+  const evidenceList = useSelector(selectAllEvidence);
+  const teams = useSelector(selectAllTeams);
+  const violationsStatus = useSelector(selectComplianceViolationsStatus);
+  const evidenceStatus = useSelector(selectEvidenceStatus);
+  const teamsStatus = useSelector(selectTeamsStatus);
+  const foreignLoading = [violationsStatus, evidenceStatus, teamsStatus].some(isPendingStatus);
 
   const [activeReviewTab, setActiveReviewTab] = useState('tasks');
   const [sendBackTaskTarget, setSendBackTaskTarget] = useState(null);
@@ -154,26 +157,10 @@ export default function PmDashboard() {
     dispatch(fetchProjects());
     dispatch(fetchTasks());
     dispatch(fetchEscalations());
+    dispatch(fetchComplianceViolations());
+    dispatch(fetchEvidence());
+    dispatch(fetchTeams());
   }, [dispatch]);
-
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      complianceApi.getViolations().catch(() => []),
-      evidenceApi.getEvidenceList().catch(() => []),
-      teamsApi.list().catch(() => []),
-    ])
-      .then(([violationResponse, evidenceResponse, teamResponse]) => {
-        if (!active) return;
-        setViolations(normalize(violationResponse));
-        setEvidenceList(normalize(evidenceResponse));
-        setTeams(normalize(teamResponse));
-      })
-      .finally(() => {
-        if (active) setForeignLoading(false);
-      });
-    return () => { active = false; };
-  }, []);
 
   const loading = foreignLoading || projectsLoading || tasksLoading || escalationsLoading;
   const error = storeError ? storeError.message || 'Failed to load PM dashboard.' : '';

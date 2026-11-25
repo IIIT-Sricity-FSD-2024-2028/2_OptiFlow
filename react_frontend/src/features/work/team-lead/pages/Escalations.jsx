@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
@@ -17,8 +17,8 @@ import {
   selectEscalationsLoading,
 } from '../../../../store/escalations';
 import { fetchTasks, selectAllTasks, selectTasksLoading } from '../../../../store/tasks';
-// Foreign resource (M5 users) keeps its own fetch until that slice merges.
-import * as usersApi from '../../../../services/api/users';
+import { fetchUsers, selectAllUsers, selectUsersStatus } from '../../../../store/users';
+import { isPendingStatus } from '../../utils/storeStatus';
 
 const BLOCKER_TYPES = [
   'Access / permission',
@@ -29,7 +29,6 @@ const BLOCKER_TYPES = [
   'Technical issue',
   'Other',
 ];
-const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 
 export default function TeamLeadEscalations() {
   const { user } = useAuth();
@@ -38,8 +37,17 @@ export default function TeamLeadEscalations() {
   const tasks = useSelector(selectAllTasks);
   const escalationsLoading = useSelector(selectEscalationsLoading);
   const tasksLoading = useSelector(selectTasksLoading);
-  const [teamUserIds, setTeamUserIds] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(true);
+  const users = useSelector(selectAllUsers);
+  const usersStatus = useSelector(selectUsersStatus);
+  const usersLoading = isPendingStatus(usersStatus);
+  // The Team Lead and their direct reports; empty until the user list has loaded.
+  const teamUserIds = useMemo(() => {
+    if (usersStatus !== 'succeeded') return [];
+    const reports = users
+      .filter((member) => String(member.managerUserId || member.managerId || '') === String(user.id))
+      .map((member) => String(member.id || member.userId));
+    return [String(user.id), ...reports];
+  }, [users, usersStatus, user.id]);
   const loading = escalationsLoading || tasksLoading || usersLoading;
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
@@ -62,25 +70,15 @@ export default function TeamLeadEscalations() {
       if (isReportableError(error)) throw error;
     };
     Promise.all([
-      usersApi.list(),
+      dispatch(fetchUsers()).unwrap().catch(rethrow),
       dispatch(fetchEscalations()).unwrap().catch(rethrow),
       dispatch(fetchTasks()).unwrap().catch(rethrow),
     ])
-      .then(([userResponse]) => {
-        if (!active) return;
-        const reports = normalize(userResponse)
-          .filter((member) => String(member.managerUserId || member.managerId || '') === String(user.id))
-          .map((member) => String(member.id || member.userId));
-        setTeamUserIds([String(user.id), ...reports]);
-      })
       .catch((error) => {
         if (active) showToast('error', error.message || 'Failed to load escalation data.');
-      })
-      .finally(() => {
-        if (active) setUsersLoading(false);
       });
     return () => { active = false; };
-  }, [dispatch, user.id]);
+  }, [dispatch]);
 
   const teamEscalations = escalations.filter((escalation) => {
     const reporterId = escalation.reportedById || escalation.reportedBy?.id;
