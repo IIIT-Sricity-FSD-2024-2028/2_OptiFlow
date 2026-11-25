@@ -14,6 +14,9 @@ export function SubmitToPmModal({
   submitting,
   compliance,
   taskEvidence,
+  allSubtasksComplete = true,
+  completedSubtasks = 0,
+  totalSubtasks = 0,
   file,
   onFileChange,
   fileTitle,
@@ -35,13 +38,20 @@ export function SubmitToPmModal({
         <Button
           variant="primary"
           onClick={onSubmit}
-          disabled={submitting || (compliance.evidenceBlocked && taskEvidence.length === 0 && !file)}
+          disabled={submitting || !allSubtasksComplete || (compliance.evidenceBlocked && taskEvidence.length === 0 && !file)}
         >
           {submitting ? 'Submitting…' : 'Confirm & Submit to PM'}
         </Button>
       </>}
     >
       <div className="space-y-4">
+        {!allSubtasksComplete && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-center gap-2">
+            <span className="font-semibold">All subtasks are not complete ({completedSubtasks}/{totalSubtasks} completed).</span>
+            <span>You cannot submit this task until all subtasks have been completed.</span>
+          </div>
+        )}
+
         <p className="text-xs text-gray-500">
           Submit your completed deliverables and handover summary. The task will move into <strong>In Review</strong> for Project Manager audit and approval.
         </p>

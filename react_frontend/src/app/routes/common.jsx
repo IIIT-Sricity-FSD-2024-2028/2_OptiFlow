@@ -8,11 +8,11 @@ const SetPassword = React.lazy(() => import("../../features/common/pages/SetPass
 const Register = React.lazy(
   () => import("../../features/common/pages/Register"),
 );
+const ChangePassword = React.lazy(() => import("../../features/common/pages/ChangePassword"));
 const Notifications = React.lazy(
   () => import("../../features/common/pages/Notifications"),
 );
 const Profile = React.lazy(() => import("../../features/common/pages/Profile"));
-const ChangePassword = React.lazy(() => import("../../features/common/pages/ChangePassword"));
 const Unauthorized = React.lazy(
   () => import("../../features/common/pages/Unauthorized"),
 );

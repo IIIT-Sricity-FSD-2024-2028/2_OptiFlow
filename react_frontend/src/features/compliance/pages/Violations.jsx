@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { useAuth } from "../../../context/AuthContext";
-import { apiClient } from "../../../services/api/client";
+import { apiClient, buildUrl } from "../../../services/api/client";
+import { getToken } from "../../../services/auth/session";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
@@ -56,13 +57,17 @@ export default function ComplianceViolations() {
   const handleExportCsv = async () => {
     try {
       setIsExporting(true);
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/compliance-violations/export/csv", {
+      const token = getToken();
+      const exportUrl = buildUrl("/compliance-violations/export/csv");
+      const res = await fetch(exportUrl, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
-      if (!res.ok) throw new Error("Failed to export compliance violations");
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok || contentType.includes("text/html")) {
+        throw new Error("Failed to export compliance violations: received invalid response from server");
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -82,6 +87,7 @@ export default function ComplianceViolations() {
   const handleCheckSlas = async () => {
     try {
       setIsCheckingSla(true);
+      setError(null);
       await apiClient.post("/api/compliance-violations/check-slas");
       dispatch(fetchComplianceViolations({ force: true }));
     } catch (err) {

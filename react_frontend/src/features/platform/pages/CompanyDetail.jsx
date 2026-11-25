@@ -1,53 +1,44 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Building2, PauseCircle, PlayCircle, XCircle } from 'lucide-react';
 import { PATHS } from '../../../app/paths';
-import { apiClient } from '../../../services/api/client';
+import { fetchCompany, updateCompany, selectCompanyDetail } from '../../../store/platformCompanies';
 import { Badge } from '../../../shared/components/Badge';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { useToast } from '../../../shared/components/Toast';
 import { CompanyOverviewTab } from '../components/detail/CompanyOverviewTab';
 import { CompanySubscriptionTab } from '../components/detail/CompanySubscriptionTab';
+import { CompanySupportAccessTab } from '../components/detail/CompanySupportAccessTab';
 import { CompanyActivityTab } from '../components/detail/CompanyActivityTab';
 
-const TABS = ['Overview', 'Subscription', 'Activity'];
+const TABS = ['Overview', 'Subscription', 'Support', 'Activity'];
 
 export default function CompanyDetail() {
   const toast = useToast();
   const { id } = useParams();
-  const [company, setCompany] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const dispatch = useDispatch();
+  const detail = useSelector((state) => selectCompanyDetail(state, id));
   const [activeTab, setActiveTab] = useState('Overview');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, targetStatus: null, loading: false });
 
-  const loadCompany = useCallback(async (isInitial = false) => {
-    try {
-      if (!isInitial) setLoading(true);
-      setError(null);
-      const res = await apiClient(`/api/platform/companies/${id}`);
-      setCompany(res);
-    } catch (err) {
-      setError(err.message || 'Failed to load company details');
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const company = detail.data;
+  const loading = !company && (detail.status === 'idle' || detail.status === 'loading');
+  const error = detail.error ? detail.error.message || 'Failed to load company details' : null;
+  // Any platform write (this page's status change, a subscription, a support grant) marks the
+  // company stale; the page then loads it again while still showing the current data.
+  const stale = detail.status === 'succeeded' && !detail.loadedAt;
 
   useEffect(() => {
-    loadCompany(true);
-  }, [loadCompany]);
+    dispatch(fetchCompany({ id }));
+  }, [dispatch, id, stale]);
 
   const handleConfirmStatus = async () => {
     if (!confirmModal.targetStatus) return;
     try {
       setConfirmModal((prev) => ({ ...prev, loading: true }));
-      await apiClient(`/api/platform/companies/${id}`, {
-        method: 'PATCH',
-        body: { status: confirmModal.targetStatus },
-      });
+      await dispatch(updateCompany({ id, body: { status: confirmModal.targetStatus } })).unwrap();
       setConfirmModal({ isOpen: false, targetStatus: null, loading: false });
-      await loadCompany();
     } catch (err) {
       toast.error(err.message || 'Status transition failed');
       setConfirmModal((prev) => ({ ...prev, loading: false }));
@@ -123,6 +114,7 @@ export default function CompanyDetail() {
       {/* Tab Panels */}
       {activeTab === 'Overview' && <CompanyOverviewTab company={company} />}
       {activeTab === 'Subscription' && <CompanySubscriptionTab company={company} />}
+      {activeTab === 'Support' && <CompanySupportAccessTab company={company} />}
       {activeTab === 'Activity' && <CompanyActivityTab company={company} />}
 
       {/* Status Transition ConfirmDialog */}

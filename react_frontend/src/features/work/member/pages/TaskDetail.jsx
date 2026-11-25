@@ -21,14 +21,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import { memberReads, useMemberReads } from '../useMemberReads';
 import { fetchTaskById, selectTaskById, selectTaskMutation } from '../../../../store/tasks';
 import { updateSubtask, selectSubtasksByTaskId } from '../../../../store/subtasks';
-import { selectUserById } from '../../../../store/users';
+import { selectUserById, selectAllUsers } from '../../../../store/users';
 import { selectProjectById } from '../../../../store/projects';
+import { selectAllEscalations } from '../../../../store/escalations';
 import { selectAllEvidence, deleteEvidence } from '../../../../store/evidence';
 import { selectAllComplianceBindings } from '../../../../store/complianceBindings';
 import { selectAllComplianceViolations, fetchComplianceViolations } from '../../../../store/complianceViolations';
 import { AlertTriangle, FileText, ShieldAlert } from 'lucide-react';
 
-const reads = [memberReads.users, memberReads.projects, memberReads.evidence, memberReads.complianceBindings, memberReads.complianceViolations];
+const reads = [memberReads.users, memberReads.projects, memberReads.escalations, memberReads.evidence, memberReads.complianceBindings, memberReads.complianceViolations];
 
 export default function MemberTaskDetail() {
   const { id: taskId } = useParams();
@@ -44,13 +45,23 @@ export default function MemberTaskDetail() {
   const loading = lists.loading || detailStatus === 'idle' || detailStatus === 'loading';
   const error = lists.error;
   const project = useSelector(state => selectProjectById(state, task?.projectId || task?.project?.id)) || task?.project;
-  const manager = useSelector(state => selectUserById(state, task?.createdById || task?.createdBy?.id || user?.managerId)) || task?.createdBy;
+  const leadId = (task?.assignedToId && String(task.assignedToId) !== String(user?.id) ? task.assignedToId : null)
+    || (task?.assignedTo?.id && String(task.assignedTo.id) !== String(user?.id) ? task.assignedTo.id : null)
+    || task?.createdById || task?.createdBy?.id || user?.managerId;
+  const manager = useSelector(state => selectUserById(state, leadId)) || (leadId === task?.assignedTo?.id ? task?.assignedTo : task?.createdBy);
   const subtasks = useSelector(state => selectSubtasksByTaskId(state, taskId));
+  const allEscalations = useSelector(selectAllEscalations);
+  const openExtensionRequests = allEscalations.filter(
+    (e) => String(e.taskId) === String(taskId) &&
+           e.blockerType === 'Extension Request' &&
+           ['Open', 'Reviewed', 'Pending'].includes(e.status || 'Open')
+  );
   const allEvidence = useSelector(selectAllEvidence);
   const evidenceList = allEvidence.filter(e => String(e.taskId || e.task_id || e.task?.id) === taskId);
   const bindings = useSelector(selectAllComplianceBindings);
   const violations = useSelector(selectAllComplianceViolations);
   const taskViolations = violations.filter(v => String(v.entityId) === taskId && ['Open', 'Under_Review'].includes(v.status));
+  const primaryViolation = taskViolations.find((v) => v.breachedAt) || taskViolations[0];
   const matchingRule = bindings.find(({ rule, scopeType, scopeId }) => {
     if (!task || !rule?.isActive || rule.criteria?.requirement?.type !== 'EVIDENCE_REQUIRED') return false;
     const scopes = {
@@ -63,11 +74,22 @@ export default function MemberTaskDetail() {
   });
   const isEvidenceRequired = Boolean(matchingRule || taskViolations.length);
   const complianceRule = matchingRule?.rule || taskViolations[0]?.rule;
+  const allUsers = useSelector(selectAllUsers);
+  const complianceOfficer =
+    primaryViolation?.assignedOfficer ||
+    primaryViolation?.rule?.category?.owner ||
+    complianceRule?.category?.owner ||
+    complianceRule?.assignedOfficer ||
+    allUsers.find((u) => {
+      const r = String(u.role || u.roleName || u.roleSlug || '').toLowerCase();
+      return r.includes('compliance_officer') || r === 'compliance';
+    }) || null;
 
   // Modals state
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [isBlockerModalOpen, setIsBlockerModalOpen] = useState(false);
   const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
+  const [selectedSubtaskForExt, setSelectedSubtaskForExt] = useState(null);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
 
   const getSlaTimeRemaining = (dueDate) => {
@@ -151,7 +173,6 @@ export default function MemberTaskDetail() {
     return false;
   });
 
-  const primaryViolation = taskViolations.find((v) => v.breachedAt) || taskViolations[0];
   const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && e.rejectionReason);
 
   const stages = [
@@ -180,7 +201,7 @@ export default function MemberTaskDetail() {
         isEvidenceRequired={isEvidenceRequired}
         complianceRule={complianceRule}
         stages={stages}
-        onOpenExtensionModal={() => setIsExtensionModalOpen(true)}
+        onOpenExtensionModal={null}
         onOpenBlockerModal={() => setIsBlockerModalOpen(true)}
         onOpenSubmitModal={() => setIsSubmitModalOpen(true)}
       />
@@ -195,6 +216,8 @@ export default function MemberTaskDetail() {
             latestRejectedEvidence={latestRejectedEvidence}
             isLockedOut={isLockedOut}
             complianceRule={complianceRule}
+            complianceOfficer={complianceOfficer}
+            taskDueDate={dueDate}
             getSlaTimeRemaining={getSlaTimeRemaining}
             onOpenEvidenceModal={() => setIsEvidenceModalOpen(true)}
           />
@@ -221,6 +244,11 @@ export default function MemberTaskDetail() {
             subtasks={subtasks}
             readOnly={isCompleted}
             onSubmitSubtask={!isCompleted ? handleSubtaskSubmit : undefined}
+            onRequestExtension={!isCompleted ? (st) => {
+              setSelectedSubtaskForExt(st);
+              setIsExtensionModalOpen(true);
+            } : undefined}
+            extensionRequests={openExtensionRequests}
             currentUserId={user?.id}
           />
 
@@ -276,9 +304,7 @@ export default function MemberTaskDetail() {
                 <div className="flex justify-between py-1 border-b border-slate-50">
                   <span className="text-slate-400">Officer Contact</span>
                   <span className="font-semibold text-slate-800">
-                    {primaryViolation?.assignedOfficer?.fullName ||
-                      primaryViolation?.rule?.assignedOfficer?.fullName ||
-                      'Compliance Lead'}
+                    {complianceOfficer?.fullName || 'Compliance Officer'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50">
@@ -310,17 +336,23 @@ export default function MemberTaskDetail() {
         onClose={() => setIsBlockerModalOpen(false)}
         taskId={taskId}
         projectId={task?.projectId || project?.id}
-        managerId={manager?.id || task?.createdById}
+        managerId={manager?.id || task?.assignedToId || task?.assignedTo?.id || task?.createdById}
       />
 
       <RequestExtensionModal
         isOpen={isExtensionModalOpen}
-        onClose={() => setIsExtensionModalOpen(false)}
+        onClose={() => {
+          setIsExtensionModalOpen(false);
+          setSelectedSubtaskForExt(null);
+        }}
         taskId={taskId}
+        subtaskId={selectedSubtaskForExt?.id || selectedSubtaskForExt?.subtaskId}
+        subtaskTitle={selectedSubtaskForExt?.title}
         projectId={task?.projectId || project?.id}
-        managerId={manager?.id || task?.createdById}
+        managerId={manager?.id || task?.assignedToId || task?.assignedTo?.id || task?.createdById}
         taskTitle={task?.title}
-        currentDeadline={task?.dueDate || task?.deadline}
+        currentDeadline={selectedSubtaskForExt?.dueDate || selectedSubtaskForExt?.deadline || task?.dueDate || task?.deadline}
+        parentTaskDeadline={task?.dueDate || task?.deadline}
       />
 
       <UploadEvidenceModal

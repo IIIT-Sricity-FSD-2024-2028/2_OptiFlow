@@ -1,10 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiClient } from '../../../services/api/client';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useDispatch } from 'react-redux';
+import { compactQuery } from '../../../services/api/platform';
+import {
+  fetchSupportGrants,
+  createSupportGrant,
+  revokeSupportGrant,
+  selectSupportGrantsEntry,
+} from '../../../store/platformSupportAccess';
+import { useKeyedList } from './useKeyedList';
+
+const EMPTY_SUMMARY = { total: 0, active: 0, expired: 0, revoked: 0 };
 
 export function useSupportAccess(initialPageSize = 10) {
-  const [grants, setGrants] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState({ total: 0, active: 0, expired: 0, revoked: 0 });
+  const dispatch = useDispatch();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [search, setSearch] = useState('');
@@ -13,8 +21,6 @@ export function useSupportAccess(initialPageSize = 10) {
   const [companyFilter, setCompanyFilter] = useState('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const debounceTimerRef = useRef(null);
 
@@ -27,57 +33,34 @@ export function useSupportAccess(initialPageSize = 10) {
     return () => clearTimeout(debounceTimerRef.current);
   }, [search]);
 
-  const fetchGrants = useCallback(async (isInitial = false) => {
-    try {
-      if (!isInitial) setLoading(true);
-      setError(null);
+  const query = useMemo(
+    () =>
+      compactQuery({
+        page,
+        pageSize,
+        q: debouncedSearch,
+        status: statusFilter,
+        companyId: companyFilter,
+        startDate,
+        endDate,
+      }),
+    [page, pageSize, debouncedSearch, statusFilter, companyFilter, startDate, endDate],
+  );
 
-      const params = new URLSearchParams();
-      params.append('page', String(page));
-      params.append('pageSize', String(pageSize));
-      if (debouncedSearch.trim()) params.append('q', debouncedSearch.trim());
-      if (statusFilter && statusFilter !== 'All') params.append('status', statusFilter);
-      if (companyFilter && companyFilter !== 'All') params.append('companyId', companyFilter);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
+  const { items, total, summary, loading, error, refetch } = useKeyedList({
+    fetchList: fetchSupportGrants,
+    selectEntry: selectSupportGrantsEntry,
+    query,
+  });
 
-      const res = await apiClient(`/api/platform/support-access?${params.toString()}`);
-      setGrants(res?.items || []);
-      setTotal(res?.total || 0);
-      if (res?.summary) setSummary(res.summary);
-    } catch (err) {
-      console.error('Failed to fetch support access grants:', err);
-      setError(err.message || 'Failed to load support access grants');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, debouncedSearch, statusFilter, companyFilter, startDate, endDate]);
-
-  useEffect(() => {
-    fetchGrants(true);
-  }, [fetchGrants]);
-
-  const createGrant = async (payload) => {
-    const res = await apiClient('/api/platform/support-access', {
-      method: 'POST',
-      body: payload,
-    });
-    await fetchGrants();
-    return res;
-  };
-
-  const revokeGrant = async (id) => {
-    const res = await apiClient(`/api/platform/support-access/${id}/revoke`, {
-      method: 'POST',
-    });
-    await fetchGrants();
-    return res;
-  };
+  // The slice marks the list stale after a write, and useKeyedList fetches it again.
+  const createGrant = (payload) => dispatch(createSupportGrant(payload)).unwrap();
+  const revokeGrant = (id) => dispatch(revokeSupportGrant(id)).unwrap();
 
   return {
-    grants,
+    grants: items,
     total,
-    summary,
+    summary: summary ?? EMPTY_SUMMARY,
     page,
     setPage,
     pageSize,
@@ -94,7 +77,7 @@ export function useSupportAccess(initialPageSize = 10) {
     setEndDate: (val) => { setEndDate(val); setPage(1); },
     loading,
     error,
-    refetch: fetchGrants,
+    refetch,
     createGrant,
     revokeGrant,
   };

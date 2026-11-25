@@ -15,7 +15,7 @@ function mount(templates = []) {
       <MemoryRouter initialEntries={['/test/row']}>
         <Routes>
           <Route path="/test/:id" element={<Dashboard />} />
-          <Route path="/process-admin/instances/:id" element={<p>Opened new instance</p>} />
+          <Route path="/process-admin/templates/:id" element={<p>Opened template builder</p>} />
         </Routes>
       </MemoryRouter>
     </Provider>,
@@ -40,14 +40,17 @@ it('handles an empty response', async () => {
   await screen.findByText(/No active process instances found/);
 });
 
-it('launches the selected template and navigates to the created instance', async () => {
+it('creates a new process template and navigates to the template builder', async () => {
   api.listInstances.mockResolvedValue([]);
-  api.createInstance.mockResolvedValue({ id: 'new-instance' });
-  mount([{ id: 't', name: 'Review', isActive: true, steps: [{ id: 's' }] }]);
+  api.createTemplate.mockResolvedValue({ id: 'new-template', name: 'Review', version: 1, isActive: true });
+  mount([]);
   await screen.findByText(/No active process instances found/);
-  fireEvent.click(screen.getByRole('button', { name: /Launch/i }));
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: 't' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workflow' }));
-  await screen.findByText('Opened new instance');
-  expect(api.createInstance).toHaveBeenCalledWith({ templateId: 't' }, expect.objectContaining({ signal: expect.anything() }));
+  fireEvent.click(screen.getByRole('button', { name: /\+ Create Template/i }));
+  fireEvent.change(screen.getByPlaceholderText('Enter descriptive template name'), { target: { value: 'Review' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create & Open Builder' }));
+  await screen.findByText('Opened template builder');
+  expect(api.createTemplate).toHaveBeenCalledWith(
+    { name: 'Review', version: 1, isActive: true },
+    expect.objectContaining({ signal: expect.anything() }),
+  );
 });

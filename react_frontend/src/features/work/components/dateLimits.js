@@ -49,3 +49,12 @@ export const minExtensionDateInput = (currentDeadline) => {
   return toInputDate(tomorrow);
 };
 
+/**
+ * Maximum date allowed for a subtask extension request.
+ * Must be before/on the parent task's deadline.
+ * Returns "YYYY-MM-DD" for <input type="date" max="...">.
+ */
+export const maxExtensionDateInput = (parentTaskDeadline) => {
+  if (!parentTaskDeadline) return undefined;
+  return deadlineInput(parentTaskDeadline);
+};

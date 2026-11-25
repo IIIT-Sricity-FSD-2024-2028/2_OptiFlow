@@ -180,5 +180,12 @@ export const apiRequest = async (endpoint, options = {}) => {
   return unwrap(parsed);
 };
 
+// Convenience HTTP method helpers for callers using apiClient.get/post/etc.
+apiRequest.get = (endpoint, options = {}) => apiRequest(endpoint, { ...options, method: 'GET' });
+apiRequest.post = (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: 'POST', body });
+apiRequest.put = (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: 'PUT', body });
+apiRequest.patch = (endpoint, body, options = {}) => apiRequest(endpoint, { ...options, method: 'PATCH', body });
+apiRequest.delete = (endpoint, options = {}) => apiRequest(endpoint, { ...options, method: 'DELETE' });
+
 // Kept so the ~240 existing call sites keep working unchanged.
 export const apiClient = apiRequest;

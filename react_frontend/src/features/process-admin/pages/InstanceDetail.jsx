@@ -1,19 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchProcessInstanceById,
   selectProcessInstanceById,
   selectProcessInstanceDetailRequest,
-  actionInstanceStep,
-  updateProcessInstance,
-  selectProcessInstanceMutation,
 } from '../../../store/processInstances';
 import { PATHS } from '../../../app/paths';
 import { Button } from '../../../shared/components/Button';
 import { Badge } from '../../../shared/components/Badge';
-import { Modal } from '../../../shared/components/Modal';
-import { FormField, Textarea } from '../../../shared/components/FormField';
 import { Loader } from '../../../shared/components/Loader';
 import { formatDate } from '../../../shared/utils/formatDate';
 
@@ -24,56 +19,12 @@ export default function ProcessAdminInstanceDetail() {
   const dispatch = useDispatch();
   const instance = useSelector(state => selectProcessInstanceById(state, id));
   const request = useSelector(state => selectProcessInstanceDetailRequest(state, id));
-  const update = useSelector(state => selectProcessInstanceMutation(state, 'update:' + id));
-  const loading = !request || request.status === 'loading' || update?.status === 'loading';
-  const error = (request?.error || update?.error)?.message;
-
-  // Action Dialog State
-  const [actionModal, setActionModal] = useState({
-    open: false,
-    stepId: null,
-    actionType: null, // 'Approved' | 'Rejected' | 'Skipped'
-  });
-  const selectedStep = instance?.steps?.find(step => step.id === actionModal.stepId);
-  const [actionComment, setActionComment] = useState('');
-  const submitting = useSelector(state => selectProcessInstanceMutation(state, 'action:' + actionModal.stepId)?.status === 'loading');
-  const [actionError, setActionError] = useState('');
+  const loading = !request || request.status === 'loading';
+  const error = request?.error?.message;
 
   useEffect(() => {
     if (id) dispatch(fetchProcessInstanceById(id));
   }, [dispatch, id]);
-
-  const handleOpenActionModal = (step, actionType) => {
-    setActionModal({
-      open: true,
-      stepId: step.id,
-      actionType,
-    });
-    setActionComment('');
-    setActionError('');
-  };
-
-  const handleExecuteAction = async () => {
-    if (!selectedStep) return;
-
-    try {
-      setActionError('');
-
-      await dispatch(actionInstanceStep({ id: actionModal.stepId, data: {
-        status: actionModal.actionType,
-        comment: actionComment.trim() || undefined,
-      } })).unwrap();
-
-      setActionModal({ open: false, stepId: null, actionType: null });
-      await dispatch(fetchProcessInstanceById(id)).unwrap();
-    } catch (err) {
-      setActionError(err.message || `Failed to ${actionModal.actionType?.toLowerCase()} step`);
-    }
-  };
-
-  const handleManualStatusChange = async (newStatus) => {
-    await dispatch(updateProcessInstance({ id, data: { status: newStatus } }));
-  };
 
   if (loading) {
     return (
@@ -122,28 +73,6 @@ export default function ProcessAdminInstanceDetail() {
           <p className="text-xs text-slate-400 mt-1 font-mono">
             Instance ID: {instance.id} • Started {formatDate(instance.createdAt)}
           </p>
-        </div>
-
-        {/* Administrative State Overrides */}
-        <div className="flex items-center gap-2">
-          {instance.status === 'Active' && (
-            <Button
-              variant="danger"
-              className="text-xs py-1.5 px-3"
-              onClick={() => handleManualStatusChange('Cancelled')}
-            >
-              Abort / Cancel Instance
-            </Button>
-          )}
-          {instance.status === 'Draft' && (
-            <Button
-              variant="primary"
-              className="text-xs py-1.5 px-3"
-              onClick={() => handleManualStatusChange('Active')}
-            >
-              Start Instance
-            </Button>
-          )}
         </div>
       </div>
 
@@ -261,86 +190,12 @@ export default function ProcessAdminInstanceDetail() {
                       )}
                     </div>
                   </div>
-
-                  {/* Step Action Buttons (Only available for Pending active steps or Process Admin override) */}
-                  {instance.status === 'Active' && isPending && isCurrent && (
-                    <div className="flex items-center gap-2 pt-2 sm:pt-0 shrink-0">
-                      <Button
-                        variant="secondary"
-                        className="text-xs py-1.5 px-3 bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-                        onClick={() => handleOpenActionModal(step, 'Rejected')}
-                      >
-                        ✕ Reject
-                      </Button>
-                      <Button
-                        variant="primary"
-                        className="text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => handleOpenActionModal(step, 'Approved')}
-                      >
-                        ✓ Approve
-                      </Button>
-                    </div>
-                  )}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-
-      {/* Step Action Confirmation Modal */}
-      <Modal
-        isOpen={actionModal.open}
-        onClose={() => setActionModal({ open: false, stepId: null, actionType: null })}
-        title={`${actionModal.actionType === 'Approved' ? 'Approve' : 'Reject'} Step`}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setActionModal({ open: false, stepId: null, actionType: null })}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant={actionModal.actionType === 'Approved' ? 'primary' : 'danger'}
-              onClick={handleExecuteAction}
-              disabled={submitting}
-            >
-              {submitting ? 'Processing...' : `Confirm ${actionModal.actionType}`}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            You are marking <b>{selectedStep?.templateStep?.name || 'this step'}</b> as{' '}
-            <span className={actionModal.actionType === 'Approved' ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
-              {actionModal.actionType}
-            </span>.
-            {actionModal.actionType === 'Rejected' && selectedStep?.templateStep?.onRejectGotoStep && (
-              <span className="block mt-2 text-amber-800 bg-amber-50 p-2.5 rounded-md text-xs">
-                Notice: The process state machine will automatically loop back execution to the configured return step.
-              </span>
-            )}
-          </p>
-
-          {actionError && (
-            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-md">
-              {actionError}
-            </div>
-          )}
-
-          <FormField label="Decision Comments / Audit Notes">
-            <Textarea
-              rows={3}
-              value={actionComment}
-              onChange={(e) => setActionComment(e.target.value)}
-              placeholder="Add optional notes for the audit trail..."
-            />
-          </FormField>
-        </div>
-      </Modal>
     </div>
   );
 }

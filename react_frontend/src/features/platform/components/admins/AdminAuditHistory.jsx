@@ -1,26 +1,15 @@
-import { useState, useEffect } from 'react';
 import { History, Shield, ArrowRight } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { useScopedAuditLogs } from '../../hooks/useAuditLogs';
 
 export function AdminAuditHistory({ adminUserId }) {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    if (!adminUserId) return;
-
-    setLoading(true);
-    apiClient(`/api/platform/audit-logs?adminUserId=${adminUserId}`)
-      .then((res) => { if (isMounted) setLogs(res?.items || []); })
-      .catch((err) => console.error('Failed to load admin audit logs:', err))
-      .finally(() => { if (isMounted) setLoading(false); });
-
-    return () => { isMounted = false; };
-  }, [adminUserId]);
+  const { logs, loading, error } = useScopedAuditLogs({ adminUserId }, { enabled: Boolean(adminUserId) });
 
   if (loading) {
     return <div className="text-xs text-slate-400 py-3">Loading administrator audit history...</div>;
+  }
+
+  if (error) {
+    return <div className="text-xs text-red-600 py-3">Could not load audit history: {error}</div>;
   }
 
   if (logs.length === 0) {

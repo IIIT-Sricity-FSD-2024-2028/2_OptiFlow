@@ -1,7 +1,15 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { prisma } from '../config/prisma.js';
-import { UnauthorizedError, ForbiddenError, AppError } from '../utils/errors.js';
+import { UnauthorizedError, ForbiddenError, AppError, withCode } from '../utils/errors.js';
+
+/** Routes an admin who must still replace a temporary password may call. */
+const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([
+  '/platform/auth/me',
+  '/api/platform/auth/me',
+  '/platform/auth/change-password',
+  '/api/platform/auth/change-password',
+]);
 
 /**
  * Extracts the JWT from cookies (httpOnly) or Authorization Bearer header.
@@ -92,11 +100,22 @@ export async function authenticatePlatformAdmin(req, res, next) {
       }
     }
 
+    // A new admin, or one given a temporary password, must choose their own before doing anything.
+    const mustChangePassword = adminUser.passwordChangedAt === null;
+    const path = (req.originalUrl || req.url || '').split('?')[0];
+    if (mustChangePassword && !PASSWORD_CHANGE_ALLOWED_PATHS.has(path)) {
+      throw withCode(
+        new ForbiddenError('You must set a new password before continuing'),
+        'PASSWORD_CHANGE_REQUIRED',
+      );
+    }
+
     req.platformAdmin = {
       id: adminUser.id,
       email: adminUser.email,
       fullName: adminUser.fullName,
       role: 'platform_admin',
+      mustChangePassword,
     };
 
     next();

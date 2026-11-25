@@ -30,6 +30,7 @@ export async function seedPlatform(prisma: PrismaClient, ctx: { passwordHash: st
       email: "admin@platform.com",
       passwordHash,
       fullName: "Global Platform Administrator",
+      passwordChangedAt: new Date(),
     },
   });
 

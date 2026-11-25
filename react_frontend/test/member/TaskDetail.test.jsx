@@ -30,17 +30,22 @@ it('retries an upload against the existing record before submitting the memberâ€
 });
 it('sends a later extension date and the taskâ€™s manager', async () => {
   const create = vi.fn(data => ({ ...data, id: 'ext' }));
-  renderMember(TaskDetail, { 'POST /api/escalations': create });
+  const datedSubtask = { id: 's1', taskId: 't1', title: 'My subtask', assignedToId: 'member', status: 'Pending', dueDate: '2030-01-10' };
+  renderMember(TaskDetail, {
+    'GET /api/tasks/t1': { id: 't1', title: 'My task', assignedToId: 'member', status: 'In_Progress', projectId: 'p1', createdById: 'lead', dueDate: '2030-01-15', subtasks: [datedSubtask] },
+    'GET /api/subtasks': [datedSubtask],
+    'POST /api/escalations': create,
+  });
   fireEvent.click(await screen.findByRole('button', { name: 'Request Extension' }));
   const date = document.querySelector('input[type=date]');
-  expect(date.min).toBe('2030-01-16');
-  fireEvent.change(date, { target: { value: '2030-01-20' } });
+  expect(date.min).toBe('2030-01-11');
+  fireEvent.change(date, { target: { value: '2030-01-14' } });
   fireEvent.change(screen.getByPlaceholderText(/Explain why extra time/), { target: { value: 'Waiting on review' } });
   fireEvent.click(screen.getByRole('button', { name: 'Send Request' }));
-  await screen.findByText('Extension request sent to leadership.');
+  await screen.findByText('Extension request sent to your Team Lead.');
   expect(create).toHaveBeenCalledWith(expect.objectContaining({
     taskId: 't1', targetManagerId: 'lead', blockerType: 'Extension Request',
-    description: expect.stringContaining('2030-01-20'),
+    description: expect.stringContaining('2030-01-14'),
   }));
 });
 it('shows a missing task and the read failure reason', async () => {

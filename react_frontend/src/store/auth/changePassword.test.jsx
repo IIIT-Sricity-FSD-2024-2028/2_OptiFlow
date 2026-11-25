@@ -72,4 +72,16 @@ describe("first-login password change", () => {
     expect(store.getState().auth.user.mustChangePassword).toBe(true);
     expect(store.getState().auth.mutations.changePassword.status).toBe("failed");
   });
+
+  it("uses the platform endpoint and keeps a platform session for a platform admin", async () => {
+    const platformCall = vi.spyOn(authApi, "platformChangePassword").mockResolvedValue({ token: "platform-fresh" });
+    const tenantCall = vi.spyOn(authApi, "changePassword");
+    const setSession = vi.spyOn(session, "setSession");
+    const store = storeWith({ id: "p1", role: "platform_admin", mustChangePassword: true, isPlatform: true });
+    await store.dispatch(changePassword({ currentPassword: "temp-pass-1", newPassword: "my-own-password" })).unwrap();
+    expect(platformCall).toHaveBeenCalled();
+    expect(tenantCall).not.toHaveBeenCalled();
+    expect(setSession).toHaveBeenCalledWith("platform-fresh", true);
+    expect(store.getState().auth.user.mustChangePassword).toBe(false);
+  });
 });

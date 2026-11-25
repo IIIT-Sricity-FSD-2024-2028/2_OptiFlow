@@ -47,9 +47,11 @@ export const registerCompany = createApiThunk("auth/registerCompany", async (pay
 
 // Replaces the password (the first-login step for admin-created users). The API revokes older
 // sessions and returns a fresh token, which becomes this tab's session.
-export const changePassword = createApiThunk("auth/changePassword", async (body, options) => {
-  const response = await authApi.changePassword(body, options);
-  if (response?.token) setSession(response.token, false);
+export const changePassword = createApiThunk("auth/changePassword", async (body, options, { getState }) => {
+  // Platform administrators have their own endpoint and token; decided from the session.
+  const isPlatform = Boolean(getState().auth.user?.isPlatform);
+  const response = await (isPlatform ? authApi.platformChangePassword : authApi.changePassword)(body, options);
+  if (response?.token) setSession(response.token, isPlatform);
   return null;
 });
 

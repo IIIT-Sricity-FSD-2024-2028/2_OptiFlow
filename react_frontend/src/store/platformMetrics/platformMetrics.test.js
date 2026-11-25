@@ -120,3 +120,30 @@ describe("platformMetrics slice", () => {
     expect(store.getState().platformMetrics).toMatchObject({ status: "idle", data: null, loadedAt: null });
   });
 });
+
+describe("platformMetrics: stale after platform writes", () => {
+  it.each([
+    ["createCompany", () => import("../platformCompanies/thunks").then((m) => m.createCompany({}))],
+    ["updateCompany", () => import("../platformCompanies/thunks").then((m) => m.updateCompany({ id: "c1", body: {} }))],
+    ["createPlan", () => import("../platformPlans/thunks").then((m) => m.createPlan({}))],
+    ["updatePlan", () => import("../platformPlans/thunks").then((m) => m.updatePlan({ id: "p1", body: {} }))],
+    ["createSubscription", () => import("../platformSubscriptions/thunks").then((m) => m.createSubscription({}))],
+    ["updateSubscription", () => import("../platformSubscriptions/thunks").then((m) => m.updateSubscription({ id: "s1", body: {} }))],
+    ["createAdminUser", () => import("../platformAdminUsers/thunks").then((m) => m.createAdminUser({}))],
+    ["updateAdminUser", () => import("../platformAdminUsers/thunks").then((m) => m.updateAdminUser({ id: "a1", body: {} }))],
+    ["createSupportGrant", () => import("../platformSupportAccess/thunks").then((m) => m.createSupportGrant({}))],
+    ["revokeSupportGrant", () => import("../platformSupportAccess/thunks").then((m) => m.revokeSupportGrant("g1"))],
+  ])("%s makes the next plain read fetch again", async (service, makeThunk) => {
+    const read = vi.spyOn(platformApi, "getMetrics").mockResolvedValue(DATA);
+    vi.spyOn(platformApi, service).mockResolvedValue({ id: "x" });
+    const store = makeStore();
+    await store.dispatch(fetchPlatformMetrics());
+    await store.dispatch(fetchPlatformMetrics()); // still fresh: skipped
+    expect(read).toHaveBeenCalledTimes(1);
+    await store.dispatch(await makeThunk());
+    expect(selectPlatformMetricsLoadedAt(store.getState())).toBeNull();
+    expect(selectPlatformMetrics(store.getState())).toEqual(DATA); // still shown until the refetch
+    await store.dispatch(fetchPlatformMetrics());
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+});

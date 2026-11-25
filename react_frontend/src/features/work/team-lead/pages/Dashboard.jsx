@@ -748,7 +748,7 @@ export default function TeamLeadDashboard() {
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
         {/* Escalation form */}
-        <EscalationForm 
+        <EscalationForm
           tasks={teamOverviewTasks}
           onSubmit={handleSendEscalation}
         />

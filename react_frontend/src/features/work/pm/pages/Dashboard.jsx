@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { Badge } from '../../../../shared/components/Badge';
@@ -22,17 +22,23 @@ import { fetchEvidence, selectAllEvidence, selectEvidenceStatus } from '../../..
 import { fetchTeams, selectAllTeams, selectTeamsStatus } from '../../../../store/teams';
 import { isPendingStatus } from '../../utils/storeStatus';
 import { fetchProjects, selectAllProjects, selectProjectsError, selectProjectsLoading } from '../../../../store/projects';
-import { fetchTasks, selectAllTasks, selectTasksError, selectTasksLoading } from '../../../../store/tasks';
+import { fetchTasks, selectAllTasks, selectTasksError, selectTasksLoading, updateTask } from '../../../../store/tasks';
 import {
   fetchEscalations,
   selectAllEscalations,
   selectEscalationsError,
   selectEscalationsLoading,
+  updateEscalation,
 } from '../../../../store/escalations';
+import { Toast } from '../../../../shared/components/Toast';
+import { selectAuthUser } from '../../../../store/auth';
+import { PmReviewQueue } from '../components/PmReviewQueue';
+import { SendBackTaskModal, RejectExtensionModal } from '../components/PmReviewModals';
 
 const projectPath = (id) => PATHS.PM.PROJECT_DETAIL.replace(':id', id);
 
 export default function PmDashboard() {
+  const user = useSelector(selectAuthUser);
   const dispatch = useDispatch();
   const projects = useSelector(selectAllProjects);
   const tasks = useSelector(selectAllTasks);
@@ -53,6 +59,100 @@ export default function PmDashboard() {
   const teamsStatus = useSelector(selectTeamsStatus);
   const foreignLoading = [violationsStatus, evidenceStatus, teamsStatus].some(isPendingStatus);
 
+  const [activeReviewTab, setActiveReviewTab] = useState('tasks');
+  const [sendBackTaskTarget, setSendBackTaskTarget] = useState(null);
+  const [sendBackReason, setSendBackReason] = useState('');
+  const [sendingBack, setSendingBack] = useState(false);
+  const [sendBackError, setSendBackError] = useState('');
+
+  const [rejectExtTarget, setRejectExtTarget] = useState(null);
+  const [rejectExtReason, setRejectExtReason] = useState('');
+  const [rejectingExt, setRejectingExt] = useState(false);
+  const [rejectExtError, setRejectExtError] = useState('');
+  const [rejectExtModalOpen, setRejectExtModalOpen] = useState(false);
+
+  const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
+
+  const showToast = (type, message) => {
+    setToast({ visible: true, type, message });
+    setTimeout(() => setToast((curr) => ({ ...curr, visible: false })), 3500);
+  };
+
+  const handleApproveTask = async (task) => {
+    try {
+      await dispatch(updateTask({ id: task.id, data: { status: 'Completed', pmApproval: true } })).unwrap();
+      showToast('success', `Task "${task.title}" approved and completed.`);
+    } catch (err) {
+      showToast('error', err.message || 'Failed to approve task.');
+    }
+  };
+
+  const openSendBackTask = (task) => {
+    setSendBackTaskTarget(task);
+    setSendBackReason('');
+    setSendBackError('');
+  };
+
+  const handleConfirmSendBack = async () => {
+    if (!sendBackReason.trim()) {
+      setSendBackError('Please enter revision feedback.');
+      return;
+    }
+    setSendingBack(true);
+    try {
+      await dispatch(updateTask({
+        id: sendBackTaskTarget.id,
+        data: { status: 'Active', notes: sendBackReason.trim() }
+      })).unwrap();
+      setSendBackTaskTarget(null);
+      showToast('info', 'Task sent back to Team Lead for revision.');
+    } catch (err) {
+      setSendBackError(err.message || 'Failed to send back task.');
+    } finally {
+      setSendingBack(false);
+    }
+  };
+
+  const handleApproveExtension = async (ext) => {
+    try {
+      await dispatch(updateEscalation({ id: ext.id, data: { status: 'Resolved' } })).unwrap();
+      dispatch(fetchTasks({ force: true }));
+      showToast('success', 'Extension request approved & deadline updated.');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to approve extension request.');
+    }
+  };
+
+  const openRejectExtension = (ext) => {
+    setRejectExtTarget(ext);
+    setRejectExtReason('');
+    setRejectExtError('');
+    setRejectExtModalOpen(true);
+  };
+
+  const handleConfirmRejectExtension = async () => {
+    if (!rejectExtReason.trim()) {
+      setRejectExtError('Please enter a rejection comment/reason.');
+      return;
+    }
+    setRejectingExt(true);
+    try {
+      const desc = rejectExtTarget.description?.trim()
+        ? `${rejectExtTarget.description.trim()}\n\nRejection Comment: ${rejectExtReason.trim()}`
+        : `Rejection Comment: ${rejectExtReason.trim()}`;
+      await dispatch(updateEscalation({
+        id: rejectExtTarget.id,
+        data: { status: 'Closed', description: desc }
+      })).unwrap();
+      setRejectExtModalOpen(false);
+      showToast('info', 'Extension rejected & Team Lead notified.');
+    } catch (err) {
+      setRejectExtError(err.message || 'Failed to reject extension.');
+    } finally {
+      setRejectingExt(false);
+    }
+  };
+
   useEffect(() => {
     dispatch(fetchProjects());
     dispatch(fetchTasks());
@@ -68,7 +168,23 @@ export default function PmDashboard() {
   if (loading) return <div className="min-h-full flex items-center justify-center p-8"><Loader /></div>;
   if (error) return <div className="p-6 text-sm text-red-600" role="alert">{error}</div>;
 
-  const openEscalations = escalations.filter((item) => !['Resolved', 'Closed'].includes(item.status));
+  const openExtensionRequests = escalations.filter((item) => {
+    if (item.blockerType !== 'Extension Request') return false;
+    if (['Resolved', 'Closed'].includes(item.status)) return false;
+    // It should not be visible to himself
+    if (user?.id && String(item.reportedById || item.reportedBy?.id) === String(user.id)) return false;
+    // Subtask extensions requested by team members are for the Team Lead to review, not the PM.
+    // PM only reviews task extensions requested by Team Leads.
+    const isSubtaskExt =
+      item.title?.toLowerCase().includes('subtask extension') ||
+      item.description?.toLowerCase().includes('subtask:');
+    if (isSubtaskExt) return false;
+    return true;
+  });
+  const openEscalations = escalations.filter(
+    (item) => item.blockerType !== 'Extension Request' && !['Resolved', 'Closed'].includes(item.status)
+  );
+  const tasksInReview = tasks.filter((item) => item.status === 'In_Review');
   const activeProjects = projects.filter((item) => item.status === 'Active').length;
   const completedTasks = tasks.filter((item) => item.status === 'Completed').length;
   const overdueTasks = tasks.filter((item) =>
@@ -249,6 +365,18 @@ export default function PmDashboard() {
         </div>
       </section>
 
+      {/* Review Queue (Tasks in Review & Extension Requests) */}
+      <PmReviewQueue
+        activeTab={activeReviewTab}
+        onTabChange={setActiveReviewTab}
+        tasks={tasksInReview}
+        extensionRequests={openExtensionRequests}
+        onApproveTask={handleApproveTask}
+        onSendBackTask={openSendBackTask}
+        onApproveExtension={handleApproveExtension}
+        onRejectExtension={openRejectExtension}
+      />
+
       {/* Projects, Team Workload & Escalations Section */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Projects Delivery & Team Workload */}
@@ -335,7 +463,7 @@ export default function PmDashboard() {
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 bg-slate-50/50">
             <div>
               <h2 className="font-semibold text-slate-900 text-sm">Escalation Alerts</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Open blockers and extension requests from teams.</p>
+              <p className="mt-0.5 text-xs text-slate-500">Open blockers and issues requiring PM intervention.</p>
             </div>
             <Link to={PATHS.PM.ESCALATIONS} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
               Inbox →
@@ -366,6 +494,37 @@ export default function PmDashboard() {
           )}
         </div>
       </section>
+
+      {/* Review Queue Action Modals */}
+      <SendBackTaskModal
+        task={sendBackTaskTarget}
+        isOpen={Boolean(sendBackTaskTarget)}
+        onClose={() => setSendBackTaskTarget(null)}
+        onConfirm={handleConfirmSendBack}
+        sending={sendingBack}
+        error={sendBackError}
+        reason={sendBackReason}
+        onReasonChange={setSendBackReason}
+      />
+
+      <RejectExtensionModal
+        extension={rejectExtTarget}
+        isOpen={rejectExtModalOpen}
+        onClose={() => setRejectExtModalOpen(false)}
+        onConfirm={handleConfirmRejectExtension}
+        rejecting={rejectingExt}
+        error={rejectExtError}
+        reason={rejectExtReason}
+        onReasonChange={setRejectExtReason}
+      />
+
+      {toast.visible && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast((curr) => ({ ...curr, visible: false }))}
+        />
+      )}
     </div>
   );
 }

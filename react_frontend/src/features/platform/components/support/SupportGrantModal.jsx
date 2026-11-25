@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, ShieldCheck, Clock } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { useCompanyOptions } from '../../hooks/useCompanies';
 import { useToast } from '../../../../shared/components/Toast';
 
 export function SupportGrantModal({ isOpen, preselectedCompanyId, onClose, onConfirm }) {
   const toast = useToast();
-  const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState('');
+  const { companies: allCompanies } = useCompanyOptions(isOpen && !preselectedCompanyId);
+  const companies = useMemo(() => allCompanies.filter((c) => c.status !== 'Closed'), [allCompanies]);
+  const [chosenCompanyId, setChosenCompanyId] = useState('');
+  // The preselected company, else the user's choice, else the first open company.
+  const companyId = preselectedCompanyId
+    || (companies.some((c) => c.id === chosenCompanyId) ? chosenCompanyId : companies[0]?.id || '');
+  const setCompanyId = setChosenCompanyId;
   const [reason, setReason] = useState('');
   const [durationHours, setDurationHours] = useState(4);
   const [submitting, setSubmitting] = useState(false);
@@ -15,19 +20,9 @@ export function SupportGrantModal({ isOpen, preselectedCompanyId, onClose, onCon
     if (isOpen) {
       setReason('');
       setDurationHours(4);
-      if (preselectedCompanyId) {
-        setCompanyId(preselectedCompanyId);
-      } else {
-        apiClient('/api/platform/companies?pageSize=100')
-          .then((res) => {
-            const list = (res?.items || []).filter((c) => c.status !== 'Closed');
-            setCompanies(list);
-            if (list[0]) setCompanyId(list[0].id);
-          })
-          .catch((err) => console.error('Failed to load companies:', err));
-      }
+      setChosenCompanyId('');
     }
-  }, [isOpen, preselectedCompanyId]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

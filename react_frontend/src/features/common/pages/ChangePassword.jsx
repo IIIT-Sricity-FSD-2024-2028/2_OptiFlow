@@ -11,6 +11,8 @@ import { Button } from "../../../shared/components/Button";
 // so the route guards send flagged users here before any dashboard loads.
 export default function ChangePassword() {
   const { user, changePassword, logout } = useAuth();
+  const isPlatform = Boolean(user?.isPlatform);
+  const minLength = isPlatform ? 10 : 8;
   const toast = useToast();
   const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -25,7 +27,7 @@ export default function ChangePassword() {
     e.preventDefault();
     setError("");
     if (!currentPassword) return setError("Enter the temporary password you were given.");
-    if (newPassword.length < 8) return setError("The new password must be at least 8 characters long.");
+    if (newPassword.length < minLength) return setError(`The new password must be at least ${minLength} characters long.`);
     if (newPassword === currentPassword) return setError("Choose a password different from the temporary one.");
     if (newPassword !== confirm) return setError("The two new passwords do not match.");
     setSaving(true);
@@ -79,7 +81,7 @@ export default function ChangePassword() {
               autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              minLength={8}
+              minLength={minLength}
               disabled={saving}
               required
             />
@@ -90,7 +92,7 @@ export default function ChangePassword() {
               autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              minLength={8}
+              minLength={minLength}
               disabled={saving}
               required
             />
@@ -102,7 +104,7 @@ export default function ChangePassword() {
 
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span className="flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> At least 8 characters
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> At least {minLength} characters
           </span>
           <button type="button" onClick={logout} className="font-semibold text-slate-600 hover:text-slate-900">
             Sign out

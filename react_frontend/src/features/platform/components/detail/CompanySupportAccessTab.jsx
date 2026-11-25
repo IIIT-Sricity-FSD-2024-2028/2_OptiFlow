@@ -1,12 +1,14 @@
 import { useState } from 'react';
+import { useDispatch } from 'react-redux';
 import { ShieldAlert, Plus, Clock, UserCheck, ShieldCheck } from 'lucide-react';
 import { Badge } from '../../../../shared/components/Badge';
-import { apiClient } from '../../../../services/api/client';
+import { createSupportGrant, revokeSupportGrant } from '../../../../store/platformSupportAccess';
 import { formatRelativeExpiry } from '../../utils/relativeDate';
 import { SupportGrantModal } from '../support/SupportGrantModal';
 import { SupportRevokeDialog } from '../support/SupportRevokeDialog';
 
 export function CompanySupportAccessTab({ company, onRefresh }) {
+  const dispatch = useDispatch();
   const grants = company.supportAccesses || [];
   const isClosedCompany = company.status === 'Closed';
 
@@ -21,15 +23,13 @@ export function CompanySupportAccessTab({ company, onRefresh }) {
   };
 
   const handleCreateGrant = async (payload) => {
-    await apiClient('/api/platform/support-access', { method: 'POST', body: payload });
+    await dispatch(createSupportGrant(payload)).unwrap();
     if (onRefresh) onRefresh();
-    else window.location.reload();
   };
 
   const handleRevoke = async (id) => {
-    await apiClient(`/api/platform/support-access/${id}/revoke`, { method: 'POST' });
+    await dispatch(revokeSupportGrant(id)).unwrap();
     if (onRefresh) onRefresh();
-    else window.location.reload();
   };
 
   return (

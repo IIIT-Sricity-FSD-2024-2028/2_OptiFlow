@@ -3,16 +3,20 @@ import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/FormField';
 import { StatusBadge } from './StatusBadge';
 import { CheckCircle2, Circle } from 'lucide-react';
+import { deadlineInput } from './dateLimits';
 
 export function SubtaskList({
   subtasks = [],
   readOnly = false,
   onStatusToggle,
   onSubmitSubtask,
+  onRequestExtension,
+  extensionRequests = [],
   submittedSubtaskIds = new Set(),
   onAddSubtask,
   onDeleteSubtask,
   currentUserId,
+  members = [],
 }) {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -30,7 +34,10 @@ export function SubtaskList({
     }
   };
 
-  const doneCount = subtasks.filter(st => String(st.status || '').toLowerCase().includes('complete') || String(st.status || '').toLowerCase().includes('review')).length;
+  const doneCount = subtasks.filter(st => {
+    const s = String(st.status || '').toLowerCase();
+    return s.includes('complete') || s.includes('review');
+  }).length;
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
@@ -52,35 +59,69 @@ export function SubtaskList({
         </div>
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="p-4">
         {subtasks.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-4">No subtasks defined for this deliverable.</p>
+          <p className="text-xs text-slate-400 italic text-center py-4">No subtasks defined yet.</p>
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {subtasks.map((subtask) => {
-              const subId = subtask.id || subtask.subtaskId;
+          <ul className="space-y-2">
+            {subtasks.map((subtask, index) => {
+              const subId = subtask.id || subtask.subtaskId || index;
               const status = String(subtask.status || '').toLowerCase();
               const isCompleted = status.includes('complete');
-              const isInReview = ['in_review', 'pending_tl_review'].includes(status);
+              const isInReview = ['in_review', 'pending_tl_review'].includes(status) || submittedSubtaskIds.has(subId);
+              
+              const assigneeId = subtask.assignedToId || subtask.assignedTo?.id || (typeof subtask.assignedTo === 'string' ? subtask.assignedTo : null);
+              const isMine = !currentUserId || String(assigneeId) === String(currentUserId);
               // One-step submit: the assignee sends an open subtask to In_Review; only the
               // Team Lead or PM can mark it Completed (or send it back to Active).
-              const assigneeId = subtask.assignedToId || subtask.assignedTo?.id;
-              const isMine = !currentUserId || String(assigneeId) === String(currentUserId);
+              const subTitle = (subtask.title || '').trim().toLowerCase();
+              const hasExtensionRequested = Boolean(subTitle) && extensionRequests.some(
+                (e) => (
+                  e.title?.toLowerCase().includes(`subtask extension request: ${subTitle}`) ||
+                  e.description?.toLowerCase().includes(`subtask: "${subTitle}"`) ||
+                  (e.description?.toLowerCase().includes('subtask:') && e.description?.toLowerCase().includes(subTitle))
+                )
+              );
               const canSubmit = isMine && !isCompleted && !isInReview && !submittedSubtaskIds.has(subId);
+              const canRequestExtension = isMine && !isCompleted && !isInReview && !hasExtensionRequested && onRequestExtension;
+
+              const assignedUser = members.find(
+                (m) => String(m.id || m.userId) === String(subtask.assignedToId || subtask.assignedTo)
+              );
+              const assigneeDisplayName =
+                subtask.assignedToName ||
+                (typeof subtask.assignedTo === 'object'
+                  ? subtask.assignedTo?.fullName || subtask.assignedTo?.name
+                  : null) ||
+                assignedUser?.fullName ||
+                assignedUser?.name ||
+                (typeof subtask.assignedTo === 'string' && !subtask.assignedTo.includes('-')
+                  ? subtask.assignedTo
+                  : null);
 
               return (
-                <li key={subId} className="py-3 flex items-start gap-3">
+                <li
+                  key={subId}
+                  className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${
+                    isCompleted
+                      ? 'bg-emerald-50/40 border-emerald-100'
+                      : isInReview
+                      ? 'bg-purple-50/40 border-purple-100'
+                      : 'bg-white border-slate-100 hover:border-slate-200'
+                  }`}
+                >
+                  {/* Status Toggle — only for assigned user or leads */}
                   {!readOnly && onStatusToggle && (() => {
-                    const assignedId = subtask.assignedToId || subtask.assignedTo?.id;
-                    const canToggle = !currentUserId || !assignedId || String(assignedId) === String(currentUserId);
+                    const canToggle = !currentUserId || !assigneeId || String(assigneeId) === String(currentUserId);
                     return canToggle ? (
                       <button
                         type="button"
                         onClick={() => onStatusToggle(subId, !isCompleted)}
                         className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                        title={isCompleted ? 'Mark incomplete' : 'Mark complete'}
                       >
                         {isCompleted || isInReview ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <CheckCircle2 className={`w-4 h-4 ${isCompleted ? 'text-emerald-600' : 'text-purple-500'}`} />
                         ) : (
                           <Circle className="w-4 h-4 text-slate-300" />
                         )}
@@ -88,14 +129,14 @@ export function SubtaskList({
                     ) : (
                       <div className="mt-0.5">
                         {isCompleted || isInReview ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <CheckCircle2 className={`w-4 h-4 ${isCompleted ? 'text-emerald-600' : 'text-purple-500'}`} />
                         ) : (
                           <Circle className="w-4 h-4 text-slate-300" />
                         )}
                       </div>
                     );
                   })()}
-                  {!onStatusToggle && onSubmitSubtask && (
+                  {!onStatusToggle && (
                     <div className="mt-0.5">
                       {isCompleted || isInReview ? (
                         <CheckCircle2 className={`w-4 h-4 ${isCompleted ? 'text-emerald-600' : 'text-purple-500'}`} />
@@ -113,14 +154,16 @@ export function SubtaskList({
                     >
                       {subtask.title}
                     </p>
-                    {(subtask.assignedTo || subtask.assignedToName) && (
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Assigned to:{' '}
-                        {typeof subtask.assignedTo === 'object'
-                          ? subtask.assignedTo?.fullName || subtask.assignedTo?.name
-                          : subtask.assignedTo || subtask.assignedToName}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[11px] text-slate-400">
+                      {assigneeDisplayName && (
+                        <span>Assigned to: {assigneeDisplayName}</span>
+                      )}
+                      {(subtask.dueDate || subtask.deadline) && (
+                        <span>
+                          {assigneeDisplayName ? '•' : ''} Due: {deadlineInput(subtask.dueDate || subtask.deadline)}
+                        </span>
+                      )}
+                    </div>
                     {subtask.reviewComment && !isCompleted && !isInReview && (
                       <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900" role="note">
                         <span className="font-semibold">Sent back for changes: </span>
@@ -131,15 +174,31 @@ export function SubtaskList({
 
                   <div className="flex items-center gap-2">
                     <StatusBadge status={subtask.status || (isCompleted ? 'Completed' : 'Active')} />
-                    {/* Submit for Review button — shown when completed but not yet submitted this session */}
+                    {/* Submit for Review button — shown when open and not yet submitted */}
                     {!readOnly && onSubmitSubtask && canSubmit && (
                       <button
                         type="button"
                         onClick={() => onSubmitSubtask(subId)}
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors whitespace-nowrap"
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors whitespace-nowrap cursor-pointer"
                         title="Send this subtask to your Team Lead for review"
                       >
                         Submit for review
+                      </button>
+                    )}
+                    {/* Member Subtask Extension Button / Status */}
+                    {!readOnly && hasExtensionRequested && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                        Extension Requested
+                      </span>
+                    )}
+                    {!readOnly && canRequestExtension && (
+                      <button
+                        type="button"
+                        onClick={() => onRequestExtension(subtask)}
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors whitespace-nowrap cursor-pointer"
+                        title="Request deadline extension for this subtask from your Team Lead"
+                      >
+                        Request Extension
                       </button>
                     )}
                     {isInReview && (

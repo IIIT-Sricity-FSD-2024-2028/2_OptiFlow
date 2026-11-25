@@ -76,10 +76,20 @@ export default function TeamLeadTaskDetail() {
     ));
     return { hasRules: open.length > 0, evidenceBlocked: open.length > 0 };
   }, [violations, taskId]);
+  // Every user (main's allUsers): resolves subtask assignee names beyond the assignable members.
+  const allUsers = users;
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   // Subtasks live in the task row; the tasks slice keeps them in step with subtask changes.
-  const subtasks = Array.isArray(task?.subtasks) ? task.subtasks : [];
+  const userMap = new Map((allUsers.length ? allUsers : members).map((u) => [String(u.id), u.fullName || u.name]));
+  const subtasks = (Array.isArray(task?.subtasks) ? task.subtasks : []).map((st) => {
+    const assigneeName = userMap.get(String(st.assignedToId || st.assignedTo));
+    return assigneeName && !st.assignedToName ? { ...st, assignedToName: assigneeName } : st;
+  });
+
+  const totalSubtasks = subtasks.length;
+  const completedSubtasks = subtasks.filter((st) => String(st.status || '').toLowerCase().includes('complete')).length;
+  const allSubtasksComplete = totalSubtasks === 0 || completedSubtasks === totalSubtasks;
 
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitNotes, setSubmitNotes] = useState('');
@@ -157,6 +167,10 @@ export default function TeamLeadTaskDetail() {
 
   const handleSubmitWork = async (e) => {
     e?.preventDefault();
+    if (!allSubtasksComplete) {
+      showToast('error', `Cannot submit task: all subtasks are not complete (${completedSubtasks}/${totalSubtasks} completed).`);
+      return;
+    }
     if (compliance.evidenceBlocked && taskEvidence.length === 0 && !submitFile) {
       showToast('error', 'Compliance requires an evidence deliverable. Please attach a document.');
       return;
@@ -339,8 +353,9 @@ export default function TeamLeadTaskDetail() {
             <div className="flex justify-end -mb-4 relative z-10 pr-2">
               <Button variant="outline" onClick={() => { setSubtaskError(''); setSubtaskOpen(true); }}>+ Add Subtask</Button>
             </div>
-            <SubtaskList 
+            <SubtaskList
               subtasks={subtasks}
+              members={allUsers.length > 0 ? allUsers : members}
               readOnly={false}
               currentUserId={user.id}
               onStatusToggle={(subId, markComplete) =>
@@ -360,17 +375,30 @@ export default function TeamLeadTaskDetail() {
             <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 {task.status !== 'Completed' && task.status !== 'In_Review' && (
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      setSubmitNotes('');
-                      setSubmitFile(null);
-                      setSubmitFileTitle('');
-                      setSubmitOpen(true);
-                    }}
-                  >
-                    Submit Work for Review →
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      variant="primary"
+                      disabled={!allSubtasksComplete}
+                      title={!allSubtasksComplete ? 'All subtasks are not complete' : undefined}
+                      onClick={() => {
+                        if (!allSubtasksComplete) {
+                          showToast('warning', `All subtasks are not complete (${completedSubtasks}/${totalSubtasks} completed). Complete all subtasks before submitting the task.`);
+                          return;
+                        }
+                        setSubmitNotes('');
+                        setSubmitFile(null);
+                        setSubmitFileTitle('');
+                        setSubmitOpen(true);
+                      }}
+                    >
+                      Submit Work for Review →
+                    </Button>
+                    {!allSubtasksComplete && (
+                      <span className="text-xs text-amber-700 font-semibold bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
+                        All subtasks are not complete ({completedSubtasks}/{totalSubtasks} completed)
+                      </span>
+                    )}
+                  </div>
                 )}
                 {task.status === 'In_Review' && (
                   <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shadow-xs">
@@ -431,6 +459,9 @@ export default function TeamLeadTaskDetail() {
         submitting={submittingWork}
         compliance={compliance}
         taskEvidence={taskEvidence}
+        allSubtasksComplete={allSubtasksComplete}
+        completedSubtasks={completedSubtasks}
+        totalSubtasks={totalSubtasks}
         file={submitFile}
         onFileChange={setSubmitFile}
         fileTitle={submitFileTitle}

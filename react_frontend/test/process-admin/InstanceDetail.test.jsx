@@ -36,20 +36,14 @@ it('handles an empty response', async () => {
   await screen.findByText(/Process instance could not be found/);
 });
 
-it('preserves a rejected step, then refreshes the parent after approval succeeds', async () => {
+it('renders active instance steps in read-only mode without approve or reject actions', async () => {
   const step = { id: 's', processInstanceId: 'row', status: 'Pending', templateStep: { name: 'Review' } };
   const instance = { id: 'row', title: 'Review run', status: 'Active', currentStepId: 's', steps: [step] };
-  const approved = { ...step, status: 'Approved' };
-  api.getInstance.mockResolvedValueOnce(instance).mockResolvedValueOnce({
-    ...instance, status: 'Completed', currentStepId: null, steps: [approved],
-  });
-  api.actionStep.mockRejectedValueOnce(new Error('Step is blocked')).mockResolvedValueOnce(approved);
+  api.getInstance.mockResolvedValueOnce(instance);
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: /Approve/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm Approved' }));
-  await screen.findByText('Step is blocked');
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm Approved' }));
-  await screen.findByText('Completed');
-  expect(api.actionStep).toHaveBeenLastCalledWith('s', { status: 'Approved', comment: undefined },
-    expect.objectContaining({ signal: expect.anything() }));
+  await screen.findByText('Review');
+  expect(screen.getByText('Active Step')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Approve/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Reject/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Abort/i })).not.toBeInTheDocument();
 });

@@ -51,7 +51,15 @@ export async function listComplianceBindings(req, res, next) {
     const bindings = await prisma.complianceBinding.findMany({
       where,
       include: {
-        rule: true,
+        rule: {
+          include: {
+            category: {
+              include: {
+                owner: { select: { id: true, fullName: true, email: true } },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -78,7 +86,15 @@ export async function getComplianceBindingById(req, res, next) {
         },
       },
       include: {
-        rule: true,
+        rule: {
+          include: {
+            category: {
+              include: {
+                owner: { select: { id: true, fullName: true, email: true } },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -124,7 +140,15 @@ export async function createComplianceBinding(req, res, next) {
         companyId: req.user.companyId,
       },
       include: {
-        rule: true,
+        rule: {
+          include: {
+            category: {
+              include: {
+                owner: { select: { id: true, fullName: true, email: true } },
+              },
+            },
+          },
+        },
       },
     });
 

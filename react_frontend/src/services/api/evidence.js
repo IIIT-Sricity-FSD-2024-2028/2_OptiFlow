@@ -67,8 +67,10 @@ export const exportCsv = async ({ signal } = {}) => {
     if (err?.name === 'AbortError') throw new ApiError('Request cancelled', { code: 'ABORTED' });
     throw new ApiError('Cannot reach the server. Check your connection and try again.', { code: 'NETWORK_ERROR' });
   }
-  if (!response.ok) {
-    throw new ApiError('Failed to export evidence data', { status: response.status });
+  // An HTML body means the request reached the app shell (e.g. a dev proxy miss), not the API.
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || contentType.includes('text/html')) {
+    throw new ApiError('Failed to export evidence data: invalid response from server', { status: response.status });
   }
   return response.blob();
 };

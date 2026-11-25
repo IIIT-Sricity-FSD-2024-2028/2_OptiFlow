@@ -8,10 +8,6 @@ import {
   selectProcessTemplateDetailRequest,
   selectProcessTemplateMutation,
 } from '../../../store/processTemplates';
-import {
-  createProcessInstance,
-  selectCreatingProcessInstance,
-} from '../../../store/processInstances';
 import { PATHS } from '../../../app/paths';
 import { Button } from '../../../shared/components/Button';
 import { Badge } from '../../../shared/components/Badge';
@@ -61,7 +57,6 @@ function TemplateForm({ template }) {
   const [isActive, setIsActive] = useState(Boolean(template.isActive));
   const [steps, setSteps] = useState(() => draftSteps(template.steps));
   const saving = useSelector(state => selectProcessTemplateMutation(state, 'update:' + id)?.status === 'loading');
-  const launching = useSelector(selectCreatingProcessInstance);
   const [feedback, setFeedback] = useState(null);
 
   const hasActiveInstances = Boolean(
@@ -167,18 +162,6 @@ function TemplateForm({ template }) {
     }
   };
 
-  const handleLaunchDirect = async () => {
-    try {
-      const res = await dispatch(createProcessInstance({ templateId: id })).unwrap();
-      const instanceId = res?.id || res?.data?.id;
-      if (instanceId) {
-        navigate(PATHS.PROCESS_ADMIN.INSTANCE_DETAIL.replace(':id', instanceId));
-      }
-    } catch (err) {
-      setFeedback({ type: 'error', message: err.message || 'Failed to launch instance' });
-    }
-  };
-
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       {/* Top Navigation & Status Bar */}
@@ -200,13 +183,6 @@ function TemplateForm({ template }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            onClick={handleLaunchDirect}
-            disabled={launching || saving || steps.length === 0 || !isActive}
-          >
-            {launching ? 'Launching...' : '▶ Launch Instance'}
-          </Button>
           <Button
             variant="primary"
             onClick={handleSave}

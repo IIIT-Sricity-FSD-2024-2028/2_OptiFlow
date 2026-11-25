@@ -1,30 +1,18 @@
-import { useState, useEffect } from 'react';
 import { History, User, Calendar, MessageSquare, ArrowRight } from 'lucide-react';
-import { apiClient } from '../../../../services/api/client';
+import { useScopedAuditLogs } from '../../hooks/useAuditLogs';
 
 export function SubscriptionAuditHistory({ subscriptionId }) {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    if (!subscriptionId) return;
-
-    setLoading(true);
-    apiClient(`/api/platform/audit-logs?entityType=Subscription&entityId=${subscriptionId}`)
-      .then((res) => {
-        if (isMounted) setLogs(res?.items || []);
-      })
-      .catch((err) => console.error('Failed to load subscription audit logs:', err))
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-
-    return () => { isMounted = false; };
-  }, [subscriptionId]);
+  const { logs, loading, error } = useScopedAuditLogs(
+    { entityType: 'Subscription', entityId: subscriptionId },
+    { enabled: Boolean(subscriptionId) },
+  );
 
   if (loading) {
     return <div className="text-xs text-slate-400 py-3">Loading change history...</div>;
+  }
+
+  if (error) {
+    return <div className="text-xs text-red-600 py-3">Could not load change history: {error}</div>;
   }
 
   if (logs.length === 0) {

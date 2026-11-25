@@ -61,6 +61,15 @@ export async function assertWithinPlanLimit(companyId, resource, { adding = 1, c
   }
 }
 
+/** What the company uses now, counted the way the tenant-side limits count it. */
+export async function countPlanUsage(companyId, client = prisma) {
+  const out = {};
+  for (const [key, def] of Object.entries(RESOURCES)) {
+    out[key] = await def.count(companyId, client);
+  }
+  return out;
+}
+
 /** Usage vs limits snapshot, e.g. for a future "Plan and usage" page. */
 export async function getPlanUsage(companyId) {
   const out = {};

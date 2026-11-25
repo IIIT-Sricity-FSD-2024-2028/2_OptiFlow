@@ -30,3 +30,32 @@ describe("auth service", () => {
     expect(apiClient.mock.calls[0][1]).toMatchObject({ method: "POST", skipAuthRedirect: true });
   });
 });
+describe("setPassword", () => {
+  it("does not redirect on 401", async () => {
+    await authApi.setPassword({ token: "t", password: "longenough1" });
+    expect(apiClient).toHaveBeenCalledWith(
+      "/auth/set-password",
+      expect.objectContaining({ method: "POST", skipAuthRedirect: true }),
+    );
+  });
+});
+
+describe("changePassword", () => {
+  it("posts the current and new password without redirecting on 401", async () => {
+    await authApi.changePassword({ currentPassword: "old", newPassword: "newlongpass1" });
+    expect(apiClient).toHaveBeenCalledWith(
+      "/auth/change-password",
+      expect.objectContaining({ method: "POST", body: { currentPassword: "old", newPassword: "newlongpass1" }, skipAuthRedirect: true }),
+    );
+  });
+});
+
+describe("platformChangePassword", () => {
+  it("posts to the platform endpoint", async () => {
+    await authApi.platformChangePassword({ currentPassword: "old", newPassword: "newlongpass12" });
+    expect(apiClient).toHaveBeenCalledWith(
+      "/platform/auth/change-password",
+      expect.objectContaining({ method: "POST", body: { currentPassword: "old", newPassword: "newlongpass12" }, skipAuthRedirect: true }),
+    );
+  });
+});
