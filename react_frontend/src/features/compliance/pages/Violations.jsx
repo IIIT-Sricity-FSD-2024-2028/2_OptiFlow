@@ -87,6 +87,7 @@ export default function ComplianceViolations() {
   const handleCheckSlas = async () => {
     try {
       setIsCheckingSla(true);
+      setError(null);
       await apiClient.post("/api/compliance-violations/check-slas");
       dispatch(fetchComplianceViolations({ force: true }));
     } catch (err) {
