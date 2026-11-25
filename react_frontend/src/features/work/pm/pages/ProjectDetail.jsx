@@ -19,6 +19,7 @@ import * as usersApi from '../../../../services/api/users';
 import * as complianceApi from '../../../../services/api/compliance';
 import { ComplianceOverviewModal, CreateProjectTaskModal, TaskReviewDrawer } from '../components/ProjectDetailPanels';
 import { formatDate } from '../components/formatDate';
+import { todayInput } from '../../components/dateLimits';
 
 const STATUSES = ['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'];
 const TASK_PAGE_SIZE = 10;
@@ -207,6 +208,23 @@ export default function PmProjectDetail() {
     if (!taskForm.title.trim()) {
       setTaskError('Enter a task title.');
       return;
+    }
+
+    if (taskForm.dueDate) {
+      if (taskForm.dueDate < todayInput()) {
+        setTaskError('Task due date cannot be in the past.');
+        return;
+      }
+      const projectTarget = project?.targetDate ? String(project.targetDate).slice(0, 10) : null;
+      if (projectTarget && taskForm.dueDate > projectTarget) {
+        setTaskError(`Task due date cannot be after the project deadline (${projectTarget}).`);
+        return;
+      }
+      const projectStart = project?.startDate ? String(project.startDate).slice(0, 10) : null;
+      if (projectStart && taskForm.dueDate < projectStart) {
+        setTaskError(`Task due date cannot be before the project start date (${projectStart}).`);
+        return;
+      }
     }
 
     setSavingTask(true);
@@ -530,6 +548,8 @@ export default function PmProjectDetail() {
         error={taskError}
         form={taskForm}
         onFormChange={setTaskForm}
+        projectStartDate={project?.startDate}
+        projectTargetDate={project?.targetDate}
       />
 
       <TaskReviewDrawer

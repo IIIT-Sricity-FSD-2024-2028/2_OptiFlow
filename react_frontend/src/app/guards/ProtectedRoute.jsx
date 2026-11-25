@@ -23,6 +23,15 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
 
   const isPlatformUser = Boolean(user.isPlatform || user.role === ROLES.PLATFORM_ADMIN);
 
+  // 1b. A temporary password (a company owner provisioned by a platform admin, a user created by
+  //     HR, a new platform administrator) must be replaced before anything else; the server
+  //     refuses every other request until then. The change-password page itself is rendered for
+  //     everyone, platform admins included, so it must not be bounced by the area checks below.
+  if (user.mustChangePassword) {
+    if (location.pathname === PATHS.COMMON.CHANGE_PASSWORD) return <Outlet />;
+    return <Navigate to={PATHS.COMMON.CHANGE_PASSWORD} replace />;
+  }
+
   // 2. Is this a platform route but the user is a standard tenant? Kick to unauthorized
   if (isPlatform && !isPlatformUser) {
     return <Navigate to={PATHS.COMMON.UNAUTHORIZED} replace />;
@@ -34,12 +43,6 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
       return <Navigate to={PATHS.PLATFORM.PROFILE} replace />;
     }
     return <Navigate to={PATHS.PLATFORM.DASHBOARD} replace />;
-  }
-
-  // 4. Admin-created or reset password still in use? The API refuses everything else until it is
-  //    replaced (403 PASSWORD_CHANGE_REQUIRED), so finish that step first.
-  if (!isPlatformUser && user.mustChangePassword && location.pathname !== PATHS.COMMON.CHANGE_PASSWORD) {
-    return <Navigate to={PATHS.COMMON.CHANGE_PASSWORD} replace />;
   }
 
   // 5. Do they have the right role for this specific route?

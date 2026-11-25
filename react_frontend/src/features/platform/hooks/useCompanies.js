@@ -1,16 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiClient } from '../../../services/api/client';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useDispatch } from 'react-redux';
+import { compactQuery } from '../../../services/api/platform';
+import {
+  fetchCompanies,
+  updateCompany,
+  selectCompaniesEntry,
+} from '../../../store/platformCompanies';
+import { useKeyedList } from './useKeyedList';
 
+// Filters, paging and search stay here (they are this page's own state); the rows live in the store.
 export function useCompanies(initialPageSize = 10) {
-  const [companies, setCompanies] = useState([]);
-  const [total, setTotal] = useState(0);
+  const dispatch = useDispatch();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const debounceTimerRef = useRef(null);
 
@@ -30,48 +35,25 @@ export function useCompanies(initialPageSize = 10) {
     setPage(1);
   };
 
-  const fetchCompanies = useCallback(async (isInitial = false) => {
-    try {
-      if (!isInitial) setLoading(true);
-      setError(null);
+  const query = useMemo(
+    () => compactQuery({ page, pageSize, q: debouncedSearch, status: statusFilter }),
+    [page, pageSize, debouncedSearch, statusFilter],
+  );
 
-      const params = new URLSearchParams();
-      params.append('page', String(page));
-      params.append('pageSize', String(pageSize));
-      if (debouncedSearch.trim()) params.append('q', debouncedSearch.trim());
-      if (statusFilter && statusFilter !== 'All') params.append('status', statusFilter);
+  const { items, total, loading, error, refetch } = useKeyedList({
+    fetchList: fetchCompanies,
+    selectEntry: selectCompaniesEntry,
+    query,
+  });
 
-      const res = await apiClient(`/api/platform/companies?${params.toString()}`);
-      setCompanies(res?.items || []);
-      setTotal(res?.total || 0);
-    } catch (err) {
-      console.error('Failed to fetch companies:', err);
-      setError(err.message || 'Failed to load companies');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, debouncedSearch, statusFilter]);
-
-  useEffect(() => {
-    fetchCompanies(true);
-  }, [fetchCompanies]);
-
+  // The slice marks the list stale after the write, and useKeyedList fetches it again.
   const updateCompanyStatus = async (companyId, newStatus) => {
-    try {
-      await apiClient(`/api/platform/companies/${companyId}`, {
-        method: 'PATCH',
-        body: { status: newStatus },
-      });
-      await fetchCompanies();
-      return { success: true };
-    } catch (err) {
-      console.error(`Failed to update company ${companyId} status:`, err);
-      throw err;
-    }
+    await dispatch(updateCompany({ id: companyId, body: { status: newStatus } })).unwrap();
+    return { success: true };
   };
 
   return {
-    companies,
+    companies: items,
     total,
     page,
     setPage,
@@ -83,7 +65,22 @@ export function useCompanies(initialPageSize = 10) {
     setStatusFilter: handleStatusChange,
     loading,
     error,
-    refetch: fetchCompanies,
+    refetch,
     updateCompanyStatus,
   };
+}
+
+// Companies for a dropdown or a filter (the first 100). Its own cache entry, so it never
+// replaces the page the Companies table is showing. `enabled` = false does not fetch.
+const OPTIONS_QUERY = { pageSize: '100' };
+
+export function useCompanyOptions(enabled = true) {
+  const { items, loading, error } = useKeyedList({
+    fetchList: fetchCompanies,
+    selectEntry: selectCompaniesEntry,
+    query: OPTIONS_QUERY,
+    keepPrevious: false,
+    enabled,
+  });
+  return { companies: items, loading, error };
 }

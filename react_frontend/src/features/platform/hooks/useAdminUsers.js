@@ -1,17 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiClient } from '../../../services/api/client';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useDispatch } from 'react-redux';
+import { compactQuery } from '../../../services/api/platform';
+import {
+  fetchAdminUsers,
+  createAdminUser,
+  updateAdminUser,
+  resetAdminPassword,
+  selectAdminUsersEntry,
+} from '../../../store/platformAdminUsers';
+import { useKeyedList } from './useKeyedList';
+
+const EMPTY_SUMMARY = { total: 0, active: 0, inactive: 0 };
 
 export function useAdminUsers(initialPageSize = 10) {
-  const [admins, setAdmins] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState({ total: 0, active: 0, inactive: 0 });
+  const dispatch = useDispatch();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const debounceTimerRef = useRef(null);
 
@@ -24,74 +31,37 @@ export function useAdminUsers(initialPageSize = 10) {
     return () => clearTimeout(debounceTimerRef.current);
   }, [search]);
 
-  const fetchAdmins = useCallback(async (isInitial = false) => {
-    try {
-      if (!isInitial) setLoading(true);
-      setError(null);
+  const query = useMemo(
+    () => compactQuery({ page, pageSize, q: debouncedSearch, status: statusFilter }),
+    [page, pageSize, debouncedSearch, statusFilter],
+  );
 
-      const params = new URLSearchParams();
-      params.append('page', String(page));
-      params.append('pageSize', String(pageSize));
-      if (debouncedSearch.trim()) params.append('q', debouncedSearch.trim());
-      if (statusFilter && statusFilter !== 'All') params.append('status', statusFilter);
+  const { items, total, summary: serverSummary, loading, error, refetch } = useKeyedList({
+    fetchList: fetchAdminUsers,
+    selectEntry: selectAdminUsersEntry,
+    query,
+  });
 
-      const res = await apiClient(`/api/platform/admin-users?${params.toString()}`);
-      const items = res?.items || [];
-      const totalCount = res?.total ?? items.length;
-      setAdmins(items);
-      setTotal(totalCount);
-
-      const summaryData = res?.summary;
-      if (summaryData && (summaryData.total > 0 || summaryData.active > 0 || summaryData.inactive > 0)) {
-        setSummary(summaryData);
-      } else if (items.length > 0) {
-        const active = items.filter((a) => a.isActive).length;
-        setSummary({
-          total: totalCount,
-          active,
-          inactive: Math.max(0, totalCount - active),
-        });
-      }
-    } catch (err) {
-      console.error('Failed to fetch platform admin users:', err);
-      setError(err.message || 'Failed to load platform admin users');
-    } finally {
-      setLoading(false);
+  // Use the server's counts; when it sends none (or all zero) count the rows we have.
+  const summary = useMemo(() => {
+    if (serverSummary && (serverSummary.total > 0 || serverSummary.active > 0 || serverSummary.inactive > 0)) {
+      return serverSummary;
     }
-  }, [page, pageSize, debouncedSearch, statusFilter]);
+    if (items.length > 0) {
+      const active = items.filter((a) => a.isActive).length;
+      return { total, active, inactive: Math.max(0, total - active) };
+    }
+    return EMPTY_SUMMARY;
+  }, [serverSummary, items, total]);
 
-  useEffect(() => {
-    fetchAdmins(true);
-  }, [fetchAdmins]);
-
-  const createAdmin = async (payload) => {
-    const res = await apiClient('/api/platform/admin-users', {
-      method: 'POST',
-      body: payload,
-    });
-    await fetchAdmins();
-    return res;
-  };
-
-  const updateAdmin = async (id, payload) => {
-    const res = await apiClient(`/api/platform/admin-users/${id}`, {
-      method: 'PATCH',
-      body: payload,
-    });
-    await fetchAdmins();
-    return res;
-  };
-
-  const resetPassword = async (id) => {
-    const res = await apiClient(`/api/platform/admin-users/${id}/reset-password`, {
-      method: 'POST',
-    });
-    await fetchAdmins();
-    return res;
-  };
+  // The slice marks the list stale after a write, and useKeyedList fetches it again.
+  // The answers of create and reset carry the temporary password: they go straight to the caller.
+  const createAdmin = (payload) => dispatch(createAdminUser(payload)).unwrap();
+  const updateAdmin = (id, payload) => dispatch(updateAdminUser({ id, body: payload })).unwrap();
+  const resetPassword = (id) => dispatch(resetAdminPassword(id)).unwrap();
 
   return {
-    admins,
+    admins: items,
     total,
     summary,
     page,
@@ -104,7 +74,7 @@ export function useAdminUsers(initialPageSize = 10) {
     setStatusFilter: (val) => { setStatusFilter(val); setPage(1); },
     loading,
     error,
-    refetch: fetchAdmins,
+    refetch,
     createAdmin,
     updateAdmin,
     resetPassword,

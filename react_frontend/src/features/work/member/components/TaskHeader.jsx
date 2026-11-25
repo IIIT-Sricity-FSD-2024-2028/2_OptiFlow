@@ -136,14 +136,16 @@ export default function TaskHeader({
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             {!isCompleted && (
               <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onOpenExtensionModal}
-                  className="text-xs font-semibold"
-                >
-                  Request Extension
-                </Button>
+                {onOpenExtensionModal && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onOpenExtensionModal}
+                    className="text-xs font-semibold"
+                  >
+                    Request Extension
+                  </Button>
+                )}
 
                 <Button
                   variant="outline"

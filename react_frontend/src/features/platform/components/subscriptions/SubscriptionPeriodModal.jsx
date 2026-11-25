@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { X, Calendar, PlusCircle } from 'lucide-react';
 
+const dayOf = (d) => d.toISOString().split('T')[0];
+// Same rule the API applies: stored as the end of that day (UTC).
+const endOfDay = (day) => new Date(`${day}T23:59:59.999Z`);
+
 export function SubscriptionPeriodModal({
   isOpen,
   subscription,
@@ -24,6 +28,15 @@ export function SubscriptionPeriodModal({
 
   if (!isOpen || !subscription) return null;
 
+  const today = dayOf(new Date());
+  const maxDate = (() => {
+    const d = new Date();
+    d.setUTCFullYear(d.getUTCFullYear() + 5);
+    return dayOf(d);
+  })();
+  const currentDay = subscription.currentPeriodEnd ? dayOf(new Date(subscription.currentPeriodEnd)) : null;
+  const startDay = subscription.currentPeriodStart ? dayOf(new Date(subscription.currentPeriodStart)) : null;
+
   const handleApplyPreset = (days) => {
     const base = new Date(subscription.currentPeriodEnd || Date.now());
     base.setDate(base.getDate() + days);
@@ -36,6 +49,26 @@ export function SubscriptionPeriodModal({
     setFormError(null);
     if (!newDate) {
       setFormError('New period end date is required.');
+      return;
+    }
+    if (Number.isNaN(endOfDay(newDate).getTime())) {
+      setFormError('Enter a valid date.');
+      return;
+    }
+    if (newDate === currentDay) {
+      setFormError('That is already the current period end. Pick a different date.');
+      return;
+    }
+    if (endOfDay(newDate) <= new Date()) {
+      setFormError('The new period end must be today or later. To end the subscription now, cancel it instead.');
+      return;
+    }
+    if (startDay && newDate <= startDay) {
+      setFormError('The new period end must be after the period start.');
+      return;
+    }
+    if (newDate > maxDate) {
+      setFormError('The period end cannot be more than 5 years from today.');
       return;
     }
     if (!reason.trim()) {
@@ -80,7 +113,7 @@ export function SubscriptionPeriodModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 text-xs">
           <div>
             <label className="block font-semibold text-slate-700 mb-1">Quick Presets (Extension)</label>
             <div className="grid grid-cols-4 gap-2">
@@ -109,6 +142,8 @@ export function SubscriptionPeriodModal({
             <input
               type="date"
               required
+              min={today}
+              max={maxDate}
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl"

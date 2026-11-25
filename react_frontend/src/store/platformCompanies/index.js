@@ -1,4 +1,5 @@
-import { createStubSlice } from "../core/createStubSlice";
-
-// STUB: owner (M2) replaces this file with the real slice, thunks and selectors.
-export default createStubSlice("platformCompanies").reducer;
+// The only public import path for this slice. The default export is the reducer
+// (store/index.js registers it); thunks and selectors are named exports.
+export { default } from "./slice";
+export * from "./thunks";
+export * from "./selectors";

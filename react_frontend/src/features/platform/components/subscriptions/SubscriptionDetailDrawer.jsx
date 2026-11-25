@@ -72,9 +72,9 @@ export function SubscriptionDetailDrawer({ subscription, isOpen, onClose, onRequ
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={isClosed} onClick={() => onRequestAction('plan', subscription)} className="px-3 py-1.5 font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-40">Change Plan</button>
+            <button type="button" disabled={isClosed || subscription.status === 'Cancelled'} onClick={() => onRequestAction('plan', subscription)} className="px-3 py-1.5 font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-40">Change Plan</button>
             <button type="button" disabled={isClosed || subscription.status === 'Cancelled'} onClick={() => onRequestAction('status', subscription)} className="px-3 py-1.5 font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl disabled:opacity-40">Status</button>
-            <button type="button" disabled={isClosed} onClick={() => onRequestAction('period', subscription)} className="px-3 py-1.5 font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl disabled:opacity-40">Extend End</button>
+            <button type="button" disabled={isClosed || subscription.status === 'Cancelled'} onClick={() => onRequestAction('period', subscription)} className="px-3 py-1.5 font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl disabled:opacity-40">Extend End</button>
             <button type="button" disabled={isClosed || subscription.status === 'Cancelled'} onClick={() => onRequestAction('cancel', subscription)} className="px-3 py-1.5 font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl disabled:opacity-40">Cancel</button>
           </div>
 

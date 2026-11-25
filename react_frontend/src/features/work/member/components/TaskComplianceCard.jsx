@@ -16,12 +16,21 @@ export default function TaskComplianceCard({
   latestRejectedEvidence,
   isLockedOut,
   complianceRule,
+  complianceOfficer,
+  taskDueDate,
   getSlaTimeRemaining,
   onOpenEvidenceModal,
 }) {
   if (!primaryViolation && !isEvidenceRequired && !latestRejectedEvidence) {
     return null;
   }
+
+  const officer =
+    complianceOfficer ||
+    primaryViolation?.assignedOfficer ||
+    primaryViolation?.rule?.category?.owner ||
+    complianceRule?.category?.owner ||
+    null;
 
   return (
     <div
@@ -114,30 +123,26 @@ export default function TaskComplianceCard({
           <div className="mt-0.5 font-bold text-slate-900 flex items-center gap-1">
             <UserCheck size={13} className="text-blue-600" />
             <span>
-              {primaryViolation?.assignedOfficer?.fullName ||
-                primaryViolation?.rule?.assignedOfficer?.fullName ||
-                'Compliance Governance Office'}
+              {officer?.fullName || officer?.name || 'Compliance Officer'}
             </span>
           </div>
-          <a
-            href={`mailto:${
-              primaryViolation?.assignedOfficer?.email ||
-              primaryViolation?.rule?.assignedOfficer?.email ||
-              'compliance@optiflow.io'
-            }`}
-            className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5"
-          >
-            <Mail size={11} />
-            <span>
-              {primaryViolation?.assignedOfficer?.email ||
-                primaryViolation?.rule?.assignedOfficer?.email ||
-                'compliance@optiflow.io'}
-            </span>
-          </a>
+          {officer?.email ? (
+            <a
+              href={`mailto:${officer.email}`}
+              className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5"
+            >
+              <Mail size={11} />
+              <span>{officer.email}</span>
+            </a>
+          ) : (
+            <span className="text-[11px] text-slate-400 mt-0.5 block">Governance Department</span>
+          )}
         </div>
 
         <div>
-          <span className="text-slate-500 font-medium block">Remediation SLA Deadline:</span>
+          <span className="text-slate-500 font-medium block">
+            {primaryViolation ? 'Remediation SLA Deadline:' : 'Deliverable Evidence Deadline:'}
+          </span>
           {primaryViolation?.dueDate ? (
             <div className="mt-0.5">
               <span
@@ -155,13 +160,26 @@ export default function TaskComplianceCard({
               >
                 {isLockedOut
                   ? '⛔ Deadline Breached (Lockout active)'
-                  : getSlaTimeRemaining
-                  ? getSlaTimeRemaining(primaryViolation.dueDate)?.text || 'Pending evaluation'
-                  : 'Pending evaluation'}
+                  : primaryViolation.slaRemainingLabel ||
+                    (getSlaTimeRemaining
+                      ? getSlaTimeRemaining(primaryViolation.dueDate)?.text || 'Active SLA'
+                      : 'Active SLA')}
+              </span>
+            </div>
+          ) : taskDueDate ? (
+            <div className="mt-0.5">
+              <span className="font-bold flex items-center gap-1 text-slate-900">
+                <Clock size={13} className="text-blue-600" />
+                <span>{new Date(taskDueDate).toLocaleDateString()}</span>
+              </span>
+              <span className="text-[11px] font-semibold text-blue-700">
+                {getSlaTimeRemaining
+                  ? getSlaTimeRemaining(taskDueDate)?.text || 'Deliverable timeline active'
+                  : 'Deliverable timeline active'}
               </span>
             </div>
           ) : (
-            <span className="font-semibold text-slate-700 mt-0.5 block">Standard SLA Window</span>
+            <span className="font-semibold text-slate-700 mt-0.5 block">Standard Policy Window</span>
           )}
         </div>
 

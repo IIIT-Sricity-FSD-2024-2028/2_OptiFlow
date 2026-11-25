@@ -18,22 +18,11 @@ export function resolveTeamLead(user, allUsers = []) {
   }
 
   if (!myLeader) {
-    const userEmail = (user?.email || selfUser?.email || '').toLowerCase();
-    if (['member2@acme.com', 'member4@acme.com', 'member7@acme.com'].includes(userEmail)) {
-      myLeader = allUsers.find((u) => (u.email || '').toLowerCase() === 'tl2@acme.com') || { fullName: 'Lucas Scott' };
-    } else if (['employee@acme.com', 'member3@acme.com', 'member6@acme.com'].includes(userEmail)) {
-      myLeader = allUsers.find((u) => (u.email || '').toLowerCase() === 'tl@acme.com') || { fullName: 'Charlie Davis' };
-    } else if (userEmail === 'member5@acme.com') {
-      myLeader = allUsers.find((u) => (u.email || '').toLowerCase() === 'tl_devops@acme.com') || { fullName: 'Marcus Vance' };
-    }
-  }
-
-  if (!myLeader) {
     myLeader = allUsers.find((u) => {
-      const r = String(u.role || u.roleName || u.roleLabel || u.jobTitle || '').toLowerCase();
+      const r = String(u.role || u.roleName || u.roleLabel || u.roleSlug || u.jobTitle || '').toLowerCase();
       return r.includes('team_lead') || r.includes('team_leader') || r.includes('lead');
     });
   }
 
-  return myLeader || { fullName: 'Lucas Scott' };
+  return myLeader || { fullName: 'Team Lead' };
 }

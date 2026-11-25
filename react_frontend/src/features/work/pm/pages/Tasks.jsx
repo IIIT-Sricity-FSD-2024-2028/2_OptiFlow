@@ -29,6 +29,7 @@ import {
 import * as complianceApi from '../../../../services/api/compliance';
 import * as usersApi from '../../../../services/api/users';
 import { CreateTaskForm } from '../components/CreateTaskForm';
+import { todayInput } from '../../components/dateLimits';
 
 const normalize = (response) => Array.isArray(response) ? response : response?.data || [];
 const PAGE_SIZE = 10;
@@ -166,6 +167,23 @@ export default function PmTasks() {
     if (!form.title.trim() || !form.projectId) {
       setError('Enter a task title and select a target project.');
       return;
+    }
+
+    if (form.dueDate) {
+      if (form.dueDate < todayInput()) {
+        setError('Task due date cannot be in the past.');
+        return;
+      }
+      const projectTarget = selectedProjectForForm?.targetDate ? String(selectedProjectForForm.targetDate).slice(0, 10) : null;
+      if (projectTarget && form.dueDate > projectTarget) {
+        setError(`Task due date cannot be after the project deadline (${projectTarget}).`);
+        return;
+      }
+      const projectStart = selectedProjectForForm?.startDate ? String(selectedProjectForForm.startDate).slice(0, 10) : null;
+      if (projectStart && form.dueDate < projectStart) {
+        setError(`Task due date cannot be before the project start date (${projectStart}).`);
+        return;
+      }
     }
 
     setSaving(true);

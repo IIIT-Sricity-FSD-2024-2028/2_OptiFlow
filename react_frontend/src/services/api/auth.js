@@ -37,3 +37,7 @@ export const platformLogout = (options) =>
     credentials: "include",
     skipAuthRedirect: true,
   });
+
+// Platform administrator replaces a temporary password (the server requires at least 10 characters).
+export const platformChangePassword = ({ currentPassword, newPassword }, options) =>
+  apiClient("/platform/auth/change-password", { ...options, method: "POST", body: { currentPassword, newPassword }, skipAuthRedirect: true });

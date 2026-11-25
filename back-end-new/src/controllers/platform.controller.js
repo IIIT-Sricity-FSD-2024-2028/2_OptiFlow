@@ -47,6 +47,58 @@ function passwordField(value, field = "password") {
   return value;
 }
 
+/** Optional text: missing or empty becomes null, anything else must be text within the length. */
+function optionalText(value, field, max) {
+  if (value === undefined || value === null || value === "") return null;
+  return textField(value, field, { max });
+}
+
+/** Text from a request body: anything that is not a string counts as missing. */
+function asText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Date filter from the query string. A date-only end value ("2026-11-25") means the whole day,
+ * otherwise the filter would stop at midnight and drop that day's rows.
+ */
+function parseDateFilter(value, label, { endOfDay = false } = {}) {
+  const raw = String(value).trim();
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const parsed = new Date(dateOnly && endOfDay ? `${raw}T23:59:59.999Z` : raw);
+  if (isNaN(parsed.getTime())) {
+    throw new BadRequestError(`Invalid ${label} date format`);
+  }
+  return parsed;
+}
+
+/** One CSV cell. Text starting with = + - @ would run as a formula in Excel, so it gets a quote. */
+function csvCell(value) {
+  let text = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+const PLAN_FIT_CHECKS = [
+  { key: "users", field: "maxUsers", label: "active users" },
+  { key: "branches", field: "maxBranches", label: "branches" },
+  { key: "activeProcessTemplates", field: "maxActiveProcessTemplates", label: "active process templates" },
+  { key: "complianceRules", field: "maxComplianceRules", label: "compliance rules" },
+];
+
+/** A company cannot be moved onto a plan that is smaller than what it already uses. */
+async function assertUsageFitsPlan(companyId, plan) {
+  const usage = await countPlanUsage(companyId);
+  const over = PLAN_FIT_CHECKS.filter(
+    ({ key, field }) => plan[field] !== null && plan[field] !== undefined && usage[key] > plan[field],
+  ).map(({ key, field, label }) => `${label}: using ${usage[key]}, plan allows ${plan[field]}`);
+  if (over.length > 0) {
+    throw new BadRequestError(
+      `Cannot move this company to ${plan.name}, it uses more than the plan allows (${over.join("; ")})`,
+    );
+  }
+}
+
 /** Plan limit: null means unlimited, otherwise a whole number >= 0. */
 function planLimit(value, field) {
   if (value === null) return null;
@@ -69,6 +121,7 @@ import { writeAuditLog } from "../utils/platformAudit.js";
 import { buildSetPasswordLink } from "../utils/passwordTokens.js";
 import { sendOwnerInviteEmail } from "../services/email.service.js";
 import { invalidateCompanyAuthCache } from "../utils/companyAuthCache.js";
+import { countPlanUsage } from "../utils/planLimits.js";
 
 // ============================================================================
 // 1. PLATFORM ADMIN AUTHENTICATION
@@ -411,7 +464,7 @@ export async function getPlatformMetrics(req, res, next) {
       }),
       prisma.company.findMany({
         where: {
-          subscriptions: { none: {} },
+          status: { not: "Closed" }, subscriptions: { none: { status: { in: ["Active", "Trialing", "PastDue"] } } },
         },
         take: 5,
         orderBy: { createdAt: "desc" },
@@ -426,7 +479,7 @@ export async function getPlatformMetrics(req, res, next) {
 
     // Also get the total count of companies with no subscription for integrity indicator
     const noSubCompanyCount = await prisma.company.count({
-      where: { subscriptions: { none: {} } },
+      where: { status: { not: "Closed" }, subscriptions: { none: { status: { in: ["Active", "Trialing", "PastDue"] } } } },
     });
 
     // 6. Recent Activity from Platform Audit Log (10 entries)
@@ -526,7 +579,7 @@ export async function listPlatformCompanies(req, res, next) {
         include: {
           subscriptions: {
             include: { plan: true },
-            where: { status: { in: ["Active", "Trialing"] } },
+            where: { status: { in: ["Active", "Trialing", "PastDue"] } },
             orderBy: { currentPeriodEnd: "desc" },
           },
           _count: {
@@ -550,23 +603,29 @@ export async function listPlatformCompanies(req, res, next) {
  * Provision a new company: creates company + owner user + assigns system admin role + subscription in one transaction.
  * Generates a one-time set-password token and link, and writes a PlatformAuditLog row.
  */
+// 12 characters from an alphabet without look-alikes (no 0/O, 1/l/I), at least one of each class.
+function generateTemporaryPassword() {
+  const sets = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnpqrstuvwxyz", "23456789"];
+  const all = sets.join("");
+  const pick = (chars) => chars[crypto.randomInt(chars.length)];
+  const out = [...sets.map(pick), ...Array.from({ length: 9 }, () => pick(all))];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out.join("");
+}
+
 export async function createPlatformCompany(req, res, next) {
   try {
     const body = req.body || {};
-    const legalName = (
-      body.legalName ||
-      body.companyLegalName ||
-      body.name ||
-      ""
-    ).trim();
-    const ownerFullName = (body.ownerFullName || body.fullName || "").trim();
-    const ownerEmail = (body.ownerEmail || body.email || "")
-      .trim()
-      .toLowerCase();
+    const legalName = asText(body.legalName || body.companyLegalName || body.name);
+    const ownerFullName = asText(body.ownerFullName || body.fullName);
+    const ownerEmail = asText(body.ownerEmail || body.email).toLowerCase();
     const planId = body.planId || body.plan_id;
     const billingCycle = body.billingCycle || body.billing_cycle || "Monthly";
-    const size = body.size || body.companySize || null;
-    const industry = body.industry || null;
+    const size = optionalText(body.size || body.companySize, "size", 50);
+    const industry = optionalText(body.industry, "industry", 100);
 
     validateRequired({ legalName, ownerFullName, ownerEmail, planId }, [
       "legalName",
@@ -575,11 +634,17 @@ export async function createPlatformCompany(req, res, next) {
       "planId",
     ]);
     validateEmail(ownerEmail, "ownerEmail");
+    textField(legalName, "legalName", { max: 200 });
+    textField(ownerFullName, "ownerFullName", { max: 120 });
+    textField(ownerEmail, "ownerEmail", { max: 254 });
 
     const normalizedBillingCycle =
       String(billingCycle).toLowerCase() === "annual" ? "Annual" : "Monthly";
 
     // Verify plan exists and is active
+    if (typeof planId !== "string") {
+      throw new BadRequestError("planId must be a text id");
+    }
     const plan = await prisma.plan.findUnique({ where: { id: planId } });
     if (!plan) {
       throw new NotFoundError(`Plan with ID ${planId} not found`);
@@ -598,18 +663,17 @@ export async function createPlatformCompany(req, res, next) {
       throw new ConflictError("A user with this email address already exists");
     }
 
-    // The owner never receives a password from the platform admin. The account is created
-    // with a random, never-disclosed password and the owner chooses their own through a
-    // one-time set-password link (emailed, and shown once to the provisioning admin).
+    // The platform admin does not choose the owner's password. The system generates a random
+    // temporary one, shown once to the provisioning admin. passwordChangedAt stays null, so the
+    // owner is forced to replace it at first sign-in (see authenticate.js). A one-time
+    // set-password link is also emailed as an alternative.
     if (body.password || body.ownerPassword) {
       throw new BadRequestError(
-        "Owner passwords cannot be set by platform admins. The owner sets one via the invite link.",
+        "Owner passwords cannot be set by platform admins. A temporary password is generated for the owner.",
       );
     }
-    const passwordHash = await bcrypt.hash(
-      crypto.randomBytes(32).toString("hex"),
-      10,
-    );
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     const periodEnd = new Date();
     periodEnd.setMonth(
@@ -774,6 +838,7 @@ export async function createPlatformCompany(req, res, next) {
         ...result,
         owner,
         // Shown once to the provisioning admin; never stored or audited.
+        temporaryPassword,
         setPasswordUrl: invite.url,
         setPasswordExpiresAt: invite.expiresAt,
         mustChangePassword: true,
@@ -858,11 +923,10 @@ export async function updatePlatformCompany(req, res, next) {
 
     const updateData = {};
     if (body.legalName !== undefined) {
-      const trimmed = String(body.legalName || "").trim();
-      if (!trimmed) {
+      if (typeof body.legalName !== "string" || !body.legalName.trim()) {
         throw new BadRequestError("Legal name cannot be empty");
       }
-      updateData.legalName = trimmed;
+      updateData.legalName = textField(body.legalName, "legalName", { max: 200 });
     }
 
     if (body.status !== undefined) {
@@ -872,11 +936,15 @@ export async function updatePlatformCompany(req, res, next) {
           `Invalid company status '${body.status}'. Allowed values are: ${allowedStatuses.join(", ")}`,
         );
       }
+      // Closing is final: the tenant's access, subscription and invites were all shut down with it.
+      if (company.status === "Closed" && body.status !== "Closed") {
+        throw new BadRequestError("A closed company cannot be reopened");
+      }
       updateData.status = body.status;
     }
 
-    if (body.size !== undefined) updateData.size = body.size;
-    if (body.industry !== undefined) updateData.industry = body.industry;
+    if (body.size !== undefined) updateData.size = optionalText(body.size, "size", 50);
+    if (body.industry !== undefined) updateData.industry = optionalText(body.industry, "industry", 100);
 
     if (Object.keys(updateData).length === 0) {
       throw new BadRequestError("No valid fields provided for update");
@@ -905,6 +973,9 @@ export async function updatePlatformCompany(req, res, next) {
       return result;
     });
 
+    // Suspend / Close must cut tenant access now, not after the auth cache expires.
+    invalidateCompanyAuthCache(id);
+
     ok(res, updated, "Company updated successfully");
   } catch (err) {
     next(err);
@@ -921,10 +992,8 @@ export async function updatePlatformCompany(req, res, next) {
 export async function listPlans(req, res, next) {
   try {
     const where = {};
-    if (req.query.isActive !== undefined) {
-      where.isActive =
-        req.query.isActive === "true" || req.query.isActive === true;
-    }
+    if (req.query.isActive === "true") where.isActive = true;
+    else if (req.query.isActive === "false") where.isActive = false;
 
     const plans = await prisma.plan.findMany({
       where,
@@ -1089,6 +1158,9 @@ export async function updatePlan(req, res, next) {
       return result;
     });
 
+    // Limits changed: every company on this plan must see them now.
+    invalidateCompanyAuthCache();
+
     // Same shape as GET /platform/plans items (they carry `_count`).
     const subscriptions = await prisma.subscription.count({
       where: { planId: id },
@@ -1145,7 +1217,7 @@ export async function listSubscriptions(req, res, next) {
       where.billingCycle = raw === "annual" ? "Annual" : "Monthly";
     }
 
-    if (q && q.trim()) {
+    if (typeof q === "string" && q.trim()) {
       where.company = {
         legalName: { contains: q.trim(), mode: "insensitive" },
       };
@@ -1205,9 +1277,10 @@ export async function listSubscriptions(req, res, next) {
               status: true,
               _count: {
                 select: {
-                  users: true,
+                  // Counted the way the tenant-side plan limits count them.
+                  users: { where: { isActive: true } },
                   branches: true,
-                  processTemplates: true,
+                  processTemplates: { where: { isActive: true } },
                   complianceRules: true,
                 },
               },
@@ -1215,7 +1288,7 @@ export async function listSubscriptions(req, res, next) {
           },
           plan: true,
         },
-        orderBy: { currentPeriodEnd: "desc" },
+        orderBy: [{ currentPeriodEnd: "desc" }, { id: "asc" }],
       }),
       prisma.subscription.count({ where }),
       prisma.subscription.count({ where: { status: "Active" } }),
@@ -1342,6 +1415,7 @@ export async function createSubscription(req, res, next) {
         "Cannot assign an archived plan to a new subscription",
       );
     }
+    await assertUsageFitsPlan(companyId, plan);
 
     const periodEnd = new Date();
     periodEnd.setMonth(
@@ -1371,6 +1445,8 @@ export async function createSubscription(req, res, next) {
 
       return created;
     });
+
+    invalidateCompanyAuthCache(companyId);
 
     created(res, subscription, "Subscription created successfully");
   } catch (err) {
@@ -1402,6 +1478,13 @@ export async function updateSubscription(req, res, next) {
       );
     }
 
+    // Cancelling is final: a new subscription has to be created instead.
+    if (existing.status === "Cancelled") {
+      throw new BadRequestError(
+        "A cancelled subscription cannot be changed. Create a new subscription instead",
+      );
+    }
+
     const updateData = {};
 
     // 1. Plan change
@@ -1415,6 +1498,7 @@ export async function updateSubscription(req, res, next) {
           "Cannot assign an archived plan to a subscription",
         );
       }
+      await assertUsageFitsPlan(existing.companyId, plan);
       updateData.planId = plan.id;
     }
 
@@ -1439,10 +1523,52 @@ export async function updateSubscription(req, res, next) {
     }
 
     // 4. Period end date
-    if (body.currentPeriodEnd) {
-      const parsedDate = new Date(body.currentPeriodEnd);
+    if (body.currentPeriodEnd !== undefined && body.currentPeriodEnd !== null && body.currentPeriodEnd !== "") {
+      const raw = body.currentPeriodEnd;
+      // Only an ISO date/date-time string is accepted: new Date() would turn 1, "2026" or
+      // "Mar 5" into some date without complaint.
+      if (
+        typeof raw !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(raw.trim())
+      ) {
+        throw new BadRequestError(
+          "currentPeriodEnd must be an ISO date such as 2026-12-31",
+        );
+      }
+      const parsedDate = new Date(raw.trim());
       if (isNaN(parsedDate.getTime())) {
-        throw new BadRequestError("Invalid date format for currentPeriodEnd");
+        throw new BadRequestError("currentPeriodEnd is not a real calendar date");
+      }
+      // 2026-02-31 parses in some engines as Mar 3; make sure the day did not roll over.
+      const [y, m, d] = raw.trim().slice(0, 10).split("-").map(Number);
+      const probe = new Date(Date.UTC(y, m - 1, d));
+      if (probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) {
+        throw new BadRequestError("currentPeriodEnd is not a real calendar date");
+      }
+      if (parsedDate.getTime() === new Date(existing.currentPeriodEnd).getTime()) {
+        throw new BadRequestError("The period already ends on that date");
+      }
+      if (parsedDate <= new Date()) {
+        throw new BadRequestError(
+          "The new period end must be in the future. To end the subscription now, cancel it instead",
+        );
+      }
+      if (parsedDate <= new Date(existing.currentPeriodStart)) {
+        throw new BadRequestError(
+          "The new period end must be after the period start",
+        );
+      }
+      const maxEnd = new Date();
+      maxEnd.setFullYear(maxEnd.getFullYear() + 5);
+      if (parsedDate > maxEnd) {
+        throw new BadRequestError(
+          "The period end cannot be more than 5 years from today",
+        );
+      }
+      if (String(body.reason || "").trim().length < 5) {
+        throw new BadRequestError(
+          "A reason of at least 5 characters is required to change the period end",
+        );
       }
       updateData.currentPeriodEnd = parsedDate;
     }
@@ -1459,9 +1585,10 @@ export async function updateSubscription(req, res, next) {
               status: true,
               _count: {
                 select: {
-                  users: true,
+                  // Counted the way the tenant-side plan limits count them.
+                  users: { where: { isActive: true } },
                   branches: true,
-                  processTemplates: true,
+                  processTemplates: { where: { isActive: true } },
                   complianceRules: true,
                 },
               },
@@ -1487,6 +1614,8 @@ export async function updateSubscription(req, res, next) {
 
       return sub;
     });
+
+    invalidateCompanyAuthCache(existing.companyId);
 
     ok(res, updated, "Subscription updated successfully");
   } catch (err) {
@@ -1534,18 +1663,10 @@ function buildAuditLogWhere(query) {
   if (start || end) {
     where.createdAt = {};
     if (start) {
-      const parsedStart = new Date(start);
-      if (isNaN(parsedStart.getTime())) {
-        throw new BadRequestError("Invalid start date format");
-      }
-      where.createdAt.gte = parsedStart;
+      where.createdAt.gte = parseDateFilter(start, "start");
     }
     if (end) {
-      const parsedEnd = new Date(end);
-      if (isNaN(parsedEnd.getTime())) {
-        throw new BadRequestError("Invalid end date format");
-      }
-      where.createdAt.lte = parsedEnd;
+      where.createdAt.lte = parseDateFilter(end, "end", { endOfDay: true });
     }
     if (
       where.createdAt.gte &&
@@ -1641,16 +1762,16 @@ export async function exportPlatformAuditLogs(req, res, next) {
       "IP",
     ];
     const rows = logs.map((log) => [
-      `"${log.id}"`,
-      `"${log.createdAt.toISOString()}"`,
-      `"${(log.adminUser?.fullName || "").replace(/"/g, '""')}"`,
-      `"${(log.adminUser?.email || "").replace(/"/g, '""')}"`,
-      `"${(log.action || "").replace(/"/g, '""')}"`,
-      `"${(log.entityType || "").replace(/"/g, '""')}"`,
-      `"${(log.entityId || "").replace(/"/g, '""')}"`,
-      `"${(log.company?.legalName || "").replace(/"/g, '""')}"`,
-      `"${(log.ip || "").replace(/"/g, '""')}"`,
-    ]);
+      log.id,
+      log.createdAt.toISOString(),
+      log.adminUser?.fullName,
+      log.adminUser?.email,
+      log.action,
+      log.entityType,
+      log.entityId,
+      log.company?.legalName,
+      log.ip,
+    ].map(csvCell));
 
     const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
 
@@ -1677,7 +1798,7 @@ export async function listPlatformAdminUsers(req, res, next) {
     const { status, q } = req.query;
     const where = {};
 
-    if (q && q.trim()) {
+    if (typeof q === "string" && q.trim()) {
       where.OR = [
         { fullName: { contains: q.trim(), mode: "insensitive" } },
         { email: { contains: q.trim(), mode: "insensitive" } },
@@ -1709,7 +1830,7 @@ export async function listPlatformAdminUsers(req, res, next) {
           passwordChangedAt: true,
           _count: { select: { supportAccesses: true } },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
       }),
       prisma.platformAdminUser.count({ where }),
       prisma.platformAdminUser.count({ where: { isActive: true } }),
@@ -2051,7 +2172,7 @@ export async function listPlatformSupportAccesses(req, res, next) {
       ...(adminUserId ? { adminUserId: String(adminUserId) } : {}),
     };
 
-    if (q && q.trim()) {
+    if (typeof q === "string" && q.trim()) {
       where.OR = [
         { company: { legalName: { contains: q.trim(), mode: "insensitive" } } },
         {
@@ -2063,8 +2184,8 @@ export async function listPlatformSupportAccesses(req, res, next) {
 
     if (startDate || endDate) {
       where.grantedAt = {};
-      if (startDate) where.grantedAt.gte = new Date(startDate);
-      if (endDate) where.grantedAt.lte = new Date(endDate);
+      if (startDate) where.grantedAt.gte = parseDateFilter(startDate, "start");
+      if (endDate) where.grantedAt.lte = parseDateFilter(endDate, "end", { endOfDay: true });
     }
 
     const now = new Date();
@@ -2101,7 +2222,7 @@ export async function listPlatformSupportAccesses(req, res, next) {
             company: { select: { id: true, legalName: true, status: true } },
             adminUser: { select: { id: true, fullName: true, email: true } },
           },
-          orderBy: { grantedAt: "desc" },
+          orderBy: [{ grantedAt: "desc" }, { id: "asc" }],
         }),
         prisma.platformSupportAccess.count({ where }),
         prisma.platformSupportAccess.count({

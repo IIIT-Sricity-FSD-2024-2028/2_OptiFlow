@@ -34,7 +34,9 @@ export const Topbar = ({ title }) => {
   const dispatch = useDispatch();
   const notifications = useSelector(selectAllNotifications);
   const unreadCount = useSelector(selectUnreadCount);
-  const userId = user?.id;
+  // Platform admins have no tenant inbox: /api/notifications rejects their token with 403.
+  const isPlatform = Boolean(user?.isPlatform);
+  const userId = isPlatform ? undefined : user?.id;
 
   useEffect(() => {
     if (!userId) return;
@@ -158,7 +160,8 @@ export const Topbar = ({ title }) => {
 
       {/* Right Controls: Notification Bell + User Profile */}
       <div className="flex items-center gap-3">
-        {/* Interactive Notification Bell */}
+        {/* Interactive Notification Bell (tenant users only) */}
+        {!isPlatform && (
         <div className="relative" ref={notifRef}>
           <button
             type="button"
@@ -293,6 +296,7 @@ export const Topbar = ({ title }) => {
             </div>
           )}
         </div>
+        )}
 
         {/* User Trigger Pill & Dropdown */}
         <div className="relative" ref={dropdownRef}>

@@ -1,34 +1,39 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { AlertCircle, RefreshCw } from "lucide-react";
-import { apiClient } from "../../../services/api/client";
+import {
+  fetchPlatformMetrics,
+  selectPlatformMetrics,
+  selectPlatformMetricsStatus,
+  selectPlatformMetricsError,
+  selectPlatformMetricsLoadedAt,
+} from "../../../store/platformMetrics";
 import { DashboardStatCards } from "../components/dashboard/DashboardStatCards";
 import { DashboardNeedsAttention } from "../components/dashboard/DashboardNeedsAttention";
 import { DashboardPlanDistribution } from "../components/dashboard/DashboardPlanDistribution";
 import { DashboardRecentActivity } from "../components/dashboard/DashboardRecentActivity";
 import { DashboardRecentCompanies } from "../components/dashboard/DashboardRecentCompanies";
 
-export default function PlatformDashboard() {
-  const [metrics, setMetrics] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const EMPTY_METRICS = {};
 
-  const fetchMetrics = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await apiClient("/api/platform/metrics");
-      setMetrics(res || {});
-    } catch (err) {
-      console.error("Failed to load platform dashboard metrics:", err);
-      setError(err.message || "Failed to load platform metrics");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+export default function PlatformDashboard() {
+  const dispatch = useDispatch();
+  const data = useSelector(selectPlatformMetrics);
+  const status = useSelector(selectPlatformMetricsStatus);
+  const errorInfo = useSelector(selectPlatformMetricsError);
+  const loadedAt = useSelector(selectPlatformMetricsLoadedAt);
+
+  const metrics = data || EMPTY_METRICS;
+  const loading = status === "idle" || status === "loading";
+  const error = errorInfo ? errorInfo.message || "Failed to load platform metrics" : null;
+  // A platform write (company, plan, subscription...) marks the numbers stale: load them again.
+  const stale = status === "succeeded" && !loadedAt;
 
   useEffect(() => {
-    fetchMetrics();
-  }, [fetchMetrics]);
+    dispatch(fetchPlatformMetrics());
+  }, [dispatch, stale]);
+
+  const fetchMetrics = useCallback(() => dispatch(fetchPlatformMetrics({ force: true })), [dispatch]);
 
   return (
     <div className="space-y-6 pb-12">

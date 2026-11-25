@@ -132,6 +132,11 @@ export default function PmTaskDetail() {
       showToast('error', 'The new deadline must be later than the current deadline.');
       return;
     }
+    const projectTarget = task.project?.targetDate ? String(task.project.targetDate).slice(0, 10) : null;
+    if (projectTarget && extensionDate > projectTarget) {
+      showToast('error', `The new deadline cannot be after the project deadline (${projectTarget}).`);
+      return;
+    }
     setSaving(true);
     try {
       await dispatch(updateTaskThunk({
@@ -377,8 +382,22 @@ export default function PmTaskDetail() {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600">The new deadline and reason will be recorded in the task audit history.</p>
-          <FormField label="New deadline" required>
-            <Input type="date" min={tomorrowInput()} value={extensionDate} onChange={(event) => setExtensionDate(event.target.value)} />
+          <FormField
+            label="New deadline"
+            required
+            hint={
+              task.project?.targetDate
+                ? `Must be on or before ${String(task.project.targetDate).slice(0, 10)}`
+                : undefined
+            }
+          >
+            <Input
+              type="date"
+              min={tomorrowInput()}
+              max={task.project?.targetDate ? String(task.project.targetDate).slice(0, 10) : undefined}
+              value={extensionDate}
+              onChange={(event) => setExtensionDate(event.target.value)}
+            />
           </FormField>
           <FormField label="Reason" required>
             <Textarea value={extensionReason} onChange={(event) => setExtensionReason(event.target.value)} rows={4} placeholder="Explain why the deadline is being extended." />

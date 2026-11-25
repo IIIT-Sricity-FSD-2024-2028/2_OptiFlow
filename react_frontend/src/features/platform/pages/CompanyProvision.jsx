@@ -2,13 +2,17 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, User, CreditCard, Sparkles, AlertCircle } from 'lucide-react';
 import { PATHS } from '../../../app/paths';
-import { apiClient } from '../../../services/api/client';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchPlans, selectActivePlans, selectPlansStatus } from '../../../store/platformPlans';
+import { createCompany } from '../../../store/platformCompanies';
 import { CompanyProvisionSuccessModal } from '../components/CompanyProvisionSuccessModal';
 
 export default function CompanyProvision() {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState([]);
-  const [loadingPlans, setLoadingPlans] = useState(true);
+  const dispatch = useDispatch();
+  const plans = useSelector(selectActivePlans);
+  const plansStatus = useSelector(selectPlansStatus);
+  const loadingPlans = plansStatus === 'idle' || (plansStatus === 'loading' && plans.length === 0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
   const [successResult, setSuccessResult] = useState(null);
@@ -19,31 +23,26 @@ export default function CompanyProvision() {
     size: '1-50',
     ownerFullName: '',
     ownerEmail: '',
-    password: 'OptiFlow@2026!',
     planId: '',
     billingCycle: 'Monthly',
   });
   const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
-    async function loadPlans() {
-      try {
-        setLoadingPlans(true);
-        const res = await apiClient('/api/platform/plans?isActive=true');
-        const activePlans = res?.items || [];
-        setPlans(activePlans);
-        if (activePlans.length > 0) {
-          setForm((prev) => ({ ...prev, planId: activePlans[0].id }));
-        }
-      } catch (err) {
-        console.error('Failed to load plans:', err);
-        setFormError('Failed to load active plans tier list');
-      } finally {
-        setLoadingPlans(false);
-      }
+    dispatch(fetchPlans());
+  }, [dispatch]);
+
+  // Preselect the first active plan once the list is available.
+  useEffect(() => {
+    if (plans.length > 0) {
+      setForm((prev) => (prev.planId ? prev : { ...prev, planId: plans[0].id }));
     }
-    loadPlans();
-  }, []);
+  }, [plans]);
+
+  useEffect(() => {
+    if (plansStatus === 'failed') setFormError('Failed to load active plans tier list');
+  }, [plansStatus]);
+
 
   const validate = () => {
     const errors = {};
@@ -64,10 +63,6 @@ export default function CompanyProvision() {
       errors.ownerEmail = 'Corporate email address is required';
     } else if (!emailRegex.test(form.ownerEmail.trim())) {
       errors.ownerEmail = 'Please provide a valid corporate email address';
-    }
-
-    if (!form.password || form.password.length < 8) {
-      errors.password = 'Initial password must be at least 8 characters long';
     }
 
     if (!form.planId) {
@@ -98,10 +93,7 @@ export default function CompanyProvision() {
 
     try {
       setSubmitting(true);
-      const res = await apiClient('/api/platform/companies', {
-        method: 'POST',
-        body: form,
-      });
+      const res = await dispatch(createCompany(form)).unwrap();
       setSuccessResult(res);
     } catch (err) {
       setFormError(err.message || 'Failed to provision company');
@@ -212,26 +204,9 @@ export default function CompanyProvision() {
               )}
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Login Password *</label>
-            <input
-              type="text"
-              required
-              value={form.password}
-              onChange={(e) => handleChange('password', e.target.value)}
-              placeholder="Minimum 8 characters"
-              className={`w-full px-3.5 py-2 text-sm bg-white border rounded-xl focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none font-mono ${
-                fieldErrors.password ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-              }`}
-            />
-            {fieldErrors.password ? (
-              <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
-            ) : (
-              <p className="text-xs text-slate-500 mt-1">
-                Direct credentials for the company administrator. Default: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">OptiFlow@2026!</code>
-              </p>
-            )}
-          </div>
+          <p className="text-xs text-slate-500">
+            The owner sets their own password through a one-time invite link, which is shown to you once after the company is created.
+          </p>
         </div>
 
         {/* Plan Selection */}
