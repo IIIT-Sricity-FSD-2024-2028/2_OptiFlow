@@ -1,6 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
+import { createUser, deactivateUser, reactivateUser, selectAllUsers } from "../../../store/users";
+import { selectAllRoles } from "../../../store/roles";
+import { selectAllBranches } from "../../../store/branches";
+import { createRoleAssignment, removeRoleAssignment, selectAllRoleAssignments } from "../../../store/roleAssignments";
+import { hrReads, useHrReads, writeErrorMessage } from "../useHrReads";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { PATHS } from "../../../app/paths";
@@ -56,6 +61,10 @@ const isBranchManagerRole = (role) =>
   // A label can be anything (R17), so it must not decide this.
   role.isSystem === true && (role.roleTemplate?.slug || role.name) === "branch_manager";
 
+// What the page loads (see useHrReads). Constants, so the arrays stay stable.
+const PRIMARY = [hrReads.users];
+const SECONDARY = [hrReads.roles, hrReads.branches, hrReads.roleAssignments];
+
 /**
  * HrUsers (Users & Access Hub)
  * Unified workforce administration center combining:
@@ -63,6 +72,15 @@ const isBranchManagerRole = (role) =>
  * 2. Role & Access Bindings (RBAC permissions, company/branch governance scopes, and grant/revoke actions)
  */
 export default function HrUsers() {
+  const dispatch = useDispatch();
+  const users = useSelector(selectAllUsers);
+  const roles = useSelector(selectAllRoles);
+  const branches = useSelector(selectAllBranches);
+  const assignments = useSelector(selectAllRoleAssignments);
+  // `error` is the main data failing; `partialFailures` are secondary lists: the page still renders but says so.
+  const { loading, error: loadError, partialFailures, reload, reloading, reloadAfterFailure } = useHrReads(PRIMARY, SECONDARY);
+  const error = loadError && (loadError.message || "Failed to load directory telemetry from server.");
+
   const { user: currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
@@ -78,14 +96,6 @@ export default function HrUsers() {
   };
 
   // Core Data
-  const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [branches, setBranches] = useState([]);
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Secondary lists that failed to load; the page still renders but says so.
-  const [partialFailures, setPartialFailures] = useState([]);
 
   // Filters & Search & Pagination
   const [searchQuery, setSearchQuery] = useState("");
@@ -129,46 +139,6 @@ export default function HrUsers() {
     "superuser",
     "hr_manager",
   ].includes(currentUser?.role);
-
-  // 1. DATA HYDRATION
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setPartialFailures([]);
-    const failed = [];
-    const secondary = (path, name) =>
-      apiClient(path).catch((err) => {
-        console.warn(`[HrUsers] Failed to fetch ${name}:`, err.message);
-        failed.push(name);
-        return [];
-      });
-
-    try {
-      // Users are the page's main data: a failure there shows the error banner with Retry.
-      const [usersData, rolesData, branchesData, assignmentsData] = await Promise.all([
-        apiClient("/users"),
-        secondary("/roles", "Roles"),
-        secondary("/branches", "Branches"),
-        secondary("/role-assignments", "Role assignments"),
-      ]);
-
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setRoles(Array.isArray(rolesData) ? rolesData : []);
-      setBranches(Array.isArray(branchesData) ? branchesData : []);
-      setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
-      setPartialFailures(failed);
-    } catch (err) {
-      console.error("[HrUsers] Hydration failure:", err);
-      setError(err.message || "Failed to load directory telemetry from server.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchData();
-  }, [fetchData]);
 
   // Reset pagination on filter or tab change
   const filterKey = JSON.stringify([searchQuery, roleFilter, statusFilter, scopeFilter, activeTab]);
@@ -289,20 +259,18 @@ export default function HrUsers() {
     setFormError("");
 
     try {
-      await apiClient("/users", {
-        method: "POST",
-        body: {
-          fullName: trimmedName,
-          email: trimmedEmail,
-          password: trimmedPassword,
-          jobTitle: jobTitle.trim() || undefined,
-          managerUserId: managerUserId || undefined,
-          roleId: selectedRole || undefined,
-          branchId: isBranchManagerRole(selectedRoleObj) ? selectedBranchId || undefined : undefined,
-        },
-      });
+      await dispatch(createUser({
+        fullName: trimmedName,
+        email: trimmedEmail,
+        password: trimmedPassword,
+        jobTitle: jobTitle.trim() || undefined,
+        managerUserId: managerUserId || undefined,
+        roleId: selectedRole || undefined,
+        branchId: isBranchManagerRole(selectedRoleObj) ? selectedBranchId || undefined : undefined,
+      })).unwrap();
 
       toast.success(`Employee "${trimmedName}" onboarded successfully!`);
+      await reload();
       setIsCreateModalOpen(false);
       setFullName("");
       setEmail("");
@@ -311,10 +279,10 @@ export default function HrUsers() {
       setManagerUserId("");
       setSelectedRole("");
       setSelectedBranchId("");
-      await fetchData();
     } catch (err) {
       console.error("[HrUsers] User creation failed:", err);
-      setFormError(err.message || "Failed to onboard employee.");
+      reloadAfterFailure(err);
+      setFormError(writeErrorMessage(err, "Failed to onboard employee."));
     } finally {
       setIsSubmittingUser(false);
     }
@@ -329,26 +297,19 @@ export default function HrUsers() {
 
     try {
       if (willDeactivate) {
-        await apiClient(`/users/${deactivateTarget.id}`, { method: "DELETE" });
+        await dispatch(deactivateUser(deactivateTarget.id)).unwrap();
         toast.success(`Employee account "${deactivateTarget.fullName}" deactivated.`);
       } else {
-        try {
-          await apiClient(`/users/${deactivateTarget.id}/reactivate`, { method: "PATCH" });
-        } catch {
-          // Graceful fallback to PATCH /users/:id with isActive: true
-          await apiClient(`/users/${deactivateTarget.id}`, {
-            method: "PATCH",
-            body: { isActive: true },
-          });
-        }
+        await dispatch(reactivateUser(deactivateTarget.id)).unwrap();
         toast.success(`Employee account "${deactivateTarget.fullName}" reactivated.`);
       }
 
+      await reload();
       setDeactivateTarget(null);
-      await fetchData();
     } catch (err) {
       console.error("[HrUsers] Status mutation failed:", err);
-      toast.error(err.message || "Failed to update employee account status.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to update employee account status."));
     } finally {
       setIsDeactivating(false);
     }
@@ -378,26 +339,24 @@ export default function HrUsers() {
       const scopeId =
         assignScopeType === "Branch" ? assignBranchId : currentUser?.companyId;
 
-      await apiClient("/role-assignments", {
-        method: "POST",
-        body: {
-          userId: assignUserId,
-          roleId: assignRoleId,
-          scopeType: assignScopeType,
-          scopeId,
-        },
-      });
+      await dispatch(createRoleAssignment({
+        userId: assignUserId,
+        roleId: assignRoleId,
+        scopeType: assignScopeType,
+        scopeId,
+      })).unwrap();
 
       toast.success("Role assignment successfully granted!");
+      await reload();
       setIsAssignModalOpen(false);
       setAssignUserId("");
       setAssignRoleId("");
       setAssignScopeType("Company");
       setAssignBranchId("");
-      await fetchData();
     } catch (err) {
       console.error("[HrUsers] Role assignment failed:", err);
-      setAssignError(err.message || "Failed to assign role.");
+      reloadAfterFailure(err);
+      setAssignError(writeErrorMessage(err, "Failed to assign role."));
     } finally {
       setIsAssigning(false);
     }
@@ -409,17 +368,18 @@ export default function HrUsers() {
 
     setIsRevoking(true);
     try {
-      await apiClient(`/role-assignments/${revokeTarget.id}`, { method: "DELETE" });
+      await dispatch(removeRoleAssignment(revokeTarget.id)).unwrap();
       toast.success(
         `Role "${revokeTarget.role?.label || "Role"}" revoked from ${
           revokeTarget.user?.fullName || "user"
         }.`
       );
+      await reload();
       setRevokeTarget(null);
-      await fetchData();
     } catch (err) {
       console.error("[HrUsers] Role revoke failed:", err);
-      toast.error(err.message || "Failed to revoke role assignment.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to revoke role assignment."));
     } finally {
       setIsRevoking(false);
     }
@@ -747,7 +707,7 @@ export default function HrUsers() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button variant="secondary" size="sm" onClick={fetchData}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Refresh
           </Button>
@@ -796,7 +756,7 @@ export default function HrUsers() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700 flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" size="sm" onClick={fetchData}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             Retry
           </Button>
         </div>
