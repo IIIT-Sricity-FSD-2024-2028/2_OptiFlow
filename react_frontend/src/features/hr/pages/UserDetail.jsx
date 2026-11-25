@@ -1,6 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  fetchUserById, updateUser, deactivateUser, reactivateUser,
+  selectAllUsers, selectUserById, selectUserDetailStatus, selectUserDetailError,
+} from "../../../store/users";
+import { isValidId } from "../../../services/api/hrRequest";
+import { hrReads, useHrReads, writeErrorMessage } from "../useHrReads";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { PATHS } from "../../../app/paths";
@@ -28,6 +34,10 @@ import {
 } from "../components/orgTreeUtils";
 import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 
+// What the page loads besides the employee (see useHrReads). Constants, so the arrays stay stable.
+const PRIMARY = [];
+const SECONDARY = [hrReads.users];
+
 // WHY: HrUserDetail provides a 360-degree profile view of any individual employee.
 // It exposes organizational reporting lines, assigned roles & permissions, active operational tasks,
 // and direct subordinates, with full Zero-Clutter action suppression for profile mutations.
@@ -37,13 +47,43 @@ export default function HrUserDetail() {
   const { user: currentUser } = useAuth();
   const toast = useToast();
 
-  // Employee details and related company personnel
-  const [employee, setEmployee] = useState(null);
-  const [allUsers, setAllUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Secondary lists that failed to load; the page still renders but says so.
-  const [partialFailures, setPartialFailures] = useState([]);
+  // The employee (a detail read, with reports and assigned tasks) and the company's personnel
+  // (for the manager picker in the edit modal).
+  const dispatch = useDispatch();
+  const employee = useSelector((state) => selectUserById(state, id));
+  const detailStatus = useSelector((state) => selectUserDetailStatus(state, id));
+  const detailError = useSelector((state) => selectUserDetailError(state, id));
+  const allUsers = useSelector(selectAllUsers);
+  const { loading: listLoading, partialFailures: failedLists, reload: reloadLists, reloadAfterFailure: reloadListsAfterFailure } = useHrReads(PRIMARY, SECONDARY);
+
+  useEffect(() => {
+    dispatch(fetchUserById(id));
+  }, [dispatch, id]);
+
+  const reload = () => Promise.all([dispatch(fetchUserById(id)), reloadLists()]);
+  const reloadAfterFailure = (err) => {
+    reloadListsAfterFailure(err);
+    if (err?.status === 404) dispatch(fetchUserById(id));
+  };
+
+  // A row from the list lacks reports and tasks, so wait for this id's first detail read; later
+  // reloads keep the page on screen. Adjusted during render, not in an effect.
+  const [loadedId, setLoadedId] = useState(null);
+  // Only a read made on this visit counts: an earlier visit's result may be out of date.
+  const [askedId, setAskedId] = useState(null);
+  if (detailStatus === "loading" && askedId !== id) setAskedId(id);
+  const asked = askedId === id;
+  if (asked && detailStatus === "succeeded" && loadedId !== id) setLoadedId(id);
+  const unreadable = detailError?.status === 404 || detailError?.status === 403;
+  const detailLoaded = loadedId === id && Boolean(employee);
+  const badId = !isValidId(id);
+  const detailFailed = asked && detailStatus === "failed" && (unreadable || !detailLoaded);
+  const loading = !badId && !detailFailed && (listLoading || !detailLoaded);
+  const error = badId
+    ? "Employee record could not be found."
+    : detailFailed && (detailError?.message || "Failed to load employee profile.");
+  const partialFailures =
+    detailStatus === "failed" && !detailFailed ? ["The latest profile", ...failedLists] : failedLists;
 
   // Edit Profile Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -68,60 +108,6 @@ export default function HrUserDetail() {
     "superuser",
     "hr_manager",
   ].includes(currentUser?.role);
-
-  // 1. DATA HYDRATION
-  // WHY: Fetches the targeted user profile (with reports and assigned tasks)
-  // and all company users (to populate manager selection in edit modal).
-  const fetchEmployeeData = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
-    setPartialFailures([]);
-    const failed = [];
-    const secondary = (path, name) =>
-      apiClient(path).catch((err) => {
-        console.warn(`[HrUserDetail] Failed to fetch ${name}:`, err.message);
-        failed.push(name);
-        return [];
-      });
-
-    try {
-      const [userData, usersList] = await Promise.all([
-        apiClient(`/users/${id}`),
-        secondary("/users", "Users"),
-      ]);
-      setPartialFailures(failed);
-
-      const rawUser = userData?.data || userData;
-      if (!rawUser || !rawUser.id) {
-        throw new Error("Employee record could not be found.");
-      }
-
-      setEmployee(rawUser);
-      const rawUsersList = Array.isArray(usersList?.data)
-        ? usersList.data
-        : Array.isArray(usersList)
-        ? usersList
-        : [];
-      setAllUsers(rawUsersList);
-
-      // Pre-fill edit modal form
-      setEditFullName(rawUser.fullName || "");
-      setEditJobTitle(rawUser.jobTitle || "");
-      setEditManagerId(rawUser.managerUserId || "");
-    } catch (err) {
-      console.error("[HrUserDetail] Failed to load employee details:", err);
-      setError(err.message || "Failed to load employee profile.");
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  // Initial load
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchEmployeeData();
-  }, [fetchEmployeeData]);
 
   // Memoized set of all direct and indirect subordinate IDs to prevent reporting loops (Task 9)
   const employeeId = employee?.id;
@@ -154,21 +140,22 @@ export default function HrUserDetail() {
     setEditError("");
 
     try {
-      await apiClient(`/users/${id}`, {
-        method: "PATCH",
-        body: {
+      await dispatch(updateUser({
+        id,
+        data: {
           fullName: trimmedName,
           jobTitle: editJobTitle.trim() || null,
           managerUserId: editManagerId || null,
         },
-      });
+      })).unwrap();
 
       toast.success("Employee profile updated successfully!");
+      await reload();
       setIsEditModalOpen(false);
-      await fetchEmployeeData();
     } catch (err) {
       console.error("[HrUserDetail] Update failed:", err);
-      setEditError(err.message || "Failed to update employee details.");
+      reloadAfterFailure(err);
+      setEditError(writeErrorMessage(err, "Failed to update employee details."));
     } finally {
       setIsSubmitting(false);
     }
@@ -182,21 +169,19 @@ export default function HrUserDetail() {
 
     try {
       if (willDeactivate) {
-        await apiClient(`/users/${id}`, { method: "DELETE" });
+        await dispatch(deactivateUser(id)).unwrap();
         toast.success(`Employee "${employee.fullName}" deactivated.`);
       } else {
-        await apiClient(`/users/${id}`, {
-          method: "PATCH",
-          body: { isActive: true },
-        });
+        await dispatch(reactivateUser(id)).unwrap();
         toast.success(`Employee "${employee.fullName}" reactivated.`);
       }
 
+      await reload();
       setIsDeactivateOpen(false);
-      await fetchEmployeeData();
     } catch (err) {
       console.error("[HrUserDetail] Status toggle failed:", err);
-      toast.error(err.message || "Failed to update employee status.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to update employee status."));
     } finally {
       setIsUpdatingStatus(false);
     }
