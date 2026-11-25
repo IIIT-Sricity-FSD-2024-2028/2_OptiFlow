@@ -64,22 +64,27 @@ export default function PmEscalations() {
     dispatch(fetchProjects()).unwrap().catch(onError);
   }, [dispatch]);
 
+  const nonExtensionEscalations = useMemo(
+    () => escalations.filter((item) => item.blockerType !== 'Extension Request'),
+    [escalations]
+  );
+
   const counts = useMemo(() => ({
-    all: escalations.filter((item) => !isResolved(item)).length,
-    high: escalations.filter((item) => !isResolved(item) && ['High', 'Critical'].includes(item.priority)).length,
-    medium: escalations.filter((item) => !isResolved(item) && item.priority === 'Medium').length,
-    resolved: escalations.filter(isResolved).length,
-  }), [escalations]);
+    all: nonExtensionEscalations.filter((item) => !isResolved(item)).length,
+    high: nonExtensionEscalations.filter((item) => !isResolved(item) && ['High', 'Critical'].includes(item.priority)).length,
+    medium: nonExtensionEscalations.filter((item) => !isResolved(item) && item.priority === 'Medium').length,
+    resolved: nonExtensionEscalations.filter(isResolved).length,
+  }), [nonExtensionEscalations]);
 
   const visibleEscalations = useMemo(() => {
-    if (filter === 'resolved') return escalations.filter(isResolved);
-    const active = escalations.filter((item) => !isResolved(item));
+    if (filter === 'resolved') return nonExtensionEscalations.filter(isResolved);
+    const active = nonExtensionEscalations.filter((item) => !isResolved(item));
     if (filter === 'high') return active.filter((item) => ['High', 'Critical'].includes(item.priority));
     if (filter === 'medium') return active.filter((item) => item.priority === 'Medium');
     return active;
-  }, [escalations, filter]);
+  }, [nonExtensionEscalations, filter]);
 
-  const selectedEscalation = escalations.find((item) => String(item.id) === String(selectedId));
+  const selectedEscalation = nonExtensionEscalations.find((item) => String(item.id) === String(selectedId));
 
   const columns = [
     {

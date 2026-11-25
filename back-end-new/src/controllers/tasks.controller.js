@@ -521,7 +521,8 @@ export async function createTask(req, res, next) {
 
     // Record audit log
     try {
-      await createProcessAuditLog({companyId: req.user.companyId,
+      await createProcessAuditLog({
+        companyId: req.user.companyId,
         taskId: newTask.id,
         action: AUDIT_ACTIONS.CREATE,
         performedById: req.user.id,
@@ -619,7 +620,7 @@ export async function updateTask(req, res, next) {
         throw new ForbiddenError('Only the Project Manager can mark this task Completed; submit it for review instead');
       }
       updateData.status = body.status;
-      if (body.status === 'Completed') {
+      if (body.status === 'Completed' || body.status === 'In_Review') {
         const openSubtasksCount = await prisma.subtask.count({
           where: {
             taskId: id,
@@ -629,10 +630,12 @@ export async function updateTask(req, res, next) {
         });
         if (openSubtasksCount > 0) {
           throw new BadRequestError(
-            `Cannot mark task as Completed: ${openSubtasksCount} subtask(s) are still pending completion or review.`
+            `Cannot ${body.status === 'Completed' ? 'mark task as Completed' : 'submit task for review'}: all subtasks are not complete (${openSubtasksCount} subtask(s) still pending completion or review).`
           );
         }
-        updateData.completedAt = new Date();
+        if (body.status === 'Completed') {
+          updateData.completedAt = new Date();
+        }
       } else if (existing.completedAt) {
         updateData.completedAt = null;
       }
@@ -929,7 +932,8 @@ export async function deleteTask(req, res, next) {
 
     // Record audit log
     try {
-      await createProcessAuditLog({companyId: req.user.companyId,
+      await createProcessAuditLog({
+        companyId: req.user.companyId,
         taskId: id,
         action: AUDIT_ACTIONS.DELETE,
         performedById: req.user.id,
@@ -1512,18 +1516,29 @@ export async function updateEscalation(req, res, next) {
 
     const existing = await prisma.escalation.findFirst({
       where: { ...await buildEscalationWhere(req), id },
+      include: { task: true },
     });
 
     if (!existing) {
       throw new NotFoundError(`Escalation with ID ${id} not found`);
     }
 
+    const isTarget = existing.targetManagerId === req.user.id;
+    const isTeamLead = isTeamLeadRole(req.user);
+    const isTaskLead = isTeamLead && (
+      !existing.taskId ||
+      existing.task?.assignedToId === req.user.id ||
+      existing.blockerType === 'Extension Request' ||
+      existing.targetManagerId === req.user.id
+    );
+    const canResolve = canManageEscalations(req.user) || isTarget || isTaskLead;
+
     const updateData = {};
     const isExt = isExtensionRequest(existing);
     if (body.status) {
       validateEnum(body.status, ALLOWED_ESCALATION_STATUSES, 'status');
       const closesLoop = body.status === 'Resolved' || body.status === 'Closed';
-      if (closesLoop && !canManageEscalations(req.user) && existing.targetManagerId !== req.user.id) {
+      if (closesLoop && !canResolve) {
         throw new ForbiddenError('Only the escalation target or a manager can resolve or close an escalation');
       }
       updateData.status = body.status;
@@ -1534,13 +1549,12 @@ export async function updateEscalation(req, res, next) {
       }
     }
     if (body.description) {
-      // Editing the text is for the reporter, the target and managers.
-      const isManagerOrTarget = canManageEscalations(req.user) || existing.targetManagerId === req.user.id;
-      if (!isManagerOrTarget && existing.reportedById !== req.user.id) {
+      // Editing the text is for the reporter, the target, task team lead and managers.
+      if (!canResolve && existing.reportedById !== req.user.id) {
         throw new ForbiddenError('You cannot edit this escalation');
       }
       // The requested date is read from this text, so the requester cannot change it once sent.
-      if (isExt && !isManagerOrTarget) {
+      if (isExt && !canResolve) {
         throw new ForbiddenError('An extension request cannot be edited after it is sent');
       }
       updateData.description = body.description;
@@ -1583,6 +1597,50 @@ export async function updateEscalation(req, res, next) {
       }
       return row;
     });
+
+    // Auto-update subtask or task deadline if this is an extension resolved by lead or manager
+    if (body.status === 'Resolved' && existing.taskId) {
+      const subtaskDateMatch = existing.description?.match(/Requested new deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+      const subtaskMatch = existing.description?.match(/Subtask:\s*"([^"]+)"/i) || existing.title?.match(/Subtask Extension Request:\s*(.+)$/i);
+      if (subtaskDateMatch && subtaskMatch) {
+        const newDeadline = new Date(subtaskDateMatch[1]);
+        const subTitle = subtaskMatch[1].trim();
+        try {
+          const matchingSubtask = await prisma.subtask.findFirst({
+            where: {
+              taskId: existing.taskId,
+              title: { equals: subTitle, mode: 'insensitive' },
+              deletedAt: null,
+            },
+          });
+          if (matchingSubtask && !isNaN(newDeadline.getTime())) {
+            await prisma.subtask.update({
+              where: { id: matchingSubtask.id },
+              data: { dueDate: newDeadline },
+            });
+          }
+        } catch (subErr) {
+          console.warn('[Escalation] Notice: auto-updating subtask deadline:', subErr.message);
+        }
+      } else {
+        // Parent task extension
+        const taskDateMatch = existing.description?.match(/Requested deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i) ||
+                              existing.description?.match(/new deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+        if (taskDateMatch) {
+          const newDeadline = new Date(taskDateMatch[1]);
+          if (!isNaN(newDeadline.getTime())) {
+            try {
+              await prisma.task.update({
+                where: { id: existing.taskId },
+                data: { dueDate: newDeadline },
+              });
+            } catch (taskErr) {
+              console.warn('[Escalation] Notice: auto-updating task deadline:', taskErr.message);
+            }
+          }
+        }
+      }
+    }
 
     if (updateData.status && updateData.status !== existing.status && existing.reportedById !== req.user.id) {
       const action = updateData.status === 'Resolved' ? 'approved' : updateData.status === 'Closed' ? 'rejected' : updateData.status.toLowerCase();
