@@ -111,7 +111,10 @@ export function createListThunks(name, { list, get }) {
 }
 
 export function addListCases(builder, fetchList, adapter) {
+  // Signing in does not reload the page, so rows cached for the previous user are dropped here.
   builder
+    .addCase("auth/login/fulfilled", () => createListState(adapter))
+    .addCase("auth/platformLogin/fulfilled", () => createListState(adapter))
     .addCase(fetchList.pending, (state, action) => {
       const key = queryKeyOf(action.meta.arg);
       if (key !== state.queryKey) {
