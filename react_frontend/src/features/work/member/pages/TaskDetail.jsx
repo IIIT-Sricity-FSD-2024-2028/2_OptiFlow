@@ -23,6 +23,7 @@ import * as evidenceApi from '../../../../services/api/evidence';
 import * as complianceApi from '../../../../services/api/compliance';
 import * as usersApi from '../../../../services/api/users';
 import * as projectsApi from '../../../../services/api/projects';
+import * as escalationsApi from '../../../../services/api/escalations';
 import { AlertTriangle, FileText, ShieldAlert } from 'lucide-react';
 
 export default function MemberTaskDetail() {
@@ -38,6 +39,7 @@ export default function MemberTaskDetail() {
   const [subtasks, setSubtasks] = useState([]);
   const [evidenceList, setEvidenceList] = useState([]);
   const [taskViolations, setTaskViolations] = useState([]);
+  const [openExtensionRequests, setOpenExtensionRequests] = useState([]);
   // Track which subtasks have been submitted this session so Submit btn hides after send
   const [submittedSubtaskIds, setSubmittedSubtaskIds] = useState(new Set());
   const [isEvidenceRequired, setIsEvidenceRequired] = useState(false);
@@ -47,6 +49,7 @@ export default function MemberTaskDetail() {
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [isBlockerModalOpen, setIsBlockerModalOpen] = useState(false);
   const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
+  const [selectedSubtaskForExt, setSelectedSubtaskForExt] = useState(null);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
 
   const getSlaTimeRemaining = (dueDate) => {
@@ -70,13 +73,14 @@ export default function MemberTaskDetail() {
       if (!taskId) return;
       setLoading(true);
       try {
-        const [taskRes, usersRes, projectsRes, evRes, bindingsRes, violationsRes] = await Promise.allSettled([
+        const [taskRes, usersRes, projectsRes, evRes, bindingsRes, violationsRes, escalationsRes] = await Promise.allSettled([
           tasksApi.get(taskId),
           usersApi.list(),
           projectsApi.list(),
           evidenceApi.list(),
           complianceApi.getBindings(),
           complianceApi.getViolations(),
+          escalationsApi.list(),
         ]);
 
         if (!isMounted) return;
@@ -94,6 +98,14 @@ export default function MemberTaskDetail() {
         const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
         const allBindings = bindingsRes.status === 'fulfilled' && bindingsRes.value ? (Array.isArray(bindingsRes.value) ? bindingsRes.value : bindingsRes.value.data || []) : [];
         const allViolations = violationsRes.status === 'fulfilled' && violationsRes.value ? (Array.isArray(violationsRes.value) ? violationsRes.value : violationsRes.value.data || []) : [];
+        const allEscalations = escalationsRes.status === 'fulfilled' && escalationsRes.value ? (Array.isArray(escalationsRes.value) ? escalationsRes.value : escalationsRes.value.data || []) : [];
+
+        const openExts = allEscalations.filter(
+          (e) => String(e.taskId) === String(taskId) &&
+                 e.blockerType === 'Extension Request' &&
+                 ['Open', 'Reviewed', 'Pending'].includes(e.status || 'Open')
+        );
+        setOpenExtensionRequests(openExts);
 
         setSubtasks(Array.isArray(rawTask.subtasks) ? rawTask.subtasks : []);
         setEvidenceList(allEv.filter((e) => String(e.taskId || e.task_id || e.task?.id) === String(taskId)));
@@ -107,8 +119,8 @@ export default function MemberTaskDetail() {
         const projectObj = allProjects.find((p) => String(p.id) === String(projId)) || rawTask.project || null;
         setProject(projectObj);
 
-        const assignerId = rawTask.createdById || rawTask.createdBy?.id || user?.managerId;
-        setManager(allUsers.find((u) => String(u.id) === String(assignerId)) || rawTask.createdBy || null);
+        const leadId = rawTask.assignedToId || rawTask.assignedTo?.id || rawTask.createdById || rawTask.createdBy?.id || user?.managerId;
+        setManager(allUsers.find((u) => String(u.id) === String(leadId)) || rawTask.assignedTo || rawTask.createdBy || null);
 
         // Check if any active compliance rule mandates evidence for this deliverable
         const matchingRule = allBindings.find((b) => {
@@ -243,7 +255,7 @@ export default function MemberTaskDetail() {
         isEvidenceRequired={isEvidenceRequired}
         complianceRule={complianceRule}
         stages={stages}
-        onOpenExtensionModal={() => setIsExtensionModalOpen(true)}
+        onOpenExtensionModal={null}
         onOpenBlockerModal={() => setIsBlockerModalOpen(true)}
         onOpenSubmitModal={() => setIsSubmitModalOpen(true)}
       />
@@ -284,6 +296,11 @@ export default function MemberTaskDetail() {
             subtasks={subtasks}
             readOnly={isCompleted}
             onSubmitSubtask={!isCompleted ? handleSubtaskSubmit : undefined}
+            onRequestExtension={!isCompleted ? (st) => {
+              setSelectedSubtaskForExt(st);
+              setIsExtensionModalOpen(true);
+            } : undefined}
+            extensionRequests={openExtensionRequests}
             submittedSubtaskIds={submittedSubtaskIds}
             currentUserId={user?.id}
           />
@@ -380,17 +397,34 @@ export default function MemberTaskDetail() {
         onClose={() => setIsBlockerModalOpen(false)}
         taskId={taskId}
         projectId={task?.projectId || project?.id}
-        managerId={manager?.id || task?.createdById}
+        managerId={manager?.id || task?.assignedToId || task?.assignedTo?.id || task?.createdById}
       />
 
       <RequestExtensionModal
         isOpen={isExtensionModalOpen}
-        onClose={() => setIsExtensionModalOpen(false)}
+        onClose={() => {
+          setIsExtensionModalOpen(false);
+          setSelectedSubtaskForExt(null);
+        }}
         taskId={taskId}
+        subtaskId={selectedSubtaskForExt?.id || selectedSubtaskForExt?.subtaskId}
+        subtaskTitle={selectedSubtaskForExt?.title}
         projectId={task?.projectId || project?.id}
-        managerId={manager?.id || task?.createdById}
+        managerId={manager?.id || task?.assignedToId || task?.assignedTo?.id || task?.createdById}
         taskTitle={task?.title}
-        currentDeadline={task?.dueDate || task?.deadline}
+        currentDeadline={selectedSubtaskForExt?.dueDate || selectedSubtaskForExt?.deadline || task?.dueDate || task?.deadline}
+        parentTaskDeadline={task?.dueDate || task?.deadline}
+        onSuccess={() => {
+          escalationsApi.list().then((res) => {
+            const list = Array.isArray(res) ? res : res?.data || [];
+            const openExts = list.filter(
+              (e) => String(e.taskId) === String(taskId) &&
+                     e.blockerType === 'Extension Request' &&
+                     ['Open', 'Reviewed', 'Pending'].includes(e.status || 'Open')
+            );
+            setOpenExtensionRequests(openExts);
+          }).catch(() => {});
+        }}
       />
 
       <UploadEvidenceModal
@@ -402,7 +436,7 @@ export default function MemberTaskDetail() {
           complianceApi.getViolations().then((res) => {
             const list = Array.isArray(res) ? res : res?.data || [];
             setTaskViolations(list.filter((v) => String(v.entityId) === String(taskId) && ['Open', 'Under_Review'].includes(v.status)));
-          }).catch(() => {});
+          }).catch(() => { });
         }}
       />
     </div>

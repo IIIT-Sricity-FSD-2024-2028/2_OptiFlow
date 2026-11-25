@@ -5,16 +5,19 @@ import { FormField, Input, Textarea } from '../../../../../shared/components/For
 import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../shared/components/Toast';
 import * as escalationsApi from '../../../../../services/api/escalations';
-import { deadlineInput, minExtensionDateInput } from '../../../components/dateLimits';
+import { deadlineInput, minExtensionDateInput, maxExtensionDateInput } from '../../../components/dateLimits';
 
 export function RequestExtensionModal({
   isOpen,
   onClose,
   taskId,
+  subtaskId,
+  subtaskTitle,
   projectId,
   managerId,
   taskTitle = 'Task',
   currentDeadline,
+  parentTaskDeadline,
   onSuccess,
 }) {
   const { user } = useAuth();
@@ -25,6 +28,7 @@ export function RequestExtensionModal({
   const [submitting, setSubmitting] = useState(false);
 
   const minDate = minExtensionDateInput(currentDeadline);
+  const maxDate = maxExtensionDateInput(parentTaskDeadline);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -38,20 +42,33 @@ export function RequestExtensionModal({
       return;
     }
 
+    if (maxDate && extDate > maxDate) {
+      toast.warning(`Proposed subtask deadline cannot exceed parent task deadline (${maxDate}).`);
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const isSubtask = Boolean(subtaskId || subtaskTitle);
+      const title = isSubtask
+        ? `Subtask Extension Request: ${subtaskTitle || taskTitle}`
+        : `Extension Request: ${taskTitle}`;
+      const desc = isSubtask
+        ? `Subtask: "${subtaskTitle}". Requested new deadline: ${extDate}. Parent task deadline: ${deadlineInput(parentTaskDeadline) || 'N/A'}. Reason: ${extReason.trim()}`
+        : `Requested new deadline: ${extDate}. Reason: ${extReason.trim()}`;
+
       await escalationsApi.create({
         taskId: String(taskId),
         projectId,
-        title: `Extension Request: ${taskTitle}`,
-        description: `Requested new deadline: ${extDate}. Reason: ${extReason.trim()}`,
+        title,
+        description: desc,
         blockerType: 'Extension Request',
         priority: 'Medium',
         reportedBy: user?.id,
         targetManagerId: managerId ? String(managerId) : undefined,
       });
 
-      toast.success('Extension request sent to leadership.');
+      toast.success('Extension request sent to your Team Lead.');
       setExtDate('');
       setExtReason('');
       onSuccess?.();
@@ -65,32 +82,47 @@ export function RequestExtensionModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Request Deadline Extension">
+    <Modal isOpen={isOpen} onClose={onClose} title="Request Subtask Deadline Extension">
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-xs text-slate-500">
-          This sends an urgent extension request to your team leader detailing the new proposed deadline and reason.
+          This sends an urgent extension request to your Team Lead detailing the new proposed deadline and reason.
         </p>
+
+        {subtaskTitle && (
+          <div className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-700 border border-slate-200">
+            <span className="font-semibold text-slate-900">Subtask: </span>
+            {subtaskTitle}
+          </div>
+        )}
 
         <FormField label="Proposed New Due Date" required>
           <Input
             type="date"
             min={minDate}
+            max={maxDate}
             value={extDate}
             onChange={(e) => setExtDate(e.target.value)}
             disabled={submitting}
             required
           />
-          {currentDeadline && (
-            <p className="text-xs text-slate-500 mt-1">
-              Current deadline: <span className="font-medium text-slate-700">{deadlineInput(currentDeadline)}</span> (extension must be later than current deadline)
-            </p>
-          )}
+          <div className="space-y-0.5 mt-1">
+            {currentDeadline && (
+              <p className="text-xs text-slate-500">
+                Current deadline: <span className="font-medium text-slate-700">{deadlineInput(currentDeadline)}</span> (must be after current deadline)
+              </p>
+            )}
+            {parentTaskDeadline && (
+              <p className="text-xs text-slate-500">
+                Task deadline: <span className="font-medium text-slate-700">{deadlineInput(parentTaskDeadline)}</span> (must be on or before task deadline)
+              </p>
+            )}
+          </div>
         </FormField>
 
         <FormField label="Reason for Extension" required>
           <Textarea
             rows={3}
-            placeholder="Explain why extra time is required (e.g. dependency delays, unexpected technical blockers)..."
+            placeholder="Explain why extra time is required for this subtask..."
             value={extReason}
             onChange={(e) => setExtReason(e.target.value)}
             disabled={submitting}
