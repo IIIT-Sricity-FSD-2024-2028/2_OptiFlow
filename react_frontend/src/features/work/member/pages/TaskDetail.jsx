@@ -17,14 +17,19 @@ import {
   RequestExtensionModal,
   UploadEvidenceModal,
 } from '../components/modals';
-import * as tasksApi from '../../../../services/api/tasks';
-import * as subtasksApi from '../../../../services/api/subtasks';
-import * as evidenceApi from '../../../../services/api/evidence';
-import * as complianceApi from '../../../../services/api/compliance';
-import * as usersApi from '../../../../services/api/users';
-import * as projectsApi from '../../../../services/api/projects';
-import * as escalationsApi from '../../../../services/api/escalations';
+import { useDispatch, useSelector } from 'react-redux';
+import { memberReads, useMemberReads } from '../useMemberReads';
+import { fetchTaskById, selectTaskById, selectTaskMutation } from '../../../../store/tasks';
+import { updateSubtask, selectSubtasksByTaskId } from '../../../../store/subtasks';
+import { selectUserById } from '../../../../store/users';
+import { selectProjectById } from '../../../../store/projects';
+import { selectAllEscalations } from '../../../../store/escalations';
+import { selectAllEvidence, deleteEvidence } from '../../../../store/evidence';
+import { selectAllComplianceBindings } from '../../../../store/complianceBindings';
+import { selectAllComplianceViolations, fetchComplianceViolations } from '../../../../store/complianceViolations';
 import { AlertTriangle, FileText, ShieldAlert } from 'lucide-react';
+
+const reads = [memberReads.users, memberReads.projects, memberReads.escalations, memberReads.evidence, memberReads.complianceBindings, memberReads.complianceViolations];
 
 export default function MemberTaskDetail() {
   const { id: taskId } = useParams();
@@ -32,18 +37,42 @@ export default function MemberTaskDetail() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [task, setTask] = useState(null);
-  const [project, setProject] = useState(null);
-  const [manager, setManager] = useState(null);
-  const [subtasks, setSubtasks] = useState([]);
-  const [evidenceList, setEvidenceList] = useState([]);
-  const [taskViolations, setTaskViolations] = useState([]);
-  const [openExtensionRequests, setOpenExtensionRequests] = useState([]);
-  // Track which subtasks have been submitted this session so Submit btn hides after send
-  const [submittedSubtaskIds, setSubmittedSubtaskIds] = useState(new Set());
-  const [isEvidenceRequired, setIsEvidenceRequired] = useState(false);
-  const [complianceRule, setComplianceRule] = useState(null);
+  const dispatch = useDispatch();
+  const lists = useMemberReads(reads);
+  const task = useSelector(state => selectTaskById(state, taskId));
+  const detailStatus = useSelector(state => selectTaskMutation(state, 'getById').status);
+  const detailError = useSelector(state => selectTaskMutation(state, 'getById').error);
+  const loading = lists.loading || detailStatus === 'idle' || detailStatus === 'loading';
+  const error = lists.error;
+  const project = useSelector(state => selectProjectById(state, task?.projectId || task?.project?.id)) || task?.project;
+  const leadId = (task?.assignedToId && String(task.assignedToId) !== String(user?.id) ? task.assignedToId : null)
+    || (task?.assignedTo?.id && String(task.assignedTo.id) !== String(user?.id) ? task.assignedTo.id : null)
+    || task?.createdById || task?.createdBy?.id || user?.managerId;
+  const manager = useSelector(state => selectUserById(state, leadId)) || (leadId === task?.assignedTo?.id ? task?.assignedTo : task?.createdBy);
+  const subtasks = useSelector(state => selectSubtasksByTaskId(state, taskId));
+  const allEscalations = useSelector(selectAllEscalations);
+  const openExtensionRequests = allEscalations.filter(
+    (e) => String(e.taskId) === String(taskId) &&
+           e.blockerType === 'Extension Request' &&
+           ['Open', 'Reviewed', 'Pending'].includes(e.status || 'Open')
+  );
+  const allEvidence = useSelector(selectAllEvidence);
+  const evidenceList = allEvidence.filter(e => String(e.taskId || e.task_id || e.task?.id) === taskId);
+  const bindings = useSelector(selectAllComplianceBindings);
+  const violations = useSelector(selectAllComplianceViolations);
+  const taskViolations = violations.filter(v => String(v.entityId) === taskId && ['Open', 'Under_Review'].includes(v.status));
+  const matchingRule = bindings.find(({ rule, scopeType, scopeId }) => {
+    if (!task || !rule?.isActive || rule.criteria?.requirement?.type !== 'EVIDENCE_REQUIRED') return false;
+    const scopes = {
+      Company: task.companyId || user?.companyId,
+      Project: task.projectId || project?.id,
+      Team: project?.teamId || project?.team?.id,
+      Branch: project?.team?.branchId,
+    };
+    return scopes[scopeType] != null && String(scopes[scopeType]) === String(scopeId);
+  });
+  const isEvidenceRequired = Boolean(matchingRule || taskViolations.length);
+  const complianceRule = matchingRule?.rule || taskViolations[0]?.rule;
 
   // Modals state
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -67,105 +96,12 @@ export default function MemberTaskDetail() {
   };
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadTaskDetails() {
-      if (!taskId) return;
-      setLoading(true);
-      try {
-        const [taskRes, usersRes, projectsRes, evRes, bindingsRes, violationsRes, escalationsRes] = await Promise.allSettled([
-          tasksApi.get(taskId),
-          usersApi.list(),
-          projectsApi.list(),
-          evidenceApi.list(),
-          complianceApi.getBindings(),
-          complianceApi.getViolations(),
-          escalationsApi.list(),
-        ]);
-
-        if (!isMounted) return;
-
-        const rawTask = taskRes.status === 'fulfilled' && taskRes.value ? (taskRes.value.data || taskRes.value) : null;
-        if (!rawTask) {
-          setLoading(false);
-          return;
-        }
-
-        setTask(rawTask);
-
-        const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
-        const allProjects = projectsRes.status === 'fulfilled' && projectsRes.value ? (Array.isArray(projectsRes.value) ? projectsRes.value : projectsRes.value.data || []) : [];
-        const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
-        const allBindings = bindingsRes.status === 'fulfilled' && bindingsRes.value ? (Array.isArray(bindingsRes.value) ? bindingsRes.value : bindingsRes.value.data || []) : [];
-        const allViolations = violationsRes.status === 'fulfilled' && violationsRes.value ? (Array.isArray(violationsRes.value) ? violationsRes.value : violationsRes.value.data || []) : [];
-        const allEscalations = escalationsRes.status === 'fulfilled' && escalationsRes.value ? (Array.isArray(escalationsRes.value) ? escalationsRes.value : escalationsRes.value.data || []) : [];
-
-        const openExts = allEscalations.filter(
-          (e) => String(e.taskId) === String(taskId) &&
-                 e.blockerType === 'Extension Request' &&
-                 ['Open', 'Reviewed', 'Pending'].includes(e.status || 'Open')
-        );
-        setOpenExtensionRequests(openExts);
-
-        setSubtasks(Array.isArray(rawTask.subtasks) ? rawTask.subtasks : []);
-        setEvidenceList(allEv.filter((e) => String(e.taskId || e.task_id || e.task?.id) === String(taskId)));
-
-        const activeViolations = allViolations.filter(
-          (v) => String(v.entityId) === String(taskId) && ['Open', 'Under_Review'].includes(v.status)
-        );
-        setTaskViolations(activeViolations);
-
-        const projId = rawTask.projectId || rawTask.project?.id;
-        const projectObj = allProjects.find((p) => String(p.id) === String(projId)) || rawTask.project || null;
-        setProject(projectObj);
-
-        const leadId = rawTask.assignedToId || rawTask.assignedTo?.id || rawTask.createdById || rawTask.createdBy?.id || user?.managerId;
-        setManager(allUsers.find((u) => String(u.id) === String(leadId)) || rawTask.assignedTo || rawTask.createdBy || null);
-
-        // Check if any active compliance rule mandates evidence for this deliverable
-        const matchingRule = allBindings.find((b) => {
-          if (!b.rule || !b.rule.isActive) return false;
-          const reqType = b.rule.criteria?.requirement?.type;
-          if (reqType !== 'EVIDENCE_REQUIRED') return false;
-
-          const scopeType = b.scopeType;
-          const scopeId = String(b.scopeId);
-          if (scopeType === 'Company' && scopeId === String(rawTask.companyId || user?.companyId)) return true;
-          if (scopeType === 'Project' && scopeId === String(rawTask.projectId || projectObj?.id)) return true;
-          if (scopeType === 'Team' && scopeId === String(projectObj?.teamId || projectObj?.team?.id)) return true;
-          if (scopeType === 'Branch' && scopeId === String(projectObj?.team?.branchId)) return true;
-          return false;
-        });
-
-        setIsEvidenceRequired(Boolean(matchingRule || activeViolations.length > 0));
-        setComplianceRule(matchingRule?.rule || activeViolations[0]?.rule || null);
-      } catch (err) {
-        console.error('Error loading task details:', err);
-        if (isMounted) toast.error('Failed to load task');
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }
-
-    loadTaskDetails();
-    return () => {
-      isMounted = false;
-    };
-  }, [taskId, user?.id]);
-
-  // Members submit their own subtasks (In_Review); the Team Lead approves them.
-  const markSubmitted = (ids) => {
-    const idSet = new Set(ids.map(String));
-    setSubtasks((prev) =>
-      prev.map((st) => (idSet.has(String(st.id || st.subtaskId)) ? { ...st, status: 'In_Review' } : st))
-    );
-    setSubmittedSubtaskIds((prev) => new Set([...prev, ...ids]));
-  };
+    if (taskId) dispatch(fetchTaskById(taskId));
+  }, [dispatch, taskId]);
 
   const handleSubtaskSubmit = async (subId) => {
     try {
-      await subtasksApi.update(subId, { status: 'In_Review' });
-      markSubmitted([subId]);
+      await dispatch(updateSubtask({ id: subId, data: { status: 'In_Review' } })).unwrap();
       toast.success('Subtask sent to your Team Lead for review.');
     } catch (err) {
       toast.error(err.message || 'Could not submit subtask for review.');
@@ -174,8 +110,7 @@ export default function MemberTaskDetail() {
 
   const handleDeleteEvidence = async (evId) => {
     try {
-      await evidenceApi.remove(evId);
-      setEvidenceList((prev) => prev.filter((e) => e.id !== evId));
+      await dispatch(deleteEvidence(evId)).unwrap();
       toast.success('Evidence removed.');
     } catch {
       toast.error('Failed to delete evidence.');
@@ -191,13 +126,13 @@ export default function MemberTaskDetail() {
     );
   }
 
-  if (!task) {
+  if (!task || detailStatus === 'failed') {
     return (
       <div className="max-w-2xl mx-auto py-12 text-center">
         <EmptyState
           icon={<AlertTriangle className="w-10 h-10 text-amber-500" />}
           title="Task not found"
-          description="The requested deliverable could not be loaded or may have been reassigned."
+          description={detailError?.message || "The requested deliverable could not be loaded or may have been reassigned."}
           action={
             <Button variant="primary" onClick={() => navigate(PATHS.MEMBER.TASKS)}>
               Back to My Tasks
@@ -239,6 +174,7 @@ export default function MemberTaskDetail() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
       {/* Decomposed Header Section */}
       <TaskHeader
         task={task}
@@ -301,7 +237,6 @@ export default function MemberTaskDetail() {
               setIsExtensionModalOpen(true);
             } : undefined}
             extensionRequests={openExtensionRequests}
-            submittedSubtaskIds={submittedSubtaskIds}
             currentUserId={user?.id}
           />
 
@@ -384,12 +319,6 @@ export default function MemberTaskDetail() {
         isEvidenceRequired={isEvidenceRequired}
         complianceRuleName={complianceRule?.name}
         existingEvidenceCount={evidenceList.length}
-        onSuccess={(newEv, submittedIds = []) => {
-          markSubmitted(submittedIds);
-          if (newEv) {
-            setEvidenceList((prev) => [newEv, ...prev]);
-          }
-        }}
       />
 
       <ReportBlockerModal
@@ -414,30 +343,13 @@ export default function MemberTaskDetail() {
         taskTitle={task?.title}
         currentDeadline={selectedSubtaskForExt?.dueDate || selectedSubtaskForExt?.deadline || task?.dueDate || task?.deadline}
         parentTaskDeadline={task?.dueDate || task?.deadline}
-        onSuccess={() => {
-          escalationsApi.list().then((res) => {
-            const list = Array.isArray(res) ? res : res?.data || [];
-            const openExts = list.filter(
-              (e) => String(e.taskId) === String(taskId) &&
-                     e.blockerType === 'Extension Request' &&
-                     ['Open', 'Reviewed', 'Pending'].includes(e.status || 'Open')
-            );
-            setOpenExtensionRequests(openExts);
-          }).catch(() => {});
-        }}
       />
 
       <UploadEvidenceModal
         isOpen={isEvidenceModalOpen}
         onClose={() => setIsEvidenceModalOpen(false)}
         taskId={taskId}
-        onSuccess={(newEv) => {
-          if (newEv) setEvidenceList((prev) => [newEv, ...prev]);
-          complianceApi.getViolations().then((res) => {
-            const list = Array.isArray(res) ? res : res?.data || [];
-            setTaskViolations(list.filter((v) => String(v.entityId) === String(taskId) && ['Open', 'Under_Review'].includes(v.status)));
-          }).catch(() => { });
-        }}
+        onSuccess={() => dispatch(fetchComplianceViolations({ force: true }))}
       />
     </div>
   );

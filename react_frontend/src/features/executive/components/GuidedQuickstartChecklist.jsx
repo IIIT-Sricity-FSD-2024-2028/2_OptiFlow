@@ -16,6 +16,8 @@ import {
   Compass,
 } from "lucide-react";
 import { PATHS } from "../../../app/paths";
+import { ROLES } from "../../../roles";
+import { useAuth } from "../../../context/AuthContext";
 
 export function GuidedQuickstartChecklist({
   metrics = {},
@@ -33,6 +35,10 @@ export function GuidedQuickstartChecklist({
   });
 
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { user } = useAuth();
+  // Only the owner / system admin may open the HR pages (ROLE_GROUPS.HR). Others get a page
+  // they can actually use instead of the "unauthorized" screen.
+  const canManageOrg = [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN].includes(user?.role);
 
   const {
     totalBranches = 0,
@@ -56,7 +62,7 @@ export function GuidedQuickstartChecklist({
       description:
         "Establish physical or regional branch units to structure squads and compliance boundaries.",
       isDone: step1Done,
-      path: PATHS.HR.BRANCHES,
+      path: canManageOrg ? PATHS.HR.BRANCHES : PATHS.EXECUTIVE.PORTFOLIO,
       icon: Building2,
       actionText: step1Done ? "Manage Branches" : "Create First Branch",
     },
@@ -76,7 +82,8 @@ export function GuidedQuickstartChecklist({
       description:
         "Add engineers, designers, or compliance reviewers to participate in milestone deliverables.",
       isDone: step3Done,
-      path: PATHS.EXECUTIVE.EMPLOYEES,
+      // The employee directory is read-only; people are added on the HR users page.
+      path: canManageOrg ? PATHS.HR.USERS : PATHS.EXECUTIVE.EMPLOYEES,
       icon: UserPlus,
       actionText: step3Done ? "View Directory" : "Invite Colleagues",
     },
@@ -86,7 +93,7 @@ export function GuidedQuickstartChecklist({
       description:
         "Define milestones, assign squads, and attach compliance gates for evidence reviews.",
       isDone: step4Done,
-      path: PATHS.EXECUTIVE.PROJECTS,
+      path: step4Done ? PATHS.EXECUTIVE.PROJECTS : `${PATHS.EXECUTIVE.PROJECTS}?new=1`,
       icon: FolderKanban,
       actionText: step4Done ? "View Projects" : "New Project",
     },

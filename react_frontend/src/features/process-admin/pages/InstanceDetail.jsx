@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getInstance, actionStep, updateInstance } from '../../../services/api/process';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchProcessInstanceById,
+  selectProcessInstanceById,
+  selectProcessInstanceDetailRequest,
+  actionInstanceStep,
+  updateProcessInstance,
+  selectProcessInstanceMutation,
+} from '../../../store/processInstances';
 import { PATHS } from '../../../app/paths';
 import { Button } from '../../../shared/components/Button';
 import { Badge } from '../../../shared/components/Badge';
@@ -13,44 +21,32 @@ export default function ProcessAdminInstanceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [instance, setInstance] = useState(null);
-  const [error, setError] = useState(null);
+  const dispatch = useDispatch();
+  const instance = useSelector(state => selectProcessInstanceById(state, id));
+  const request = useSelector(state => selectProcessInstanceDetailRequest(state, id));
+  const update = useSelector(state => selectProcessInstanceMutation(state, 'update:' + id));
+  const loading = !request || request.status === 'loading' || update?.status === 'loading';
+  const error = (request?.error || update?.error)?.message;
 
   // Action Dialog State
   const [actionModal, setActionModal] = useState({
     open: false,
-    step: null,
+    stepId: null,
     actionType: null, // 'Approved' | 'Rejected' | 'Skipped'
   });
+  const selectedStep = instance?.steps?.find(step => step.id === actionModal.stepId);
   const [actionComment, setActionComment] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const submitting = useSelector(state => selectProcessInstanceMutation(state, 'action:' + actionModal.stepId)?.status === 'loading');
   const [actionError, setActionError] = useState('');
 
-  const loadInstance = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await getInstance(id);
-      const inst = res?.data ?? res;
-      setInstance(inst);
-    } catch (err) {
-      setError(err.message || 'Failed to load process instance details');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (id) {
-      loadInstance();
-    }
-  }, [id]);
+    if (id) dispatch(fetchProcessInstanceById(id));
+  }, [dispatch, id]);
 
   const handleOpenActionModal = (step, actionType) => {
     setActionModal({
       open: true,
-      step,
+      stepId: step.id,
       actionType,
     });
     setActionComment('');
@@ -58,35 +54,25 @@ export default function ProcessAdminInstanceDetail() {
   };
 
   const handleExecuteAction = async () => {
-    if (!actionModal.step) return;
+    if (!selectedStep) return;
 
     try {
-      setSubmitting(true);
       setActionError('');
 
-      await actionStep(actionModal.step.id, {
+      await dispatch(actionInstanceStep({ id: actionModal.stepId, data: {
         status: actionModal.actionType,
         comment: actionComment.trim() || undefined,
-      });
+      } })).unwrap();
 
-      setActionModal({ open: false, step: null, actionType: null });
-      await loadInstance();
+      setActionModal({ open: false, stepId: null, actionType: null });
+      await dispatch(fetchProcessInstanceById(id)).unwrap();
     } catch (err) {
       setActionError(err.message || `Failed to ${actionModal.actionType?.toLowerCase()} step`);
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const handleManualStatusChange = async (newStatus) => {
-    try {
-      setLoading(true);
-      await updateInstance(id, { status: newStatus });
-      await loadInstance();
-    } catch (err) {
-      setError(err.message || `Failed to update status to ${newStatus}`);
-      setLoading(false);
-    }
+    await dispatch(updateProcessInstance({ id, data: { status: newStatus } }));
   };
 
   if (loading) {
@@ -305,13 +291,13 @@ export default function ProcessAdminInstanceDetail() {
       {/* Step Action Confirmation Modal */}
       <Modal
         isOpen={actionModal.open}
-        onClose={() => setActionModal({ open: false, step: null, actionType: null })}
+        onClose={() => setActionModal({ open: false, stepId: null, actionType: null })}
         title={`${actionModal.actionType === 'Approved' ? 'Approve' : 'Reject'} Step`}
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setActionModal({ open: false, step: null, actionType: null })}
+              onClick={() => setActionModal({ open: false, stepId: null, actionType: null })}
               disabled={submitting}
             >
               Cancel
@@ -328,11 +314,11 @@ export default function ProcessAdminInstanceDetail() {
       >
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            You are marking <b>{actionModal.step?.templateStep?.name || 'this step'}</b> as{' '}
+            You are marking <b>{selectedStep?.templateStep?.name || 'this step'}</b> as{' '}
             <span className={actionModal.actionType === 'Approved' ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold'}>
               {actionModal.actionType}
             </span>.
-            {actionModal.actionType === 'Rejected' && actionModal.step?.templateStep?.onRejectGotoStep && (
+            {actionModal.actionType === 'Rejected' && selectedStep?.templateStep?.onRejectGotoStep && (
               <span className="block mt-2 text-amber-800 bg-amber-50 p-2.5 rounded-md text-xs">
                 Notice: The process state machine will automatically loop back execution to the configured return step.
               </span>

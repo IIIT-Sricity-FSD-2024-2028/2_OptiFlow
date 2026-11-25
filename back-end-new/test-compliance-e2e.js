@@ -331,6 +331,110 @@ async function runComplianceE2ETests() {
       console.log('         Audit log endpoint lockdown confirmed');
     });
 
+    console.log('\n--- Phase 7: Compliance SLA Timers, CSV Exports & Automated Resolution ---');
+    await testStep('Violations API hydrates SLA timers and labels (Improvement 1)', async () => {
+      const res = await fetch(`${baseUrl}/api/compliance-violations`, {
+        headers: headersFor(coToken),
+      });
+      assert.equal(res.status, 200);
+      const json = await res.json();
+      assert.ok(json.success);
+      const items = json.data;
+      assert.ok(items.length > 0, 'Must have violations to inspect');
+      const v = items[0];
+      assert.ok(v.dueDate, 'Violation must have dueDate');
+      assert.ok(['On_Track', 'At_Risk', 'Breached', 'Met', 'Resolved_Late'].includes(v.slaStatus), `Invalid slaStatus: ${v.slaStatus}`);
+      assert.ok(typeof v.slaRemainingLabel === 'string', 'Violation must have slaRemainingLabel');
+      console.log(`         Hydrated SLA check passed: dueDate=${v.dueDate}, status=${v.slaStatus}, label=${v.slaRemainingLabel}`);
+    });
+
+    await testStep('POST /api/compliance-violations/check-slas executes auto-escalation check', async () => {
+      const res = await fetch(`${baseUrl}/api/compliance-violations/check-slas`, {
+        method: 'POST',
+        headers: headersFor(coToken),
+      });
+      assert.equal(res.status, 200);
+      const json = await res.json();
+      assert.ok(json.success);
+      assert.ok('escalatedCount' in json);
+      console.log(`         SLA check executed successfully: ${json.escalatedCount} escalated`);
+    });
+
+    await testStep('GET /api/compliance-violations/export/csv downloads audit CSV (Improvement 2)', async () => {
+      const res = await fetch(`${baseUrl}/api/compliance-violations/export/csv`, {
+        headers: headersFor(coToken),
+      });
+      assert.equal(res.status, 200);
+      assert.ok(res.headers.get('content-type').includes('text/csv'), 'Must return text/csv');
+      const csv = await res.text();
+      assert.ok(csv.includes('Violation ID'));
+      assert.ok(csv.includes('SLA Status'));
+      assert.ok(csv.includes('Assigned Officer'));
+      console.log(`         Violations CSV verified (${csv.length} bytes)`);
+    });
+
+    await testStep('GET /api/evidence/export/csv downloads evidence audit CSV (Improvement 2)', async () => {
+      const res = await fetch(`${baseUrl}/api/evidence/export/csv`, {
+        headers: headersFor(tlToken),
+      });
+      assert.equal(res.status, 200);
+      assert.ok(res.headers.get('content-type').includes('text/csv'), 'Must return text/csv');
+      const csv = await res.text();
+      assert.ok(csv.includes('Evidence ID'));
+      assert.ok(csv.includes('Submitter Name'));
+      assert.ok(csv.includes('Reviewer Name'));
+      console.log(`         Evidence CSV verified (${csv.length} bytes)`);
+    });
+
+    await testStep('Evidence submission transitions violation to Under_Review & approval auto-resolves (Improvement 3)', async () => {
+      // Find an open violation for testing
+      const allViolationsRes = await fetch(`${baseUrl}/api/compliance-violations?status=Open`, {
+        headers: headersFor(coToken),
+      });
+      const allViolations = (await allViolationsRes.json()).data;
+      const targetViolation = allViolations[0];
+      assert.ok(targetViolation, 'Must have at least one Open violation for testing');
+
+      // TM submits evidence referencing this violation
+      const createEvRes = await fetch(`${baseUrl}/api/evidence`, {
+        method: 'POST',
+        headers: headersFor(tmToken),
+        body: JSON.stringify({
+          title: 'Automated Lifecycle Evidence Deliverable',
+          taskId: targetViolation.entityType === 'Task' ? targetViolation.entityId : null,
+          violationId: targetViolation.id,
+          evidenceType: 'Document',
+          notes: 'Deliverable submitted by Team Member to remediate policy violation',
+        }),
+      });
+      assert.equal(createEvRes.status, 201);
+      const evJson = await createEvRes.json();
+      const testEvId = evJson.data.id;
+
+      // Verify violation transitioned to Under_Review
+      const vCheckRes = await fetch(`${baseUrl}/api/compliance-violations/${targetViolation.id}`, {
+        headers: headersFor(coToken),
+      });
+      const vCheck = (await vCheckRes.json()).data;
+      assert.equal(vCheck.status, 'Under_Review', 'Violation must be Under_Review while evidence is pending');
+
+      // TL approves the evidence
+      const approveRes = await fetch(`${baseUrl}/api/evidence/${testEvId}`, {
+        method: 'PATCH',
+        headers: headersFor(tlToken),
+        body: JSON.stringify({ status: 'Approved' }),
+      });
+      assert.equal(approveRes.status, 200);
+
+      // Verify violation is now Resolved
+      const vFinalRes = await fetch(`${baseUrl}/api/compliance-violations/${targetViolation.id}`, {
+        headers: headersFor(coToken),
+      });
+      const vFinal = (await vFinalRes.json()).data;
+      assert.equal(vFinal.status, 'Resolved', 'Violation must be Resolved after evidence is Approved');
+      console.log(`         Violation ${targetViolation.id} auto-resolved with remarks: "${vFinal.resolutionRemarks}"`);
+    });
+
     console.log('\n================================================================================');
     console.log(`  SUMMARY: All ${passedTests} / ${totalTests} End-to-End Compliance Tests PASSED!`);
     console.log('================================================================================\n');

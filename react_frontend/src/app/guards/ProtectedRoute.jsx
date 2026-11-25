@@ -36,11 +36,17 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
     return <Navigate to={PATHS.PLATFORM.DASHBOARD} replace />;
   }
 
-  // 4. Do they have the right role for this specific route?
+  // 4. Admin-created or reset password still in use? The API refuses everything else until it is
+  //    replaced (403 PASSWORD_CHANGE_REQUIRED), so finish that step first.
+  if (!isPlatformUser && user.mustChangePassword && location.pathname !== PATHS.COMMON.CHANGE_PASSWORD) {
+    return <Navigate to={PATHS.COMMON.CHANGE_PASSWORD} replace />;
+  }
+
+  // 5. Do they have the right role for this specific route?
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
     return <Navigate to={PATHS.COMMON.UNAUTHORIZED} replace />;
   }
 
-  // 5. Access granted! Render the children routes.
+  // 6. Access granted! Render the children routes.
   return <Outlet />;
 };

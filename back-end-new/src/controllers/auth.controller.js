@@ -206,12 +206,18 @@ export async function handleLogin(req, res, next) {
       console.warn('[Auth] Notice: Could not fetch team memberships:', tmErr.message);
     }
 
+    // An HR/admin-chosen (or reset) password must be replaced before anything else works: the auth
+    // middleware answers every other call with 403 PASSWORD_CHANGE_REQUIRED. Tell the client up
+    // front so it can open the "set your password" screen instead of a dashboard that cannot load.
+    const mustChangePassword = user.passwordChangedAt === null;
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
         success: true,
         token,
+        mustChangePassword,
         targetRoute,
         role: roleSlug,
         roleSlug,
@@ -228,6 +234,7 @@ export async function handleLogin(req, res, next) {
           assignedRole: roleLabel,
           roleId: matchedAssignment?.roleId || matchedAssignment?.role?.id || null,
           targetRoute,
+          mustChangePassword,
           scopeType: matchedAssignment?.scopeType || null,
           scopeId: matchedAssignment?.scopeId || null,
           branchName,
@@ -343,6 +350,7 @@ export async function handleRegisterCompany(req, res, next) {
           fullName: ownerFullName,
           email: ownerEmail.toLowerCase(),
           passwordHash,
+          passwordChangedAt: new Date(),
         },
       });
 
@@ -662,6 +670,107 @@ export async function handleChangePassword(req, res, next) {
       message: 'Password changed successfully.',
       data: { token },
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /auth/forgot-password & POST /api/auth/forgot-password  (public)
+ * Body: { email }
+ *
+ * There is no outgoing email yet, so recovery is admin-assisted: the request notifies (in-app)
+ * the people who are allowed to reset this user's password. They set a temporary password from
+ * the user's HR profile; the user must replace it at first sign-in (passwordChangedAt = null).
+ *
+ * Who is notified mirrors the PATCH /users/:id rules (D-S3):
+ *  - a Company Owner's password can only be reset by another Company Owner
+ *  - a System Admin's by an Owner or System Admin
+ *  - everyone else's by an Owner, System Admin or HR (Access Governance)
+ *
+ * The answer is always the same, whether or not the address exists, so the endpoint cannot be
+ * used to discover accounts.
+ */
+const RESET_ADMIN_SLUGS = {
+  company_owner: ['company_owner'],
+  system_admin: ['company_owner', 'system_admin'],
+  default: ['company_owner', 'system_admin', 'access_governance'],
+};
+
+export async function handleForgotPassword(req, res, next) {
+  const generic = {
+    success: true,
+    message:
+      'If an account exists for that email, your company administrator has been notified and will send you a temporary password.',
+  };
+  try {
+    const email = String(req.body?.email || '').trim();
+    validateRequired({ email }, ['email']);
+    validateEmail(email);
+
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      include: {
+        company: { select: { id: true, status: true } },
+        roleAssignments: {
+          where: { revokedAt: null },
+          include: { role: { include: { roleTemplate: { select: { slug: true } } } } },
+        },
+      },
+    });
+
+    // Unknown, deactivated or suspended accounts get the same answer and nothing happens.
+    if (!user || !user.isActive || !user.companyId || user.company?.status !== 'Active') {
+      return res.status(200).json(generic);
+    }
+
+    const { roleSlug } = resolveUserRole(user);
+    const adminSlugs = RESET_ADMIN_SLUGS[roleSlug] || RESET_ADMIN_SLUGS.default;
+
+    const admins = await prisma.user.findMany({
+      where: {
+        companyId: user.companyId,
+        isActive: true,
+        id: { not: user.id },
+        roleAssignments: {
+          some: {
+            revokedAt: null,
+            role: { isSystem: true, roleTemplate: { slug: { in: adminSlugs } } },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          companyId: user.companyId,
+          userId: admin.id,
+          title: 'Password reset requested',
+          message: `${user.fullName} (${user.email}) forgot their password. Open their profile under Users and choose "Reset Password" to give them a temporary password.`,
+          type: 'Security',
+        })),
+      });
+    } else {
+      console.warn(`[ForgotPassword] No administrator can reset the password of user ${user.id}; nobody was notified.`);
+    }
+
+    try {
+      await createSystemAuditLog({
+        companyId: user.companyId,
+        targetUserId: user.id,
+        action: AUDIT_ACTIONS.UPDATE,
+        performedById: null,
+        ipAddress: req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+        newValue: { message: 'Password reset requested via Forgot Password', notifiedAdmins: admins.length },
+      });
+    } catch (auditErr) {
+      console.warn('[AuditLog] Notice: forgot-password audit log failed:', auditErr.message);
+    }
+
+    return res.status(200).json(generic);
   } catch (err) {
     next(err);
   }

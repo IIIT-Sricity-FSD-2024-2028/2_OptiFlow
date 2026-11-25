@@ -42,7 +42,11 @@ const ALLOWED_EVIDENCE_STATUSES = [
 /** Include shared by list, create and update so every response has the same shape. */
 function ruleListInclude(companyId) {
   return {
-    category: true,
+    category: {
+      include: {
+        owner: { select: { id: true, fullName: true, email: true } },
+      },
+    },
     bindings: true,
     violations: {
       where: { companyId, status: "Open" },
@@ -86,7 +90,11 @@ export async function getComplianceRuleById(req, res, next) {
         OR: [{ companyId: null }, { companyId: req.user.companyId }],
       },
       include: {
-        category: true,
+        category: {
+          include: {
+            owner: { select: { id: true, fullName: true, email: true } },
+          },
+        },
         bindings: true,
         violations: { where: { companyId: req.user.companyId } },
         _count: {

@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listInstances, deleteInstance } from '../../../services/api/process';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchProcessInstances,
+  selectAllProcessInstances,
+  selectProcessInstancesStatus,
+  selectProcessInstancesError,
+  deleteProcessInstance,
+  selectProcessInstanceMutation,
+} from '../../../store/processInstances';
 import { PATHS } from '../../../app/paths';
 import { Table } from '../../../shared/components/Table';
 import { Badge } from '../../../shared/components/Badge';
@@ -13,45 +21,33 @@ const STATUS_OPTIONS = ['ALL', 'Active', 'Completed', 'Rejected', 'Draft', 'Canc
 
 export default function ProcessAdminInstances() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState([]);
+  const dispatch = useDispatch();
+  const instances = useSelector(selectAllProcessInstances);
+  const status = useSelector(selectProcessInstancesStatus);
+  const loading = status === 'idle' || status === 'loading';
+  const loadError = useSelector(selectProcessInstancesError);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [error, setError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const error = deleteError || loadError?.message;
 
   // Deletion State
-  const [instanceToDelete, setInstanceToDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const fetchInstances = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await listInstances();
-      const raw = res?.data ?? res;
-      setInstances(Array.isArray(raw) ? raw : []);
-    } catch (err) {
-      setError(err.message || 'Failed to load process instances');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [selectedId, setSelectedId] = useState(null);
+  const instanceToDelete = instances.find(row => row.id === selectedId);
+  const deleting = useSelector(state => selectProcessInstanceMutation(state, 'delete:' + instanceToDelete?.id)?.status === 'loading');
 
   useEffect(() => {
-    fetchInstances();
-  }, []);
+    dispatch(fetchProcessInstances());
+  }, [dispatch]);
 
   const handleDeleteConfirm = async () => {
     if (!instanceToDelete) return;
     try {
-      setDeleting(true);
-      await deleteInstance(instanceToDelete.id);
-      setInstanceToDelete(null);
-      await fetchInstances();
+      setDeleteError(null);
+      await dispatch(deleteProcessInstance(instanceToDelete.id)).unwrap();
+      setSelectedId(null);
     } catch (err) {
-      setError(err.message || 'Failed to delete process instance');
-    } finally {
-      setDeleting(false);
+      setDeleteError(err.message || 'Failed to delete process instance');
     }
   };
 
@@ -150,7 +146,7 @@ export default function ProcessAdminInstances() {
             <Button
               variant="danger"
               className="text-xs py-1 px-2.5"
-              onClick={() => setInstanceToDelete(row)}
+              onClick={() => setSelectedId(row.id)}
             >
               Delete
             </Button>
@@ -222,7 +218,7 @@ export default function ProcessAdminInstances() {
         variant="danger"
         loading={deleting}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setInstanceToDelete(null)}
+        onCancel={() => setSelectedId(null)}
       />
     </div>
   );

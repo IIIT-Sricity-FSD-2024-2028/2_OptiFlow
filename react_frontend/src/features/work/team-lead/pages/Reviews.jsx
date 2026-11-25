@@ -13,6 +13,7 @@ import {
   CheckCircle2, 
   XCircle, 
   Clock,
+  Download,
 } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { updateTask } from '../../../../store/tasks';
@@ -65,11 +66,39 @@ export default function TeamLeadReviews() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
     setToast({ visible: true, type, message });
     setTimeout(() => setToast(t => ({ ...t, visible: false })), 3000);
+  };
+
+  const handleExportEvidenceCsv = async () => {
+    try {
+      setIsExporting(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/evidence/export/csv', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) throw new Error('Failed to export evidence data');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `compliance-evidence-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('success', 'Evidence audit log exported successfully.');
+    } catch (err) {
+      showToast('error', err.message || 'Failed to download CSV');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -187,7 +216,19 @@ export default function TeamLeadReviews() {
           <h1 className="text-3xl font-bold text-gray-900">Team Evidence Vault</h1>
           <p className="text-gray-500 mt-1">Review and approve your team's submitted evidence</p>
         </div>
-        <Badge status="info">Team Lead</Badge>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExportEvidenceCsv}
+            disabled={isExporting}
+            className="inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Download size={14} className={isExporting ? "animate-bounce" : ""} />
+            <span>{isExporting ? "Exporting..." : "Export Audit CSV"}</span>
+          </Button>
+          <Badge status="info">Team Lead</Badge>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6 items-start">

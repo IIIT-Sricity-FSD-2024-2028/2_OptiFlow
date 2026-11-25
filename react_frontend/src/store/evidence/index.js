@@ -3,6 +3,8 @@ import { baseState } from "../core/createStubSlice";
 import {
   fetchEvidence,
   fetchEvidenceById,
+  createEvidence,
+  updateEvidence,
   reviewEvidence,
   uploadEvidenceFile,
   deleteEvidence,
@@ -56,7 +58,32 @@ export const evidenceSlice = createSlice({
         state.error = action.payload;
       })
 
-      // 3. Review / Adjudicate Evidence
+      // 3. Create Evidence
+      .addCase(createEvidence.fulfilled, (state, action) => {
+        const created = action.payload;
+        if (!created?.id) return;
+        const index = state.items.findIndex((item) => item.id === created.id);
+        if (index !== -1) {
+          state.items[index] = { ...state.items[index], ...created };
+        } else {
+          state.items.unshift(created);
+        }
+      })
+
+      // 4. Update Evidence
+      .addCase(updateEvidence.fulfilled, (state, action) => {
+        const updated = action.payload;
+        if (!updated?.id) return;
+        const index = state.items.findIndex((item) => item.id === updated.id);
+        if (index !== -1) {
+          state.items[index] = { ...state.items[index], ...updated };
+        }
+        if (state.currentEvidence && state.currentEvidence.id === updated.id) {
+          state.currentEvidence = { ...state.currentEvidence, ...updated };
+        }
+      })
+
+      // 5. Review / Adjudicate Evidence
       .addCase(reviewEvidence.fulfilled, (state, action) => {
         const updated = action.payload;
         if (!updated?.id) return;
@@ -69,7 +96,7 @@ export const evidenceSlice = createSlice({
         }
       })
 
-      // 4. Upload Evidence File
+      // 6. Upload Evidence File
       .addCase(uploadEvidenceFile.fulfilled, (state, action) => {
         const updated = action.payload;
         if (!updated?.id) return;
@@ -82,7 +109,7 @@ export const evidenceSlice = createSlice({
         }
       })
 
-      // 5. Delete Evidence
+      // 7. Delete Evidence
       .addCase(deleteEvidence.fulfilled, (state, action) => {
         const id = action.payload;
         state.items = state.items.filter((item) => item.id !== id);

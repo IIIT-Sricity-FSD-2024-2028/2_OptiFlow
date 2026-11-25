@@ -7,7 +7,10 @@ import {
   assertValidScope,
   assertScopeFitsRole,
   assertOwnerAdminGrantRules,
+  assertGrantBelowCaller,
   countActiveOwners,
+  revokeOtherBranchManagers,
+  auditBranchManagerRevokes,
   ROLE_WITH_TEMPLATE,
 } from '../utils/roleAssignmentGuards.js';
 import { withCompanyLock } from '../utils/planLimits.js';
@@ -52,6 +55,7 @@ export async function listRoleAssignments(req, res, next) {
  * - Company Owner can be granted or revoked only by a Company Owner. A System Admin may also
  *   grant it while the company has no owner; that part is checked under the company lock.
  * - System Admin only by a Company Owner or System Admin.
+ * Roles of a user who holds System Admin: see assertMayChangeAdminHolder (checked under the lock).
  */
 function assertMayChangeRole(req, targetUserId, role, verb) {
   if (String(targetUserId) === req.user.id) {
@@ -65,6 +69,23 @@ function assertMayChangeRole(req, targetUserId, role, verb) {
   if (slug === 'system_admin' && !['company_owner', 'system_admin'].includes(req.user.role)) {
     throw new ForbiddenError(`Only a Company Owner or System Admin can ${verb} the System Admin role`);
   }
+}
+
+/**
+ * Roles of a System Admin are changed only by a Company Owner (R2 / D1): a System Admin may not
+ * grant or revoke anything on a peer System Admin, unless the company has no active owner (as for
+ * the F1 bootstrap). Run inside the company lock with its tx as `client`, so the target's
+ * System Admin status is read at the moment of the write.
+ */
+async function assertMayChangeAdminHolder(req, targetUserId, verb, client) {
+  if (req.user.role === 'company_owner') return;
+  const held = await client.roleAssignment.findMany({
+    where: { userId: String(targetUserId), revokedAt: null },
+    include: { role: ROLE_WITH_TEMPLATE },
+  });
+  if (!held.some((ra) => systemSlugOfRole(ra.role) === 'system_admin')) return;
+  if (req.user.role === 'system_admin' && (await countActiveOwners(req.user.companyId, client)) === 0) return;
+  throw new ForbiddenError(`Only the Company Owner can ${verb} roles of a System Administrator`);
 }
 
 export async function createRoleAssignment(req, res, next) {
@@ -96,6 +117,7 @@ export async function createRoleAssignment(req, res, next) {
     }
 
     assertMayChangeRole(req, targetUser.id, role, 'assign');
+    assertGrantBelowCaller(req, role);
     if (!targetUser.isActive) {
       throw new BadRequestError('Roles cannot be assigned to a deactivated user');
     }
@@ -105,10 +127,11 @@ export async function createRoleAssignment(req, res, next) {
     // WHY: Idempotency & DoS Prevention (MAL-04 & NORM-04) - an identical active assignment is
     // returned instead of duplicated. The check and the insert run under the company row lock,
     // so parallel identical requests cannot each create a row.
-    const { assignment, created } = await withCompanyLock(companyId, async (tx) => {
+    const { assignment, created, revokedManagers } = await withCompanyLock(companyId, async (tx) => {
+      await assertMayChangeAdminHolder(req, targetUser.id, 'assign', tx);
       const existing = await tx.roleAssignment.findFirst({
         where: {
-          companyId,
+          user: { companyId },
           userId: targetUser.id,
           roleId: role.id,
           scopeType,
@@ -126,6 +149,7 @@ export async function createRoleAssignment(req, res, next) {
         grantingSlug: systemSlugOfRole(role),
         client: tx,
       });
+      const revoked = await revokeOtherBranchManagers({ req, role, scopeType, scopeId, userId: targetUser.id, client: tx });
 
       const row = await tx.roleAssignment.create({
         data: {
@@ -138,7 +162,7 @@ export async function createRoleAssignment(req, res, next) {
         },
         include: ASSIGNMENT_INCLUDE,
       });
-      return { assignment: row, created: true };
+      return { assignment: row, created: true, revokedManagers: revoked };
     });
 
     if (!created) {
@@ -153,8 +177,8 @@ export async function createRoleAssignment(req, res, next) {
     try {
       await createSystemAuditLog({companyId,
         targetUserId: targetUser.id,
-        // ROLE_ASSIGNED / ROLE_REVOKED are not accepted by utils/audit.js yet (hand-off H5), so role
-        // changes are recorded as PERMISSION_CHANGE with an `event`, which the HR Audit Logs page counts.
+        // Kept as PERMISSION_CHANGE with an `event` field on purpose (utils/audit.js does accept
+        // ROLE_ASSIGNED / ROLE_REVOKED): the HR Audit Logs page counts PERMISSION_CHANGE as role changes.
         action: AUDIT_ACTIONS.PERMISSION_CHANGE,
         performedById: req.user.id,
         newValue: { event: 'ROLE_ASSIGNED', userId: targetUser.id, roleId: role.id, roleLabel: role.label, scopeType, scopeId },
@@ -162,6 +186,7 @@ export async function createRoleAssignment(req, res, next) {
     } catch (auditErr) {
       console.warn('[AuditLog] Notice: Audit record logging during role assignment:', auditErr.message);
     }
+    await auditBranchManagerRevokes(req, role, revokedManagers);
 
     res.status(201).json({
       success: true,
@@ -198,6 +223,7 @@ export async function deleteRoleAssignment(req, res, next) {
     // Identical active duplicates (same user, role and scope, left by older code) are revoked
     // together, so a revoke really removes the access.
     await withCompanyLock(companyId, async (tx) => {
+      await assertMayChangeAdminHolder(req, assignment.userId, 'revoke', tx);
       const identical = await tx.roleAssignment.findMany({
         where: {
           userId: assignment.userId,

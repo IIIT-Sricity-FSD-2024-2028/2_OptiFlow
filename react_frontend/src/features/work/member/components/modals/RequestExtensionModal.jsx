@@ -4,7 +4,8 @@ import { Button } from '../../../../../shared/components/Button';
 import { FormField, Input, Textarea } from '../../../../../shared/components/FormField';
 import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../shared/components/Toast';
-import * as escalationsApi from '../../../../../services/api/escalations';
+import { useDispatch } from 'react-redux';
+import { createEscalation } from '../../../../../store/escalations';
 import { deadlineInput, minExtensionDateInput, maxExtensionDateInput } from '../../../components/dateLimits';
 
 export function RequestExtensionModal({
@@ -22,6 +23,7 @@ export function RequestExtensionModal({
 }) {
   const { user } = useAuth();
   const toast = useToast();
+  const dispatch = useDispatch();
 
   const [extDate, setExtDate] = useState('');
   const [extReason, setExtReason] = useState('');
@@ -57,7 +59,7 @@ export function RequestExtensionModal({
         ? `Subtask: "${subtaskTitle}". Requested new deadline: ${extDate}. Parent task deadline: ${deadlineInput(parentTaskDeadline) || 'N/A'}. Reason: ${extReason.trim()}`
         : `Requested new deadline: ${extDate}. Reason: ${extReason.trim()}`;
 
-      await escalationsApi.create({
+      await dispatch(createEscalation({
         taskId: String(taskId),
         projectId,
         title,
@@ -66,7 +68,7 @@ export function RequestExtensionModal({
         priority: 'Medium',
         reportedBy: user?.id,
         targetManagerId: managerId ? String(managerId) : undefined,
-      });
+      })).unwrap();
 
       toast.success('Extension request sent to your Team Lead.');
       setExtDate('');

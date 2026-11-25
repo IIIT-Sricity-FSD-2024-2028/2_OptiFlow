@@ -15,6 +15,11 @@ export const RoleRedirect = () => {
     return <Navigate to={PATHS.PUBLIC.LOGIN} replace />;
   }
 
+  // First sign-in with an admin-chosen password: set a new one before any dashboard.
+  if (!user.isPlatform && user.mustChangePassword) {
+    return <Navigate to={PATHS.COMMON.CHANGE_PASSWORD} replace />;
+  }
+
   // Map each role to their respective landing page
   switch (user.role) {
     case ROLES.PLATFORM_ADMIN:

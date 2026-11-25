@@ -40,6 +40,16 @@ function validateUploadedFile(file) {
   }
 }
 
+/**
+ * Fire-and-forget notification helper for compliance & review events.
+ */
+function notify(companyId, userId, title, message, type = 'Review') {
+  if (!companyId || !userId) return;
+  prisma.notification
+    .create({ data: { companyId, userId, title, message, type } })
+    .catch((err) => console.warn('[Notification] Notice:', err.message));
+}
+
 /** Include shared by list, get, create, update and upload so every response has the same shape. */
 const EVIDENCE_LIST_INCLUDE = {
   user: { select: { id: true, fullName: true, email: true } },
@@ -179,6 +189,18 @@ export async function createEvidence(req, res, next) {
       include: EVIDENCE_LIST_INCLUDE,
     });
 
+    // If evidence was submitted directly against an open violation, transition it to Under_Review
+    if (violationId) {
+      try {
+        await prisma.complianceViolation.updateMany({
+          where: { id: violationId, status: 'Open' },
+          data: { status: 'Under_Review' },
+        });
+      } catch (vErr) {
+        console.warn('[Violation] Notice: Failed to transition violation to Under_Review:', vErr.message);
+      }
+    }
+
     if (storageDetails) {
       try {
         await prisma.attachment.create({
@@ -216,6 +238,42 @@ export async function createEvidence(req, res, next) {
       });
     } catch (auditErr) {
       console.warn('[Compliance Evidence] Failed to create audit log for createEvidence:', auditErr.message);
+    }
+
+    // Notify the submitter's Team Lead/Manager and Task Creator/Assignee that new evidence has been submitted
+    try {
+      const submitter = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { id: true, fullName: true, email: true, managerUserId: true },
+      });
+
+      const recipients = new Set();
+      if (submitter?.managerUserId && submitter.managerUserId !== req.user.id) {
+        recipients.add(submitter.managerUserId);
+      }
+
+      if (newEvidence.taskId) {
+        const task = await prisma.task.findUnique({
+          where: { id: newEvidence.taskId },
+          select: { id: true, title: true, assignedToId: true, createdById: true },
+        });
+        if (task) {
+          if (task.assignedToId && task.assignedToId !== req.user.id) recipients.add(task.assignedToId);
+          if (task.createdById && task.createdById !== req.user.id) recipients.add(task.createdById);
+        }
+      }
+
+      for (const recipientId of recipients) {
+        notify(
+          req.user.companyId,
+          recipientId,
+          'New Evidence Submitted',
+          `Evidence "${newEvidence.title}" was submitted by ${req.user.fullName || req.user.email} for review.`,
+          'Review'
+        );
+      }
+    } catch (notifErr) {
+      console.warn('[Notification] Notice: Failed to send evidence submission notification:', notifErr.message);
     }
 
     res.status(201).json({
@@ -298,15 +356,19 @@ export async function updateEvidence(req, res, next) {
         } catch (auditErr) {
           console.warn('[AuditLog] Notice: Audit logging for violation auto-resolve failed:', auditErr.message);
         }
-      } else if (existing.taskId) {
-        // Auto-resolve ONLY open violations for this task that are EVIDENCE_REQUIRED
-        // (Do NOT indiscriminately resolve unrelated violations like Overdue, Missing Assignee, etc.)
+      }
+
+      // Even if violationId was set, also check the parent task to clear remaining evidence violations,
+      // resolve cross-module Compliance Blocker escalations, and complete In_Review subtasks.
+      if (existing.taskId) {
+        // Auto-resolve open/under-review violations for this task that require evidence
         const taskViolations = await prisma.complianceViolation.findMany({
           where: {
             companyId: req.user.companyId,
             entityType: 'Task',
             entityId: existing.taskId,
-            status: 'Open',
+            status: { in: ['Open', 'Under_Review'] },
+            ...(existing.violationId ? { id: { not: existing.violationId } } : {}),
           },
           include: {
             rule: {
@@ -319,11 +381,14 @@ export async function updateEvidence(req, res, next) {
 
         for (const tv of taskViolations) {
           const ruleRequirement = tv.rule?.criteria?.requirement;
-          const isEvidenceRule = ruleRequirement?.type === 'EVIDENCE_REQUIRED';
+          const isEvidenceRule =
+            ruleRequirement?.type === 'EVIDENCE_REQUIRED' ||
+            tv.rule?.ruleType === 'Evidence' ||
+            /evidence/i.test(tv.rule?.name || '');
 
           // Check if category or type matches if specified by the rule
           let matchesRequirement = isEvidenceRule;
-          if (isEvidenceRule) {
+          if (isEvidenceRule && ruleRequirement) {
             const reqCategory = ruleRequirement?.evidenceCategory || ruleRequirement?.category;
             const reqType = ruleRequirement?.evidenceType || ruleRequirement?.type_name;
 
@@ -353,7 +418,7 @@ export async function updateEvidence(req, res, next) {
                 violationId: tv.id,
                 action: AUDIT_ACTIONS.STATUS_CHANGE,
                 performedById: req.user.id,
-                oldValue: { status: 'OPEN' },
+                oldValue: { status: tv.status },
                 newValue: { status: 'RESOLVED', resolutionRemarks: `Auto-resolved via approved evidence "${existing.title}"` },
               });
             } catch (auditErr) {
@@ -380,7 +445,61 @@ export async function updateEvidence(req, res, next) {
         } catch (escErr) {
           console.warn('[Escalation] Notice: Auto-resolving compliance escalation:', escErr.message);
         }
+
+        // Also auto-complete any In_Review subtasks for this task submitted by this user
+        try {
+          const inReviewSubtasks = await prisma.subtask.findMany({
+            where: {
+              taskId: existing.taskId,
+              status: 'In_Review',
+              OR: [
+                { assignedToId: existing.userId },
+                { assignedToId: null },
+              ],
+            },
+          });
+          if (inReviewSubtasks.length > 0) {
+            await prisma.subtask.updateMany({
+              where: {
+                id: { in: inReviewSubtasks.map((s) => s.id) },
+              },
+              data: {
+                status: 'Completed',
+              },
+            });
+            for (const st of inReviewSubtasks) {
+              notify(
+                req.user.companyId,
+                existing.userId,
+                'Subtask approved',
+                `Your subtask "${st.title}" was approved.`,
+                'Task'
+              );
+            }
+          }
+        } catch (stErr) {
+          console.warn('[Subtask] Notice: Auto-completing subtask for approved evidence:', stErr.message);
+        }
       }
+    }
+
+    // Notify submitter of evidence review decision
+    if (body.status === 'Approved' && existing.userId && existing.userId !== req.user.id) {
+      notify(
+        req.user.companyId,
+        existing.userId,
+        'Evidence Approved',
+        `Your evidence "${existing.title}" was approved by ${req.user.fullName || 'Team Lead'}.`,
+        'Review'
+      );
+    } else if (body.status === 'Rejected' && existing.userId && existing.userId !== req.user.id) {
+      notify(
+        req.user.companyId,
+        existing.userId,
+        'Evidence Returned for Revision',
+        `Your evidence "${existing.title}" was returned for revision.${body.notes ? ` Feedback: ${body.notes}` : ''}`,
+        'Review'
+      );
     }
 
     try {
@@ -616,4 +735,98 @@ export async function streamEvidenceFile(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * GET /api/evidence/export/csv
+ * Exports compliance evidence records to an audit-ready CSV file.
+ */
+export async function exportComplianceEvidenceCsv(req, res, next) {
+  try {
+    const role = normalizeRole(req.user?.role);
+    const where = { companyId: req.user.companyId };
+
+    if (role === 'team_member' || role === 'member') {
+      where.userId = req.user.id;
+    } else if (role === 'team_lead' || role === 'team_leader' || role === 'lead') {
+      where.OR = [
+        { userId: req.user.id },
+        { user: { managerUserId: req.user.id } },
+        { task: { project: { team: { teamMembers: { some: { userId: req.user.id } } } } } },
+      ];
+    } else if (role === 'project_manager' || role === 'pm') {
+      where.OR = [
+        { userId: req.user.id },
+        { task: { project: { createdById: req.user.id } } },
+      ];
+    }
+
+    const { status, taskId, violationId } = req.query || {};
+    if (status) where.status = status;
+    if (taskId) where.taskId = taskId;
+    if (violationId) where.violationId = violationId;
+
+    const evidenceList = await prisma.complianceEvidence.findMany({
+      where,
+      include: EVIDENCE_LIST_INCLUDE,
+      orderBy: { submittedAt: 'desc' },
+    });
+
+    const headers = [
+      'Evidence ID',
+      'Title',
+      'Type',
+      'Status',
+      'Task ID',
+      'Task Title',
+      'Violation ID',
+      'Associated Rule',
+      'Submitter Name',
+      'Submitter Email',
+      'Reviewer Name',
+      'Reviewer Email',
+      'Submitted At',
+      'Reviewed At',
+      'File URL',
+      'Notes',
+    ];
+
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return '""';
+      let str = String(val).replace(/"/g, '""');
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str}"`;
+    };
+
+    const rows = evidenceList.map((e) => [
+      escapeCsv(e.id),
+      escapeCsv(e.title),
+      escapeCsv(e.evidenceType),
+      escapeCsv(e.status),
+      escapeCsv(e.taskId || ''),
+      escapeCsv(e.task?.title || ''),
+      escapeCsv(e.violationId || ''),
+      escapeCsv(e.violation?.rule?.name || ''),
+      escapeCsv(e.user?.fullName || 'N/A'),
+      escapeCsv(e.user?.email || 'N/A'),
+      escapeCsv(e.reviewedBy?.fullName || ''),
+      escapeCsv(e.reviewedBy?.email || ''),
+      escapeCsv(e.submittedAt ? new Date(e.submittedAt).toISOString() : ''),
+      escapeCsv(e.reviewedAt ? new Date(e.reviewedAt).toISOString() : ''),
+      escapeCsv(e.fileUrl || ''),
+      escapeCsv(e.notes || ''),
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+
+    const filename = `compliance-evidence-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    next(err);
+  }
+}
+
 

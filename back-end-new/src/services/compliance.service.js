@@ -187,6 +187,33 @@ async function checkEvidenceForTask(taskId, requirement, rule) {
 const ACTIVE_VIOLATION_STATUSES = ['Open', 'Under_Review'];
 
 /**
+ * Calculates standard SLA due date based on rule severity:
+ * - Critical: 24 hours
+ * - High: 72 hours (3 days)
+ * - Medium: 7 days
+ * - Low: 14 days
+ */
+export function calculateSlaDueDate(severity, fromDate = new Date()) {
+  const d = new Date(fromDate);
+  switch (severity) {
+    case 'Critical':
+      d.setHours(d.getHours() + 24);
+      break;
+    case 'High':
+      d.setHours(d.getHours() + 72);
+      break;
+    case 'Medium':
+      d.setDate(d.getDate() + 7);
+      break;
+    case 'Low':
+    default:
+      d.setDate(d.getDate() + 14);
+      break;
+  }
+  return d;
+}
+
+/**
  * Opens a violation for (rule, entity) unless an active one already exists. The database also
  * enforces this with a partial unique index, so two concurrent callers cannot both insert.
  * @param {object} client prisma client or transaction client
@@ -202,7 +229,14 @@ export async function recordViolationOnce(client, data) {
   const existing = await client.complianceViolation.findFirst({ where });
   if (existing) return { violation: existing, created: false };
   try {
-    const violation = await client.complianceViolation.create({ data: { status: 'Open', ...data } });
+    const insertData = {
+      status: 'Open',
+      ...data,
+    };
+    if (!insertData.dueDate) {
+      insertData.dueDate = calculateSlaDueDate(data.severity || 'Medium');
+    }
+    const violation = await client.complianceViolation.create({ data: insertData });
     return { violation, created: true };
   } catch (err) {
     if (err?.code === 'P2002') {

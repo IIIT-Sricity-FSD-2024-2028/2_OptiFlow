@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listTemplates, createTemplate, deleteTemplate } from '../../../services/api/process';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchProcessTemplates,
+  selectAllProcessTemplates,
+  selectProcessTemplatesStatus,
+  selectProcessTemplatesError,
+  deleteProcessTemplate,
+  createProcessTemplate,
+  selectCreatingProcessTemplate,
+  selectProcessTemplateMutation,
+} from '../../../store/processTemplates';
 import { PATHS } from '../../../app/paths';
 import { Table } from '../../../shared/components/Table';
 import { Badge } from '../../../shared/components/Badge';
@@ -12,10 +22,14 @@ import { formatDate } from '../../../shared/utils/formatDate';
 
 export default function ProcessAdminTemplates() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [templates, setTemplates] = useState([]);
+  const dispatch = useDispatch();
+  const templates = useSelector(selectAllProcessTemplates);
+  const status = useSelector(selectProcessTemplatesStatus);
+  const loading = status === 'idle' || status === 'loading';
+  const loadError = useSelector(selectProcessTemplatesError);
   const [searchQuery, setSearchQuery] = useState('');
-  const [error, setError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const error = deleteError || loadError?.message;
 
   // Create Template Modal Form State (Controlled Form)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -25,29 +39,16 @@ export default function ProcessAdminTemplates() {
     isActive: true,
   });
   const [formErrors, setFormErrors] = useState({});
-  const [submitting, setSubmitting] = useState(false);
+  const submitting = useSelector(selectCreatingProcessTemplate);
 
   // Delete Confirmation State
-  const [templateToDelete, setTemplateToDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const fetchTemplates = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await listTemplates();
-      const raw = res?.data ?? res;
-      setTemplates(Array.isArray(raw) ? raw : []);
-    } catch (err) {
-      setError(err.message || 'Failed to load process templates');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [selectedId, setSelectedId] = useState(null);
+  const templateToDelete = templates.find(row => row.id === selectedId);
+  const deleting = useSelector(state => selectProcessTemplateMutation(state, 'delete:' + templateToDelete?.id)?.status === 'loading');
 
   useEffect(() => {
-    fetchTemplates();
-  }, []);
+    dispatch(fetchProcessTemplates());
+  }, [dispatch]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -78,12 +79,11 @@ export default function ProcessAdminTemplates() {
     }
 
     try {
-      setSubmitting(true);
-      const res = await createTemplate({
+      const res = await dispatch(createProcessTemplate({
         name: formData.name.trim(),
         version: Number(formData.version),
         isActive: formData.isActive,
-      });
+      })).unwrap();
 
       setIsCreateModalOpen(false);
       setFormData({ name: '', version: 1, isActive: true });
@@ -92,26 +92,21 @@ export default function ProcessAdminTemplates() {
       if (templateId) {
         navigate(PATHS.PROCESS_ADMIN.TEMPLATE_DETAIL.replace(':id', templateId));
       } else {
-        fetchTemplates();
+        dispatch(fetchProcessTemplates({ force: true }));
       }
     } catch (err) {
       setFormErrors({ submit: err.message || 'Failed to create template' });
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (!templateToDelete) return;
     try {
-      setDeleting(true);
-      await deleteTemplate(templateToDelete.id);
-      setTemplateToDelete(null);
-      await fetchTemplates();
+      setDeleteError(null);
+      await dispatch(deleteProcessTemplate(templateToDelete.id)).unwrap();
+      setSelectedId(null);
     } catch (err) {
-      setError(err.message || 'Failed to delete template');
-    } finally {
-      setDeleting(false);
+      setDeleteError(err.message || 'Failed to delete template');
     }
   };
 
@@ -173,7 +168,7 @@ export default function ProcessAdminTemplates() {
             className="text-xs py-1 px-2.5"
             disabled={(row.instances?.length ?? row._count?.instances ?? 0) > 0}
             title={(row.instances?.length ?? row._count?.instances ?? 0) > 0 ? 'Cannot delete a template with run instances' : 'Delete template'}
-            onClick={() => setTemplateToDelete(row)}
+            onClick={() => setSelectedId(row.id)}
           >
             Delete
           </Button>
@@ -322,7 +317,7 @@ export default function ProcessAdminTemplates() {
         variant="danger"
         loading={deleting}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setTemplateToDelete(null)}
+        onCancel={() => setSelectedId(null)}
       />
     </div>
   );

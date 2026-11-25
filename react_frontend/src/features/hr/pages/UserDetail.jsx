@@ -26,6 +26,7 @@ import {
   ROLE_BADGE_STYLES,
   ROLE_LEVEL_LABELS,
 } from "../components/orgTreeUtils";
+import { ResetPasswordDialog } from "../components/ResetPasswordDialog";
 
 // WHY: HrUserDetail provides a 360-degree profile view of any individual employee.
 // It exposes organizational reporting lines, assigned roles & permissions, active operational tasks,
@@ -41,6 +42,8 @@ export default function HrUserDetail() {
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Secondary lists that failed to load; the page still renders but says so.
+  const [partialFailures, setPartialFailures] = useState([]);
 
   // Edit Profile Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,6 +56,9 @@ export default function HrUserDetail() {
   // Deactivate / Reactivate Dialog State
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Admin-assisted password reset (Forgot Password notifies the admins; no email yet)
+  const [isResetOpen, setIsResetOpen] = useState(false);
 
   // WHY: Zero-Clutter Hard Action Suppression ensures only HR Managers and Admins
   // can view and trigger administrative mutation actions.
@@ -70,12 +76,21 @@ export default function HrUserDetail() {
     if (!id) return;
     setLoading(true);
     setError(null);
+    setPartialFailures([]);
+    const failed = [];
+    const secondary = (path, name) =>
+      apiClient(path).catch((err) => {
+        console.warn(`[HrUserDetail] Failed to fetch ${name}:`, err.message);
+        failed.push(name);
+        return [];
+      });
 
     try {
       const [userData, usersList] = await Promise.all([
         apiClient(`/users/${id}`),
-        apiClient("/users").catch(() => []),
+        secondary("/users", "Users"),
       ]);
+      setPartialFailures(failed);
 
       const rawUser = userData?.data || userData;
       if (!rawUser || !rawUser.id) {
@@ -161,7 +176,7 @@ export default function HrUserDetail() {
 
   // 3. DEACTIVATE / REACTIVATE HANDLER
   const handleToggleStatus = async () => {
-    if (!employee) return;
+    if (!employee || isUpdatingStatus) return;
     setIsUpdatingStatus(true);
     const willDeactivate = employee.isActive !== false;
 
@@ -216,10 +231,12 @@ export default function HrUserDetail() {
   const roleAssignments = employee.roleAssignments || [];
   const teamMemberships = employee.teamMembers || [];
 
+  // The API resolves role (slug) and roleLabel; roleAssignments[0] is only a fallback.
   const primaryRole = employee.roleAssignments?.[0]?.role;
-  const rawRole = primaryRole?.name || employee.role || "team_member";
+  const rawRole = employee.role || primaryRole?.name || "team_member";
   const roleSlug = rawRole.toLowerCase().replace(/[\s-]+/g, "_");
-  const resolvedRoleLabel = primaryRole?.label || ROLE_LEVEL_LABELS[roleSlug] || "Team Member";
+  const resolvedRoleLabel =
+    (employee.role ? employee.roleLabel : primaryRole?.label) || ROLE_LEVEL_LABELS[roleSlug] || "Team Member";
   const resolvedRoleBadgeClass =
     ROLE_BADGE_STYLES[roleSlug] || "bg-slate-100 text-slate-700 border-slate-200/80";
 
@@ -236,6 +253,12 @@ export default function HrUserDetail() {
           &larr; Back to Employee Directory
         </Button>
       </div>
+
+      {!error && partialFailures.length > 0 && (
+        <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          {partialFailures.join(", ")} could not be loaded; related lists and pickers may be empty.
+        </div>
+      )}
 
       {/* Main Profile Header Card */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 md:p-8">
@@ -352,6 +375,12 @@ export default function HrUserDetail() {
                   Edit Profile
                 </Button>
 
+                {employee.id !== currentUser?.id && employee.isActive !== false && (
+                  <Button variant="warning" onClick={() => setIsResetOpen(true)}>
+                    Reset Password
+                  </Button>
+                )}
+
                 {employee.id !== currentUser?.id && (
                   <Button
                     variant={employee.isActive !== false ? "danger" : "primary"}
@@ -438,7 +467,7 @@ export default function HrUserDetail() {
                 Direct Reports ({directReports.length})
               </span>
               {directReports.length === 0 ? (
-                <p className="text-sm text-slate-400 italic">No direct reports currently assigned.</p>
+                <p className="text-sm text-slate-500 italic">No direct reports currently assigned.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {directReports.map((report) => (
@@ -451,9 +480,9 @@ export default function HrUserDetail() {
                         <span className="text-sm font-medium text-slate-900 block">
                           {report.fullName}
                         </span>
-                        <span className="text-xs text-slate-400">{report.email}</span>
+                        <span className="text-xs text-slate-500">{report.email}</span>
                       </div>
-                      <span className="text-slate-400 text-sm">&rarr;</span>
+                      <span className="text-slate-500 text-sm">&rarr;</span>
                     </div>
                   ))}
                 </div>
@@ -530,7 +559,7 @@ export default function HrUserDetail() {
             </div>
 
             {assignedTasks.length === 0 ? (
-              <p className="text-sm text-slate-400 italic py-2">
+              <p className="text-sm text-slate-500 italic py-2">
                 No active tasks currently delegated to this employee.
               </p>
             ) : (
@@ -653,7 +682,7 @@ export default function HrUserDetail() {
                       {employee.manager.fullName}
                     </Link>
                   ) : (
-                    <span className="text-slate-400 italic">Executive / Direct</span>
+                    <span className="text-slate-500 italic">Executive / Direct</span>
                   )}
                 </span>
               </div>
@@ -688,7 +717,7 @@ export default function HrUserDetail() {
             </div>
 
             {roleAssignments.length === 0 ? (
-              <p className="text-sm text-slate-400 italic">No explicit roles assigned.</p>
+              <p className="text-sm text-slate-500 italic">No explicit roles assigned.</p>
             ) : (
               <div className="space-y-3">
                 {roleAssignments.map((ra) => (
@@ -698,14 +727,14 @@ export default function HrUserDetail() {
                   >
                     <div className="flex items-center justify-between">
                       <Badge variant="info" value={ra.role?.label || "Role"} />
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-500">
                         {ra.role?.isSystem ? "System" : "Custom"}
                       </span>
                     </div>
                     <div className="text-xs text-slate-600">
                       Scope: <span className="font-semibold">{ra.scopeType || "Company"}</span>
                     </div>
-                    <div className="text-[11px] text-slate-400">
+                    <div className="text-[11px] text-slate-500">
                       Granted: {formatDate(ra.grantedAt)}
                     </div>
                   </div>
@@ -761,6 +790,7 @@ export default function HrUserDetail() {
 
           <FormField label="Full Name" required>
             <Input
+              aria-label="Full Name"
               value={editFullName}
               onChange={(e) => setEditFullName(e.target.value)}
               disabled={isSubmitting}
@@ -770,6 +800,7 @@ export default function HrUserDetail() {
 
           <FormField label="Job Title" hint="Designation / Position">
             <Input
+              aria-label="Job Title"
               value={editJobTitle}
               onChange={(e) => setEditJobTitle(e.target.value)}
               disabled={isSubmitting}
@@ -778,6 +809,7 @@ export default function HrUserDetail() {
 
           <FormField label="Reporting Manager" hint="Direct supervisor in hierarchy">
             <Select
+              aria-label="Reporting Manager"
               value={editManagerId}
               onChange={(e) => setEditManagerId(e.target.value)}
               disabled={isSubmitting}
@@ -822,17 +854,22 @@ export default function HrUserDetail() {
             ? `Are you sure you want to deactivate "${employee.fullName}"? Their access will be immediately blocked.`
             : `Are you sure you want to reactivate "${employee.fullName}"? Their access will be restored.`
         }
-        confirmLabel={
-          isUpdatingStatus
-            ? "Updating..."
-            : employee.isActive !== false
-            ? "Deactivate Account"
-            : "Reactivate Account"
+        confirmText={
+          employee.isActive !== false ? "Deactivate Account" : "Reactivate Account"
         }
-        confirmVariant={employee.isActive !== false ? "danger" : "primary"}
+        variant={employee.isActive !== false ? "danger" : "primary"}
+        loading={isUpdatingStatus}
         onConfirm={handleToggleStatus}
         onCancel={() => !isUpdatingStatus && setIsDeactivateOpen(false)}
       />
+
+      {isResetOpen && (
+        <ResetPasswordDialog
+          employee={employee}
+          onClose={() => setIsResetOpen(false)}
+          onReset={() => toast.success(`Temporary password issued for ${employee.fullName}.`)}
+        />
+      )}
     </div>
   );
 }

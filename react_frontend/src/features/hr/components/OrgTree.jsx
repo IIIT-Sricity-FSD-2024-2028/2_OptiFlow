@@ -114,6 +114,7 @@ export function OrgTree({ users = [], branches = [], teams = [] }) {
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
           <select
+            aria-label="Filter org chart by branch"
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
             className="px-3 py-1.5 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600 cursor-pointer"
@@ -141,15 +142,16 @@ export function OrgTree({ users = [], branches = [], teams = [] }) {
             <button
               type="button"
               onClick={() => setZoomLevel((z) => Math.max(0.6, Math.round((z - 0.1) * 10) / 10))}
-              className="p-1 text-slate-600 hover:text-slate-900 rounded"
+              className="min-w-6 min-h-6 p-1 inline-flex items-center justify-center text-slate-600 hover:text-slate-900 rounded"
               title="Zoom Out"
+              aria-label="Zoom out"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={() => setZoomLevel(1)}
-              className="px-2 py-0.5 text-[11px] font-mono text-slate-600 hover:text-slate-900 rounded"
+              className="min-h-6 px-2 py-0.5 text-[11px] font-mono text-slate-600 hover:text-slate-900 rounded"
               title="Reset Zoom to 100%"
             >
               {Math.round(zoomLevel * 100)}%
@@ -157,8 +159,9 @@ export function OrgTree({ users = [], branches = [], teams = [] }) {
             <button
               type="button"
               onClick={() => setZoomLevel((z) => Math.min(1.4, Math.round((z + 0.1) * 10) / 10))}
-              className="p-1 text-slate-600 hover:text-slate-900 rounded"
+              className="min-w-6 min-h-6 p-1 inline-flex items-center justify-center text-slate-600 hover:text-slate-900 rounded"
               title="Zoom In"
+              aria-label="Zoom in"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>

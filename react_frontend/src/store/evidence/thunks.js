@@ -44,7 +44,39 @@ export const fetchEvidenceById = createAsyncThunk(
   }
 );
 
-// 3. Review / Adjudicate Evidence (Approve / Reject)
+// 3. Create Evidence Record
+export const createEvidence = createAsyncThunk(
+  "evidence/create",
+  async (data, { rejectWithValue }) => {
+    try {
+      const res = await apiClient("/api/evidence", {
+        method: "POST",
+        body: data,
+      });
+      return res?.data || res;
+    } catch (err) {
+      return rejectWithValue(normalizeError(err));
+    }
+  }
+);
+
+// 4. Update Evidence Record
+export const updateEvidence = createAsyncThunk(
+  "evidence/update",
+  async ({ id, data }, { rejectWithValue }) => {
+    try {
+      const res = await apiClient(`/api/evidence/${id}`, {
+        method: "PATCH",
+        body: data,
+      });
+      return res?.data || res;
+    } catch (err) {
+      return rejectWithValue(normalizeError(err));
+    }
+  }
+);
+
+// 5. Review / Adjudicate Evidence (Approve / Reject)
 export const reviewEvidence = createAsyncThunk(
   "evidence/review",
   async ({ id, status, rejectionReason }, { rejectWithValue }) => {
@@ -64,7 +96,7 @@ export const reviewEvidence = createAsyncThunk(
   }
 );
 
-// 4. Upload Evidence File (Multipart FormData)
+// 6. Upload Evidence File (Multipart FormData)
 export const uploadEvidenceFile = createAsyncThunk(
   "evidence/uploadFile",
   async ({ id, file }, { rejectWithValue }) => {
@@ -82,7 +114,7 @@ export const uploadEvidenceFile = createAsyncThunk(
   }
 );
 
-// 5. Delete Evidence Record
+// 7. Delete Evidence Record
 export const deleteEvidence = createAsyncThunk(
   "evidence/delete",
   async (id, { rejectWithValue }) => {

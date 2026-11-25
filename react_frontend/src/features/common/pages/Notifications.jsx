@@ -1,6 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiClient } from '../../../services/api/client';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchNotifications, markNotificationRead, markAllNotificationsRead,
+  selectAllNotifications, selectUnreadCount,
+  selectNotificationsStatus, selectNotificationsError, selectNotificationMutations,
+} from '../../../store/notifications';
+import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../shared/components/Button';
 import { Loader } from '../../../shared/components/Loader';
 import {
@@ -11,58 +17,41 @@ import {
   ExternalLink,
   CheckCircle2,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
+
+// Notification.type values; the API has no category or priority fields.
+const WORK_TYPES = ['Task', 'Review', 'Escalation'];
+const isComplianceType = (n) => n.type === 'Compliance';
+const isWorkType = (n) => WORK_TYPES.includes(n.type);
 
 export default function Notifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'UNREAD' | 'COMPLIANCE' | 'WORK'
-  const [markingId, setMarkingId] = useState(null);
-
-  const fetchNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await apiClient('/notifications');
-      const list = res.data || (Array.isArray(res) ? res : []);
-      setNotifications(list);
-    } catch (err) {
-      console.error('Failed to load notifications:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const dispatch = useDispatch();
+  const { user } = useAuth();
+  const userId = user?.id;
+  const notifications = useSelector(selectAllNotifications);
+  const unreadCount = useSelector(selectUnreadCount);
+  const status = useSelector(selectNotificationsStatus);
+  const error = useSelector(selectNotificationsError);
+  const mutations = useSelector(selectNotificationMutations);
+  const loading = ['idle', 'loading'].includes(status) && !notifications.length;
+  const [activeFilter, setActiveFilter] = useState('ALL');
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchNotifications();
-  }, [fetchNotifications]);
+    if (userId) dispatch(fetchNotifications({ userId, force: true }));
+  }, [dispatch, userId]);
 
-  const handleMarkAsRead = async (id, e) => {
+  const handleMarkAsRead = (id, e) => {
     e?.stopPropagation();
-    try {
-      setMarkingId(id);
-      await apiClient(`/notifications/${id}/read`, { method: 'PATCH' });
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch {
-      // Best effort: the item stays unread and the next refresh shows the server state.
-    } finally {
-      setMarkingId(null);
-    }
+    return dispatch(markNotificationRead(id));
   };
 
-  const handleMarkAllRead = async () => {
-    try {
-      await apiClient('/notifications/read-all', { method: 'POST' });
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch {
-      // Best effort: items stay unread and the next refresh shows the server state.
-    }
-  };
+  const handleMarkAllRead = () => dispatch(markAllNotificationsRead());
 
   const handleNavigate = async (n) => {
     if (!n.isRead) {
-      await handleMarkAsRead(n.id);
+      handleMarkAsRead(n.id);
     }
     if (n.linkUrl) {
       navigate(n.linkUrl);
@@ -71,12 +60,10 @@ export default function Notifications() {
 
   const filteredList = notifications.filter(n => {
     if (activeFilter === 'UNREAD') return !n.isRead;
-    if (activeFilter === 'COMPLIANCE') return n.category === 'COMPLIANCE';
-    if (activeFilter === 'WORK') return n.category === 'WORK';
+    if (activeFilter === 'COMPLIANCE') return isComplianceType(n);
+    if (activeFilter === 'WORK') return isWorkType(n);
     return true;
   });
-
-  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6 text-slate-900">
@@ -135,7 +122,7 @@ export default function Notifications() {
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Compliance ({notifications.filter(n => n.category === 'COMPLIANCE').length})
+          Compliance ({notifications.filter(isComplianceType).length})
         </button>
         <button
           onClick={() => setActiveFilter('WORK')}
@@ -145,11 +132,29 @@ export default function Notifications() {
               : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Work Tasks ({notifications.filter(n => n.category === 'WORK').length})
+          Work Tasks ({notifications.filter(isWorkType).length})
         </button>
       </div>
 
       {/* Notifications Feed */}
+      {error && (
+        <div role="alert" className="bg-white border border-rose-200 rounded-xl p-6 text-center">
+          <AlertTriangle size={32} className="mx-auto text-rose-500 mb-2" />
+          <h3 className="font-bold text-slate-800 text-sm">Notifications could not be loaded</h3>
+          <p className="text-xs text-slate-500 mt-1">{error.message || String(error)}</p>
+          {userId && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => dispatch(fetchNotifications({ userId, force: true }))}
+              className="mt-3"
+            >
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="p-12 text-center text-slate-500">
           <Loader />
@@ -166,8 +171,8 @@ export default function Notifications() {
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 shadow-xs overflow-hidden">
           {filteredList.map((n) => {
-            const isUrgent = n.priority === 'URGENT';
-            const isCompliance = n.category === 'COMPLIANCE';
+            const isUrgent = n.type === 'Escalation' || n.priority === 'URGENT';
+            const isCompliance = isComplianceType(n);
 
             return (
               <div
@@ -201,9 +206,9 @@ export default function Notifications() {
                       <span className="font-bold text-sm text-slate-900">
                         {n.title}
                       </span>
-                      {n.category && (
+                      {n.type && (
                         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {n.category}
+                          {n.type}
                         </span>
                       )}
                       {isUrgent && (
@@ -212,7 +217,7 @@ export default function Notifications() {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0">
                       <Clock size={12} />
                       {new Date(n.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
@@ -223,7 +228,7 @@ export default function Notifications() {
                   </p>
 
                   <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <span className="text-slate-400 font-medium">
+                    <span className="text-slate-500 font-medium">
                       {n.senderName ? `Attributed to: ${n.senderName}` : 'System Generated'}
                     </span>
 
@@ -231,7 +236,7 @@ export default function Notifications() {
                       {!n.isRead && (
                         <button
                           onClick={(e) => handleMarkAsRead(n.id, e)}
-                          disabled={markingId === n.id}
+                          disabled={mutations['read:' + n.id]?.status === 'loading'}
                           className="text-slate-500 hover:text-slate-800 font-medium text-xs px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 transition-colors"
                         >
                           Mark as read

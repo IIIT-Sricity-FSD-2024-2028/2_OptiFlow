@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Badge } from '../../../shared/components/Badge';
 import { Loader } from '../../../shared/components/Loader';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Pagination } from '../../../shared/components/Pagination';
 import { Modal } from '../../../shared/components/Modal';
-import { apiClient } from '../../../services/api/client';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchProcessAuditLogs, selectProcessAuditFeed } from '../../../store/auditLogs';
 import { formatAuditTimestamp } from '../../../shared/utils/formatDate';
 import {
   Search,
@@ -140,33 +141,24 @@ function LogDetailModal({ log, onClose }) {
 }
 
 export default function ProcessAdminAuditLogs() {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedLog, setSelectedLog] = useState(null);
+  const dispatch = useDispatch();
+  const { items: logs, status, error } = useSelector(selectProcessAuditFeed);
+  const loading = status === 'idle' || status === 'loading';
+  const [selectedId, setSelectedId] = useState(null);
+  const selectedLog = selectedId == null ? null : logs.find((log) => log.id === selectedId);
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
 
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await apiClient('/audit-logs/process');
-      setLogs(Array.isArray(data) ? data : data?.data || []);
-      setCurrentPage(1);
-    } catch (err) {
-      console.error('[ProcessAdminAuditLogs] Error loading logs:', err);
-      setError(err.message || 'Failed to load process audit logs.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    dispatch(fetchProcessAuditLogs());
+  }, [dispatch]);
+
+  async function refreshLogs() {
+    const result = await dispatch(fetchProcessAuditLogs({ force: true }));
+    if (fetchProcessAuditLogs.fulfilled.match(result)) setCurrentPage(1);
+  }
 
   // Derived filter dropdown options
   const actionOptions = useMemo(() => {
@@ -230,7 +222,7 @@ export default function ProcessAdminAuditLogs() {
         </div>
         <button
           type="button"
-          onClick={fetchLogs}
+          onClick={refreshLogs}
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
         >
@@ -256,7 +248,7 @@ export default function ProcessAdminAuditLogs() {
 
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}
+          {typeof error === 'string' ? error : error?.message || 'Failed to load process audit logs.'}
         </div>
       )}
 
@@ -400,7 +392,7 @@ export default function ProcessAdminAuditLogs() {
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
-                          onClick={() => setSelectedLog(log)}
+                          onClick={() => setSelectedId(log.id)}
                           className="text-slate-400 hover:text-emerald-600 transition-colors p-1.5 rounded-lg hover:bg-emerald-50/80 cursor-pointer"
                           title="View Details"
                           aria-label="View audit log detail"
@@ -426,7 +418,7 @@ export default function ProcessAdminAuditLogs() {
         </div>
       )}
 
-      <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />
+      <LogDetailModal log={selectedLog} onClose={() => setSelectedId(null)} />
     </div>
   );
 }
