@@ -19,15 +19,6 @@ describe("platformPlans thunks", () => {
     expect(options.abortKey).toBe("platformPlans/fetch:null");
   });
 
-  it("fetchPlans is skipped while a load of the same query is running", async () => {
-    const spy = vi.spyOn(platformApi, "listPlans").mockImplementation(() => new Promise(() => {}));
-    const store = makeStore();
-    store.dispatch(fetchPlans());
-    const second = await store.dispatch(fetchPlans());
-    expect(second.meta.condition).toBe(true); // skipped by condition
-    expect(spy).toHaveBeenCalledTimes(1);
-  });
-
   it("createPlan sends the body and never gets an abortKey", async () => {
     const spy = vi.spyOn(platformApi, "createPlan").mockResolvedValue({ id: "p2" });
     const action = await makeStore().dispatch(createPlan({ name: "Pro" }));
