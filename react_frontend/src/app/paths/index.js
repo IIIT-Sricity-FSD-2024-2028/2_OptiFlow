@@ -28,6 +28,7 @@ export const PATHS = {
   },
   EXECUTIVE: {
     DASHBOARD: "/executive/dashboard",
+    PORTFOLIO: "/executive/portfolio",
     PROJECTS: "/executive/projects",
     PROJECT_DETAIL: "/executive/projects/:id",
     EMPLOYEES: "/executive/employees",

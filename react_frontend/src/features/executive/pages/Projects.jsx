@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PATHS } from '../../../app/paths';
 import { Badge } from '../../../shared/components/Badge';
 import { EmptyState } from '../../../shared/components/EmptyState';
@@ -9,6 +9,7 @@ import { Pagination } from '../../../shared/components/Pagination';
 import * as projectsApi from '../../../services/api/projects';
 import * as teamsApi from '../../../services/api/teams';
 import * as executiveApi from '../../../services/api/executive';
+import { CreateProjectModal } from '../components/CreateProjectModal';
 import {
   Briefcase,
   Users,
@@ -19,6 +20,7 @@ import {
   Clock,
   TrendingUp,
   UserCheck,
+  Plus,
 } from 'lucide-react';
 
 const normalize = (r) => (Array.isArray(r) ? r : r?.data || []);
@@ -27,9 +29,11 @@ const PAGE_SIZE = 9;
 const PROJECT_FILTERS = [
   { value: 'All', label: 'All' },
   { value: 'Active', label: 'Active' },
-  { value: 'OnHold', label: 'At Risk' },
+  // OnHold is a status, not a risk rating: risk lives on the Portfolio Health page.
+  { value: 'OnHold', label: 'On Hold' },
   { value: 'Planning', label: 'Planning' },
   { value: 'Completed', label: 'Completed' },
+  { value: 'Cancelled', label: 'Cancelled' },
 ];
 
 const statusStyle = (status) => {
@@ -55,6 +59,12 @@ export default function ExecutiveProjects() {
   const [teamFilter, setTeamFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  // ?new=1 (from the dashboard's New Project button) opens the create dialog directly.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const createOpen = searchParams.get('new') === '1';
+  const openCreate = () => setSearchParams({ new: '1' });
+  const closeCreate = () => setSearchParams({});
 
   // Hydrate branch list once
   useEffect(() => {
@@ -81,7 +91,7 @@ export default function ExecutiveProjects() {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [branchFilter]);
+  }, [branchFilter, reloadKey]);
 
   const filteredProjects = projects.filter((p) => {
     const status = p.status === 'On_Hold' ? 'OnHold' : p.status;
@@ -99,6 +109,7 @@ export default function ExecutiveProjects() {
     OnHold: projects.filter((p) => ['OnHold', 'On_Hold'].includes(p.status)).length,
     Planning: projects.filter((p) => p.status === 'Planning').length,
     Completed: projects.filter((p) => p.status === 'Completed').length,
+    Cancelled: projects.filter((p) => p.status === 'Cancelled').length,
   };
 
   const paginated = filteredProjects.slice(
@@ -121,11 +132,21 @@ export default function ExecutiveProjects() {
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <header>
-        <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-        <p className="mt-1 text-gray-500">
-          Read-only executive overview of all company projects and delivery progress.
-        </p>
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
+          <p className="mt-1 text-gray-500">
+            Every company project and its delivery progress. Launch new initiatives and appoint their Project Manager here.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="inline-flex items-center gap-1.5 self-start sm:self-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm"
+        >
+          <Plus size={16} />
+          New Project
+        </button>
       </header>
 
       {error && (
@@ -140,7 +161,7 @@ export default function ExecutiveProjects() {
           { label: 'Total Projects', value: projects.length, cls: 'text-slate-900' },
           { label: 'Active', value: activeCount, cls: 'text-blue-700' },
           { label: 'Completed', value: completedCount, cls: 'text-emerald-700' },
-          { label: 'At Risk', value: atRiskCount, cls: atRiskCount > 0 ? 'text-rose-700' : 'text-slate-900' },
+          { label: 'On Hold', value: atRiskCount, cls: atRiskCount > 0 ? 'text-rose-700' : 'text-slate-900' },
         ].map(({ label, value, cls }) => (
           <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
             <p className={`text-3xl font-extrabold ${cls}`}>{value}</p>
@@ -300,6 +321,15 @@ export default function ExecutiveProjects() {
             onPageChange={setCurrentPage}
           />
         </div>
+      )}
+
+      {createOpen && (
+        <CreateProjectModal
+          isOpen
+          teams={teams}
+          onClose={closeCreate}
+          onCreated={() => setReloadKey((k) => k + 1)}
+        />
       )}
     </div>
   );
