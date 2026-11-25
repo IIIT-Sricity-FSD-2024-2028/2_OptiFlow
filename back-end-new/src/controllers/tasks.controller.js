@@ -487,6 +487,13 @@ export async function createTask(req, res, next) {
       throw new BadRequestError(`Tasks cannot be added to a project that is ${project.status}`);
     }
 
+    if (dueDate && project.targetDate && dueDate > project.targetDate) {
+      throw new BadRequestError(`Task due date cannot be after the project deadline (${formatDay(project.targetDate)})`);
+    }
+    if (dueDate && project.startDate && dueDate < project.startDate) {
+      throw new BadRequestError(`Task due date cannot be before the project start date (${formatDay(project.startDate)})`);
+    }
+
     let targetAssigneeId = null;
     if (assignedToId) {
       const candidateUser = await assertActiveTeamLead(req.user.companyId, assignedToId, project.teamId);
@@ -665,6 +672,12 @@ export async function updateTask(req, res, next) {
     }
     if (dueDateChanged && updateData.dueDate) {
       assertNotPast(updateData.dueDate, 'dueDate');
+      if (existing.project?.targetDate && updateData.dueDate > existing.project.targetDate) {
+        throw new BadRequestError(`Task due date cannot be after the project deadline (${formatDay(existing.project.targetDate)})`);
+      }
+      if (existing.project?.startDate && updateData.dueDate < existing.project.startDate) {
+        throw new BadRequestError(`Task due date cannot be before the project start date (${formatDay(existing.project.startDate)})`);
+      }
       // The task deadline cannot move before any of its subtask deadlines.
       const laterSubtask = await prisma.subtask.findFirst({
         where: { taskId: id, deletedAt: null, dueDate: { gt: updateData.dueDate } },

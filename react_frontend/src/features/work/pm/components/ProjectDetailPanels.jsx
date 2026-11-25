@@ -125,7 +125,17 @@ export function ComplianceOverviewModal({ isOpen, onClose, projectName, activeTa
   );
 }
 
-export function CreateProjectTaskModal({ isOpen, onClose, onSubmit, saving, error, form, onFormChange }) {
+export function CreateProjectTaskModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  saving,
+  error,
+  form,
+  onFormChange,
+  projectStartDate,
+  projectTargetDate,
+}) {
   return (
     <Modal
       isOpen={isOpen}
@@ -158,8 +168,22 @@ export function CreateProjectTaskModal({ isOpen, onClose, onSubmit, saving, erro
           <FormField label="Estimated hours">
             <Input type="number" min="0" step="0.5" value={form.estimatedHours} onChange={(event) => onFormChange({ ...form, estimatedHours: event.target.value })} disabled={saving} />
           </FormField>
-          <FormField label="Deadline">
-            <Input type="date" min={todayInput()} value={form.dueDate} onChange={(event) => onFormChange({ ...form, dueDate: event.target.value })} disabled={saving} />
+          <FormField
+            label="Deadline"
+            hint={
+              projectTargetDate
+                ? `Must be on or before ${String(projectTargetDate).slice(0, 10)}`
+                : undefined
+            }
+          >
+            <Input
+              type="date"
+              min={projectStartDate && String(projectStartDate).slice(0, 10) > todayInput() ? String(projectStartDate).slice(0, 10) : todayInput()}
+              max={projectTargetDate ? String(projectTargetDate).slice(0, 10) : undefined}
+              value={form.dueDate}
+              onChange={(event) => onFormChange({ ...form, dueDate: event.target.value })}
+              disabled={saving}
+            />
           </FormField>
         </div>
       </form>

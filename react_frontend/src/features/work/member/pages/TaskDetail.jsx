@@ -21,7 +21,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { memberReads, useMemberReads } from '../useMemberReads';
 import { fetchTaskById, selectTaskById, selectTaskMutation } from '../../../../store/tasks';
 import { updateSubtask, selectSubtasksByTaskId } from '../../../../store/subtasks';
-import { selectUserById } from '../../../../store/users';
+import { selectUserById, selectAllUsers } from '../../../../store/users';
 import { selectProjectById } from '../../../../store/projects';
 import { selectAllEvidence, deleteEvidence } from '../../../../store/evidence';
 import { selectAllComplianceBindings } from '../../../../store/complianceBindings';
@@ -51,6 +51,7 @@ export default function MemberTaskDetail() {
   const bindings = useSelector(selectAllComplianceBindings);
   const violations = useSelector(selectAllComplianceViolations);
   const taskViolations = violations.filter(v => String(v.entityId) === taskId && ['Open', 'Under_Review'].includes(v.status));
+  const primaryViolation = taskViolations.find((v) => v.breachedAt) || taskViolations[0];
   const matchingRule = bindings.find(({ rule, scopeType, scopeId }) => {
     if (!task || !rule?.isActive || rule.criteria?.requirement?.type !== 'EVIDENCE_REQUIRED') return false;
     const scopes = {
@@ -63,6 +64,16 @@ export default function MemberTaskDetail() {
   });
   const isEvidenceRequired = Boolean(matchingRule || taskViolations.length);
   const complianceRule = matchingRule?.rule || taskViolations[0]?.rule;
+  const allUsers = useSelector(selectAllUsers);
+  const complianceOfficer =
+    primaryViolation?.assignedOfficer ||
+    primaryViolation?.rule?.category?.owner ||
+    complianceRule?.category?.owner ||
+    complianceRule?.assignedOfficer ||
+    allUsers.find((u) => {
+      const r = String(u.role || u.roleName || u.roleSlug || '').toLowerCase();
+      return r.includes('compliance_officer') || r === 'compliance';
+    }) || null;
 
   // Modals state
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -151,7 +162,6 @@ export default function MemberTaskDetail() {
     return false;
   });
 
-  const primaryViolation = taskViolations.find((v) => v.breachedAt) || taskViolations[0];
   const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && e.rejectionReason);
 
   const stages = [
@@ -195,6 +205,8 @@ export default function MemberTaskDetail() {
             latestRejectedEvidence={latestRejectedEvidence}
             isLockedOut={isLockedOut}
             complianceRule={complianceRule}
+            complianceOfficer={complianceOfficer}
+            taskDueDate={dueDate}
             getSlaTimeRemaining={getSlaTimeRemaining}
             onOpenEvidenceModal={() => setIsEvidenceModalOpen(true)}
           />
@@ -276,9 +288,7 @@ export default function MemberTaskDetail() {
                 <div className="flex justify-between py-1 border-b border-slate-50">
                   <span className="text-slate-400">Officer Contact</span>
                   <span className="font-semibold text-slate-800">
-                    {primaryViolation?.assignedOfficer?.fullName ||
-                      primaryViolation?.rule?.assignedOfficer?.fullName ||
-                      'Compliance Lead'}
+                    {complianceOfficer?.fullName || 'Compliance Officer'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-50">

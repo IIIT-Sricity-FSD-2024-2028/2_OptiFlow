@@ -18,6 +18,8 @@ import {
 import { useDispatch } from 'react-redux';
 import { updateTask } from '../../../../store/tasks';
 import { createEscalation } from '../../../../store/escalations';
+import { buildUrl } from '../../../../services/api/client';
+import { getToken } from '../../../../services/auth/session';
 // Foreign resource (M1 evidence) keeps its own fetch until that slice merges.
 import * as evidenceApi from '../../../../services/api/evidence';
 
@@ -77,13 +79,17 @@ export default function TeamLeadReviews() {
   const handleExportEvidenceCsv = async () => {
     try {
       setIsExporting(true);
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/evidence/export/csv', {
+      const token = getToken();
+      const exportUrl = buildUrl('/evidence/export/csv');
+      const res = await fetch(exportUrl, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
-      if (!res.ok) throw new Error('Failed to export evidence data');
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || contentType.includes('text/html')) {
+        throw new Error('Failed to export evidence data: invalid response from server');
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');

@@ -56,7 +56,7 @@ export default function MemberDashboard() {
     );
   }
 
-  const managerName = manager?.fullName || manager?.name || 'Lucas Scott';
+  const managerName = manager?.fullName || manager?.name || 'Team Lead';
 
   return (
     <div className="space-y-6 max-w-[1240px] mx-auto pb-8">

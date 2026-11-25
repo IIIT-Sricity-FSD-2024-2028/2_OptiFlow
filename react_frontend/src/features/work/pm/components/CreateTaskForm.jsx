@@ -128,10 +128,18 @@ export function CreateTaskForm({
               </Select>
             </FormField>
 
-            <FormField label="Target Due Date">
+            <FormField
+              label="Target Due Date"
+              hint={
+                selectedProject?.targetDate
+                  ? `Must be on or before ${String(selectedProject.targetDate).slice(0, 10)}`
+                  : undefined
+              }
+            >
               <Input
                 type="date"
-                min={todayInput()}
+                min={selectedProject?.startDate && String(selectedProject.startDate).slice(0, 10) > todayInput() ? String(selectedProject.startDate).slice(0, 10) : todayInput()}
+                max={selectedProject?.targetDate ? String(selectedProject.targetDate).slice(0, 10) : undefined}
                 value={form.dueDate}
                 onChange={(event) => onFormChange((c) => ({ ...c, dueDate: event.target.value }))}
               />
