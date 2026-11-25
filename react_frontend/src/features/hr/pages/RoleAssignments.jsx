@@ -1,6 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { apiClient } from "../../../services/api/client";
+import { useDispatch, useSelector } from "react-redux";
+import { createRoleAssignment, removeRoleAssignment, selectAllRoleAssignments } from "../../../store/roleAssignments";
+import { selectAllUsers } from "../../../store/users";
+import { selectAllRoles } from "../../../store/roles";
+import { selectAllBranches } from "../../../store/branches";
+import { hrReads, useHrReads, writeErrorMessage } from "../useHrReads";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../shared/components/Toast";
 import { PATHS } from "../../../app/paths";
@@ -42,24 +47,29 @@ import {
 
 const PAGE_SIZE = 10;
 
+// What the page loads (see useHrReads). Constants, so the arrays stay stable.
+const PRIMARY = [hrReads.roleAssignments];
+const SECONDARY = [hrReads.users, hrReads.roles, hrReads.branches];
+
 // WHY: HrRoleAssignments provides the scoped access administration console.
 // It allows HR Administrators and Platform Admins to bind users to specific operational roles
 // across Company-wide or Branch-specific scopes, and promptly revoke elevated permissions.
 export default function HrRoleAssignments() {
+  const dispatch = useDispatch();
+  const assignments = useSelector(selectAllRoleAssignments);
+  const users = useSelector(selectAllUsers);
+  const roles = useSelector(selectAllRoles);
+  const branches = useSelector(selectAllBranches);
+  // `error` is the main data failing; `partialFailures` are secondary lists: the page still renders but says so.
+  const { loading, error: loadError, partialFailures, reload, reloading, reloadAfterFailure } = useHrReads(PRIMARY, SECONDARY);
+  const error = loadError && (loadError.message || "Failed to load role assignments from server.");
+
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const toast = useToast();
 
   // Core state
-  const [assignments, setAssignments] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Secondary lists that failed to load; the page still renders but says so.
-  const [partialFailures, setPartialFailures] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filters
@@ -99,45 +109,6 @@ export default function HrRoleAssignments() {
     "superuser",
     "hr_manager",
   ].includes(currentUser?.role);
-
-  // 1. DATA HYDRATION
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setPartialFailures([]);
-    const failed = [];
-    const secondary = (path, name) =>
-      apiClient(path).catch((err) => {
-        console.warn(`[HrRoleAssignments] Failed to fetch ${name}:`, err.message);
-        failed.push(name);
-        return [];
-      });
-
-    try {
-      const [assignmentsData, usersData, rolesData, branchesData] = await Promise.all([
-        apiClient("/role-assignments"),
-        secondary("/users", "Users"),
-        secondary("/roles", "Roles"),
-        secondary("/branches", "Branches"),
-      ]);
-      setPartialFailures(failed);
-
-      setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setRoles(Array.isArray(rolesData) ? rolesData : []);
-      setBranches(Array.isArray(branchesData) ? branchesData : []);
-    } catch (err) {
-      console.error("[HrRoleAssignments] Failed to load assignments telemetry:", err);
-      setError(err.message || "Failed to load role assignments from server.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load; becomes a thunk dispatch in the Redux cycle (M5 section 6)
-    fetchData();
-  }, [fetchData]);
 
   // Reset pagination on filter changes
   const filterKey = JSON.stringify([searchQuery, roleFilter, scopeFilter, userFilter]);
@@ -215,26 +186,24 @@ export default function HrRoleAssignments() {
       const scopeId =
         selectedScopeType === "Branch" ? selectedBranchId : currentUser?.companyId;
 
-      await apiClient("/role-assignments", {
-        method: "POST",
-        body: {
-          userId: selectedUserId,
-          roleId: selectedRoleId,
-          scopeType: selectedScopeType,
-          scopeId,
-        },
-      });
+      await dispatch(createRoleAssignment({
+        userId: selectedUserId,
+        roleId: selectedRoleId,
+        scopeType: selectedScopeType,
+        scopeId,
+      })).unwrap();
 
       toast.success("Role assigned successfully!");
+      await reload();
       setIsAssignModalOpen(false);
       setSelectedUserId("");
       setSelectedRoleId("");
       setSelectedScopeType("Company");
       setSelectedBranchId("");
-      await fetchData();
     } catch (err) {
       console.error("[HrRoleAssignments] Creation failed:", err);
-      setModalError(err.message || "Failed to assign role.");
+      reloadAfterFailure(err);
+      setModalError(writeErrorMessage(err, "Failed to assign role."));
     } finally {
       setIsSubmitting(false);
     }
@@ -246,18 +215,17 @@ export default function HrRoleAssignments() {
 
     setIsRevoking(true);
     try {
-      await apiClient(`/role-assignments/${revokeTarget.id}`, {
-        method: "DELETE",
-      });
+      await dispatch(removeRoleAssignment(revokeTarget.id)).unwrap();
 
       toast.success(
         `Role "${revokeTarget.role?.label}" revoked from ${revokeTarget.user?.fullName}.`
       );
+      await reload();
       setRevokeTarget(null);
-      await fetchData();
     } catch (err) {
       console.error("[HrRoleAssignments] Revocation failed:", err);
-      toast.error(err.message || "Failed to revoke role assignment.");
+      reloadAfterFailure(err);
+      toast.error(writeErrorMessage(err, "Failed to revoke role assignment."));
     } finally {
       setIsRevoking(false);
     }
@@ -392,7 +360,7 @@ export default function HrRoleAssignments() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={fetchData}>
+          <Button variant="secondary" disabled={reloading} onClick={() => reload()}>
             <RotateCw className="w-4 h-4 mr-1.5" />
             Refresh
           </Button>
@@ -421,7 +389,7 @@ export default function HrRoleAssignments() {
       {error && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700 flex items-center justify-between">
           <span>{error}</span>
-          <Button variant="secondary" size="sm" onClick={fetchData}>
+          <Button variant="secondary" size="sm" disabled={reloading} onClick={() => reload()}>
             Retry
           </Button>
         </div>
