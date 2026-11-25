@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
@@ -10,8 +10,10 @@ import { ConfirmDialog } from '../../../../shared/components/ConfirmDialog';
 import { UploadEvidenceModal } from '../components/modals/UploadEvidenceModal';
 import EvidenceTable from '../components/EvidenceTable';
 import { EVIDENCE_TYPES } from '../../constants';
-import * as evidenceApi from '../../../../services/api/evidence';
-import * as tasksApi from '../../../../services/api/tasks';
+import { useDispatch, useSelector } from 'react-redux';
+import { memberReads, useMemberReads } from '../useMemberReads';
+import { selectAllTasks } from '../../../../store/tasks';
+import { selectAllEvidence, deleteEvidence } from '../../../../store/evidence';
 import {
   FileText,
   CheckCircle2,
@@ -20,13 +22,21 @@ import {
   Plus,
 } from 'lucide-react';
 
+const reads = [memberReads.tasks, memberReads.evidence];
+
 export default function MemberEvidence() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [loading, setLoading] = useState(true);
-  const [evidenceList, setEvidenceList] = useState([]);
-  const [tasks, setTasks] = useState([]);
+  const { loading, error } = useMemberReads(reads);
+  const dispatch = useDispatch();
+  const allEvidence = useSelector(selectAllEvidence);
+  const tasks = useSelector(selectAllTasks);
+  const currentUserId = String(user?.id || user?.userId || '');
+  const evidenceList = useMemo(() => allEvidence.filter(item => {
+    const owner = String(item.userId || item.user_id || item.user?.id || item.user || '');
+    return !currentUserId || owner === currentUserId || !owner;
+  }), [allEvidence, currentUserId]);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,43 +45,12 @@ export default function MemberEvidence() {
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const editingItem = evidenceList.find(item => item.id === editingId);
 
   // Delete Confirm Dialog state
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [evRes, tasksRes] = await Promise.allSettled([
-        evidenceApi.list(),
-        tasksApi.list(),
-      ]);
-
-      const allEv = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
-      const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
-
-      const currentUserId = String(user?.id || user?.userId || '');
-
-      const myEv = allEv.filter((e) => {
-        const uId = String(e.userId || e.user_id || (typeof e.user === 'object' ? e.user?.id : e.user) || '');
-        return !currentUserId || uId === currentUserId || !uId;
-      });
-
-      setEvidenceList(myEv);
-      setTasks(allTasks);
-    } catch (err) {
-      console.error('Error fetching evidence:', err);
-      toast.error('Failed to load evidence records');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [user?.id]);
 
   const metrics = useMemo(() => {
     const total = evidenceList.length;
@@ -105,8 +84,7 @@ export default function MemberEvidence() {
   const handleDelete = async () => {
     if (!deletingId) return;
     try {
-      await evidenceApi.remove(deletingId);
-      setEvidenceList((prev) => prev.filter((e) => e.id !== deletingId));
+      await dispatch(deleteEvidence(deletingId)).unwrap();
       toast.success('Artifact record removed.');
       setIsDeleteConfirmOpen(false);
       setDeletingId(null);
@@ -126,6 +104,7 @@ export default function MemberEvidence() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
       {/* Top Header */}
       <div>
         <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1">
@@ -147,7 +126,7 @@ export default function MemberEvidence() {
             variant="primary"
             size="sm"
             onClick={() => {
-              setEditingItem(null);
+              setEditingId(null);
               setIsModalOpen(true);
             }}
             className="text-xs font-semibold flex items-center gap-1.5"
@@ -238,7 +217,7 @@ export default function MemberEvidence() {
         typeFilter={typeFilter}
         statusFilter={statusFilter}
         onEditItem={(item) => {
-          setEditingItem(item);
+          setEditingId(item.id);
           setIsModalOpen(true);
         }}
         onDeleteItem={(item) => {
@@ -252,13 +231,10 @@ export default function MemberEvidence() {
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setEditingItem(null);
+          setEditingId(null);
         }}
         tasks={tasks}
         initialData={editingItem}
-        onSuccess={() => {
-          loadData();
-        }}
       />
 
       {/* Reusable Confirm Dialog */}

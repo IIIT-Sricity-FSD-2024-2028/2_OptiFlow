@@ -4,6 +4,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchExecutiveMetrics,
   fetchExecutiveBranches,
+  fetchExecutivePortfolio,
+  selectPortfolioSummary,
+  selectPortfolioStatus,
   selectExecutiveMetrics,
   selectExecutiveBranches,
   selectExecutiveStatus,
@@ -13,7 +16,6 @@ import { useAuth } from '../../../context/AuthContext';
 import { PATHS } from '../../../app/paths';
 import { Loader } from '../../../shared/components/Loader';
 import { GuidedQuickstartChecklist } from '../components/GuidedQuickstartChecklist';
-import * as executiveApi from '../../../services/api/executive';
 import * as projectsApi from '../../../services/api/projects';
 import {
   Briefcase,
@@ -34,7 +36,9 @@ import {
   ExternalLink,
   ChevronRight,
   Plus,
+  Activity,
 } from 'lucide-react';
+import { ROLES } from '../../../roles';
 
 const normalize = (r) => (Array.isArray(r) ? r : r?.data || []);
 
@@ -47,6 +51,10 @@ export default function ExecutiveDashboard() {
   const branches = useSelector(selectExecutiveBranches);
   const status = useSelector(selectExecutiveStatus);
   const reduxError = useSelector(selectExecutiveError);
+  const portfolioSummary = useSelector(selectPortfolioSummary);
+  const portfolioStatus = useSelector(selectPortfolioStatus);
+  // Branch Managers cannot open the HR branch pages (ROLE_GROUPS.HR), so no link for them.
+  const canManageOrg = [ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN].includes(user?.role);
 
   const [projects, setProjects] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState('');
@@ -59,6 +67,7 @@ export default function ExecutiveDashboard() {
   const loadDashboardData = useCallback(async (branchId) => {
     const params = branchId ? { branchId } : {};
     dispatch(fetchExecutiveMetrics(params));
+    dispatch(fetchExecutivePortfolio(params));
     setProjectsLoading(true);
     setProjectsError('');
     try {
@@ -117,6 +126,9 @@ export default function ExecutiveDashboard() {
     totalProjects = 0,
     activeTasks = 0,
     completedTasks = 0,
+    overdueTasks = 0,
+    blockedTasks = 0,
+    taskTrend = {},
     totalTasks: serverTotalTasks = 0,
     openEscalations = 0,
     openViolations = 0,
@@ -179,7 +191,7 @@ export default function ExecutiveDashboard() {
           </div>
 
           <Link
-            to={PATHS.EXECUTIVE.PROJECTS}
+            to={`${PATHS.EXECUTIVE.PROJECTS}?new=1`}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-2xs hover:shadow-xs transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -220,6 +232,11 @@ export default function ExecutiveDashboard() {
           <p className="text-[11px] text-slate-500 mt-2">
             {completedTasks} of {totalTasks} tasks completed · {activeTasks} in flight
           </p>
+          {(overdueTasks > 0 || blockedTasks > 0) && (
+            <p className="text-[11px] font-semibold text-amber-700 mt-1">
+              {overdueTasks} overdue · {blockedTasks} blocked
+            </p>
+          )}
         </div>
 
         {/* Metric 2: Compliance Health */}
@@ -304,6 +321,46 @@ export default function ExecutiveDashboard() {
         </div>
       </section>
 
+      {/* 3b. Portfolio health strip + 30-day delivery trend */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 p-5 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-blue-600" />
+              <span>Portfolio Health</span>
+            </h2>
+            <Link to={PATHS.EXECUTIVE.PORTFOLIO} className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
+              <span>Open Portfolio</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+          {portfolioStatus === 'failed' ? (
+            <p className="text-xs text-rose-700">Portfolio health could not be loaded.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Off Track', value: portfolioSummary?.off_track, cls: 'text-rose-700 bg-rose-50 border-rose-100' },
+                { label: 'At Risk', value: portfolioSummary?.at_risk, cls: 'text-amber-800 bg-amber-50 border-amber-100' },
+                { label: 'On Track', value: portfolioSummary?.on_track, cls: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
+                { label: 'No PM Assigned', value: portfolioSummary?.withoutManager, cls: 'text-slate-700 bg-slate-50 border-slate-200' },
+              ].map(({ label, value, cls }) => (
+                <Link key={label} to={PATHS.EXECUTIVE.PORTFOLIO} className={`rounded-xl border p-3 hover:shadow-xs transition-shadow ${cls}`}>
+                  <p className="text-2xl font-extrabold">{value ?? '–'}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider mt-0.5">{label}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <span>Tasks Completed · 30 days</span>
+          </h2>
+          <CompletionTrend trend={taskTrend} />
+        </div>
+      </section>
+
       {/* 4. Domain Section: Active Initiatives Portfolio (Work Domain) */}
       <section className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -333,7 +390,7 @@ export default function ExecutiveDashboard() {
               Create your first project to define milestone deliverables and attach automated compliance rules.
             </p>
             <Link
-              to={PATHS.EXECUTIVE.PROJECTS}
+              to={`${PATHS.EXECUTIVE.PROJECTS}?new=1`}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -529,7 +586,12 @@ export default function ExecutiveDashboard() {
           ) : (
             <div className="divide-y divide-slate-100 text-xs">
               {recentEscalations.map((esc) => (
-                <div key={esc.id} className="py-3 flex items-start justify-between gap-3">
+                <div
+                  key={esc.id}
+                  onClick={() => navigate(PATHS.PM.ESCALATIONS)}
+                  className="py-3 px-2.5 -mx-2.5 rounded-xl flex items-start justify-between gap-3 hover:bg-slate-50/80 transition-colors cursor-pointer"
+                  title="Open the escalation inbox"
+                >
                   <div>
                     <span className="font-semibold text-slate-900 block">{esc.title}</span>
                     <span className="text-[11px] text-slate-500 mt-0.5 block">
@@ -564,12 +626,14 @@ export default function ExecutiveDashboard() {
               Regional offices, delivery teams, and personnel allocation.
             </p>
           </div>
-          <Link
-            to={PATHS.HR.BRANCHES}
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-          >
-            <span>Manage Branches →</span>
-          </Link>
+          {canManageOrg && (
+            <Link
+              to={PATHS.HR.BRANCHES}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            >
+              <span>Manage Branches →</span>
+            </Link>
+          )}
         </div>
 
         {branchDistribution.length === 0 ? (
@@ -609,6 +673,37 @@ export default function ExecutiveDashboard() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+// Small bar chart of tasks completed per day over the last 30 days (data: metrics.taskTrend).
+function CompletionTrend({ trend }) {
+  const days = Object.entries(trend || {});
+  const total = days.reduce((acc, [, n]) => acc + n, 0);
+  const max = Math.max(1, ...days.map(([, n]) => n));
+  if (days.length === 0) {
+    return <p className="text-xs text-slate-400 mt-6">No trend data yet.</p>;
+  }
+  return (
+    <div>
+      <p className="text-xs text-slate-500 mb-3">
+        <span className="text-lg font-extrabold text-slate-900">{total}</span> completed
+      </p>
+      <div className="flex items-end gap-[3px] h-20" role="img" aria-label={`${total} tasks completed in the last 30 days`}>
+        {days.map(([day, n]) => (
+          <div
+            key={day}
+            title={`${day}: ${n} completed`}
+            className={`flex-1 rounded-t-sm ${n > 0 ? 'bg-emerald-500' : 'bg-slate-100'}`}
+            style={{ height: `${n > 0 ? Math.max(8, Math.round((n / max) * 100)) : 4}%` }}
+          />
+        ))}
+      </div>
+      <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+        <span>{days[0][0].slice(5)}</span>
+        <span>{days[days.length - 1][0].slice(5)}</span>
+      </div>
     </div>
   );
 }

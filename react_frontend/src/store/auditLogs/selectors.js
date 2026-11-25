@@ -8,3 +8,5 @@ export const selectAuditLogsError = (state) => state.auditLogs.error;
 
 export const selectIsAuditLogsLoading = (state) =>
   state.auditLogs.status === "loading";
+
+export const selectProcessAuditFeed = (state) => state.auditLogs.processFeed;

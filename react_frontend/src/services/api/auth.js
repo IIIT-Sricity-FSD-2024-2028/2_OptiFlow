@@ -15,6 +15,18 @@ export const registerCompany = (payload, options) =>
 
 export const getMe = (options) => apiClient("/auth/me", options);
 
+// Public: asks the company's administrators to reset this account's password (no email yet).
+export const forgotPassword = (body, options) =>
+  apiClient("/auth/forgot-password", { ...options, method: "POST", body, skipAuthRedirect: true });
+
+// Public: redeems a one-time set-password link (company owner invite).
+export const setPassword = (body, options) =>
+  apiClient("/auth/set-password", { ...options, method: "POST", body, skipAuthRedirect: true });
+
+// skipAuthRedirect: a wrong current password answers 401; it must show an error, not sign out.
+export const changePassword = (body, options) =>
+  apiClient("/auth/change-password", { ...options, method: "POST", body, skipAuthRedirect: true });
+
 export const getPlatformMe = (options) => apiClient("/platform/auth/me", options);
 
 // skipAuthRedirect: a 401 while logging out must not bounce the user anywhere.
@@ -26,15 +38,6 @@ export const platformLogout = (options) =>
     skipAuthRedirect: true,
   });
 
-// Public: the one-time token from an owner invite link is the proof, there is no session yet.
-export const setPassword = ({ token, password }, options) =>
-  apiClient("/auth/set-password", { ...options, method: "POST", body: { token, password }, skipAuthRedirect: true });
-
-// Signed-in user replaces their password (also lifts the first-login gate). The answer carries a
-// fresh token: the old one is revoked by the change.
-export const changePassword = ({ currentPassword, newPassword }, options) =>
-  apiClient("/auth/change-password", { ...options, method: "POST", body: { currentPassword, newPassword } });
-
 // Platform administrator replaces a temporary password (the server requires at least 10 characters).
 export const platformChangePassword = ({ currentPassword, newPassword }, options) =>
-  apiClient("/platform/auth/change-password", { ...options, method: "POST", body: { currentPassword, newPassword } });
+  apiClient("/platform/auth/change-password", { ...options, method: "POST", body: { currentPassword, newPassword }, skipAuthRedirect: true });

@@ -7,7 +7,8 @@ export const FORBIDDEN_EVENT_TYPE = "forbidden";
 
 // 403s that pages already show in their own way, so the shared toast must stay out of it.
 // A COMPLIANCE_BLOCK is a 403 too, and the task and process screens render its violation list.
-export const HANDLED_403_CODES = ["COMPLIANCE_BLOCK"];
+// PASSWORD_CHANGE_REQUIRED: the route guards already send the user to the change-password page.
+export const HANDLED_403_CODES = ["COMPLIANCE_BLOCK", "PASSWORD_CHANGE_REQUIRED"];
 
 export const isSharedForbidden = (action) =>
   isRejected(action) &&

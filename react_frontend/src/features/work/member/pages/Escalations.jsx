@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { useAuth } from '../../../../context/AuthContext';
-import { useToast } from '../../../../shared/components/Toast';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
@@ -11,10 +10,11 @@ import { StatusBadge, PriorityBadge } from '../../components/StatusBadge';
 import { ReportBlockerModal } from '../components/modals/ReportBlockerModal';
 import EscalationTable from '../components/EscalationTable';
 import { resolveTeamLead } from '../../utils/userUtils';
-import * as escalationsApi from '../../../../services/api/escalations';
-import * as tasksApi from '../../../../services/api/tasks';
-import * as subtasksApi from '../../../../services/api/subtasks';
-import * as usersApi from '../../../../services/api/users';
+import { useSelector } from 'react-redux';
+import { memberReads, useMemberReads } from '../useMemberReads';
+import { selectMemberDeliverables } from '../memberSelectors';
+import { selectAllEscalations } from '../../../../store/escalations';
+import { selectAllUsers } from '../../../../store/users';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -23,15 +23,17 @@ import {
   Plus,
 } from 'lucide-react';
 
+const reads = [memberReads.tasks, memberReads.subtasks, memberReads.users, memberReads.escalations];
+
 export default function MemberEscalations() {
   const { user } = useAuth();
-  const toast = useToast();
 
-  const [loading, setLoading] = useState(true);
-  const [escalations, setEscalations] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [, setUsers] = useState([]);
-  const [manager, setManager] = useState(null);
+  const { loading, error } = useMemberReads(reads);
+  const tasks = useSelector(state => selectMemberDeliverables(state, user?.id || user?.userId));
+  const users = useSelector(selectAllUsers);
+  const manager = resolveTeamLead(user, users);
+  const allEscalations = useSelector(selectAllEscalations);
+  const currentUserId = String(user?.id || user?.userId || '');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,76 +42,20 @@ export default function MemberEscalations() {
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewingItem, setViewingItem] = useState(null);
+  const [viewingId, setViewingId] = useState(null);
 
-  const loadEscalationsData = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const [escRes, tasksRes, subtasksRes, usersRes] = await Promise.allSettled([
-        escalationsApi.list(),
-        tasksApi.list(),
-        subtasksApi.list(),
-        usersApi.list(),
-      ]);
+  const escalations = useMemo(() => {
+    const myTaskIds = new Set(
+      tasks.map((t) => String(t.isSubtask ? (t.parentTaskId || t.taskId) : (t.id || t.taskId)))
+    );
 
-      const allEsc = escRes.status === 'fulfilled' && escRes.value ? (Array.isArray(escRes.value) ? escRes.value : escRes.value.data || []) : [];
-      const allTasks = tasksRes.status === 'fulfilled' && tasksRes.value ? (Array.isArray(tasksRes.value) ? tasksRes.value : tasksRes.value.data || []) : [];
-      const allSubtasks = subtasksRes.status === 'fulfilled' && subtasksRes.value ? (Array.isArray(subtasksRes.value) ? subtasksRes.value : subtasksRes.value.data || []) : [];
-      const allUsers = usersRes.status === 'fulfilled' && usersRes.value ? (Array.isArray(usersRes.value) ? usersRes.value : usersRes.value.data || []) : [];
-
-      setUsers(allUsers);
-      const myLeader = resolveTeamLead(user, allUsers);
-      setManager(myLeader);
-
-      const currentUserId = String(user?.id || user?.userId || '');
-
-      const myTasks = allTasks.filter((t) => {
-        const assigneeId = String(t.assignedToId || (typeof t.assignedTo === 'object' ? t.assignedTo?.id : t.assignedTo) || '');
-        return Boolean(currentUserId && assigneeId === currentUserId);
-      });
-
-      const mySubtasks = allSubtasks
-        .filter((st) => String(st.assignedTo || st.assignedToId || '') === currentUserId)
-        .map((st) => {
-          const parent = allTasks.find((pt) => String(pt.id || pt.taskId) === String(st.taskId));
-          return {
-            ...st,
-            id: st.id || st.subtaskId,
-            title: st.title || 'Subtask',
-            projectId: parent?.projectId || parent?.project?.id,
-            project: parent?.project,
-            isSubtask: true,
-            parentTaskId: st.taskId,
-            dueDate: st.dueDate || st.due_date || parent?.dueDate,
-            priority: st.priority || parent?.priority || 'Medium',
-          };
-        });
-
-      const myDeliverables = [...myTasks.map((t) => ({ ...t, isSubtask: false })), ...mySubtasks];
-      setTasks(myDeliverables);
-
-      const myTaskIds = new Set(
-        myDeliverables.map((t) => String(t.isSubtask ? (t.parentTaskId || t.taskId) : (t.id || t.taskId)))
-      );
-
-      const myEsc = allEsc.filter((e) => {
-        const reporterId = String(e.reportedBy || e.reportedById || (typeof e.reporter === 'object' ? e.reporter?.id : e.reporter) || '');
-        const escTaskId = String(e.taskId || e.task_id || (typeof e.task === 'object' ? e.task?.id : e.task) || '');
-        return Boolean(currentUserId && (reporterId === currentUserId || (escTaskId && myTaskIds.has(escTaskId))));
-      });
-
-      setEscalations(myEsc);
-    } catch (err) {
-      console.error('Error fetching escalations:', err);
-      toast.error('Could not load escalations');
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    loadEscalationsData();
-  }, [loadEscalationsData]);
+    return allEscalations.filter((e) => {
+      const reporterId = String(e.reportedBy || e.reportedById || (typeof e.reporter === 'object' ? e.reporter?.id : e.reporter) || '');
+      const escTaskId = String(e.taskId || e.task_id || (typeof e.task === 'object' ? e.task?.id : e.task) || '');
+      return Boolean(currentUserId && (reporterId === currentUserId || (escTaskId && myTaskIds.has(escTaskId))));
+    });
+  }, [tasks, allEscalations, currentUserId]);
+  const viewingItem = escalations.find(item => item.id === viewingId);
 
   const metrics = useMemo(() => {
     const total = escalations.length;
@@ -154,6 +100,7 @@ export default function MemberEscalations() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1">
@@ -261,7 +208,7 @@ export default function MemberEscalations() {
         searchQuery={searchQuery}
         priorityFilter={priorityFilter}
         statusFilter={statusFilter}
-        onViewItem={(item) => setViewingItem(item)}
+        onViewItem={(item) => setViewingId(item.id)}
       />
 
       {/* Shared Blocker Creation Modal */}
@@ -270,14 +217,11 @@ export default function MemberEscalations() {
         onClose={() => setIsModalOpen(false)}
         tasks={tasks}
         managerId={manager?.id || manager?.userId}
-        onSuccess={() => {
-          loadEscalationsData();
-        }}
       />
 
       {/* Blocker Details Modal */}
       {viewingItem && (
-        <Modal isOpen={Boolean(viewingItem)} onClose={() => setViewingItem(null)} title={viewingItem.title || 'Blocker Details'}>
+        <Modal isOpen={Boolean(viewingItem)} onClose={() => setViewingId(null)} title={viewingItem.title || 'Blocker Details'}>
           <div className="space-y-4 text-xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <StatusBadge status={viewingItem.status || 'Active'} />
@@ -300,7 +244,7 @@ export default function MemberEscalations() {
               </div>
             )}
             <div className="flex justify-end pt-2">
-              <Button variant="outline" size="sm" onClick={() => setViewingItem(null)}>
+              <Button variant="outline" size="sm" onClick={() => setViewingId(null)}>
                 Close
               </Button>
             </div>

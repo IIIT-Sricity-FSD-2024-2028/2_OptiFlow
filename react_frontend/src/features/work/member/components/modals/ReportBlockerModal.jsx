@@ -5,8 +5,9 @@ import { FormField, Input, Select, Textarea } from '../../../../../shared/compon
 import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../shared/components/Toast';
 import { BLOCKER_TYPES } from '../../../constants';
-import * as escalationsApi from '../../../../../services/api/escalations';
-import * as tasksApi from '../../../../../services/api/tasks';
+import { useDispatch } from 'react-redux';
+import { createEscalation } from '../../../../../store/escalations';
+import { updateTask } from '../../../../../store/tasks';
 
 export function ReportBlockerModal({
   isOpen,
@@ -19,6 +20,7 @@ export function ReportBlockerModal({
 }) {
   const { user } = useAuth();
   const toast = useToast();
+  const dispatch = useDispatch();
 
   const [selectedTaskId, setSelectedTaskId] = useState(taskId || '');
   const [blockerType, setBlockerType] = useState(BLOCKER_TYPES[0]);
@@ -58,7 +60,7 @@ export function ReportBlockerModal({
       const finalProjId = projectId || selectedTask?.projectId || selectedTask?.project?.id;
       const finalTitle = title.trim() || `Blocked: ${selectedTask?.title || 'Task'}`;
 
-      await escalationsApi.create({
+      await dispatch(createEscalation({
         taskId: actualTaskId ? String(actualTaskId) : undefined,
         projectId: finalProjId,
         title: finalTitle,
@@ -67,12 +69,12 @@ export function ReportBlockerModal({
         priority,
         reportedBy: user?.id,
         targetManagerId: managerId ? String(managerId) : undefined,
-      });
+      })).unwrap();
 
       // Update task status to Blocked
       try {
         if (actualTaskId) {
-          await tasksApi.update(actualTaskId, { status: 'Blocked' });
+          await dispatch(updateTask({ id: actualTaskId, data: { status: 'Blocked' } })).unwrap();
         }
       } catch {
         // The blocker is already logged; a failed status change is not fatal.

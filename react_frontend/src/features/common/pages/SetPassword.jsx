@@ -1,99 +1,105 @@
 import { useState } from "react";
+import { useDispatch } from "react-redux";
 import { Link, useSearchParams } from "react-router-dom";
-import { setPassword } from "../../../services/api/auth";
-import { Button } from "../../../shared/components/Button";
+import { KeyRound, CheckCircle2 } from "lucide-react";
 import { PATHS } from "../../../app/paths";
+import { setPasswordWithToken } from "../../../store/auth";
+import { FormField, Input } from "../../../shared/components/FormField";
+import { Button } from "../../../shared/components/Button";
 
-const MIN_LENGTH = 8;
-
-/**
- * Public page behind the owner invite link a platform admin hands over when provisioning a company
- * (/set-password?token=...). No session is needed: the one-time token in the URL is the proof.
- * After it succeeds the owner signs in with the new password.
- */
+// Target of the one-time set-password link that the Platform Admin gets when provisioning a
+// company (APP_BASE_URL/set-password?token=...). The new owner never receives a password; they
+// choose one here, then sign in. Redeeming the link also invalidates it.
 export default function SetPassword() {
+  const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
-  const [password, setPasswordValue] = useState("");
+  const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [status, setStatus] = useState(token ? "ready" : "missing"); // ready | working | done | failed | missing
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (password.length < MIN_LENGTH) {
-      setError(`Password must be at least ${MIN_LENGTH} characters.`);
-      return;
-    }
-    if (password !== confirm) {
-      setError("Passwords do not match.");
-      return;
-    }
     setError("");
-    setStatus("working");
+    if (password.length < 8) return setError("The password must be at least 8 characters long.");
+    if (password !== confirm) return setError("The two passwords do not match.");
+    setSaving(true);
     try {
-      await setPassword({ token, password });
-      setStatus("done");
+      await dispatch(setPasswordWithToken({ token, password })).unwrap();
+      setDone(true);
     } catch (err) {
-      setError(err.message || "This link is invalid or has expired. Ask your administrator for a new one.");
-      setStatus("failed");
+      setError(err?.message || "This link is invalid or has expired. Ask your platform administrator for a new one.");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const inputClass =
-    "w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20";
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-8 shadow-xs space-y-5 text-slate-900">
-        <h1 className="text-xl font-bold">Set your password</h1>
+    <div className="min-h-screen bg-[#f0f4ff] flex items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-8 space-y-6">
+        <div className="space-y-2 text-center">
+          <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+            {done ? <CheckCircle2 className="w-6 h-6 text-emerald-600" /> : <KeyRound className="w-6 h-6" />}
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {done ? "Password saved" : "Choose your password"}
+          </h1>
+          <p className="text-sm text-slate-500">
+            {done
+              ? "Your account is ready. Sign in with your email and the password you just chose."
+              : "Set the password for your new OptiFlow account."}
+          </p>
+        </div>
 
-        {status === "missing" && (
-          <p className="text-sm text-red-600">This link is incomplete. Open the link you were given again.</p>
+        {!token && !done && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800" role="alert">
+            This page needs the link you were sent. Open the full link, or ask your administrator for a new one.
+          </div>
         )}
 
-        {(status === "ready" || status === "working" || status === "failed") && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Choose a password for your OfficeSync account. It must be at least {MIN_LENGTH} characters.
-            </p>
-            <div>
-              <label htmlFor="new-password" className="block text-xs font-semibold text-slate-700 mb-1">New password</label>
-              <input
-                id="new-password"
+        {error && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+            {error}
+          </div>
+        )}
+
+        {done ? (
+          <Link
+            to={PATHS.PUBLIC.LOGIN}
+            className="block w-full text-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Go to Sign In
+          </Link>
+        ) : (
+          <form onSubmit={submit} className="space-y-4">
+            <FormField label="New password" required>
+              <Input
                 type="password"
                 autoComplete="new-password"
                 value={password}
-                onChange={(e) => setPasswordValue(e.target.value)}
-                className={inputClass}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                disabled={saving || !token}
+                required
               />
-            </div>
-            <div>
-              <label htmlFor="confirm-password" className="block text-xs font-semibold text-slate-700 mb-1">Confirm password</label>
-              <input
-                id="confirm-password"
+            </FormField>
+            <FormField label="Confirm password" required>
+              <Input
                 type="password"
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className={inputClass}
+                minLength={8}
+                disabled={saving || !token}
+                required
               />
-            </div>
-            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" variant="primary" disabled={status === "working"}>
-              {status === "working" ? "Saving..." : "Set password"}
+            </FormField>
+            <Button type="submit" className="w-full" disabled={saving || !token}>
+              {saving ? "Saving…" : "Save password"}
             </Button>
           </form>
-        )}
-
-        {status === "done" && (
-          <p className="text-sm text-emerald-700">Your password is set. You can now sign in.</p>
-        )}
-
-        {(status === "done" || status === "missing") && (
-          <Link to={PATHS.PUBLIC.LOGIN} className="inline-block text-sm font-medium text-blue-700 hover:text-blue-900">
-            Go to sign in
-          </Link>
         )}
       </div>
     </div>

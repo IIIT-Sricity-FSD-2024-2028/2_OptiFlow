@@ -4,6 +4,9 @@ import { Modal } from '../../../shared/components/Modal';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '../../../app/paths';
 
+// The owner account is created with a random temporary password, shown here once so the platform
+// admin can hand it over. The owner must replace it at first sign-in (the API blocks everything
+// else until then), so it only works for that one step.
 export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
   const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
@@ -11,13 +14,17 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
   if (!result) return null;
 
   const email = result.owner?.email || '';
-  const temporaryPassword = result.temporaryPassword || '';
-  const emailDelivered = Boolean(result.inviteEmail?.delivered);
+  const password = result.temporaryPassword || '';
 
-  const handleCopyPassword = () => {
-    navigator.clipboard.writeText(temporaryPassword);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const handleCopyInvite = async () => {
+    const text = `Your OptiFlow account is ready.\nSign-in email: ${email}\nTemporary password: ${password}\nYou will be asked to choose your own password at first sign-in.`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      /* clipboard blocked: the password stays selectable on screen */
+    }
   };
 
   const handleGoToLogin = () => {
@@ -87,11 +94,12 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
             </div>
             <button
               type="button"
-              onClick={handleCopyPassword}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
+              onClick={handleCopyInvite}
+              disabled={!password}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs disabled:opacity-50"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy Password'}</span>
+              <span>{copied ? 'Copied' : 'Copy Login'}</span>
             </button>
           </div>
 
@@ -104,29 +112,22 @@ export function CompanyProvisionSuccessModal({ isOpen, result, onClose }) {
               <span className="font-mono font-semibold text-slate-900 select-all">{email}</span>
             </div>
 
-            <div className="py-1 border-b border-slate-200/60 space-y-1">
+            <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
               <span className="text-slate-500 flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5 text-slate-400" />
-                Temporary password (shown once)
+                Temporary Password
               </span>
-              <span className="block font-mono text-sm font-semibold text-slate-900 break-all select-all">{temporaryPassword}</span>
-              <span className="block text-[11px] text-slate-500">The owner must choose a new password at first sign-in.</span>
-            </div>
-
-            <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-              <span className="text-slate-500">Invite email</span>
-              <span className="font-semibold text-slate-900">
-                {emailDelivered ? 'Sent to the owner' : 'Not sent - share the password yourself'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between py-1">
-              <span className="text-slate-500">Landing Portal</span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700">
-                Executive Dashboard
-              </span>
+              {password ? (
+                <span className="font-mono font-semibold text-slate-900 select-all">{password}</span>
+              ) : (
+                <span className="text-rose-600">Not returned. Reset it from the company page.</span>
+              )}
             </div>
           </div>
+
+          <p className="text-[11px] text-slate-500">
+            The owner must choose a new password at first sign-in. It is shown only once.
+          </p>
         </div>
       </div>
     </Modal>

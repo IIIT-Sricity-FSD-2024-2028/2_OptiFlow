@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Modal } from '../../../../../shared/components/Modal';
 import { Button } from '../../../../../shared/components/Button';
 import { FormField, Input, Select, Textarea } from '../../../../../shared/components/FormField';
@@ -6,45 +6,34 @@ import { FileUpload } from '../../../../../shared/components/FileUpload';
 import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../shared/components/Toast';
 import { EVIDENCE_TYPES } from '../../../constants';
-import * as evidenceApi from '../../../../../services/api/evidence';
+import { useSaveEvidence } from './useSaveEvidence';
 
-export function UploadEvidenceModal({
+export function UploadEvidenceModal(props) {
+  if (!props.isOpen) return null;
+  return <EvidenceForm key={props.initialData?.id || 'new'} {...props} />;
+}
+
+function EvidenceForm({
   isOpen,
   onClose,
   taskId = '',
   tasks = [],
   initialData = null,
+  violationId = null,
   onSuccess,
 }) {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [selectedTaskId, setSelectedTaskId] = useState(taskId || '');
-  const [title, setTitle] = useState('');
-  const [type, setType] = useState(EVIDENCE_TYPES[0]);
-  const [notes, setNotes] = useState('');
-  const [fileUrl, setFileUrl] = useState('');
+  const finalViolationId = violationId || initialData?.violationId || initialData?.violation_id || null;
+  const [selectedTaskId, setSelectedTaskId] = useState(initialData?.taskId || initialData?.task_id || taskId || tasks[0]?.id || '');
+  const [title, setTitle] = useState(initialData?.title || initialData?.name || '');
+  const [type, setType] = useState(initialData?.type || initialData?.evidenceType || EVIDENCE_TYPES[0]);
+  const [notes, setNotes] = useState(initialData?.notes || initialData?.description || '');
+  const [fileUrl, setFileUrl] = useState(initialData?.fileUrl || initialData?.url || '');
   const [selectedFile, setSelectedFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedFile(null);
-      if (initialData) {
-        setTitle(initialData.title || initialData.name || '');
-        setType(initialData.type || initialData.evidenceType || EVIDENCE_TYPES[0]);
-        setNotes(initialData.notes || initialData.description || '');
-        setFileUrl(initialData.fileUrl || initialData.url || '');
-        setSelectedTaskId(initialData.taskId || initialData.task_id || taskId || '');
-      } else {
-        setTitle('');
-        setType(EVIDENCE_TYPES[0]);
-        setNotes('');
-        setFileUrl('');
-        setSelectedTaskId(taskId || (tasks?.[0]?.id || ''));
-      }
-    }
-  }, [isOpen, initialData]);
+  const saveEvidence = useSaveEvidence(isOpen, initialData?.id, taskId || selectedTaskId);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -69,24 +58,13 @@ export function UploadEvidenceModal({
         fileUrl: selectedFile ? selectedFile.name : (fileUrl.trim() || 'deliverable_artifact.pdf'),
         userId: user?.id,
       };
-
-      let result;
-      if (initialData?.id) {
-        result = await evidenceApi.update(initialData.id, payload);
-        if (selectedFile) {
-          await evidenceApi.uploadFile(initialData.id, selectedFile);
-        }
-        toast.success('Evidence updated successfully.');
-      } else {
-        result = await evidenceApi.create(payload);
-        const createdId = result?.data?.id || result?.id;
-        if (selectedFile && createdId) {
-          await evidenceApi.uploadFile(createdId, selectedFile);
-        }
-        toast.success('Evidence artifact uploaded for compliance verification!');
+      if (finalViolationId) {
+        payload.violationId = String(finalViolationId);
       }
 
-      onSuccess?.(result?.data || result);
+      const result = await saveEvidence(payload, selectedFile);
+      toast.success(initialData?.id ? 'Evidence updated successfully.' : 'Evidence artifact uploaded for compliance verification!');
+      onSuccess?.(result);
       onClose();
     } catch (err) {
       console.error(err);

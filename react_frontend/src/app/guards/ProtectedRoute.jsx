@@ -23,10 +23,12 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
 
   const isPlatformUser = Boolean(user.isPlatform || user.role === ROLES.PLATFORM_ADMIN);
 
-  // A temporary password (a company owner provisioned by a platform admin, a user created by HR,
-  // a new platform administrator) must be replaced before anything else. The server refuses every
-  // other request until then.
+  // 1b. A temporary password (a company owner provisioned by a platform admin, a user created by
+  //     HR, a new platform administrator) must be replaced before anything else; the server
+  //     refuses every other request until then. The change-password page itself is rendered for
+  //     everyone, platform admins included, so it must not be bounced by the area checks below.
   if (user.mustChangePassword) {
+    if (location.pathname === PATHS.COMMON.CHANGE_PASSWORD) return <Outlet />;
     return <Navigate to={PATHS.COMMON.CHANGE_PASSWORD} replace />;
   }
 
@@ -43,11 +45,11 @@ export const ProtectedRoute = ({ allowedRoles = [], isPlatform = false }) => {
     return <Navigate to={PATHS.PLATFORM.DASHBOARD} replace />;
   }
 
-  // 4. Do they have the right role for this specific route?
+  // 5. Do they have the right role for this specific route?
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
     return <Navigate to={PATHS.COMMON.UNAUTHORIZED} replace />;
   }
 
-  // 5. Access granted! Render the children routes.
+  // 6. Access granted! Render the children routes.
   return <Outlet />;
 };

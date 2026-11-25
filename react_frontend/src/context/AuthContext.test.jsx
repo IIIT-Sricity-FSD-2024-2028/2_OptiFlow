@@ -180,7 +180,7 @@ describe("useAuth shape", () => {
     renderApp();
     await screen.findByText("user:none");
     expect(Object.keys(auth).sort()).toEqual(
-      ["loading", "login", "logout", "platformLogin", "platformLogout", "sessionNotice", "user"],
+      ["changePassword", "loading", "login", "logout", "platformLogin", "platformLogout", "sessionNotice", "user"],
     );
   });
 

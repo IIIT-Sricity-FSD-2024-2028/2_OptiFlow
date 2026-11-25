@@ -710,6 +710,7 @@ export async function createPlatformCompany(req, res, next) {
           companyId: company.id,
           name: "Headquarters",
           code: "HQ",
+          // Branch has no description column; passing one made every provisioning fail.
         },
       });
 
@@ -1522,10 +1523,52 @@ export async function updateSubscription(req, res, next) {
     }
 
     // 4. Period end date
-    if (body.currentPeriodEnd) {
-      const parsedDate = new Date(body.currentPeriodEnd);
+    if (body.currentPeriodEnd !== undefined && body.currentPeriodEnd !== null && body.currentPeriodEnd !== "") {
+      const raw = body.currentPeriodEnd;
+      // Only an ISO date/date-time string is accepted: new Date() would turn 1, "2026" or
+      // "Mar 5" into some date without complaint.
+      if (
+        typeof raw !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(raw.trim())
+      ) {
+        throw new BadRequestError(
+          "currentPeriodEnd must be an ISO date such as 2026-12-31",
+        );
+      }
+      const parsedDate = new Date(raw.trim());
       if (isNaN(parsedDate.getTime())) {
-        throw new BadRequestError("Invalid date format for currentPeriodEnd");
+        throw new BadRequestError("currentPeriodEnd is not a real calendar date");
+      }
+      // 2026-02-31 parses in some engines as Mar 3; make sure the day did not roll over.
+      const [y, m, d] = raw.trim().slice(0, 10).split("-").map(Number);
+      const probe = new Date(Date.UTC(y, m - 1, d));
+      if (probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) {
+        throw new BadRequestError("currentPeriodEnd is not a real calendar date");
+      }
+      if (parsedDate.getTime() === new Date(existing.currentPeriodEnd).getTime()) {
+        throw new BadRequestError("The period already ends on that date");
+      }
+      if (parsedDate <= new Date()) {
+        throw new BadRequestError(
+          "The new period end must be in the future. To end the subscription now, cancel it instead",
+        );
+      }
+      if (parsedDate <= new Date(existing.currentPeriodStart)) {
+        throw new BadRequestError(
+          "The new period end must be after the period start",
+        );
+      }
+      const maxEnd = new Date();
+      maxEnd.setFullYear(maxEnd.getFullYear() + 5);
+      if (parsedDate > maxEnd) {
+        throw new BadRequestError(
+          "The period end cannot be more than 5 years from today",
+        );
+      }
+      if (String(body.reason || "").trim().length < 5) {
+        throw new BadRequestError(
+          "A reason of at least 5 characters is required to change the period end",
+        );
       }
       updateData.currentPeriodEnd = parsedDate;
     }
