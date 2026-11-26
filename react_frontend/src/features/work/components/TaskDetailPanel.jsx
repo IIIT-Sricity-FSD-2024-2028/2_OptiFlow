@@ -87,6 +87,12 @@ export function TaskDetailPanel({
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Due Date</h3>
               <p className="text-sm text-gray-900">{formatDate(task.dueDate || task.deadline)}</p>
             </div>
+            {task.estimatedHours != null && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Estimated Hours Budget</h3>
+                <p className="text-sm font-medium text-gray-900">{Number(task.estimatedHours)} hrs</p>
+              </div>
+            )}
           </div>
         </section>
 

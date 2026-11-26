@@ -8,6 +8,8 @@ import { deadlineInput } from './dateLimits';
 export function SubtaskList({
   subtasks = [],
   readOnly = false,
+  taskEstimatedHours = null,
+  headerAction = null,
   onStatusToggle,
   onSubmitSubtask,
   onApproveSubtask,
@@ -40,16 +42,29 @@ export function SubtaskList({
     const s = String(st.status || '').toLowerCase();
     return s.includes('complete') || s.includes('review');
   }).length;
+  const allocatedHours = subtasks.reduce(
+    (sum, st) => sum + (st?.estimatedHours != null ? Number(st.estimatedHours) : 0),
+    0
+  );
+  const budgetHours = taskEstimatedHours != null ? Number(taskEstimatedHours) : null;
+  const remainingHours = budgetHours != null ? Math.max(0, Number((budgetHours - allocatedHours).toFixed(2))) : null;
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
-      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+      <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3 bg-slate-50/50">
         <div>
-          <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+          <h3 className="font-bold text-slate-900 text-sm flex flex-wrap items-center gap-2">
             Subtasks
             {subtasks.length > 0 && (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
                 {doneCount}/{subtasks.length} done
+              </span>
+            )}
+            {(budgetHours > 0 || allocatedHours > 0) && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                {budgetHours > 0
+                  ? `${Number(allocatedHours.toFixed(2))}h / ${budgetHours}h allotted${remainingHours > 0 ? ` • ${remainingHours}h left` : ''}`
+                  : `${Number(allocatedHours.toFixed(2))}h allotted`}
               </span>
             )}
           </h3>
@@ -59,6 +74,7 @@ export function SubtaskList({
               : `${subtasks.length} subtask(s) defined`}
           </p>
         </div>
+        {headerAction && <div className="shrink-0">{headerAction}</div>}
       </div>
 
       <div className="p-4">
@@ -151,18 +167,28 @@ export function SubtaskList({
                   <div className="flex-1 min-w-0">
                     <p
                       className={`text-xs font-semibold ${
-                        isCompleted || isInReview ? 'text-slate-400 line-through' : 'text-slate-800'
+                        isCompleted ? 'text-slate-400 line-through' : 'text-slate-800'
                       }`}
                     >
                       {subtask.title}
                     </p>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[11px] text-slate-400">
+                    {subtask.description && (
+                      <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">
+                        {subtask.description}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-1 text-[11px] text-slate-400">
                       {assigneeDisplayName && (
                         <span>Assigned to: {assigneeDisplayName}</span>
                       )}
+                      {subtask.estimatedHours != null && (
+                        <span className="font-medium text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded">
+                          {Number(subtask.estimatedHours)}h
+                        </span>
+                      )}
                       {(subtask.dueDate || subtask.deadline) && (
                         <span>
-                          {assigneeDisplayName ? '•' : ''} Due: {deadlineInput(subtask.dueDate || subtask.deadline)}
+                          • Due: {deadlineInput(subtask.dueDate || subtask.deadline)}
                         </span>
                       )}
                     </div>

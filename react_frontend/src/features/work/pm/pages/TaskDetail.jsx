@@ -284,6 +284,12 @@ export default function PmTaskDetail() {
             <p className="mt-1 text-sm font-medium text-slate-800 truncate">{task.createdBy?.fullName || '—'}</p>
           </div>
           <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Est. Hours</p>
+            <p className="mt-1 text-sm font-medium text-slate-800">
+              {task.estimatedHours != null ? `${Number(task.estimatedHours)}h` : '—'}
+            </p>
+          </div>
+          <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Completed</p>
             <p className="mt-1 text-sm font-medium text-slate-800">{formatDate(task.completedAt)}</p>
           </div>
@@ -345,6 +351,7 @@ export default function PmTaskDetail() {
                 columns={[
                   { key: 'title', header: 'Subtask', accessor: 'title' },
                   { key: 'assignee', header: 'Member', render: (subtask) => subtask.assignedTo?.fullName || subtask.assignedTo?.email || '—' },
+                  { key: 'hours', header: 'Est. Hours', render: (subtask) => subtask.estimatedHours != null ? `${Number(subtask.estimatedHours)}h` : '—' },
                   { key: 'status', header: 'TL Review Status', render: (subtask) => <Badge status={subtask.status === 'Completed' ? 'success' : subtask.status === 'In_Review' ? 'warning' : 'info'}>{String(subtask.status || 'Draft').replace(/_/g, ' ')}</Badge> },
                   { key: 'dueDate', header: 'Due Date', render: (subtask) => formatDate(subtask.dueDate) },
                   { key: 'completedAt', header: 'Completed', render: (subtask) => formatDate(subtask.completedAt) },

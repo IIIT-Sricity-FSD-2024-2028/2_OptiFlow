@@ -272,7 +272,33 @@ function withSubtaskProgress(task) {
   if (!task || !Array.isArray(task.subtasks)) return task;
   const total = task.subtasks.length;
   const completed = task.subtasks.filter((st) => st.status === 'Completed').length;
-  return { ...task, subtaskProgress: { completed, total } };
+  const allocatedHours = task.subtasks.reduce(
+    (sum, st) => sum + (st?.estimatedHours != null ? Number(st.estimatedHours) : 0),
+    0
+  );
+  return { ...task, subtaskProgress: { completed, total, allocatedHours } };
+}
+
+async function assertSubtaskHoursWithinBudget(taskId, parentTask, estimatedHours, excludeSubtaskId = null) {
+  if (estimatedHours == null || parentTask?.estimatedHours == null) return;
+  const budget = Number(parentTask.estimatedHours);
+  if (!Number.isFinite(budget)) return;
+  const agg = await prisma.subtask.aggregate({
+    where: {
+      taskId,
+      deletedAt: null,
+      ...(excludeSubtaskId ? { id: { not: excludeSubtaskId } } : {}),
+    },
+    _sum: { estimatedHours: true },
+  });
+  const alreadyAllocated = Number(agg._sum?.estimatedHours || 0);
+  const nextTotal = alreadyAllocated + Number(estimatedHours);
+  if (nextTotal > budget + 1e-6) {
+    const remaining = Math.max(0, Number((budget - alreadyAllocated).toFixed(2)));
+    throw new BadRequestError(
+      `Allocated subtask hours (${Number(nextTotal.toFixed(2))}h) exceed task budget (${budget}h). ${remaining}h remaining.`
+    );
+  }
 }
 
 async function respondWithComplianceBlock({ req, res, taskId, taskRecord, targetStatus, failedRules }) {
@@ -1162,6 +1188,10 @@ export async function createSubtask(req, res, next) {
     const description = body.description || null;
     const status = body.status || 'Draft';
     const dueDate = parseOptionalDate(body.dueDate || body.due_date, 'dueDate');
+    const estimatedHours = parseOptionalHours(
+      body.estimatedHours ?? body.estimated_hours,
+      'estimatedHours'
+    );
 
     validateRequired({ taskId, title }, ['taskId', 'title']);
     validateEnum(status, ALLOWED_TASK_STATUSES, 'status');
@@ -1186,6 +1216,7 @@ export async function createSubtask(req, res, next) {
 
     assertNotPast(dueDate, 'dueDate');
     assertWithinParentDeadline(dueDate, parentTask.dueDate);
+    await assertSubtaskHoursWithinBudget(taskId, parentTask, estimatedHours);
 
     const assignedToId = body.assignedToId || body.assigned_to_id || body.assignedTo || null;
 
@@ -1235,6 +1266,7 @@ export async function createSubtask(req, res, next) {
         assignedToId,
         createdById: req.user.id,
         dueDate,
+        estimatedHours,
         completedAt: status === 'Completed' ? new Date() : null,
       },
     });
@@ -1276,7 +1308,14 @@ export async function updateSubtask(req, res, next) {
 
     // D-S5: members move their own subtask to In_Review; the Team Lead or PM completes it.
     if (isMemberRole(req.user)) {
-      if (body.title || body.description !== undefined || body.dueDate !== undefined || body.due_date !== undefined) {
+      if (
+        body.title ||
+        body.description !== undefined ||
+        body.dueDate !== undefined ||
+        body.due_date !== undefined ||
+        body.estimatedHours !== undefined ||
+        body.estimated_hours !== undefined
+      ) {
         throw new ForbiddenError('Team members cannot edit subtask details');
       }
       if (body.status && !MEMBER_SETTABLE_STATUSES.includes(body.status)) {
@@ -1298,6 +1337,20 @@ export async function updateSubtask(req, res, next) {
         assertWithinParentDeadline(due, parent?.dueDate);
       }
       updateData.dueDate = due;
+    }
+    if (body.estimatedHours !== undefined || body.estimated_hours !== undefined) {
+      const hrs = parseOptionalHours(
+        body.estimatedHours !== undefined ? body.estimatedHours : body.estimated_hours,
+        'estimatedHours'
+      );
+      if (hrs !== null) {
+        const parent = await prisma.task.findUnique({
+          where: { id: existing.taskId },
+          select: { estimatedHours: true },
+        });
+        await assertSubtaskHoursWithinBudget(existing.taskId, parent, hrs, id);
+      }
+      updateData.estimatedHours = hrs;
     }
     if (body.status) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');

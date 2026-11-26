@@ -463,10 +463,11 @@ model Subtask {
   title        String
   description  String?
   status       TaskStatus @default(Draft)
-  assignedToId String?
-  createdById  String
-  dueDate      DateTime?
-  completedAt  DateTime?
+  assignedToId  String?
+  createdById   String
+  dueDate       DateTime?
+  estimatedHours Decimal?
+  completedAt   DateTime?
   // Reviewer's reason when a submitted subtask is sent back; cleared on approval.
   reviewComment String?
   deletedAt    DateTime?

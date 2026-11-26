@@ -201,12 +201,53 @@ export function ExtensionRequestModal({
   );
 }
 
-export function CreateSubtaskModal({ isOpen, onClose, onSave, saving, error, form, onFormChange, user, members, taskDueDate }) {
+export function CreateSubtaskModal({
+  isOpen,
+  onClose,
+  onSave,
+  saving,
+  error,
+  form,
+  onFormChange,
+  user,
+  members,
+  taskDueDate,
+  taskEstimatedHours = null,
+  subtasks = [],
+}) {
+  const budget = taskEstimatedHours != null ? Number(taskEstimatedHours) : null;
+  const allocated = subtasks.reduce(
+    (sum, st) => sum + (st?.estimatedHours != null ? Number(st.estimatedHours) : 0),
+    0
+  );
+  const remaining = budget != null ? Math.max(0, Number((budget - allocated).toFixed(2))) : null;
+  const inputHours = form.estimatedHours !== '' && form.estimatedHours != null ? Number(form.estimatedHours) : 0;
+  const exceedsBudget = budget != null && inputHours > remaining + 1e-6;
+  const allocPct = budget > 0 ? Math.min(100, Math.round(((allocated + (Number.isFinite(inputHours) ? inputHours : 0)) / budget) * 100)) : 0;
+
+  const memberLoad = (memberId) => {
+    const mine = subtasks.filter((st) => String(st.assignedToId || st.assignedTo?.id || '') === String(memberId));
+    const hrs = mine.reduce((sum, st) => sum + (st?.estimatedHours != null ? Number(st.estimatedHours) : 0), 0);
+    return { count: mine.length, hrs };
+  };
+
+  const renderMemberOption = (m) => {
+    const id = m.id || m.userId;
+    const name = m.fullName || m.name || `Member #${id}`;
+    const load = memberLoad(id);
+    const loadText = load.count > 0 ? ` (${load.count} subtask${load.count > 1 ? 's' : ''}${load.hrs > 0 ? ` · ${load.hrs}h` : ''})` : '';
+    return (
+      <option key={id} value={id}>
+        {name}{m.jobTitle ? ` — ${m.jobTitle}` : ''}{loadText}
+      </option>
+    );
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create Subtask"
       footer={<>
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={onSave} disabled={saving}>{saving ? 'Saving…' : 'Assign Subtask'}</Button>
+        <Button variant="primary" onClick={onSave} disabled={saving || exceedsBudget}>{saving ? 'Saving…' : 'Assign Subtask'}</Button>
       </>}>
       <div className="space-y-4">
         {error && (
@@ -217,18 +258,89 @@ export function CreateSubtaskModal({ isOpen, onClose, onSave, saving, error, for
             {error}
           </div>
         )}
+
+        {budget > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-700">Task Hours Budget</span>
+              <span className="font-semibold text-slate-900">
+                {allocated}h allocated / {budget}h total ({remaining}h left)
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${exceedsBudget ? 'bg-rose-500' : 'bg-blue-600'}`}
+                style={{ width: `${allocPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <FormField label="Subtask Title" required>
-          <Input value={form.title} onChange={e => onFormChange(f => ({ ...f, title: e.target.value }))} placeholder="What needs to be done?" />
+          <Input
+            value={form.title}
+            onChange={e => onFormChange(f => ({ ...f, title: e.target.value }))}
+            placeholder="e.g. Implement OAuth token exchange"
+          />
         </FormField>
-        <FormField label="Assign To">
+
+        <FormField label="Scope & Acceptance Notes">
+          <Textarea
+            rows={2}
+            value={form.description || ''}
+            onChange={e => onFormChange(f => ({ ...f, description: e.target.value }))}
+            placeholder="Specify what deliverable is expected from this subtask..."
+          />
+        </FormField>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <FormField
+              label="Estimated Hours"
+              hint={remaining != null ? `Up to ${remaining}h remaining` : 'Optional effort allocation'}
+            >
+              <Input
+                type="number"
+                min="0"
+                step="0.5"
+                value={form.estimatedHours ?? ''}
+                onChange={e => onFormChange(f => ({ ...f, estimatedHours: e.target.value }))}
+                placeholder={remaining != null ? `e.g. ${Math.min(remaining, 8)}` : 'e.g. 4'}
+              />
+            </FormField>
+            {remaining > 0 && Number(form.estimatedHours || 0) !== remaining && (
+              <button
+                type="button"
+                onClick={() => onFormChange(f => ({ ...f, estimatedHours: String(remaining) }))}
+                className="mt-1 text-[11px] font-medium text-blue-600 hover:underline cursor-pointer"
+              >
+                Use remaining ({remaining}h)
+              </button>
+            )}
+            {exceedsBudget && (
+              <p className="mt-1 text-[11px] font-medium text-rose-600">
+                Exceeds remaining task budget ({remaining}h).
+              </p>
+            )}
+          </div>
+
+          <FormField label="Deadline">
+            <Input
+              type="date"
+              min={todayInput()}
+              max={deadlineInput(taskDueDate)}
+              value={form.due}
+              onChange={e => onFormChange(f => ({ ...f, due: e.target.value }))}
+            />
+          </FormField>
+        </div>
+
+        <FormField label="Assign To" hint="Balanced by current member workload on this task">
           <Select value={form.assignee} onChange={e => onFormChange(f => ({ ...f, assignee: e.target.value }))}>
             <option value="">— Unassigned —</option>
-            <option value={user.id}>{user.fullName || 'Me'}</option>
-            {members.map(m => <option key={m.id || m.userId} value={m.id || m.userId}>{m.fullName || m.name || 'Member #' + m.id}</option>)}
+            <option value={user.id}>{user.fullName || 'Me'} (Team Lead)</option>
+            {members.map(renderMemberOption)}
           </Select>
-        </FormField>
-        <FormField label="Deadline">
-          <Input type="date" min={todayInput()} max={deadlineInput(taskDueDate)} value={form.due} onChange={e => onFormChange(f => ({ ...f, due: e.target.value }))} />
         </FormField>
       </div>
     </Modal>

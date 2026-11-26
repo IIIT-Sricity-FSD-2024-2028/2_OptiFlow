@@ -125,7 +125,7 @@ export default function TeamLeadTaskDetail() {
   const [extReason, setExtReason] = useState('');
 
   const [subtaskOpen, setSubtaskOpen] = useState(false);
-  const [stForm, setStForm] = useState({ title: '', assignee: '', due: '' });
+  const [stForm, setStForm] = useState({ title: '', description: '', estimatedHours: '', assignee: '', due: '' });
   const [savingSt, setSavingSt] = useState(false);
   const [subtaskError, setSubtaskError] = useState('');
   const [sendBackSubtask, setSendBackSubtask] = useState(null);
@@ -294,6 +294,8 @@ export default function TeamLeadTaskDetail() {
       const created = await dispatch(createSubtask({
         taskId: taskId,
         title: stForm.title.trim(),
+        description: stForm.description?.trim() || undefined,
+        estimatedHours: stForm.estimatedHours !== '' ? Number(stForm.estimatedHours) : undefined,
         assignedToId: stForm.assignee || undefined,
         dueDate: stForm.due || undefined,
         status: 'Active'
@@ -302,7 +304,7 @@ export default function TeamLeadTaskDetail() {
       // Reload the task so the new subtask comes back with its assignee details.
       dispatch(fetchTaskById(taskId));
       showToast('success', 'Subtask created.');
-      setSubtaskOpen(false); setSubtaskError(''); setStForm({ title: '', assignee: '', due: '' });
+      setSubtaskOpen(false); setSubtaskError(''); setStForm({ title: '', description: '', estimatedHours: '', assignee: '', due: '' });
     } catch (error) {
       setSubtaskError(error?.message || 'Failed to create subtask.');
     }
@@ -417,14 +419,19 @@ export default function TeamLeadTaskDetail() {
             task={task}
             onClose={() => window.history.back()}
           >
-            <div className="flex justify-end -mb-4 relative z-10 pr-2">
-              <Button variant="outline" onClick={() => { setSubtaskError(''); setSubtaskOpen(true); }}>+ Add Subtask</Button>
-            </div>
             <SubtaskList
               subtasks={subtasks}
+              taskEstimatedHours={task.estimatedHours}
               members={allUsers.length > 0 ? allUsers : members}
               readOnly={false}
               currentUserId={user.id}
+              headerAction={
+                task.status !== 'Completed' ? (
+                  <Button variant="outline" size="sm" onClick={() => { setSubtaskError(''); setSubtaskOpen(true); }}>
+                    + Add Subtask
+                  </Button>
+                ) : null
+              }
               onApproveSubtask={handleApproveSubtask}
               onSendBackSubtask={openSendBackSubtask}
               onStatusToggle={(subId, markComplete) =>
@@ -573,6 +580,8 @@ export default function TeamLeadTaskDetail() {
         user={user}
         members={members}
         taskDueDate={task.dueDate}
+        taskEstimatedHours={task.estimatedHours}
+        subtasks={subtasks}
       />
 
       <UploadEvidenceModal

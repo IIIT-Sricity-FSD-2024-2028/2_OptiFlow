@@ -324,4 +324,64 @@ describe('Step 3 UI & Workflow Fixes', () => {
     await user.click(screen.getByRole('button', { name: 'Approve & Complete' }));
     expect(tasksApi.update).toHaveBeenCalledWith('t-rev', { status: 'Completed' }, expect.anything());
   });
+
+  it('TL CreateSubtaskModal tracks task estimated hours budget and blocks over-allocation', async () => {
+    const { apiClient } = await import('../../../services/api/client');
+    apiClient.mockResolvedValue([]);
+    tasksApi.get.mockResolvedValue({
+      id: 't-tl',
+      title: 'Auth Integration',
+      status: 'Active',
+      projectId: 'p1',
+      estimatedHours: 20,
+      subtasks: [
+        { id: 'st-1', title: 'Setup Client', status: 'Completed', estimatedHours: 12, assignedToId: 'u-2' },
+      ],
+    });
+    projectsApi.get.mockResolvedValue({
+      id: 'p1',
+      name: 'Alpha',
+      team: { teamMembers: [{ userId: 'u-2' }] },
+    });
+    usersApi.list.mockResolvedValue([
+      { id: 'u-2', fullName: 'David Smith', jobTitle: 'Engineer' },
+    ]);
+    subtasksApi.create.mockResolvedValue({
+      id: 'st-2',
+      title: 'Token Exchange',
+      estimatedHours: 8,
+    });
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter initialEntries={['/team-lead/tasks/t-tl']}>
+          <Routes>
+            <Route path="/team-lead/tasks/:id" element={<TeamLeadTaskDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: '+ Add Subtask' }));
+    expect(screen.getByText(/12h allocated \/ 20h total \(8h left\)/i)).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText(/Implement OAuth token exchange/i), 'Token Exchange');
+    const hoursInput = screen.getByPlaceholderText(/e\.g\. 8/i);
+    await user.type(hoursInput, '10');
+    expect(screen.getByText(/Exceeds remaining task budget \(8h\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assign Subtask' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /Use remaining \(8h\)/i }));
+    expect(screen.getByRole('button', { name: 'Assign Subtask' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Assign Subtask' }));
+    expect(subtasksApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 't-tl',
+        title: 'Token Exchange',
+        estimatedHours: 8,
+      }),
+      expect.anything(),
+    );
+  });
 });
