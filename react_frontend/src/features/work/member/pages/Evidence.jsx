@@ -66,15 +66,18 @@ export default function MemberEvidence() {
       let matchesStatus = true;
       if (statusFilter === 'verified') {
         matchesStatus = s.includes('verif') || s.includes('approv');
+      } else if (statusFilter === 'rejected') {
+        matchesStatus = s === 'rejected';
       } else if (statusFilter === 'pending') {
-        matchesStatus = !s.includes('verif') && !s.includes('approv');
+        matchesStatus = !s.includes('verif') && !s.includes('approv') && s !== 'rejected';
       }
 
       const matchesType = typeFilter ? String(e.evidenceType || e.type || '').toLowerCase() === typeFilter.toLowerCase() : true;
+      const feedbackText = String(e.rejectionReason || e.notes || '').toLowerCase();
       const matchesQuery = searchQuery.trim()
         ? (e.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
            e.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           e.notes?.toLowerCase().includes(searchQuery.toLowerCase()))
+           feedbackText.includes(searchQuery.toLowerCase()))
         : true;
 
       return matchesStatus && matchesType && matchesQuery;
@@ -177,6 +180,7 @@ export default function MemberEvidence() {
             {[
               { key: 'all', label: 'All' },
               { key: 'pending', label: 'Pending Review' },
+              { key: 'rejected', label: 'Rejected' },
               { key: 'verified', label: 'Verified' },
             ].map((pill) => (
               <button

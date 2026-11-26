@@ -22,9 +22,11 @@ import {
   Filter,
   Layers,
   Lock,
-  FileCheck
+  FileCheck,
+  MessageSquare
 } from "lucide-react";
 import { ReviewEvidenceModal } from "../components/ReviewEvidenceModal";
+import { EvidenceFeedbackModal } from "../../../shared/components/EvidenceFeedbackModal";
 
 const PAGE_SIZE = 10;
 
@@ -34,6 +36,7 @@ export default function ComplianceEvidence() {
   const evidenceList = useSelector(selectAllEvidence);
   const loading = useSelector(selectIsEvidenceLoading);
   const [selectedEvidence, setSelectedEvidence] = useState(null);
+  const [feedbackEvidence, setFeedbackEvidence] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const userRole = (user?.role || "").toLowerCase();
@@ -108,16 +111,30 @@ export default function ComplianceEvidence() {
     {
       header: "DELIVERABLE / TITLE",
       accessor: "title",
-      render: (row) => (
-        <div className="flex flex-col">
-          <span className="font-semibold text-[13px] text-slate-900 leading-snug">
-            {row.title}
-          </span>
-          <span className="text-[11px] text-slate-400 mt-0.5">
-            Type: {row.evidenceType || "Document"}
-          </span>
-        </div>
-      ),
+      render: (row) => {
+        const feedback = row.rejectionReason || row.notes;
+        const isRejected = String(row.status || "").toLowerCase() === "rejected";
+        return (
+          <div className="flex flex-col max-w-xs">
+            <span className="font-semibold text-[13px] text-slate-900 leading-snug">
+              {row.title}
+            </span>
+            <span className="text-[11px] text-slate-400 mt-0.5">
+              Type: {row.evidenceType || "Document"}
+            </span>
+            {feedback && (
+              <span
+                className={`text-[11px] mt-0.5 truncate ${
+                  isRejected ? "text-rose-600 font-medium" : "text-slate-500"
+                }`}
+                title={feedback}
+              >
+                {isRejected ? `Rejection feedback: ${feedback}` : feedback}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: "POLICY & SCOPE",
@@ -143,7 +160,8 @@ export default function ComplianceEvidence() {
       header: "SUBMITTED BY",
       accessor: "user",
       render: (row) => {
-        const subDate = row.submittedAt ? new Date(row.submittedAt) : null;
+        const rawDate = row.submittedAt || row.createdAt || row.updatedAt;
+        const subDate = rawDate ? new Date(rawDate) : null;
         const validDate = subDate && !isNaN(subDate.getTime());
         return (
           <div className="flex flex-col">
@@ -153,7 +171,7 @@ export default function ComplianceEvidence() {
             <span className="text-[11px] text-slate-400">
               {validDate
                 ? subDate.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-                : "Recently"}
+                : "—"}
             </span>
           </div>
         );
@@ -179,16 +197,37 @@ export default function ComplianceEvidence() {
     {
       header: "ACTIONS",
       accessor: "actions",
-      render: (row) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setSelectedEvidence(row)}
-          className="text-xs font-semibold hover:bg-slate-50 cursor-pointer"
-        >
-          {row.status === "Approved" ? "View Signoff" : "Review"}
-        </Button>
-      ),
+      render: (row) => {
+        const isRejected = String(row.status || "").toLowerCase() === "rejected";
+        const hasMessage = Boolean(row.rejectionReason || row.notes);
+        return (
+          <div className="flex items-center gap-2">
+            {(isRejected || hasMessage) && (
+              <button
+                type="button"
+                onClick={() => setFeedbackEvidence(row)}
+                className={`inline-flex items-center justify-center p-1.5 rounded-md transition-colors cursor-pointer ${
+                  isRejected
+                    ? "text-rose-600 bg-rose-50 hover:bg-rose-100"
+                    : "text-slate-500 hover:text-blue-600 hover:bg-slate-100"
+                }`}
+                aria-label={isRejected ? "View rejection message" : "View notes"}
+                title={isRejected ? "View rejection message" : "View notes"}
+              >
+                <MessageSquare size={15} />
+              </button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedEvidence(row)}
+              className="text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+            >
+              {row.status === "Approved" ? "View Signoff" : "Review"}
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -370,6 +409,12 @@ export default function ComplianceEvidence() {
         onClose={() => setSelectedEvidence(null)}
         evidence={selectedEvidence}
         onReviewed={loadEvidence}
+      />
+
+      <EvidenceFeedbackModal
+        isOpen={!!feedbackEvidence}
+        onClose={() => setFeedbackEvidence(null)}
+        evidence={feedbackEvidence}
       />
     </div>
   );
