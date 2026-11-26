@@ -10,6 +10,7 @@ import { Toast } from '../../../shared/components/Toast';
 import TeamLeadTasks from '../team-lead/pages/Tasks';
 import TeamLeadDashboard from '../team-lead/pages/Dashboard';
 import TeamLeadTaskDetail from '../team-lead/pages/TaskDetail';
+import ComplianceRules from '../../compliance/pages/Rules';
 import PmDashboard from '../pm/pages/Dashboard';
 import MemberTasks from '../member/pages/Tasks';
 import * as tasksApi from '../../../services/api/tasks';
@@ -220,5 +221,59 @@ describe('Step 3 UI & Workflow Fixes', () => {
     const approveBtn = await screen.findByRole('button', { name: 'Approve' });
     await user.click(approveBtn);
     expect(subtasksApi.update).toHaveBeenCalledWith('st-1', { status: 'Completed' }, expect.anything());
+  });
+
+  it('TL Dashboard Project Pulse calculates per-project progress and scope counts from live tasks', async () => {
+    projectsApi.list.mockResolvedValue([
+      { id: 'p1', name: 'Project One', status: 'Active' },
+      { id: 'p2', name: 'Project Two', status: 'Active' },
+    ]);
+    tasksApi.list.mockResolvedValue([
+      { id: 't1', title: 'Done Task', status: 'Completed', projectId: 'p1', subtasks: [] },
+      { id: 't2', title: 'Blocked Task', status: 'Blocked', projectId: 'p2', subtasks: [] },
+      { id: 't3', title: 'Active Task', status: 'Active', projectId: 'p2', subtasks: [] },
+    ]);
+    escalationsApi.list.mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter>
+          <TeamLeadDashboard />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    const selector = screen.getByDisplayValue('Project One');
+    await user.selectOptions(selector, 'p2');
+    expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  it('Compliance Rules modal derives Domain Compliance Officer from selected category instead of listing all employees', async () => {
+    const { apiClient } = await import('../../../services/api/client');
+    apiClient.mockImplementation(async (url) => {
+      if (String(url).startsWith('/api/compliance-categories')) {
+        return [
+          { id: 'c1', name: 'Security Controls', ownerId: 'u-sec', owner: { id: 'u-sec', fullName: 'Sophia Turner' } },
+          { id: 'c2', name: 'Operations', ownerId: 'u-1', owner: { id: 'u-1', fullName: 'Test User' } },
+        ];
+      }
+      return [];
+    });
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter>
+          <ComplianceRules />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: /New Compliance Rule/i }));
+    expect(screen.queryByText('-- Category Default --')).toBeNull();
+    expect(screen.getByText('Domain Compliance Officer')).toBeInTheDocument();
+    expect(screen.getByText('Test User')).toBeInTheDocument();
   });
 });

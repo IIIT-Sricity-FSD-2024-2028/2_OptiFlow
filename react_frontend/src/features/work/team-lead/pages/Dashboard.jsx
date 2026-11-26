@@ -191,6 +191,18 @@ export default function TeamLeadDashboard() {
     (task) => task.status === 'Blocked'
   ).length;
 
+  // Per-project metrics for Project Pulse (computed live from Redux tasks/projects)
+  const pulseTasks = project?.id
+    ? teamOverviewTasks.filter((task) => String(task.projectId || task.project?.id) === String(project.id))
+    : [];
+  const pulseTotal = pulseTasks.length;
+  const pulseMoving = pulseTasks.filter((task) =>
+    ['Active', 'In_Review', 'Pending_TL_Review'].includes(task.status)
+  ).length;
+  const pulseDone = pulseTasks.filter((task) => task.status === 'Completed').length;
+  const pulseBlocked = pulseTasks.filter((task) => task.status === 'Blocked').length;
+  const pulseProgress = pulseTotal > 0 ? Math.round((pulseDone / pulseTotal) * 100) : 0;
+
   // Split escalations: extension requests vs regular blockers
   // Use blockerType === 'Extension Request' only — no title text-matching.
   // Exclude the Team Lead's own PM-bound extension requests from their review queue.
@@ -672,7 +684,7 @@ export default function TeamLeadDashboard() {
                 <span>Progress</span>
 
                 <span className="font-semibold text-gray-900">
-                  {project.progress || 0}%
+                  {pulseProgress}%
                 </span>
               </div>
 
@@ -680,13 +692,7 @@ export default function TeamLeadDashboard() {
                 <div
                   className="h-full bg-blue-600 rounded-full transition-all"
                   style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(
-                        0,
-                        Number(project.progress) || 0
-                      )
-                    )}%`,
+                    width: `${pulseProgress}%`,
                   }}
                 />
               </div>
@@ -696,7 +702,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-gray-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-gray-900">
-                  {project.totalTasks || tasks.length}
+                  {pulseTotal}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -706,7 +712,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-blue-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-blue-600">
-                  {inProgressCount}
+                  {pulseMoving}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -716,7 +722,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-green-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-green-600">
-                  {doneCount}
+                  {pulseDone}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -726,7 +732,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-red-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-red-600">
-                  {blockedCount}
+                  {pulseBlocked}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">

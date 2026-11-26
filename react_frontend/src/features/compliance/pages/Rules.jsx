@@ -71,7 +71,6 @@ export default function ComplianceRules() {
   const categories = useSelector(selectAllComplianceCategories);
   const rulesStatus = useSelector(selectComplianceRulesStatus);
 
-  const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
 
   const loading = rulesStatus === "loading" && rules.length === 0;
@@ -80,7 +79,6 @@ export default function ComplianceRules() {
     description: "",
     severity: "Medium",
     categoryId: "",
-    assignedOfficerId: "",
     slaHours: 72,
     isActive: true,
     scopeType: "Company",
@@ -91,24 +89,16 @@ export default function ComplianceRules() {
     dispatch(fetchComplianceRules(force ? { force: true } : undefined));
     dispatch(fetchComplianceCategories(force ? { force: true } : undefined));
 
-    // 2. Fetch auxiliary users and projects for dropdowns
+    // 2. Fetch auxiliary projects for scope name display
     try {
-      const [usersResponse, projectsResponse] = await Promise.all([
-        apiClient("/users").catch(() => []),
-        apiClient("/projects").catch(() => []),
-      ]);
-      setUsers(
-        Array.isArray(usersResponse)
-          ? usersResponse
-          : usersResponse?.data || [],
-      );
+      const projectsResponse = await apiClient("/projects").catch(() => []);
       setProjects(
         Array.isArray(projectsResponse)
           ? projectsResponse
           : projectsResponse?.data || [],
       );
     } catch (err) {
-      console.error("Failed to load auxiliary users/projects:", err);
+      console.error("Failed to load auxiliary projects:", err);
     }
   };
 
@@ -161,7 +151,6 @@ export default function ComplianceRules() {
       description: "",
       severity: "Medium",
       categoryId: activeCategoryId !== "ALL" ? activeCategoryId : defaultCat,
-      assignedOfficerId: user?.id || "",
       slaHours: DEFAULT_SLA_BY_SEVERITY["Medium"] || 72,
       isActive: true,
       scopeType: "Company",
@@ -181,8 +170,6 @@ export default function ComplianceRules() {
       description: rule.description || "",
       severity: rule.severity || "Medium",
       categoryId: rule.categoryId || rule.category?.id || "",
-      assignedOfficerId:
-        rule.assignedOfficerId || rule.assignedOfficer?.id || "",
       slaHours: rule.slaHours ?? DEFAULT_SLA_BY_SEVERITY[rule.severity] ?? 72,
       isActive: rule.isActive,
       scopeType: existingBinding,
@@ -229,7 +216,6 @@ export default function ComplianceRules() {
       description: formData.description,
       severity: formData.severity,
       categoryId: formData.categoryId || null,
-      assignedOfficerId: formData.assignedOfficerId || null,
       slaHours: Number(formData.slaHours) || 72,
       isActive: formData.isActive,
     };
@@ -731,25 +717,28 @@ export default function ComplianceRules() {
 
             <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-slate-700">
-                Assigned Compliance Officer
+                Domain Compliance Officer
               </label>
-              <select
-                className="border border-slate-300 rounded-md p-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white font-medium text-slate-800"
-                value={formData.assignedOfficerId}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    assignedOfficerId: e.target.value,
-                  })
-                }
-              >
-                <option value="">-- Category Default --</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.fullName || u.email} {u.id === user?.id ? "(You)" : ""}
-                  </option>
-                ))}
-              </select>
+              {(() => {
+                const selectedCat = categories.find(
+                  (c) => String(c.id) === String(formData.categoryId),
+                );
+                const officer = selectedCat?.owner;
+                return (
+                  <div className="flex items-center justify-between gap-2 border border-slate-200 bg-slate-50 rounded-md px-3 py-2 text-sm text-slate-700 min-h-[38px]">
+                    <span className="font-medium truncate">
+                      {officer
+                        ? `${officer.fullName || officer.email}`
+                        : "Global Compliance Team"}
+                    </span>
+                    {officer?.id === user?.id && (
+                      <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full shrink-0">
+                        You
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
