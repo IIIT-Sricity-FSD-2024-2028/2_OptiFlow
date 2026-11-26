@@ -6,7 +6,9 @@ import { EmptyState } from '../../../../shared/components/EmptyState';
 import { FormField, Select } from '../../../../shared/components/FormField';
 import { Loader } from '../../../../shared/components/Loader';
 import { Button } from '../../../../shared/components/Button';
+import { Modal } from '../../../../shared/components/Modal';
 import { Pagination } from '../../../../shared/components/Pagination';
+import { Toast } from '../../../../shared/components/Toast';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchProjectById,
@@ -61,6 +63,14 @@ export default function PmProjectDetail() {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
   const [taskError, setTaskError] = useState('');
+  const [complianceOverrideTask, setComplianceOverrideTask] = useState(null);
+  const [overridingCompliance, setOverridingCompliance] = useState(false);
+  const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
+
+  const showToast = (type, message) => {
+    setToast({ visible: true, type, message });
+    setTimeout(() => setToast((curr) => ({ ...curr, visible: false })), 3500);
+  };
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
@@ -88,12 +98,20 @@ export default function PmProjectDetail() {
   }, [dispatch, id]);
 
   const updateStatus = async (status) => {
+    const projTasks = project?.tasks || [];
+    const projAllComplete = projTasks.length > 0 && projTasks.every((t) => t.status === 'Completed');
+    if (status === 'Completed' && !projAllComplete) {
+      showToast('warning', 'All tasks must be completed before marking the project Completed.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       await dispatch(updateProject({ id, data: { status } })).unwrap();
+      showToast('success', `Project status updated to ${status === 'OnHold' ? 'On hold' : status}.`);
     } catch (updateError) {
       setError(updateError.message || 'Failed to update project status.');
+      showToast('error', updateError.message || 'Failed to update project status.');
     } finally {
       setSaving(false);
     }
@@ -170,8 +188,7 @@ export default function PmProjectDetail() {
              name.includes('team_lead') || label.includes('team lead');
     });
     const titleMatch = /team\s*lead/i.test(user?.jobTitle || '') || /team\s*lead/i.test(user?.teamRole || '');
-    const emailMatch = ['tl@acme.com', 'tl2@acme.com', 'tl_devops@acme.com'].includes(String(user?.email || '').toLowerCase());
-    return Boolean(roleMatch || titleMatch || emailMatch);
+    return Boolean(roleMatch || titleMatch);
   };
   const assignedLeadIds = assignedUserIds.flatMap((userId) => {
     const assignedUser = users.find((user) => user.id === userId);
@@ -242,26 +259,63 @@ export default function PmProjectDetail() {
       await dispatch(updateTask({ id: task.id, data: { status: 'Completed' } })).unwrap();
       await dispatch(fetchProjectById(id)).unwrap();
       setSelectedTask((prev) => prev ? { ...prev, status: 'Completed' } : null);
+      showToast('success', `Task "${task.title}" marked Completed.`);
     } catch (err) {
-      setError(err.message || 'Failed to mark task as complete.');
+      if (err?.code === 'COMPLIANCE_BLOCK') {
+        dispatch(fetchComplianceViolations({ force: true }));
+        const msg = 'Blocked by Compliance: Complete required evidence before marking Completed.';
+        setError(msg);
+        showToast('error', msg);
+        return;
+      }
+      const msg = err.message || 'Failed to mark task as complete.';
+      setError(msg);
+      showToast('error', msg);
     }
   };
 
-  const handleApproveTask = async (task) => {
+  const handleApproveTask = async (task, { forceOverride = false } = {}) => {
+    if (!forceOverride && blockedTaskIds.has(String(task.id))) {
+      setComplianceOverrideTask(task);
+      return;
+    }
     try {
       await dispatch(updateTask({ id: task.id, data: { status: 'Completed', pmApproval: true } })).unwrap();
       await dispatch(fetchProjectById(id)).unwrap();
+      setComplianceOverrideTask(null);
       setSelectedTask(null);
+      showToast('success', `Task "${task.title}" approved and completed.`);
     } catch (err) {
-      setError(err.message || 'Failed to approve task.');
+      if (!forceOverride && err?.code === 'COMPLIANCE_BLOCK') {
+        dispatch(fetchComplianceViolations({ force: true }));
+        setComplianceOverrideTask(task);
+        return;
+      }
+      const msg = err.message || 'Failed to approve task.';
+      setError(msg);
+      showToast('error', msg);
+    }
+  };
+
+  const handleConfirmComplianceOverride = async () => {
+    if (!complianceOverrideTask) return;
+    setOverridingCompliance(true);
+    try {
+      await handleApproveTask(complianceOverrideTask, { forceOverride: true });
+    } finally {
+      setOverridingCompliance(false);
     }
   };
 
   const handleCompleteProject = async () => {
+    if (!allTasksCompleted) return;
     try {
       await dispatch(updateProject({ id, data: { status: 'Completed' } })).unwrap();
+      showToast('success', 'Project marked Completed.');
     } catch (err) {
-      setError(err.message || 'Failed to complete project.');
+      const msg = err.message || 'Failed to complete project.';
+      setError(msg);
+      showToast('error', msg);
     }
   };
 
@@ -296,13 +350,6 @@ export default function PmProjectDetail() {
             )}
           </div>
           <div className="flex flex-wrap items-end gap-2">
-            <button
-              type="button"
-              onClick={() => setComplianceOpen(true)}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              View Compliance
-            </button>
             <Button
               type="button"
               onClick={() => setCreateTaskOpen(true)}
@@ -323,7 +370,15 @@ export default function PmProjectDetail() {
             <div className="w-36">
               <FormField label="Change status">
                 <Select value={project.status || 'Planning'} onChange={(event) => updateStatus(event.target.value)} disabled={saving}>
-                  {STATUSES.map((status) => <option key={status} value={status}>{status === 'OnHold' ? 'On hold' : status}</option>)}
+                  {STATUSES.map((status) => (
+                    <option
+                      key={status}
+                      value={status}
+                      disabled={status === 'Completed' && !allTasksCompleted}
+                    >
+                      {status === 'OnHold' ? 'On hold' : status}
+                    </option>
+                  ))}
                 </Select>
               </FormField>
             </div>
@@ -359,11 +414,10 @@ export default function PmProjectDetail() {
         <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <h2 className="font-bold text-slate-900">Tasks <span className="ml-1 text-xs font-semibold text-amber-600">{tasks.length}</span></h2>
-            <Button type="button" size="sm" onClick={() => setCreateTaskOpen(true)}>+ Task</Button>
           </div>
           {tasks.length === 0 ? (
             <div className="p-8 text-center">
-              <EmptyState title="No tasks yet" description={'Click "+ Task" to add the first task.'} />
+              <EmptyState title="No tasks yet" description={'Click "+ Create Task" to add the first task.'} />
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -517,6 +571,9 @@ export default function PmProjectDetail() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {blockedTaskIds.has(String(task.id)) && (
+                    <Badge status="danger">⚠ Blocked by Compliance</Badge>
+                  )}
                   <Badge status="info">{(task.status || '').replace(/_/g, ' ')}</Badge>
                   <Button variant="primary" onClick={() => handleApproveTask(task)}>Approve ✓</Button>
                   <Button variant="outline" onClick={() => setSelectedTask(task)}>View</Button>
@@ -544,6 +601,34 @@ export default function PmProjectDetail() {
         onClose={() => setSelectedTask(null)}
         onApprove={handleApproveTask}
         onMarkComplete={handleMarkTaskComplete}
+      />
+
+      <Modal
+        isOpen={Boolean(complianceOverrideTask)}
+        onClose={() => !overridingCompliance && setComplianceOverrideTask(null)}
+        title="Approve despite compliance block?"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setComplianceOverrideTask(null)} disabled={overridingCompliance}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleConfirmComplianceOverride} disabled={overridingCompliance}>
+              {overridingCompliance ? 'Saving…' : 'Approve with override'}
+            </Button>
+          </>
+        )}
+      >
+        <p className="text-sm text-gray-600">
+          Compliance rules currently flag <strong>{complianceOverrideTask?.title}</strong> with open violation(s).
+          As Project Manager you can grant final approval anyway; the override is recorded in the audit log.
+        </p>
+      </Modal>
+
+      <Toast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        onClose={() => setToast((curr) => ({ ...curr, visible: false }))}
       />
     </div>
   );

@@ -37,16 +37,17 @@ const TOAST_STYLES = {
   info: 'bg-blue-50 border-blue-200 text-blue-800',
 };
 
-// Standalone Toast Card
-export const Toast = ({ visible = true, message, type = 'info', onClose, className = '' }) => {
+// Standalone Toast Card: floats above modals (z-[70]) unless stacked inside ToastProvider or previewed inline
+export const Toast = ({ visible = true, message, type = 'info', onClose, stacked = false, className = '' }) => {
   if (!visible || !message) return null;
   const style = TOAST_STYLES[type] || TOAST_STYLES.info;
   const icon = ICONS[type] || ICONS.info;
+  const positionClass = stacked ? '' : 'fixed top-5 right-5 z-[70]';
 
   return (
     <div
       role="alert"
-      className={`pointer-events-auto flex items-start gap-3 w-full max-w-sm p-4 rounded-xl border shadow-md transition-all ${style} ${className}`}
+      className={`${positionClass} pointer-events-auto flex items-start gap-3 w-full max-w-sm p-4 rounded-xl border shadow-md transition-all ${style} ${className}`}
     >
       <div className="flex-shrink-0 mt-0.5">
         {icon}
@@ -104,11 +105,12 @@ export const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      {/* Toast viewport overlay fixed at top right */}
-      <div className="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
+      {/* Toast viewport overlay fixed above modals (z-50) */}
+      <div className="fixed top-5 right-5 z-[70] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
         {toasts.map((t) => (
           <Toast
             key={t.id}
+            stacked
             type={t.type}
             message={t.message}
             onClose={() => removeToast(t.id)}

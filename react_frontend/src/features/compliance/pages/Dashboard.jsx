@@ -20,6 +20,10 @@ import {
   fetchEvidence,
   selectAllEvidence,
 } from "../../../store/evidence";
+import {
+  fetchComplianceBindings,
+  selectAllComplianceBindings,
+} from "../../../store/complianceBindings";
 import { 
   ShieldCheck, 
   CheckCircle, 
@@ -52,6 +56,7 @@ export default function ComplianceDashboard() {
   const rawRules = useSelector(selectAllComplianceRules);
   const rawViolations = useSelector(selectAllComplianceViolations);
   const rawEvidence = useSelector(selectAllEvidence);
+  const rawBindings = useSelector(selectAllComplianceBindings);
 
   const userRole = (user?.role || '').toLowerCase();
   const isGlobalAdmin = ['company_owner', 'system_admin', 'platform_admin', 'superuser'].includes(userRole);
@@ -68,13 +73,14 @@ export default function ComplianceDashboard() {
   const [scopeFilter, setScopeFilter] = useState("MyDomain"); // "MyDomain" | "All"
   const [selectedProjectId, setSelectedProjectId] = useState("all");
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (force = false) => {
     try {
       setLoading(true);
-      const [, , , projectsResponse, tasksResponse] = await Promise.all([
-        dispatch(fetchComplianceRules()),
-        dispatch(fetchComplianceViolations()),
-        dispatch(fetchEvidence()),
+      const [, , , , projectsResponse, tasksResponse] = await Promise.all([
+        dispatch(fetchComplianceRules(force ? { force: true } : undefined)),
+        dispatch(fetchComplianceViolations(force ? { force: true } : undefined)),
+        dispatch(fetchEvidence(force ? { force: true } : undefined)),
+        dispatch(fetchComplianceBindings(force ? { force: true } : undefined)),
         apiClient("/projects").catch(() => []),
         apiClient("/tasks").catch(() => []),
       ]);
@@ -168,6 +174,83 @@ export default function ComplianceDashboard() {
     return rawEvidence;
   }, [rawEvidence, scopeFilter, user?.id]);
 
+  // Selected project metadata for rule-binding and entity scope resolution
+  const selectedProject = useMemo(
+    () => rawProjects.find((p) => String(p.id) === String(selectedProjectId)) || null,
+    [rawProjects, selectedProjectId],
+  );
+
+  // Merge inline rule.bindings with Redux complianceBindings slice per ruleId
+  const ruleBindingsMap = useMemo(() => {
+    const map = new Map();
+    const addBinding = (ruleId, binding) => {
+      const key = String(ruleId);
+      if (!map.has(key)) map.set(key, new Map());
+      map.get(key).set(String(binding.id || `${binding.scopeType}:${binding.scopeId}`), binding);
+    };
+    rawRules.forEach((r) => {
+      (r.bindings || []).forEach((b) => addBinding(r.id, b));
+    });
+    rawBindings.forEach((b) => {
+      if (b.ruleId) addBinding(b.ruleId, b);
+    });
+    return map;
+  }, [rawRules, rawBindings]);
+
+  // Filter rules based on selected project scope
+  const filteredRules = useMemo(() => {
+    if (selectedProjectId === "all") return scopedRules;
+    const ruleMatchesScope = (rule, predicate) => {
+      const bindings = Array.from(ruleBindingsMap.get(String(rule.id))?.values() || []);
+      return predicate(bindings);
+    };
+
+    if (selectedProjectId === "global") {
+      return scopedRules.filter((rule) =>
+        ruleMatchesScope(rule, (bindings) =>
+          bindings.length === 0 || bindings.some((b) => b.scopeType === "Company")
+        )
+      );
+    }
+
+    const targetProjId = String(selectedProjectId);
+    const targetTeamId = selectedProject?.teamId || selectedProject?.team?.id;
+    const targetBranchId = selectedProject?.team?.branchId || selectedProject?.branchId;
+
+    return scopedRules.filter((rule) =>
+      ruleMatchesScope(rule, (bindings) =>
+        bindings.some((b) => {
+          if (b.scopeType === "Project") return String(b.scopeId) === targetProjId;
+          if (b.scopeType === "Team" && targetTeamId) return String(b.scopeId) === String(targetTeamId);
+          if (b.scopeType === "Branch" && targetBranchId) return String(b.scopeId) === String(targetBranchId);
+          if (b.scopeType === "Company") return true;
+          return false;
+        })
+      )
+    );
+  }, [scopedRules, selectedProjectId, selectedProject, ruleBindingsMap]);
+
+  // Helper to resolve an evidence item's parent project ID
+  const resolveEvidenceProjectId = (ev) => {
+    if (ev.task?.projectId) return String(ev.task.projectId);
+    if (ev.taskId && taskProjectMap.has(String(ev.taskId))) {
+      return taskProjectMap.get(String(ev.taskId));
+    }
+    if (ev.violation) {
+      return resolveEntityProject(ev.violation.entityType, ev.violation.entityId).id;
+    }
+    return null;
+  };
+
+  // Filter evidence based on selected project scope
+  const filteredEvidence = useMemo(() => {
+    if (selectedProjectId === "all") return scopedEvidence;
+    if (selectedProjectId === "global") {
+      return scopedEvidence.filter((ev) => resolveEvidenceProjectId(ev) === null);
+    }
+    return scopedEvidence.filter((ev) => resolveEvidenceProjectId(ev) === String(selectedProjectId));
+  }, [scopedEvidence, selectedProjectId, taskProjectMap, projectNameMap]);
+
   // Filter violations based on selected project
   const filteredViolations = useMemo(() => {
     if (selectedProjectId === "all") return scopedViolations;
@@ -183,12 +266,12 @@ export default function ComplianceDashboard() {
     });
   }, [scopedViolations, selectedProjectId, taskProjectMap, projectNameMap]);
 
-  // Multi-Pillar Compliance Health Score Calculation
+  // Multi-Pillar Compliance Health Score Calculation (scoped to active Project Filter)
   const metrics = useMemo(() => {
-    const totalRules = scopedRules.length || 1;
-    const activeRulesCount = scopedRules.filter((r) => r.isActive !== false).length;
+    const totalRules = filteredRules.length;
+    const activeRulesCount = filteredRules.filter((r) => r.isActive !== false).length;
     // Pillar 1: Active Rule Coverage (40%)
-    const ruleCoverageScore = (activeRulesCount / totalRules) * 40;
+    const ruleCoverageScore = totalRules === 0 ? 40 : (activeRulesCount / totalRules) * 40;
 
     const totalViolations = filteredViolations.length;
     const openViolations = filteredViolations.filter((v) => v.status === "Open" || v.status === "Under_Review");
@@ -199,9 +282,9 @@ export default function ComplianceDashboard() {
       ? 40 
       : Math.max(0, 40 - (openViolations.length / totalViolations) * 40);
 
-    const totalEvidence = scopedEvidence.length;
-    const approvedEvidence = scopedEvidence.filter((e) => e.status === "Approved").length;
-    const pendingReviews = scopedEvidence.filter((e) => e.status === "Pending" || e.status === "Under_Review").length;
+    const totalEvidence = filteredEvidence.length;
+    const approvedEvidence = filteredEvidence.filter((e) => e.status === "Approved").length;
+    const pendingReviews = filteredEvidence.filter((e) => e.status === "Pending" || e.status === "Under_Review").length;
 
     // Pillar 3: Evidence Attestation Rate (20%)
     const evidenceAttestationScore = totalEvidence === 0 
@@ -224,7 +307,7 @@ export default function ComplianceDashboard() {
       approvedEvidence,
       totalEvidence,
     };
-  }, [scopedRules, filteredViolations, scopedEvidence]);
+  }, [filteredRules, filteredViolations, filteredEvidence]);
 
   // Project Risk Matrix calculation based on current scope
   const projectRiskMatrix = useMemo(() => {
@@ -295,7 +378,7 @@ export default function ComplianceDashboard() {
       await dispatch(runComplianceEngine()).unwrap();
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastScanTime(nowStr);
-      await fetchDashboardData();
+      await fetchDashboardData(true);
       toast.success("Automated compliance engine scan completed successfully.");
     } catch (error) {
       toast.error("Compliance scan failed: " + (error.message || "Network error"));
@@ -398,20 +481,32 @@ export default function ComplianceDashboard() {
         </div>
 
         {/* Project Filter Dropdown */}
-        <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg px-3 py-1.5 shadow-2xs">
-          <Filter size={13} className="text-slate-400" />
-          <span className="text-xs font-semibold text-slate-600">Project Scope:</span>
-          <select
-            value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-            className="text-xs font-medium text-slate-800 bg-transparent focus:outline-none cursor-pointer"
-          >
-            <option value="all">All Projects in Domain</option>
-            <option value="global">Global / Non-Project Only</option>
-            {rawProjects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg px-3 py-1.5 shadow-2xs">
+            <Filter size={13} className="text-slate-400" />
+            <span className="text-xs font-semibold text-slate-600">Project Scope:</span>
+            <select
+              aria-label="Project Scope"
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="text-xs font-medium text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+            >
+              <option value="all">All Projects in Domain</option>
+              <option value="global">Global / Non-Project Only</option>
+              {rawProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedProjectId !== "all" && (
+            <button
+              type="button"
+              onClick={() => setSelectedProjectId("all")}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              Reset Scope
+            </button>
+          )}
         </div>
       </div>
 
@@ -560,10 +655,12 @@ export default function ComplianceDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-              {projectRiskMatrix.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+              {projectRiskMatrix.map((item) => {
+                const isSelected = selectedProjectId === String(item.id);
+                return (
+                <tr key={item.id} className={`transition-colors ${isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50/70'}`}>
                   <td className="py-3.5 px-5 font-bold text-slate-900 flex items-center gap-2">
-                    <FolderGit2 size={14} className="text-slate-400" />
+                    <FolderGit2 size={14} className={isSelected ? "text-blue-600" : "text-slate-400"} />
                     <span>{item.name}</span>
                   </td>
                   <td className="py-3.5 px-4 text-slate-500">{item.teamName}</td>
@@ -601,15 +698,17 @@ export default function ComplianceDashboard() {
                   </td>
                   <td className="py-3.5 px-5 text-right">
                     <button
-                      onClick={() => setSelectedProjectId(String(item.id))}
-                      className="text-blue-600 hover:text-blue-800 font-semibold hover:underline inline-flex items-center gap-1"
+                      type="button"
+                      onClick={() => setSelectedProjectId(isSelected ? "all" : String(item.id))}
+                      className="text-blue-600 hover:text-blue-800 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
                     >
-                      <span>Filter Scope</span>
+                      <span>{isSelected ? "Clear Filter" : "Filter Scope"}</span>
                       <ArrowUpRight size={13} />
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

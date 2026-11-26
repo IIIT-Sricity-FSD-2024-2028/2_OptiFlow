@@ -8,6 +8,7 @@ export function PmReviewQueue({
   onTabChange,
   tasks = [],
   extensionRequests = [],
+  blockedTaskIds = new Set(),
   onApproveTask,
   onSendBackTask,
   onApproveExtension,
@@ -84,6 +85,9 @@ export function PmReviewQueue({
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {blockedTaskIds.has(String(task.id)) && (
+                      <Badge status="danger">⚠ Blocked by Compliance</Badge>
+                    )}
                     <Badge status="info">In Review</Badge>
                     <Button variant="primary" size="sm" onClick={() => onApproveTask(task)}>
                       Approve & Complete

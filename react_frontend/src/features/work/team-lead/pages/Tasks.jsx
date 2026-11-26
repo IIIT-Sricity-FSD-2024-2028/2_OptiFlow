@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
-import { TaskTable } from '../../components/TaskTable';
+import { TaskTable, sortTaskRows } from '../../components/TaskTable';
 import { Pagination } from '../../../../shared/components/Pagination';
 import { 
   ShieldAlert, 
@@ -54,6 +54,7 @@ export default function TeamLeadTasks() {
 
   // Search & filter states
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState(null);
   // The project filter lives in the URL (?projectId=), so it is read, not copied into state.
   const selectedProjectId = selectedProjectParam;
 
@@ -86,6 +87,24 @@ export default function TeamLeadTasks() {
     setCurrentPage(1);
   };
 
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('filter');
+    nextParams.delete('projectId');
+    setSearchParams(nextParams);
+    setCurrentPage(1);
+  };
+
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev?.key === key
+        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    );
+    setCurrentPage(1);
+  };
+
   // Tag every task with metadata
   const taskRows = useMemo(() => {
     const now = new Date();
@@ -108,10 +127,13 @@ export default function TeamLeadTasks() {
 
   // Counts for triage tabs
   const counts = useMemo(() => {
+    const hasReviewableWork = (t) =>
+      ['In_Review', 'Pending_TL_Review'].includes(t.status) ||
+      (t.subtasks || []).some((st) => ['In_Review', 'Pending_TL_Review'].includes(st.status));
     return {
       all: taskRows.length,
       compliance_blocked: taskRows.filter((t) => t.complianceBlocked).length,
-      review: taskRows.filter((t) => ['In_Review', 'Pending_TL_Review'].includes(t.status)).length,
+      review: taskRows.filter(hasReviewableWork).length,
       overdue: taskRows.filter((t) => t.isOverdue).length,
       active: taskRows.filter((t) => ['Active', 'In_Progress'].includes(t.status)).length,
       completed: taskRows.filter((t) => t.status === 'Completed').length,
@@ -123,7 +145,13 @@ export default function TeamLeadTasks() {
     return taskRows.filter((task) => {
       // 1. Triage Tab filter
       if (activeFilter === 'compliance_blocked' && !task.complianceBlocked) return false;
-      if (activeFilter === 'review' && !['In_Review', 'Pending_TL_Review'].includes(task.status)) return false;
+      if (
+        activeFilter === 'review' &&
+        !['In_Review', 'Pending_TL_Review'].includes(task.status) &&
+        !(task.subtasks || []).some((st) => ['In_Review', 'Pending_TL_Review'].includes(st.status))
+      ) {
+        return false;
+      }
       if (activeFilter === 'overdue' && !task.isOverdue) return false;
       if (activeFilter === 'active' && !['Active', 'In_Progress'].includes(task.status)) return false;
       if (activeFilter === 'completed' && task.status !== 'Completed') return false;
@@ -145,10 +173,12 @@ export default function TeamLeadTasks() {
     });
   }, [taskRows, activeFilter, selectedProjectId, searchQuery]);
 
+  const sortedTasks = useMemo(() => sortTaskRows(filteredTasks, sortConfig), [filteredTasks, sortConfig]);
+
   const paginatedTasks = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredTasks.slice(start, start + PAGE_SIZE);
-  }, [filteredTasks, currentPage]);
+    return sortedTasks.slice(start, start + PAGE_SIZE);
+  }, [sortedTasks, currentPage]);
 
   const handleViewTask = (task) => {
     const path = PATHS.TEAM_LEAD.TASK_DETAIL.replace(':id', task.id);
@@ -272,12 +302,9 @@ export default function TeamLeadTasks() {
           <span>Showing {filteredTasks.length} of {taskRows.length} tasks</span>
           {(activeFilter !== 'all' || selectedProjectId !== 'all' || searchQuery) && (
             <button
-              onClick={() => {
-                setSearchQuery('');
-                handleProjectFilterChange('all');
-                handleTabChange('all');
-              }}
-              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold ml-1 transition-colors"
+              type="button"
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold ml-1 transition-colors cursor-pointer"
             >
               <RotateCcw size={12} />
               <span>Reset Filters</span>
@@ -320,6 +347,8 @@ export default function TeamLeadTasks() {
               <TaskTable 
                 tasks={paginatedTasks}
                 onRowClick={handleViewTask}
+                sortConfig={sortConfig}
+                onSort={handleSort}
                 visibleColumns={['title', 'assignee', 'priority', 'status', 'dueDate']}
               />
             </div>

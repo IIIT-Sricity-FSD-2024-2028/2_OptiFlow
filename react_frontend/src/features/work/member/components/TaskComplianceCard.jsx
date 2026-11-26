@@ -93,7 +93,7 @@ export default function TaskComplianceCard({
           <Button
             variant={isLockedOut ? 'danger' : 'primary'}
             size="sm"
-            onClick={onOpenEvidenceModal}
+            onClick={() => onOpenEvidenceModal?.(primaryViolation?.id)}
             className="text-xs font-semibold shadow-xs flex items-center gap-1.5"
           >
             <Send size={13} />
@@ -108,7 +108,7 @@ export default function TaskComplianceCard({
           <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
           <div>
             <span className="font-bold">Prior Submission Rejected by Compliance Officer: </span>
-            <span>"{latestRejectedEvidence.rejectionReason}"</span>
+            <span>"{latestRejectedEvidence.rejectionReason || latestRejectedEvidence.notes}"</span>
             <p className="mt-1 text-[11px] text-rose-700">
               Please resolve the feedback above and submit revised documentation.
             </p>

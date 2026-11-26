@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../../../../../shared/components/Modal';
 import { Button } from '../../../../../shared/components/Button';
 import { FormField, Input, Textarea } from '../../../../../shared/components/FormField';
@@ -28,6 +28,13 @@ export function RequestExtensionModal({
   const [extDate, setExtDate] = useState('');
   const [extReason, setExtReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setExtDate('');
+      setExtReason('');
+    }
+  }, [isOpen, subtaskId]);
 
   const minDate = minExtensionDateInput(currentDeadline);
   const maxDate = maxExtensionDateInput(parentTaskDeadline);
@@ -61,6 +68,7 @@ export function RequestExtensionModal({
 
       await dispatch(createEscalation({
         taskId: String(taskId),
+        subtaskId: subtaskId ? String(subtaskId) : undefined,
         projectId,
         title,
         description: desc,

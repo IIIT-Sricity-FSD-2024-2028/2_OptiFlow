@@ -66,15 +66,28 @@ export async function createComplianceCategory(req, res, next) {
     const body = req.body || {};
     const name = (body.name || '').trim();
     const description = (body.description || '').trim();
+    const requestedOwnerId = (body.ownerId || body.owner_id || '').trim() || null;
 
     validateRequired({ name }, ['name']);
+
+    let ownerId = req.user.id;
+    if (requestedOwnerId) {
+      const ownerUser = await prisma.user.findFirst({
+        where: { id: requestedOwnerId, companyId: req.user.companyId },
+        select: { id: true },
+      });
+      if (!ownerUser) {
+        throw new NotFoundError(`Owner user ${requestedOwnerId} not found in this company`);
+      }
+      ownerId = ownerUser.id;
+    }
 
     const category = await prisma.complianceCategory.create({
       data: {
         companyId: req.user.companyId,
         name,
         description: description || null,
-        ownerId: req.user.id,
+        ownerId,
       },
       include: CATEGORY_LIST_INCLUDE,
     });
@@ -105,6 +118,21 @@ export async function updateComplianceCategory(req, res, next) {
     const updateData = {};
     if (body.name) updateData.name = String(body.name).trim();
     if (body.description !== undefined) updateData.description = String(body.description).trim();
+    const requestedOwnerId = body.ownerId ?? body.owner_id;
+    if (requestedOwnerId !== undefined) {
+      if (!requestedOwnerId) {
+        updateData.ownerId = null;
+      } else {
+        const ownerUser = await prisma.user.findFirst({
+          where: { id: String(requestedOwnerId), companyId: req.user.companyId },
+          select: { id: true },
+        });
+        if (!ownerUser) {
+          throw new NotFoundError(`Owner user ${requestedOwnerId} not found in this company`);
+        }
+        updateData.ownerId = ownerUser.id;
+      }
+    }
 
     const updated = await prisma.complianceCategory.update({
       where: { id },

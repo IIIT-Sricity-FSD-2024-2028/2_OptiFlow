@@ -1,5 +1,7 @@
 // Team Lead dashboard review queue: parent tasks awaiting the PM, subtasks to
-// approve or send back, and extension requests. Presentational only.
+// inspect and review, and extension requests. Presentational only.
+import { Link } from 'react-router-dom';
+import { PATHS } from '../../../../app/paths';
 import { Button } from '../../../../shared/components/Button';
 import { Badge } from '../../../../shared/components/Badge';
 import { EmptyState } from '../../../../shared/components/EmptyState';
@@ -12,8 +14,6 @@ export function ReviewQueue({
   subtasks,
   extensionRequests,
   onBreakDown,
-  onApproveSubtask,
-  onSendBackSubtask,
   onExtensionDecision,
   onRejectExtension,
 }) {
@@ -113,6 +113,7 @@ export function ReviewQueue({
             <div className="divide-y divide-gray-100">
               {subtasks.map((subtask) => {
                 const subId = subtask.id || subtask.subtaskId;
+                const parentId = subtask._parentTask?.id || subtask.taskId;
                 return (
                   <div
                     key={subId}
@@ -127,8 +128,11 @@ export function ReviewQueue({
                     </div>
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <Badge status="info">In Review</Badge>
-                      <Button variant="primary" onClick={() => onApproveSubtask(subtask)}>Approve</Button>
-                      <Button variant="danger" onClick={() => onSendBackSubtask(subtask)}>Send Back</Button>
+                      {parentId && (
+                        <Link to={PATHS.TEAM_LEAD.TASK_DETAIL.replace(':id', parentId)}>
+                          <Button variant="outline">View</Button>
+                        </Link>
+                      )}
                     </div>
                   </div>
                 );

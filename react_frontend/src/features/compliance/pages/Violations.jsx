@@ -8,6 +8,7 @@ import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
+import { useToast } from "../../../shared/components/Toast";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
 import {
   fetchComplianceViolations,
@@ -32,6 +33,7 @@ const PAGE_SIZE = 10;
 
 export default function ComplianceViolations() {
   const { user } = useAuth();
+  const toast = useToast();
   const dispatch = useDispatch();
   const rawViolations = useSelector(selectAllComplianceViolations);
   const isViolationsLoading = useSelector(selectIsComplianceViolationsLoading);
@@ -88,8 +90,9 @@ export default function ComplianceViolations() {
     try {
       setIsCheckingSla(true);
       setError(null);
-      await apiClient.post("/api/compliance-violations/check-slas");
+      const res = await apiClient.post("/api/compliance-violations/check-slas");
       dispatch(fetchComplianceViolations({ force: true }));
+      toast.success(res?.message || "SLA check completed.");
     } catch (err) {
       setError(err.message || "Failed to run SLA check");
     } finally {

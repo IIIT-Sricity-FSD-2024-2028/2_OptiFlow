@@ -332,7 +332,7 @@ export default function ComplianceBindings() {
         <CreateBindingModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          ruleId={selectedRuleId || rules[0]?.id}
+          rules={rules}
           onBindingCreated={() => dispatch(fetchComplianceBindings({ force: true }))}
         />
       )}

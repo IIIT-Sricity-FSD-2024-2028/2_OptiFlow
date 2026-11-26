@@ -42,7 +42,15 @@ export default function MemberTaskDetail() {
   const task = useSelector(state => selectTaskById(state, taskId));
   const detailStatus = useSelector(state => selectTaskMutation(state, 'getById').status);
   const detailError = useSelector(state => selectTaskMutation(state, 'getById').error);
-  const loading = lists.loading || detailStatus === 'idle' || detailStatus === 'loading';
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const stillInitialLoading = lists.loading || detailStatus === 'idle' || detailStatus === 'loading';
+  useEffect(() => {
+    if (!stillInitialLoading) setHasLoadedOnce(true);
+  }, [stillInitialLoading]);
+  useEffect(() => {
+    setHasLoadedOnce(false);
+  }, [taskId]);
+  const loading = !hasLoadedOnce && stillInitialLoading;
   const error = lists.error;
   const project = useSelector(state => selectProjectById(state, task?.projectId || task?.project?.id)) || task?.project;
   const leadId = (task?.assignedToId && String(task.assignedToId) !== String(user?.id) ? task.assignedToId : null)
@@ -91,6 +99,7 @@ export default function MemberTaskDetail() {
   const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
   const [selectedSubtaskForExt, setSelectedSubtaskForExt] = useState(null);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
+  const [evidenceViolationId, setEvidenceViolationId] = useState(null);
 
   const getSlaTimeRemaining = (dueDate) => {
     if (!dueDate) return null;
@@ -173,12 +182,15 @@ export default function MemberTaskDetail() {
     return false;
   });
 
-  const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && e.rejectionReason);
+  const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && (e.rejectionReason || e.notes));
 
   const stages = [
     { label: 'Assigned', done: true },
-    { label: 'In Progress', done: !isCompleted && !isPendingReview && task.status !== 'Draft' && task.status !== 'Pending' },
-    { label: 'Under Review', done: isPendingReview || isCompleted },
+    {
+      label: 'In Progress',
+      done: isCompleted || isPendingReview || !['Draft', 'Pending', 'Not_Started'].includes(task.status),
+    },
+    { label: 'Under Review', done: isPendingReview || myWorkInReview || isCompleted },
     { label: 'Completed', done: isCompleted },
   ];
 
@@ -219,7 +231,10 @@ export default function MemberTaskDetail() {
             complianceOfficer={complianceOfficer}
             taskDueDate={dueDate}
             getSlaTimeRemaining={getSlaTimeRemaining}
-            onOpenEvidenceModal={() => setIsEvidenceModalOpen(true)}
+            onOpenEvidenceModal={(violationId) => {
+              setEvidenceViolationId(violationId || primaryViolation?.id || null);
+              setIsEvidenceModalOpen(true);
+            }}
           />
 
           {/* Deliverable Scope */}
@@ -258,7 +273,10 @@ export default function MemberTaskDetail() {
             evidenceList={evidenceList}
             readOnly={isCompleted}
             required={isEvidenceRequired}
-            onRequestUpload={() => setIsEvidenceModalOpen(true)}
+            onRequestUpload={() => {
+              setEvidenceViolationId(primaryViolation?.id || null);
+              setIsEvidenceModalOpen(true);
+            }}
             onDelete={handleDeleteEvidence}
           />
         </div>
@@ -357,8 +375,12 @@ export default function MemberTaskDetail() {
 
       <UploadEvidenceModal
         isOpen={isEvidenceModalOpen}
-        onClose={() => setIsEvidenceModalOpen(false)}
+        onClose={() => {
+          setIsEvidenceModalOpen(false);
+          setEvidenceViolationId(null);
+        }}
         taskId={taskId}
+        violationId={evidenceViolationId || primaryViolation?.id}
         onSuccess={() => dispatch(fetchComplianceViolations({ force: true }))}
       />
     </div>

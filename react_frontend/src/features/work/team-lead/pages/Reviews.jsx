@@ -16,6 +16,7 @@ import {
   Download,
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
+import { selectAuthUser } from '../../../../store/auth';
 import { updateTask } from '../../../../store/tasks';
 import { createEscalation } from '../../../../store/escalations';
 import {
@@ -63,6 +64,7 @@ const getDocumentName = (evidence) => {
 };
 
 export default function TeamLeadReviews() {
+  const currentUser = useSelector(selectAuthUser);
   const list = useSelector(selectAllEvidence);
   const loading = isPendingStatus(useSelector(selectEvidenceStatus));
   const [tab, setTab] = useState('pending');
@@ -419,6 +421,11 @@ export default function TeamLeadReviews() {
                   <div className="flex items-center gap-2 py-3 px-4 bg-emerald-50 border border-emerald-200 rounded-lg">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                     <span className="text-sm font-semibold text-emerald-800">Evidence Approved & Validated</span>
+                  </div>
+                ) : selected.userId && currentUser?.id && String(selected.userId) === String(currentUser.id) ? (
+                  <div className="flex items-center gap-2 pt-2 p-3.5 bg-amber-50 border border-amber-200 rounded-xl">
+                    <Clock size={16} className="text-amber-600" />
+                    <span className="text-xs font-medium text-amber-800">Submitted by you — another reviewer must approve or reject this deliverable.</span>
                   </div>
                 ) : String(selected.status || '').toLowerCase() === 'rejected' ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">

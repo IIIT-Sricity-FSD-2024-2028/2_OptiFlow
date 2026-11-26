@@ -10,9 +10,11 @@ export function CreateBindingModal({
   isOpen,
   onClose,
   ruleId,
+  rules = [],
   onBindingCreated,
 }) {
   const dispatch = useDispatch();
+  const [selectedRuleId, setSelectedRuleId] = useState(ruleId || "");
   const [scopeType, setScopeType] = useState("Company");
   const [scopeId, setScopeId] = useState("");
   
@@ -20,6 +22,15 @@ export function CreateBindingModal({
   const [options, setOptions] = useState([]);
   const [fetchingOptions, setFetchingOptions] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedRuleId(ruleId || rules[0]?.id || "");
+      setScopeType("Company");
+      setScopeId("");
+      setError(null);
+    }
+  }, [isOpen, ruleId, rules]);
 
   useEffect(() => {
     // 1. CLEAR options and exit if Company
@@ -36,10 +47,13 @@ export function CreateBindingModal({
       try {
         if (scopeType === "Project") {
           const projects = await apiClient("/projects");
-          setOptions(projects);
-        } else if (scopeType === "User") {
-          const users = await apiClient("/users");
-          setOptions(users);
+          setOptions(Array.isArray(projects) ? projects : projects?.data || []);
+        } else if (scopeType === "Team") {
+          const teams = await apiClient("/teams");
+          setOptions(Array.isArray(teams) ? teams : teams?.data || []);
+        } else if (scopeType === "Branch") {
+          const branches = await apiClient("/branches");
+          setOptions(Array.isArray(branches) ? branches : branches?.data || []);
         }
       } catch (err) {
         console.error(`Failed to fetch ${scopeType}s`, err);
@@ -54,13 +68,18 @@ export function CreateBindingModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const targetRuleId = ruleId || selectedRuleId;
+    if (!targetRuleId) {
+      setError("Please select a compliance rule.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
     try {
       // 3. Construct payload dynamically
       const payload = {
-        ruleId,
+        ruleId: targetRuleId,
         scopeType,
       };
       
@@ -105,6 +124,26 @@ export function CreateBindingModal({
           </div>
         )}
 
+        {!ruleId && rules.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Compliance Rule
+            </label>
+            <select
+              className="w-full rounded-md border border-gray-300 p-2 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+              value={selectedRuleId}
+              onChange={(e) => setSelectedRuleId(e.target.value)}
+              required
+            >
+              {rules.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Scope Type
@@ -118,8 +157,9 @@ export function CreateBindingModal({
             }}
           >
             <option value="Company">Company-wide (All)</option>
+            <option value="Branch">Specific Branch</option>
+            <option value="Team">Specific Team</option>
             <option value="Project">Specific Project</option>
-            <option value="User">Specific User</option>
           </select>
           <p className="text-xs text-gray-500 mt-1">
             Determines what entities this rule applies to.

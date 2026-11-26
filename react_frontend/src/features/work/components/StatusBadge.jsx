@@ -35,10 +35,26 @@ export function StatusBadge({ status, isOverdue = false, className = '' }) {
     );
   }
 
-  if (lower.includes('blocked') || lower.includes('failed') || lower.includes('rejected')) {
+  if (lower.includes('rejected') || lower.includes('failed')) {
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 ${className}`}>
+        {s}
+      </span>
+    );
+  }
+
+  if (lower.includes('blocked')) {
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100 ${className}`}>
         Blocked
+      </span>
+    );
+  }
+
+  if (lower.includes('revision')) {
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 ${className}`}>
+        {s}
       </span>
     );
   }

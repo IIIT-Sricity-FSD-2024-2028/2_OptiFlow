@@ -6,6 +6,7 @@ import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { TaskTable } from '../../components/TaskTable';
+import { ReportBlockerModal } from '../components/modals';
 import { useSelector } from 'react-redux';
 import { memberReads, useMemberReads } from '../useMemberReads';
 import { selectMemberDeliverables } from '../memberSelectors';
@@ -22,11 +23,12 @@ export default function MemberTasks() {
   const allTasks = useSelector(state => selectMemberDeliverables(state, user?.id || user?.userId));
   const projects = useSelector(selectAllProjects);
 
-  // Filters
+  // Filters & modals
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const [isBlockerModalOpen, setIsBlockerModalOpen] = useState(false);
 
   const statusCounts = useMemo(() => {
     return {
@@ -111,7 +113,7 @@ export default function MemberTasks() {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => navigate(PATHS.MEMBER.ESCALATIONS)}
+              onClick={() => setIsBlockerModalOpen(true)}
               className="text-xs font-semibold"
             >
               Report Blocker
@@ -220,6 +222,12 @@ export default function MemberTasks() {
           }}
         />
       )}
+
+      <ReportBlockerModal
+        isOpen={isBlockerModalOpen}
+        onClose={() => setIsBlockerModalOpen(false)}
+        tasks={allTasks}
+      />
     </div>
   );
 }

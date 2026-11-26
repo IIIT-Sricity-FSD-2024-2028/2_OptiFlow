@@ -306,9 +306,9 @@ export default function PmTaskDetail() {
                   return (
                     <div className="flex flex-col gap-1">
                       <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>
-                      {st === 'rejected' && ev.rejectionReason && (
+                      {st === 'rejected' && (ev.rejectionReason || ev.notes) && (
                         <span className="text-[11px] text-rose-700 italic max-w-xs">
-                          Feedback: "{ev.rejectionReason}"
+                          Feedback: "{ev.rejectionReason || ev.notes}"
                         </span>
                       )}
                     </div>

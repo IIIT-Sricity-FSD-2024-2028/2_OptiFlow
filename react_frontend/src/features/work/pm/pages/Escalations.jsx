@@ -187,7 +187,10 @@ export default function PmEscalations() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setFilter(key)}
+                onClick={() => {
+                  setFilter(key);
+                  setCurrentPage(1);
+                }}
                 className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
                   filter === key
                     ? 'bg-blue-600 text-white'

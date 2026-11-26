@@ -13,12 +13,12 @@ import { EscalationForm } from '../../components/EscalationForm';
 import { SubtaskList } from '../../components/SubtaskList';
 import { ReviewQueue } from '../components/ReviewQueue';
 import { EscalationWatch } from '../components/EscalationWatch';
-import { DashboardSubtaskModal, SendBackSubtaskModal, RejectExtensionModal } from '../components/DashboardModals';
+import { DashboardSubtaskModal, RejectExtensionModal } from '../components/DashboardModals';
 import { getBadgeStatus, formatStatus } from '../components/statusDisplay';
 
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTasks, isReportableError, selectAllTasks, selectTasksLoading } from '../../../../store/tasks';
-import { createSubtask, updateSubtask } from '../../../../store/subtasks';
+import { createSubtask } from '../../../../store/subtasks';
 import {
   createEscalation,
   fetchEscalations,
@@ -76,10 +76,7 @@ export default function TeamLeadDashboard() {
   const [subtaskError, setSubtaskError] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [reviewTab, setReviewTab] = useState('tasks'); // 'tasks' | 'subtasks' | 'extensions'
-  const [sendBackSubtask, setSendBackSubtask] = useState(null);
-  const [sendBackReason, setSendBackReason] = useState('');
-  const [sendBackError, setSendBackError] = useState('');
-  const [sendingBack, setSendingBack] = useState(false);
+  const [hasPickedReviewTab, setHasPickedReviewTab] = useState(false);
 
 
 
@@ -130,7 +127,7 @@ export default function TeamLeadDashboard() {
       try {
         await Promise.all([
           dispatch(fetchUsers()).unwrap().catch(rethrow),
-          dispatch(fetchTasks()).unwrap().catch(rethrow),
+          dispatch(fetchTasks({ force: true })).unwrap().catch(rethrow),
           dispatch(fetchEscalations()).unwrap().catch(rethrow),
           dispatch(fetchProjects()).unwrap().catch(rethrow),
         ]);
@@ -168,6 +165,12 @@ export default function TeamLeadDashboard() {
     ).map((st) => ({ ...st, _parentTask: task }))
   );
 
+  useEffect(() => {
+    if (!hasPickedReviewTab && reviewTab === 'tasks' && reviewQueueTasks.length === 0 && reviewQueueSubtasks.length > 0) {
+      setReviewTab('subtasks');
+    }
+  }, [hasPickedReviewTab, reviewTab, reviewQueueTasks.length, reviewQueueSubtasks.length]);
+
   const inProgressCount = teamOverviewTasks.filter((task) =>
     [
       'Active',
@@ -184,9 +187,26 @@ export default function TeamLeadDashboard() {
     (task) => task.status === 'Blocked'
   ).length;
 
+  // Per-project metrics for Project Pulse (computed live from Redux tasks/projects)
+  const pulseTasks = project?.id
+    ? teamOverviewTasks.filter((task) => String(task.projectId || task.project?.id) === String(project.id))
+    : [];
+  const pulseTotal = pulseTasks.length;
+  const pulseMoving = pulseTasks.filter((task) =>
+    ['Active', 'In_Review', 'Pending_TL_Review'].includes(task.status)
+  ).length;
+  const pulseDone = pulseTasks.filter((task) => task.status === 'Completed').length;
+  const pulseBlocked = pulseTasks.filter((task) => task.status === 'Blocked').length;
+  const pulseProgress = pulseTotal > 0 ? Math.round((pulseDone / pulseTotal) * 100) : 0;
+
   // Split escalations: extension requests vs regular blockers
   // Use blockerType === 'Extension Request' only — no title text-matching.
-  const extensionRequests = escalations.filter((e) => e.blockerType === 'Extension Request');
+  // Exclude the Team Lead's own PM-bound extension requests from their review queue.
+  const extensionRequests = escalations.filter((e) => {
+    if (e.blockerType !== 'Extension Request') return false;
+    if (user?.id && String(e.reportedById || e.reportedBy?.id) === String(user.id)) return false;
+    return true;
+  });
   const regularEscalations = escalations.filter((e) => e.blockerType !== 'Extension Request');
 
   // ---------------------------------------------------------------------------
@@ -264,48 +284,6 @@ export default function TeamLeadDashboard() {
     }
   };
 
-  const handleApproveSubtask = async (subtask) => {
-    try {
-      await dispatch(updateSubtask({ id: subtask.id || subtask.subtaskId, data: { status: 'Completed' } })).unwrap();
-      showToast('success', `Subtask "${subtask.title}" approved.`);
-    } catch {
-      showToast('error', 'Failed to approve subtask.');
-    }
-  };
-
-  const openSendBack = (subtask) => {
-    setSendBackSubtask(subtask);
-    setSendBackReason('');
-    setSendBackError('');
-  };
-
-  const closeSendBack = () => {
-    if (!sendingBack) setSendBackSubtask(null);
-  };
-
-  const handleRejectSubtask = async () => {
-    const subtask = sendBackSubtask;
-    const reason = sendBackReason.trim();
-    if (!subtask) return;
-    if (!reason) {
-      setSendBackError('Tell the team member why the subtask is being sent back.');
-      return;
-    }
-    setSendingBack(true);
-    try {
-      await dispatch(updateSubtask({
-        id: subtask.id || subtask.subtaskId,
-        data: { status: 'Active', reviewComment: reason },
-      })).unwrap();
-      setSendBackSubtask(null);
-      showToast('success', 'Subtask sent back with your comment.');
-    } catch (err) {
-      setSendBackError(err.message || 'Failed to send the subtask back.');
-    } finally {
-      setSendingBack(false);
-    }
-  };
-
   const openRejectExtension = (ext) => {
     setRejectExtTarget(ext);
     setRejectExtReason('');
@@ -349,8 +327,8 @@ export default function TeamLeadDashboard() {
       // `force`: refetch even though the list is fresh, so the task rows match the server.
       dispatch(fetchTasks({ force: true }));
       showToast('success', 'Extension approved & member notified.');
-    } catch {
-      showToast('error', 'Failed to update extension request.');
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to update extension request.');
     }
   };
 
@@ -660,7 +638,7 @@ export default function TeamLeadDashboard() {
                 <span>Progress</span>
 
                 <span className="font-semibold text-gray-900">
-                  {project.progress || 0}%
+                  {pulseProgress}%
                 </span>
               </div>
 
@@ -668,13 +646,7 @@ export default function TeamLeadDashboard() {
                 <div
                   className="h-full bg-blue-600 rounded-full transition-all"
                   style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(
-                        0,
-                        Number(project.progress) || 0
-                      )
-                    )}%`,
+                    width: `${pulseProgress}%`,
                   }}
                 />
               </div>
@@ -684,7 +656,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-gray-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-gray-900">
-                  {project.totalTasks || tasks.length}
+                  {pulseTotal}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -694,7 +666,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-blue-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-blue-600">
-                  {inProgressCount}
+                  {pulseMoving}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -704,7 +676,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-green-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-green-600">
-                  {doneCount}
+                  {pulseDone}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -714,7 +686,7 @@ export default function TeamLeadDashboard() {
 
               <div className="bg-red-50 rounded-lg p-4 text-center">
                 <p className="text-2xl font-bold text-red-600">
-                  {blockedCount}
+                  {pulseBlocked}
                 </p>
 
                 <p className="text-xs text-gray-500 mt-1">
@@ -732,13 +704,14 @@ export default function TeamLeadDashboard() {
 
       <ReviewQueue
         activeTab={reviewTab}
-        onTabChange={setReviewTab}
+        onTabChange={(nextTab) => {
+          setHasPickedReviewTab(true);
+          setReviewTab(nextTab);
+        }}
         tasks={reviewQueueTasks}
         subtasks={reviewQueueSubtasks}
         extensionRequests={extensionRequests}
         onBreakDown={openSubtaskModal}
-        onApproveSubtask={handleApproveSubtask}
-        onSendBackSubtask={openSendBack}
         onExtensionDecision={handleExtensionDecision}
         onRejectExtension={openRejectExtension}
       />
@@ -780,18 +753,6 @@ export default function TeamLeadDashboard() {
         deadline={subtaskDeadline}
         onDeadlineChange={setSubtaskDeadline}
         parentDueDate={tasks.find((task) => String(task.id) === String(selectedParentTaskId))?.dueDate}
-      />
-
-      {/* Send back subtask modal */}
-
-      <SendBackSubtaskModal
-        subtask={sendBackSubtask}
-        onClose={closeSendBack}
-        onConfirm={handleRejectSubtask}
-        sending={sendingBack}
-        error={sendBackError}
-        reason={sendBackReason}
-        onReasonChange={setSendBackReason}
       />
 
       {/* Reject extension modal */}

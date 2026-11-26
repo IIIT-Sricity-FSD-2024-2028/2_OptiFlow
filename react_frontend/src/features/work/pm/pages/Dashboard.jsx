@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { Badge } from '../../../../shared/components/Badge';
+import { Button } from '../../../../shared/components/Button';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Loader } from '../../../../shared/components/Loader';
+import { Modal } from '../../../../shared/components/Modal';
 import { StatCard } from '../../../../shared/components/StatCard';
 import { 
   ShieldAlert, 
@@ -70,6 +72,8 @@ export default function PmDashboard() {
   const [rejectingExt, setRejectingExt] = useState(false);
   const [rejectExtError, setRejectExtError] = useState('');
   const [rejectExtModalOpen, setRejectExtModalOpen] = useState(false);
+  const [complianceOverrideTask, setComplianceOverrideTask] = useState(null);
+  const [overridingCompliance, setOverridingCompliance] = useState(false);
 
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
@@ -78,12 +82,32 @@ export default function PmDashboard() {
     setTimeout(() => setToast((curr) => ({ ...curr, visible: false })), 3500);
   };
 
-  const handleApproveTask = async (task) => {
+  const handleApproveTask = async (task, { forceOverride = false } = {}) => {
+    if (!forceOverride && blockedTaskIds.has(String(task.id))) {
+      setComplianceOverrideTask(task);
+      return;
+    }
     try {
       await dispatch(updateTask({ id: task.id, data: { status: 'Completed', pmApproval: true } })).unwrap();
+      setComplianceOverrideTask(null);
       showToast('success', `Task "${task.title}" approved and completed.`);
     } catch (err) {
+      if (!forceOverride && err?.code === 'COMPLIANCE_BLOCK') {
+        dispatch(fetchComplianceViolations({ force: true }));
+        setComplianceOverrideTask(task);
+        return;
+      }
       showToast('error', err.message || 'Failed to approve task.');
+    }
+  };
+
+  const handleConfirmComplianceOverride = async () => {
+    if (!complianceOverrideTask) return;
+    setOverridingCompliance(true);
+    try {
+      await handleApproveTask(complianceOverrideTask, { forceOverride: true });
+    } finally {
+      setOverridingCompliance(false);
     }
   };
 
@@ -371,6 +395,7 @@ export default function PmDashboard() {
         onTabChange={setActiveReviewTab}
         tasks={tasksInReview}
         extensionRequests={openExtensionRequests}
+        blockedTaskIds={blockedTaskIds}
         onApproveTask={handleApproveTask}
         onSendBackTask={openSendBackTask}
         onApproveExtension={handleApproveExtension}
@@ -517,6 +542,27 @@ export default function PmDashboard() {
         reason={rejectExtReason}
         onReasonChange={setRejectExtReason}
       />
+
+      <Modal
+        isOpen={Boolean(complianceOverrideTask)}
+        onClose={() => !overridingCompliance && setComplianceOverrideTask(null)}
+        title="Approve despite compliance block?"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setComplianceOverrideTask(null)} disabled={overridingCompliance}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleConfirmComplianceOverride} disabled={overridingCompliance}>
+              {overridingCompliance ? 'Saving…' : 'Approve with override'}
+            </Button>
+          </>
+        )}
+      >
+        <p className="text-sm text-gray-600">
+          Compliance rules currently flag <strong>{complianceOverrideTask?.title}</strong> with open violation(s).
+          As Project Manager you can grant final approval anyway; the override is recorded in the audit log.
+        </p>
+      </Modal>
 
       {toast.visible && (
         <Toast

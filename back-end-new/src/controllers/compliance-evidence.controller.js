@@ -53,8 +53,16 @@ function notify(companyId, userId, title, message, type = 'Review') {
 /** Include shared by list, get, create, update and upload so every response has the same shape. */
 const EVIDENCE_LIST_INCLUDE = {
   user: { select: { id: true, fullName: true, email: true } },
-  task: { select: { id: true, title: true } },
-  violation: { include: { rule: true } },
+  task: { select: { id: true, title: true, projectId: true } },
+  violation: {
+    include: {
+      rule: {
+        include: {
+          category: { select: { id: true, name: true, ownerId: true } },
+        },
+      },
+    },
+  },
   reviewedBy: { select: { id: true, fullName: true, email: true } },
 };
 
@@ -318,7 +326,8 @@ export async function updateEvidence(req, res, next) {
     if (body.title) updateData.title = String(body.title).trim();
     if (body.evidenceType) updateData.evidenceType = body.evidenceType;
     if (body.fileUrl) updateData.fileUrl = body.fileUrl;
-    if (body.notes !== undefined) updateData.notes = body.notes;
+    const effectiveNotes = body.notes !== undefined ? body.notes : body.rejectionReason;
+    if (effectiveNotes !== undefined) updateData.notes = effectiveNotes;
     if (body.status) {
       validateEnum(body.status, ALLOWED_EVIDENCE_STATUSES, 'status');
       updateData.status = body.status;
@@ -497,7 +506,7 @@ export async function updateEvidence(req, res, next) {
         req.user.companyId,
         existing.userId,
         'Evidence Returned for Revision',
-        `Your evidence "${existing.title}" was returned for revision.${body.notes ? ` Feedback: ${body.notes}` : ''}`,
+        `Your evidence "${existing.title}" was returned for revision.${effectiveNotes ? ` Feedback: ${effectiveNotes}` : ''}`,
         'Review'
       );
     }

@@ -1,20 +1,6 @@
 import { prisma } from '../config/prisma.js';
 
-/**
- * Intercepts a task update and evaluates all relevant compliance rules across
- * all scopes (Company -> Branch -> Team -> Project).
- * @param {string} taskId 
- * @param {string|object} projectOrTask Project ID or loaded task object with relations
- * @param {object} proposedChanges 
- * @returns {Promise<{ allowed: boolean, failedRules: Array }>}
- */
-export async function evaluateTaskTransition(taskId, projectOrTask, proposedChanges) {
-  // We only care if the status is changing
-  if (!proposedChanges.status) {
-    return { allowed: true, failedRules: [] };
-  }
-
-  // Resolve scope IDs (Company, Branch, Team, Project)
+async function findApplicableComplianceRules(taskId, projectOrTask) {
   let companyId = null;
   let projectId = null;
   let teamId = null;
@@ -29,7 +15,6 @@ export async function evaluateTaskTransition(taskId, projectOrTask, proposedChan
     projectId = projectOrTask;
   }
 
-  // If any scope IDs are missing, query from DB
   if (!companyId || (projectId && (!teamId || !branchId))) {
     const taskRecord = await prisma.task.findUnique({
       where: { id: taskId },
@@ -48,50 +33,83 @@ export async function evaluateTaskTransition(taskId, projectOrTask, proposedChan
     }
   }
 
-  // Build OR condition for all applicable scopes
   const scopeConditions = [];
-  if (companyId) {
-    scopeConditions.push({ scopeType: 'Company', scopeId: companyId });
-  }
-  if (branchId) {
-    scopeConditions.push({ scopeType: 'Branch', scopeId: branchId });
-  }
-  if (teamId) {
-    scopeConditions.push({ scopeType: 'Team', scopeId: teamId });
-  }
-  if (projectId) {
-    scopeConditions.push({ scopeType: 'Project', scopeId: projectId });
-  }
+  if (companyId) scopeConditions.push({ scopeType: 'Company', scopeId: companyId });
+  if (branchId) scopeConditions.push({ scopeType: 'Branch', scopeId: branchId });
+  if (teamId) scopeConditions.push({ scopeType: 'Team', scopeId: teamId });
+  if (projectId) scopeConditions.push({ scopeType: 'Project', scopeId: projectId });
 
-  if (scopeConditions.length === 0) {
-    return { allowed: true, failedRules: [] };
-  }
+  if (scopeConditions.length === 0) return [];
 
-  // Fetch all rules bound to any applicable scope
   const bindings = await prisma.complianceBinding.findMany({
-    where: {
-      OR: scopeConditions
-    },
+    where: { OR: scopeConditions },
     include: {
       rule: {
-        include: {
-          category: true
-        }
+        include: { category: true }
       }
     }
   });
 
-  // Deduplicate rules in case the same rule is bound to both Company and Project
   const uniqueRulesMap = new Map();
   for (const binding of bindings) {
     if (binding.rule && !uniqueRulesMap.has(binding.rule.id)) {
       uniqueRulesMap.set(binding.rule.id, binding.rule);
     }
   }
+  return Array.from(uniqueRulesMap.values());
+}
+
+/**
+ * Checks whether a subtask submission for review requires attached/existing evidence
+ * (Pending, Under_Review, or Approved) under active EVIDENCE_REQUIRED rules.
+ */
+export async function evaluateSubtaskSubmission(taskId, projectOrTask) {
+  const rules = await findApplicableComplianceRules(taskId, projectOrTask);
+  const evidenceRules = rules.filter(
+    (rule) => rule.isActive && rule.criteria?.requirement?.type === 'EVIDENCE_REQUIRED'
+  );
+  if (evidenceRules.length === 0) {
+    return { allowed: true, failedRules: [] };
+  }
+
+  const submittedCount = await prisma.complianceEvidence.count({
+    where: {
+      taskId,
+      status: { in: ['Pending', 'Under_Review', 'Approved'] },
+    },
+  });
+
+  if (submittedCount > 0) {
+    return { allowed: true, failedRules: [] };
+  }
+
+  return {
+    allowed: false,
+    failedRules: evidenceRules,
+  };
+}
+
+/**
+ * Intercepts a task update and evaluates all relevant compliance rules across
+ * all scopes (Company -> Branch -> Team -> Project).
+ * @param {string} taskId 
+ * @param {string|object} projectOrTask Project ID or loaded task object with relations
+ * @param {object} proposedChanges 
+ * @returns {Promise<{ allowed: boolean, failedRules: Array }>}
+ */
+export async function evaluateTaskTransition(taskId, projectOrTask, proposedChanges) {
+  if (!proposedChanges.status) {
+    return { allowed: true, failedRules: [] };
+  }
+
+  const rules = await findApplicableComplianceRules(taskId, projectOrTask);
+  if (rules.length === 0) {
+    return { allowed: true, failedRules: [] };
+  }
 
   const activeViolations = [];
 
-  for (const rule of uniqueRulesMap.values()) {
+  for (const rule of rules) {
     if (!rule.isActive || !rule.criteria) continue;
 
     // Check if the criteria matches the proposed status transition

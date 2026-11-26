@@ -10,6 +10,8 @@ export function SubtaskList({
   readOnly = false,
   onStatusToggle,
   onSubmitSubtask,
+  onApproveSubtask,
+  onSendBackSubtask,
   onRequestExtension,
   extensionRequests = [],
   submittedSubtaskIds = new Set(),
@@ -201,7 +203,29 @@ export function SubtaskList({
                         Request Extension
                       </button>
                     )}
-                    {isInReview && (
+                    {isInReview && !readOnly && (onApproveSubtask || onSendBackSubtask) && (
+                      <>
+                        {onApproveSubtask && (
+                          <button
+                            type="button"
+                            onClick={() => onApproveSubtask(subtask)}
+                            className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 transition-colors whitespace-nowrap cursor-pointer"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {onSendBackSubtask && (
+                          <button
+                            type="button"
+                            onClick={() => onSendBackSubtask(subtask)}
+                            className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors whitespace-nowrap cursor-pointer"
+                          >
+                            Send Back
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {isInReview && !(onApproveSubtask || onSendBackSubtask) && (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap">
                         In Review
                       </span>

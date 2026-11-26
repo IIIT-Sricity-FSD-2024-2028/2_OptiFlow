@@ -55,7 +55,7 @@ function EvidenceForm({
         title: title.trim(),
         evidenceType: type,
         notes: notes.trim(),
-        fileUrl: selectedFile ? selectedFile.name : (fileUrl.trim() || 'deliverable_artifact.pdf'),
+        fileUrl: selectedFile ? selectedFile.name : fileUrl.trim(),
         userId: user?.id,
       };
       if (finalViolationId) {
@@ -124,8 +124,9 @@ function EvidenceForm({
 
         <FileUpload
           label="Attach File / Deliverable Artifact"
-          hint="PDF, PNG, JPG, CSV, DOCX up to 20MB"
+          hint="PDF, PNG, JPG, CSV, DOCX up to 25MB"
           accept=".pdf,.png,.jpg,.jpeg,.csv,.doc,.docx"
+          maxMB={25}
           onFileSelect={(file) => {
             setSelectedFile(file);
             if (!title.trim() && file?.name) {

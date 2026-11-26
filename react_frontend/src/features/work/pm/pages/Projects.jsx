@@ -349,7 +349,10 @@ export default function PmProjects() {
         <div className="flex-1">
           <Input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setCurrentPage(1);
+            }}
             placeholder="Search projects..."
             aria-label="Search projects"
           />
@@ -359,7 +362,10 @@ export default function PmProjects() {
             <button
               key={value}
               type="button"
-              onClick={() => setFilter(value)}
+              onClick={() => {
+                setFilter(value);
+                setCurrentPage(1);
+              }}
               className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
                 filter === value
                   ? "bg-white text-blue-700 shadow-sm"

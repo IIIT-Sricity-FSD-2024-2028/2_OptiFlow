@@ -98,22 +98,26 @@ export default function EvidenceTable({
                           </button>
                         );
                       })()}
-                      <button
-                        type="button"
-                        onClick={() => onEditItem(ev)}
-                        className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
-                        title="Edit Artifact"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteItem(ev)}
-                        className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-                        title="Delete Artifact"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {String(ev.status || 'Pending') === 'Pending' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onEditItem(ev)}
+                            className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                            title="Edit Artifact"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteItem(ev)}
+                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                            title="Delete Artifact"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Modal } from '../../../../../shared/components/Modal';
 import { Button } from '../../../../../shared/components/Button';
 import { FormField, Textarea, Input } from '../../../../../shared/components/FormField';
@@ -7,7 +7,8 @@ import { useToast } from '../../../../../shared/components/Toast';
 import { useDispatch } from 'react-redux';
 import { useSaveEvidence } from './useSaveEvidence';
 import { updateSubtask } from '../../../../../store/subtasks';
-import { Upload, FileText, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { fetchComplianceViolations } from '../../../../../store/complianceViolations';
+import { Upload, FileText, X, AlertTriangle, AlertOctagon, CheckCircle2 } from 'lucide-react';
 
 export function SubmitWorkModal({
   isOpen,
@@ -30,11 +31,17 @@ export function SubmitWorkModal({
   const [docTitle, setDocTitle] = useState('');
   const [evidenceType, setEvidenceType] = useState('Work Output');
   const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) setModalError('');
+  }, [isOpen]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      setModalError('');
       if (!docTitle) {
         setDocTitle(file.name.replace(/\.[^/.]+$/, ''));
       }
@@ -51,12 +58,13 @@ export function SubmitWorkModal({
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
+    setModalError('');
     if (!submitNotes.trim()) {
-      toast.warning('Please provide a brief summary of completed work.');
+      setModalError('Please provide a brief summary of completed work.');
       return;
     }
     if (subtaskIds.length === 0) {
-      toast.warning('You have no open subtasks to submit on this task.');
+      setModalError('You have no open subtasks to submit on this task.');
       return;
     }
 
@@ -102,16 +110,19 @@ export function SubmitWorkModal({
       setSubmitNotes('');
       setSelectedFile(null);
       setDocTitle('');
+      setModalError('');
       onSuccess?.(createdEvidence, submittedIds);
       onClose();
     } catch (err) {
       console.error(err);
       if (err.code === 'COMPLIANCE_BLOCK') {
-        toast.error(
-          `Submission blocked: Compliance rule "${complianceRuleName || 'Audit Policy'}" requires approved evidence before review.`
+        const ruleLabel = err.details?.[0]?.name || complianceRuleName || 'Audit Policy';
+        setModalError(
+          `Submission blocked: Compliance rule "${ruleLabel}" requires deliverable evidence before review. Attach a file below and re-submit.`
         );
+        dispatch(fetchComplianceViolations({ force: true }));
       } else {
-        toast.error(err.message || 'Failed to submit work for review.');
+        setModalError(err.message || 'Failed to submit work for review.');
       }
     } finally {
       setSubmitting(false);
@@ -121,6 +132,16 @@ export function SubmitWorkModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Submit Work for Review">
       <form onSubmit={handleSubmit} className="space-y-4">
+        {modalError && (
+          <div
+            role="alert"
+            className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-medium text-rose-800 flex items-start gap-2.5"
+          >
+            <AlertOctagon className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{modalError}</span>
+          </div>
+        )}
+
         {/* Compliance Status Notice */}
         {isEvidenceRequired ? (
           <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">

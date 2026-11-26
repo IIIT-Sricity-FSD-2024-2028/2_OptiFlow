@@ -138,10 +138,10 @@ export function EvidenceUploadCard({
                           </span>
                         )}
                       </div>
-                      {evidence.status === 'Rejected' && evidence.rejectionReason && (
+                      {evidence.status === 'Rejected' && (evidence.rejectionReason || evidence.notes) && (
                         <div className="mt-1 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1 flex items-start gap-1">
                           <span className="font-bold shrink-0">Officer Feedback:</span>
-                          <span className="italic">"{evidence.rejectionReason}"</span>
+                          <span className="italic">"{evidence.rejectionReason || evidence.notes}"</span>
                         </div>
                       )}
                     </div>
@@ -166,7 +166,7 @@ export function EvidenceUploadCard({
                         </a>
                       );
                     })()}
-                    {!readOnly && onDelete && (
+                    {!readOnly && onDelete && String(evidence.status || 'Pending') === 'Pending' && (
                       <button
                         type="button"
                         onClick={() => onDelete(evidence.id)}
