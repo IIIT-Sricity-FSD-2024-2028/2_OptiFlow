@@ -214,6 +214,7 @@ export default function ComponentShowcase() {
 
         {standaloneToast && (
           <Toast 
+            stacked
             type={standaloneToast.type} 
             message={standaloneToast.message} 
             onClose={() => setStandaloneToast(null)} 

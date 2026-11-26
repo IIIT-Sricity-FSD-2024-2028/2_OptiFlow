@@ -1,6 +1,51 @@
+import { useMemo, useState } from 'react';
 import { formatDate } from '../../../shared/utils/formatDate';
 import { StatusBadge, PriorityBadge } from './StatusBadge';
 import { ChevronRight } from 'lucide-react';
+
+const PRIORITY_RANK = { urgent: 4, critical: 4, high: 3, medium: 2, low: 1 };
+
+function getTaskSortValue(task, key) {
+  switch (key) {
+    case 'id':
+      return String(task.id || task.taskId || '').toLowerCase();
+    case 'title':
+      return String(task.title || '').toLowerCase();
+    case 'assignee':
+      return String(
+        task.assigneeName ||
+          (typeof task.assignedTo === 'object'
+            ? task.assignedTo?.fullName || task.assignedTo?.email
+            : task.assignedTo) ||
+          task.assignee ||
+          ''
+      ).toLowerCase();
+    case 'priority':
+      return PRIORITY_RANK[String(task.priority || 'medium').toLowerCase()] || 0;
+    case 'status':
+      return String(task.status || '').toLowerCase();
+    case 'dueDate': {
+      const raw = task.dueDate || task.deadline;
+      if (!raw) return Number.MAX_SAFE_INTEGER;
+      const ms = new Date(raw).getTime();
+      return Number.isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms;
+    }
+    default:
+      return '';
+  }
+}
+
+export function sortTaskRows(tasks = [], sortConfig = null) {
+  if (!sortConfig?.key) return tasks;
+  const dir = sortConfig.direction === 'desc' ? -1 : 1;
+  return [...tasks].sort((a, b) => {
+    const valA = getTaskSortValue(a, sortConfig.key);
+    const valB = getTaskSortValue(b, sortConfig.key);
+    if (valA < valB) return -1 * dir;
+    if (valA > valB) return 1 * dir;
+    return 0;
+  });
+}
 
 export function TaskTable({
   tasks = [],
@@ -9,7 +54,18 @@ export function TaskTable({
   onRowClick,
   sortConfig,
   onSort,
+  sortable = true,
 }) {
+  const [internalSort, setInternalSort] = useState(null);
+  const isControlled = typeof onSort === 'function';
+  const activeSort = isControlled ? sortConfig : internalSort;
+  const canSort = Boolean(isControlled || (sortable && onSort !== null));
+
+  const displayedTasks = useMemo(() => {
+    if (isControlled || !canSort || !internalSort?.key) return tasks;
+    return sortTaskRows(tasks, internalSort);
+  }, [tasks, isControlled, canSort, internalSort]);
+
   if (isLoading) {
     return <div className="p-8 text-center text-xs font-medium text-slate-400">Loading tasks...</div>;
   }
@@ -19,17 +75,28 @@ export function TaskTable({
   }
 
   const handleHeaderClick = (key) => {
-    if (onSort) {
+    if (!canSort) return;
+    if (isControlled) {
       onSort(key);
+      return;
     }
+    setInternalSort((prev) =>
+      prev?.key === key
+        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    );
   };
 
   const renderSortIcon = (key) => {
-    if (sortConfig?.key === key) {
-      return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
+    if (activeSort?.key === key) {
+      return activeSort.direction === 'asc' ? ' ↑' : ' ↓';
     }
     return '';
   };
+
+  const sortHeaderClass = canSort
+    ? 'py-3.5 px-5 cursor-pointer select-none hover:text-slate-800 transition-colors'
+    : 'py-3.5 px-5';
 
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white shadow-2xs">
@@ -37,12 +104,12 @@ export function TaskTable({
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
             {visibleColumns.includes('id') && (
-              <th scope="col" className="py-3.5 px-5 cursor-pointer" onClick={() => handleHeaderClick('id')}>
+              <th scope="col" className={sortHeaderClass} onClick={() => handleHeaderClick('id')}>
                 ID{renderSortIcon('id')}
               </th>
             )}
             {visibleColumns.includes('title') && (
-              <th scope="col" className="py-3.5 px-5 cursor-pointer" onClick={() => handleHeaderClick('title')}>
+              <th scope="col" className={sortHeaderClass} onClick={() => handleHeaderClick('title')}>
                 Task Deliverable{renderSortIcon('title')}
               </th>
             )}
@@ -50,7 +117,7 @@ export function TaskTable({
               <th scope="col" className="py-3.5 px-5">Process / Project</th>
             )}
             {visibleColumns.includes('assignee') && (
-              <th scope="col" className="py-3.5 px-5 cursor-pointer" onClick={() => handleHeaderClick('assignee')}>
+              <th scope="col" className={sortHeaderClass} onClick={() => handleHeaderClick('assignee')}>
                 Assignee{renderSortIcon('assignee')}
               </th>
             )}
@@ -58,17 +125,17 @@ export function TaskTable({
               <th scope="col" className="py-3.5 px-5">Assigner / Lead</th>
             )}
             {visibleColumns.includes('priority') && (
-              <th scope="col" className="py-3.5 px-5 cursor-pointer" onClick={() => handleHeaderClick('priority')}>
+              <th scope="col" className={sortHeaderClass} onClick={() => handleHeaderClick('priority')}>
                 Priority{renderSortIcon('priority')}
               </th>
             )}
             {visibleColumns.includes('status') && (
-              <th scope="col" className="py-3.5 px-5 cursor-pointer" onClick={() => handleHeaderClick('status')}>
+              <th scope="col" className={sortHeaderClass} onClick={() => handleHeaderClick('status')}>
                 Status{renderSortIcon('status')}
               </th>
             )}
             {visibleColumns.includes('dueDate') && (
-              <th scope="col" className="py-3.5 px-5 cursor-pointer" onClick={() => handleHeaderClick('dueDate')}>
+              <th scope="col" className={sortHeaderClass} onClick={() => handleHeaderClick('dueDate')}>
                 Deadline{renderSortIcon('dueDate')}
               </th>
             )}
@@ -78,7 +145,7 @@ export function TaskTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 text-xs">
-          {tasks.map((task) => {
+          {displayedTasks.map((task) => {
             const rawDueDate = task.dueDate || task.deadline;
             const isCompleted = String(task.status || '').toLowerCase().includes('complete') || String(task.status || '').toLowerCase().includes('approved');
             const isOverdue = rawDueDate && !isNaN(new Date(rawDueDate).getTime()) && new Date(rawDueDate) < new Date() && !isCompleted;

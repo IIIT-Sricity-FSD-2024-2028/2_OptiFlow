@@ -74,7 +74,11 @@ export default function TeamLeadTaskDetail() {
       && violation.entityType === 'Task'
       && String(violation.entityId) === String(taskId)
     ));
-    return { hasRules: open.length > 0, evidenceBlocked: open.length > 0 };
+    return {
+      hasRules: open.length > 0,
+      evidenceBlocked: open.length > 0,
+      primaryViolationId: open[0]?.id || null,
+    };
   }, [violations, taskId]);
   // Every user (main's allUsers): resolves subtask assignee names beyond the assignable members.
   const allUsers = users;
@@ -510,6 +514,7 @@ export default function TeamLeadTaskDetail() {
         isOpen={isEvidenceModalOpen}
         onClose={() => setIsEvidenceModalOpen(false)}
         taskId={taskId}
+        violationId={compliance.primaryViolationId}
         onSuccess={() => {
           // The new row is already in the evidence slice. Evidence starts Pending; re-read compliance instead of unblocking locally.
           setComplianceReload((n) => n + 1);

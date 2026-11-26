@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Loader } from '../../../../shared/components/Loader';
-import { TaskTable } from '../../components/TaskTable';
+import { TaskTable, sortTaskRows } from '../../components/TaskTable';
 import { Pagination } from '../../../../shared/components/Pagination';
 import { 
   ShieldAlert, 
@@ -72,6 +72,7 @@ export default function PmTasks() {
   
   // Interactive filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState(null);
   const selectedProjectId = selectedProjectParam;
   const [showAssignForm, setShowAssignForm] = useState(false);
 
@@ -232,6 +233,24 @@ export default function PmTasks() {
     setCurrentPage(1);
   };
 
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('filter');
+    nextParams.delete('projectId');
+    setSearchParams(nextParams);
+    setCurrentPage(1);
+  };
+
+  const handleSort = (key) => {
+    setSortConfig((prev) =>
+      prev?.key === key
+        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    );
+    setCurrentPage(1);
+  };
+
   // Tag every task with its compliance status & overdue status
   const taskRows = useMemo(() => {
     const now = new Date();
@@ -285,10 +304,12 @@ export default function PmTasks() {
     });
   }, [taskRows, activeFilter, selectedProjectId, searchQuery]);
 
+  const sortedTasks = useMemo(() => sortTaskRows(filteredTasks, sortConfig), [filteredTasks, sortConfig]);
+
   // Pagination slice (10 per page)
   const paginatedTasks = useMemo(() => {
-    return filteredTasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  }, [filteredTasks, currentPage]);
+    return sortedTasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  }, [sortedTasks, currentPage]);
 
   if (loading) return <div className="min-h-full flex items-center justify-center p-8"><Loader /></div>;
 
@@ -460,11 +481,8 @@ export default function PmTasks() {
           <span>Showing {filteredTasks.length} of {taskRows.length} tasks</span>
           {(activeFilter !== 'all' || selectedProjectId !== 'all' || searchQuery) && (
             <button
-              onClick={() => {
-                setSearchQuery('');
-                handleProjectFilterChange('all');
-                handleTabChange('all');
-              }}
+              type="button"
+              onClick={handleResetFilters}
               className="inline-flex items-center gap-1 text-slate-700 hover:text-slate-900 font-semibold ml-1 transition-colors"
             >
               <RotateCcw size={12} />
@@ -506,6 +524,8 @@ export default function PmTasks() {
           <TaskTable
             tasks={paginatedTasks}
             visibleColumns={['title', 'assignee', 'priority', 'status', 'dueDate']}
+            sortConfig={sortConfig}
+            onSort={handleSort}
             onRowClick={(task) => navigate(PATHS.PM.TASK_DETAIL.replace(':id', task.id))}
           />
           <Pagination

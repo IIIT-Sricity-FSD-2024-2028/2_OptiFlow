@@ -93,7 +93,7 @@ export default function TaskComplianceCard({
           <Button
             variant={isLockedOut ? 'danger' : 'primary'}
             size="sm"
-            onClick={onOpenEvidenceModal}
+            onClick={() => onOpenEvidenceModal?.(primaryViolation?.id)}
             className="text-xs font-semibold shadow-xs flex items-center gap-1.5"
           >
             <Send size={13} />

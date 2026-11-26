@@ -91,6 +91,7 @@ export default function MemberTaskDetail() {
   const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
   const [selectedSubtaskForExt, setSelectedSubtaskForExt] = useState(null);
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
+  const [evidenceViolationId, setEvidenceViolationId] = useState(null);
 
   const getSlaTimeRemaining = (dueDate) => {
     if (!dueDate) return null;
@@ -177,8 +178,11 @@ export default function MemberTaskDetail() {
 
   const stages = [
     { label: 'Assigned', done: true },
-    { label: 'In Progress', done: !isCompleted && !isPendingReview && task.status !== 'Draft' && task.status !== 'Pending' },
-    { label: 'Under Review', done: isPendingReview || isCompleted },
+    {
+      label: 'In Progress',
+      done: isCompleted || isPendingReview || !['Draft', 'Pending', 'Not_Started'].includes(task.status),
+    },
+    { label: 'Under Review', done: isPendingReview || myWorkInReview || isCompleted },
     { label: 'Completed', done: isCompleted },
   ];
 
@@ -219,7 +223,10 @@ export default function MemberTaskDetail() {
             complianceOfficer={complianceOfficer}
             taskDueDate={dueDate}
             getSlaTimeRemaining={getSlaTimeRemaining}
-            onOpenEvidenceModal={() => setIsEvidenceModalOpen(true)}
+            onOpenEvidenceModal={(violationId) => {
+              setEvidenceViolationId(violationId || primaryViolation?.id || null);
+              setIsEvidenceModalOpen(true);
+            }}
           />
 
           {/* Deliverable Scope */}
@@ -258,7 +265,10 @@ export default function MemberTaskDetail() {
             evidenceList={evidenceList}
             readOnly={isCompleted}
             required={isEvidenceRequired}
-            onRequestUpload={() => setIsEvidenceModalOpen(true)}
+            onRequestUpload={() => {
+              setEvidenceViolationId(primaryViolation?.id || null);
+              setIsEvidenceModalOpen(true);
+            }}
             onDelete={handleDeleteEvidence}
           />
         </div>
@@ -357,9 +367,12 @@ export default function MemberTaskDetail() {
 
       <UploadEvidenceModal
         isOpen={isEvidenceModalOpen}
-        onClose={() => setIsEvidenceModalOpen(false)}
+        onClose={() => {
+          setIsEvidenceModalOpen(false);
+          setEvidenceViolationId(null);
+        }}
         taskId={taskId}
-        violationId={primaryViolation?.id}
+        violationId={evidenceViolationId || primaryViolation?.id}
         onSuccess={() => dispatch(fetchComplianceViolations({ force: true }))}
       />
     </div>

@@ -587,11 +587,12 @@ export default function ComplianceRules() {
           {/* Automatically Dynamic Category Filter */}
           <select
             value={activeCategoryId}
-            onChange={(e) =>
+            onChange={(e) => {
               setSearchParams(
                 e.target.value === "ALL" ? {} : { categoryId: e.target.value },
-              )
-            }
+              );
+              setCurrentPage(1);
+            }}
             className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="ALL">
@@ -608,7 +609,10 @@ export default function ComplianceRules() {
 
           <select
             value={activeStatus}
-            onChange={(e) => setActiveStatus(e.target.value)}
+            onChange={(e) => {
+              setActiveStatus(e.target.value);
+              setCurrentPage(1);
+            }}
             className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="ALL">All Status</option>
