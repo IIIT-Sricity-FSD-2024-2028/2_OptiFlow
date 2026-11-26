@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { PATHS } from "../../../app/paths";
 import {
   fetchAuditLogs,
   selectAllAuditLogs,
+  selectAuditLogsError,
   selectAuditLogsStatus,
 } from "../../../store/auditLogs";
 import Table from "../../../shared/components/Table";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
 import { Pagination } from "../../../shared/components/Pagination";
-import { Loader2, Eye, FileText } from "lucide-react";
+import { Loader2, Eye, FileText, History } from "lucide-react";
 import { formatAuditTimestamp } from "../../../shared/utils/formatDate";
 import { AuditLogDetailModal } from "../components/AuditLogDetailModal";
 import { GenerateReportModal } from "../components/GenerateReportModal";
@@ -20,6 +23,7 @@ export default function ComplianceAuditLogs() {
   const dispatch = useDispatch();
   const logs = useSelector(selectAllAuditLogs);
   const status = useSelector(selectAuditLogsStatus);
+  const error = useSelector(selectAuditLogsError);
   const loading = status === "loading" && logs.length === 0;
 
   const [selectedLog, setSelectedLog] = useState(null);
@@ -144,9 +148,33 @@ export default function ComplianceAuditLogs() {
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg shadow-xs transition-colors shrink-0"
         >
           <FileText size={16} />
-          <span>Generate Report</span>
+          <span>Export Report</span>
         </Button>
       </div>
+
+      {/* Reports & Audit Sub-Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <Link
+          to={PATHS.COMPLIANCE.REPORTS}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          <FileText size={14} className="text-slate-400" />
+          <span>Report Generator</span>
+        </Link>
+        <Link
+          to={PATHS.COMPLIANCE.AUDIT_LOGS}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow-xs"
+        >
+          <History size={14} />
+          <span>System Audit Trail</span>
+        </Link>
+      </div>
+
+      {error && (
+        <div className="p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-sm" role="alert">
+          {error.message || "Failed to load compliance audit trail."}
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">

@@ -6,125 +6,94 @@ import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../shared/components/Toast';
 import { Modal } from '../../../shared/components/Modal';
 import { Button } from '../../../shared/components/Button';
-import { 
-  FileText, 
-  ShieldCheck, 
-  AlertTriangle, 
-  Download, 
-  CheckCircle2, 
-  Filter, 
-  Calendar, 
-  Building2, 
+import {
+  FileText,
+  ShieldCheck,
+  AlertTriangle,
+  Download,
+  CheckCircle2,
   History,
   Check,
-  FileSpreadsheet
+  FileJson,
+  Loader2,
 } from 'lucide-react';
+import {
+  REPORT_TYPES,
+  EXPORT_FORMATS,
+  exportCompliancePackage,
+} from '../utils/complianceExport';
+
+const TYPE_STYLE = {
+  'compliance-summary': { icon: ShieldCheck, color: 'text-blue-600 bg-blue-50 border-blue-200' },
+  'violations-report': { icon: AlertTriangle, color: 'text-rose-600 bg-rose-50 border-rose-200' },
+  'evidence-log': { icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+  'audit-trail': { icon: History, color: 'text-amber-600 bg-amber-50 border-amber-200' },
+};
+
+const FORMAT_ICON = {
+  csv: Download,
+  json: FileJson,
+  txt: FileText,
+};
 
 export default function ComplianceReports() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [generating, setGenerating] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [downloadedFileName, setDownloadedFileName] = useState('');
 
-  // Live Database State
   const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [rules, setRules] = useState([]);
   const [violations, setViolations] = useState([]);
   const [evidence, setEvidence] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [users, setUsers] = useState([]);
 
-  // Generator Form
   const [selectedType, setSelectedType] = useState('compliance-summary');
   const [selectedProjectId, setSelectedProjectId] = useState('all');
-  const [selectedFramework, setSelectedFramework] = useState('all');
-  const [exportFormat, setExportFormat] = useState('pdf');
-  const [dateRange, setDateRange] = useState({
-    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0],
-  });
-
-  // Recent Generated Reports List
-  const [recentReports, setRecentReports] = useState([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [sessionExports, setSessionExports] = useState([]);
 
   useEffect(() => {
     let mounted = true;
     const fetchAllData = async () => {
       try {
         setLoading(true);
-        const [projRes, rulesRes, violRes, evRes, logsRes, usersRes] = await Promise.all([
-          apiClient('/projects').catch(() => []),
-          apiClient('/compliance-rules').catch(() => []),
-          apiClient('/compliance-violations').catch(() => []),
-          apiClient('/evidence').catch(() => []),
-          apiClient('/audit-logs').catch(() => []),
-          apiClient('/users').catch(() => []),
+        setLoadError('');
+        const unwrap = (r) => (Array.isArray(r) ? r : r?.data || []);
+        const [projRes, taskRes, catRes, rulesRes, violRes, evRes, logsRes, usersRes] = await Promise.all([
+          apiClient('/projects'),
+          apiClient('/tasks'),
+          apiClient('/compliance-categories'),
+          apiClient('/compliance-rules'),
+          apiClient('/compliance-violations'),
+          apiClient('/evidence'),
+          apiClient('/audit-logs'),
+          apiClient('/users'),
         ]);
-
         if (!mounted) return;
-
-        const projList = Array.isArray(projRes) ? projRes : projRes?.data || [];
-        const rulesList = Array.isArray(rulesRes) ? rulesRes : rulesRes?.data || [];
-        const violList = Array.isArray(violRes) ? violRes : violRes?.data || [];
-        const evList = Array.isArray(evRes) ? evRes : evRes?.data || [];
-        const logsList = Array.isArray(logsRes) ? logsRes : logsRes?.data || [];
-        const usersList = Array.isArray(usersRes) ? usersRes : usersRes?.data || [];
-
-        setProjects(projList);
-        setRules(rulesList);
-        setViolations(violList);
-        setEvidence(evList);
-        setAuditLogs(logsList);
-        setUsers(usersList);
-
-        // Pre-populate standard enterprise reports
-        setRecentReports([
-          {
-            id: 'rep_exec_summary',
-            type: 'compliance-summary',
-            title: 'Executive Compliance Health & Audit Summary Report',
-            meta: `${projList.length} Projects · GDPR, SOX, ISO 27001 · Active Audit Ledger`,
-            format: 'PDF',
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            badge: 'Company-Wide',
-            badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
-          },
-          {
-            id: 'rep_violations_ledger',
-            type: 'violations-report',
-            title: 'Regulatory Violation & Escalation Ledger',
-            meta: `${violList.length} Violations Logged · ${violList.filter(v => v.status === 'Open' || v.status === 'Under_Review').length} Open Remediation Flags`,
-            format: 'CSV',
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            badge: 'Risk Ledger',
-            badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
-          },
-          {
-            id: 'rep_evidence_attestation',
-            type: 'evidence-log',
-            title: 'Evidence Verification & File Attestation Audit',
-            meta: `${evList.length} Evidence Records · Attestation & Verification State`,
-            format: 'XLSX',
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            badge: 'Attestations',
-            badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-          },
-          {
-            id: 'rep_audit_trail',
-            type: 'audit-trail',
-            title: 'System Audit Trail & Permission History Log',
-            meta: `${logsList.length} System Logs · Cryptographic Audit Trail`,
-            format: 'PDF',
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            badge: 'Security Stream',
-            badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
-          },
-        ]);
+        setProjects(unwrap(projRes));
+        setTasks(unwrap(taskRes));
+        setCategories(unwrap(catRes));
+        setRules(unwrap(rulesRes));
+        setViolations(unwrap(violRes));
+        setEvidence(unwrap(evRes));
+        setAuditLogs(unwrap(logsRes));
+        setUsers(unwrap(usersRes));
       } catch (err) {
-        console.error('Failed to load compliance data for reports:', err);
+        if (mounted) {
+          const msg = err?.message || 'Failed to load compliance data for exports.';
+          setLoadError(msg);
+          toast.error(msg);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -134,199 +103,66 @@ export default function ComplianceReports() {
     return () => { mounted = false; };
   }, []);
 
-  const reportTypes = [
-    {
-      id: 'compliance-summary',
-      name: 'Compliance Summary',
-      desc: 'Overall health score & framework audit across projects',
-      icon: ShieldCheck,
-      color: 'text-blue-600 bg-blue-50 border-blue-200',
-    },
-    {
-      id: 'violations-report',
-      name: 'Violations Ledger',
-      desc: 'All flagged violations, remediation notes & status',
-      icon: AlertTriangle,
-      color: 'text-rose-600 bg-rose-50 border-rose-200',
-    },
-    {
-      id: 'evidence-log',
-      name: 'Evidence Attestation',
-      desc: 'Submitted files, sign-offs & verification records',
-      icon: CheckCircle2,
-      color: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-    },
-    {
-      id: 'audit-trail',
-      name: 'Audit Trail Log',
-      desc: 'Security event logs, actor timestamps & system events',
-      icon: History,
-      color: 'text-amber-600 bg-amber-50 border-amber-200',
-    },
-  ];
+  const runExport = async (opts) => {
+    setGenerating(true);
+    try {
+      const cat = categories.find((c) => String(c.id) === String(opts.categoryId));
+      const { filename, scoped } = await exportCompliancePackage({
+        ...opts,
+        categoryName: cat?.name || 'All Domains',
+        data: { projects, tasks, rules, violations, evidence, auditLogs, users },
+        user,
+      });
+      const typeMeta = REPORT_TYPES.find((t) => t.id === opts.reportType) || REPORT_TYPES[0];
+      setSessionExports((prev) => [
+        {
+          id: `exp_${Date.now()}`,
+          title: `${typeMeta.name} — ${scoped.projectLabel}`,
+          meta: `${filename} · ${cat?.name || 'All Domains'}`,
+          format: opts.format.toUpperCase(),
+          options: opts,
+        },
+        ...prev,
+      ]);
+      setDownloadedFileName(filename);
+      setDownloadModalOpen(true);
+      toast.success(`Exported "${filename}" successfully.`);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to export compliance report.');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleGenerateReport = () => {
-    setGenerating(true);
-    toast.info('Extracting database records & compiling report…');
-
-    setTimeout(() => {
-      const typeObj = reportTypes.find(t => t.id === selectedType) || reportTypes[0];
-      const projectObj = projects.find(p => String(p.id) === String(selectedProjectId));
-      const projLabel = projectObj ? projectObj.name : 'All Projects';
-      const formatUpper = exportFormat.toUpperCase();
-      const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-      const newReport = {
-        id: `rep_${Date.now()}`,
-        type: selectedType,
-        title: `${typeObj.name} — ${projLabel}`,
-        meta: `${projLabel} · ${selectedFramework === 'all' ? 'All Frameworks' : selectedFramework.toUpperCase()} · Generated ${todayFormatted} · ${formatUpper}`,
-        format: formatUpper,
-        date: todayFormatted,
-        badge: projLabel === 'All Projects' ? 'Company-Wide' : 'Project-Scoped',
-        badgeColor: projLabel === 'All Projects' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200',
-        filterContext: {
-          projectId: selectedProjectId,
-          framework: selectedFramework,
-        },
-      };
-
-      setRecentReports(prev => [newReport, ...prev]);
-      setGenerating(false);
-      toast.success(`"${newReport.title}" generated successfully!`);
-      downloadReportContent(newReport);
-    }, 800);
+    runExport({
+      reportType: selectedType,
+      format: exportFormat,
+      projectId: selectedProjectId,
+      categoryId: selectedCategoryId,
+      dateRange,
+    });
   };
 
-  const downloadReportContent = (report) => {
-    const format = report.format || 'PDF';
-    const safeTitle = (report.title || 'compliance_report').toLowerCase().replace(/[^a-z0-9]/gi, '_');
-    const isCsv = format === 'CSV';
-    const isXlsx = format === 'XLSX';
-    const ext = isCsv ? 'csv' : isXlsx ? 'xlsx' : 'txt';
-    const mime = isCsv ? 'text/csv' : 'text/plain';
-
-    // Filter violations by project if project-scoped
-    let filteredViolations = violations;
-    if (report.filterContext?.projectId && report.filterContext.projectId !== 'all') {
-      const targetProjId = String(report.filterContext.projectId);
-      filteredViolations = violations.filter(v => {
-        if (v.entityType === 'Project' && String(v.entityId) === targetProjId) return true;
-        return false;
-      });
-    }
-
-    let reportText = '';
-
-    if (report.type === 'violations-report' || isCsv) {
-      // CSV format
-      reportText = 'Violation ID,Policy Name,Severity,Status,Entity Type,Entity ID,Detected At,Resolution Remarks\n';
-      filteredViolations.forEach(v => {
-        const policyName = v.rule?.name || `Rule #${v.ruleId || 'N/A'}`;
-        const cleanRemarks = (v.resolutionRemarks || '').replace(/"/g, '""');
-        reportText += `"${v.id}","${policyName}","${v.rule?.severity || v.severity || 'Medium'}","${v.status}","${v.entityType}","${v.entityId}","${v.detectedAt || ''}","${cleanRemarks}"\n`;
-      });
-    } else if (report.type === 'evidence-log') {
-      // Evidence Attestation text
-      reportText = `===================================================================
-OPTIFLOW COMPLIANCE EVIDENCE & ATTESTATION AUDIT LEDGER
-Generated On: ${new Date().toLocaleString()}
-Company Context: ${user?.company?.legalName || 'Acme Corp'}
-===================================================================
-
-I. EVIDENCE SUBMISSION OVERVIEW
-• Total Evidence Records: ${evidence.length}
-• Pending Review: ${evidence.filter(e => e.status === 'Pending' || e.status === 'Under_Review').length}
-• Approved & Verified: ${evidence.filter(e => e.status === 'Approved').length}
-• Rejected / Blocked: ${evidence.filter(e => e.status === 'Rejected').length}
-
-II. ATTESTATION LOG RECORDS
-`;
-      evidence.forEach((ev, idx) => {
-        const submitter = users.find(u => String(u.id) === String(ev.userId));
-        reportText += `
-${idx + 1}. [${String(ev.status || 'PENDING').toUpperCase()}] ${ev.title || 'Untitled Evidence'}
-   • Type: ${ev.type || ev.evidenceType || 'Document'}
-   • Submitter: ${submitter ? submitter.fullName || submitter.email : ev.userId}
-   • Associated Task: ${ev.taskId || 'None'} | Violation ID: ${ev.violationId || 'None'}
-   • Submitted Date: ${ev.createdAt || 'N/A'}
-`;
-      });
-    } else if (report.type === 'audit-trail') {
-      // Audit Trail
-      reportText = `===================================================================
-OPTIFLOW SYSTEM AUDIT TRAIL & PERMISSION LOG
-Generated On: ${new Date().toLocaleString()}
-Audit Engine: PostgreSQL / Prisma Cryptographic Trail
-===================================================================
-
-Total Audit Events Logged: ${auditLogs.length}
-
-EVENTS BREAKDOWN:
-`;
-      auditLogs.slice(0, 100).forEach((log, idx) => {
-        reportText += `[${idx + 1}] ${log.createdAt || '—'} | ${log.action || 'SYSTEM_EVENT'} | Actor: ${log.actorId || 'System'} | Details: ${JSON.stringify(log.details || log.metadata || {})}\n`;
-      });
-    } else {
-      // Executive Compliance Summary Report
-      const activeRules = rules.filter(r => r.isActive !== false);
-      const openViolations = filteredViolations.filter(v => v.status === 'Open' || v.status === 'Under_Review');
-      const resolvedViolations = filteredViolations.filter(v => v.status === 'Resolved' || v.status === 'Ignored');
-
-      reportText = `===================================================================
-OPTIFLOW EXECUTIVE COMPLIANCE & AUDIT SUMMARY REPORT
-Report Title: ${report.title}
-Generated On:  ${new Date().toLocaleString()}
-Generated By:  ${user?.fullName || user?.email || 'Compliance Officer'}
-===================================================================
-
-I. EXECUTIVE HEALTH SUMMARY
-• Compliance Policies Configured: ${rules.length} (${activeRules.length} Active)
-• Total Violations Logged: ${filteredViolations.length}
-• Active Open Violations: ${openViolations.length}
-• Mitigated & Resolved Violations: ${resolvedViolations.length}
-• Evidence Records Verified: ${evidence.filter(e => e.status === 'Approved').length} / ${evidence.length}
-
-II. CONFIGURED COMPLIANCE RULES
-${rules.map(r => `  • [${r.severity || 'Medium'}] ${r.name} — Status: ${r.isActive !== false ? 'Active' : 'Inactive'}`).join('\n') || '  No rules configured.'}
-
-III. CRITICAL REMEDIATION FLAGS
-${openViolations.map(v => `  • [${v.rule?.severity || 'High'}] ${v.rule?.name || 'Policy Violation'} (${v.entityType} #${(v.entityId || '').substring(0, 8)}) — Status: ${v.status}`).join('\n') || '  No active open violations logged.'}
-
-IV. REGULATORY CERTIFICATION STATEMENT
-This report certifies that OptiFlow compliance policy evaluations, scope bindings, and
-transition interceptors are enforced at runtime via immutable database audit logs.
-===================================================================
-`;
-    }
-
-    const blob = new Blob([reportText], { type: mime });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeTitle}.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-
-    setDownloadedFileName(`${safeTitle}.${ext}`);
-    setDownloadModalOpen(true);
-  };
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 text-slate-900">
-      {/* Top Header */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reports & Audit Trail</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Generate and export regulatory audit ledgers, executive health summaries, and attestation packages.
+            Export live regulatory audit ledgers, violation CSVs, and evidence attestation packages.
           </p>
         </div>
       </header>
 
-      {/* Reports & Audit Sub-Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
         <Link
           to={PATHS.COMPLIANCE.REPORTS}
@@ -344,27 +180,32 @@ transition interceptors are enforced at runtime via immutable database audit log
         </Link>
       </div>
 
+      {loadError && (
+        <div className="p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-sm" role="alert">
+          {loadError}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left: Generator Form (7 cols) */}
         <section className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
             <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
               <FileText size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Generate Compliance Package</h2>
-              <p className="text-xs text-slate-500">Configure report scope, framework, and target file format</p>
+              <h2 className="text-base font-bold text-slate-900">Export Compliance Package</h2>
+              <p className="text-xs text-slate-500">Filter live database records and export to CSV, JSON, or TXT</p>
             </div>
           </div>
 
-          {/* 1. Report Type Selection Cards */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
               1. Select Report Type
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {reportTypes.map((type) => {
-                const Icon = type.icon;
+              {REPORT_TYPES.map((type) => {
+                const style = TYPE_STYLE[type.id] || TYPE_STYLE['compliance-summary'];
+                const Icon = style.icon;
                 const isSelected = selectedType === type.id;
                 return (
                   <button
@@ -378,7 +219,7 @@ transition interceptors are enforced at runtime via immutable database audit log
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <div className={`p-2 rounded-lg ${type.color}`}>
+                      <div className={`p-2 rounded-lg ${style.color}`}>
                         <Icon size={18} />
                       </div>
                       {isSelected && (
@@ -395,7 +236,6 @@ transition interceptors are enforced at runtime via immutable database audit log
             </div>
           </div>
 
-          {/* 2. Filters & Scope */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
@@ -415,19 +255,17 @@ transition interceptors are enforced at runtime via immutable database audit log
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                Policy / Regulatory Framework
+                Compliance Domain
               </label>
               <select
-                value={selectedFramework}
-                onChange={(e) => setSelectedFramework(e.target.value)}
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
                 className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
               >
-                <option value="all">All Active Frameworks</option>
-                <option value="gdpr">GDPR / Data Privacy</option>
-                <option value="sox">SOX / Financial Controls</option>
-                <option value="iso27001">ISO 27001 Information Security</option>
-                <option value="soc2">SOC 2 Trust Principles</option>
-                <option value="internal">Internal Operational Standards</option>
+                <option value="all">All Compliance Domains</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
               </select>
             </div>
 
@@ -438,7 +276,7 @@ transition interceptors are enforced at runtime via immutable database audit log
               <input
                 type="date"
                 value={dateRange.start}
-                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
                 className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
               />
             </div>
@@ -450,7 +288,7 @@ transition interceptors are enforced at runtime via immutable database audit log
               <input
                 type="date"
                 value={dateRange.end}
-                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
                 className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
               />
             </div>
@@ -460,13 +298,9 @@ transition interceptors are enforced at runtime via immutable database audit log
                 Export Format
               </label>
               <div className="grid grid-cols-3 gap-3">
-                {[
-                  { id: 'pdf', label: 'PDF Document', icon: FileText, desc: 'Executive print' },
-                  { id: 'xlsx', label: 'Excel (XLSX)', icon: FileSpreadsheet, desc: 'Audit workpaper' },
-                  { id: 'csv', label: 'CSV Ledger', icon: Download, desc: 'Raw tabular export' },
-                ].map((fmt) => {
+                {EXPORT_FORMATS.map((fmt) => {
                   const isFmtSelected = exportFormat === fmt.id;
-                  const FmtIcon = fmt.icon;
+                  const FmtIcon = FORMAT_ICON[fmt.id] || FileText;
                   return (
                     <button
                       key={fmt.id}
@@ -480,6 +314,7 @@ transition interceptors are enforced at runtime via immutable database audit log
                     >
                       <FmtIcon size={18} className="mb-1 text-slate-500" />
                       <span className="text-xs">{fmt.label}</span>
+                      <span className="text-[10px] text-slate-400">{fmt.desc}</span>
                     </button>
                   );
                 })}
@@ -491,78 +326,59 @@ transition interceptors are enforced at runtime via immutable database audit log
             <Button
               variant="primary"
               onClick={handleGenerateReport}
-              disabled={generating}
+              disabled={generating || Boolean(loadError)}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 shadow-sm"
             >
               {generating ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Compiling Audit Package…</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Exporting…</span>
                 </>
               ) : (
                 <>
                   <Download size={16} />
-                  <span>Compile & Download Report</span>
+                  <span>Export Report</span>
                 </>
               )}
             </Button>
           </div>
         </section>
 
-        {/* Right: Recent Reports Ledger (5 cols) */}
         <section className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Recent Generated Reports</h2>
-              <p className="text-xs text-slate-500">Available downloads & historical exports</p>
+              <h2 className="text-base font-bold text-slate-900">Session Exports</h2>
+              <p className="text-xs text-slate-500">Live records: {rules.length} rules · {violations.length} violations · {evidence.length} evidence</p>
             </div>
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-              Live Database
+              Live DB
             </span>
           </div>
 
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-            {recentReports.length === 0 ? (
+            {sessionExports.length === 0 ? (
               <div className="text-center py-12 text-slate-400 text-sm">
-                No generated reports yet. Click Generate Report to create one.
+                Select filters and click <strong>Export Report</strong> to download live audit data.
               </div>
             ) : (
-              recentReports.map((report) => (
+              sessionExports.map((report) => (
                 <div
                   key={report.id}
-                  className="p-4 rounded-xl border border-slate-200 hover:border-blue-200 hover:bg-slate-50/50 transition-all flex flex-col gap-2.5"
+                  className="p-4 rounded-xl border border-slate-200 hover:border-blue-200 hover:bg-slate-50/50 transition-all flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-2.5">
-                      <div className="p-2 rounded-lg bg-slate-100 text-slate-600 shrink-0 mt-0.5">
-                        <FileText size={16} />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900 leading-snug">{report.title}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{report.meta}</p>
-                      </div>
-                    </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900 truncate">{report.title}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">{report.meta}</p>
                   </div>
-
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${report.badgeColor}`}>
-                        {report.badge}
-                      </span>
-                      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 uppercase">
-                        {report.format}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => downloadReportContent(report)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors py-1 px-2.5 rounded-md hover:bg-blue-50"
-                    >
-                      <Download size={13} />
-                      <span>Download</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => runExport(report.options)}
+                    disabled={generating}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 py-1 px-2.5 rounded-md hover:bg-blue-50 shrink-0"
+                  >
+                    <Download size={13} />
+                    <span>{report.format}</span>
+                  </button>
                 </div>
               ))
             )}
@@ -570,11 +386,10 @@ transition interceptors are enforced at runtime via immutable database audit log
         </section>
       </div>
 
-      {/* Download Success Modal */}
       <Modal
         isOpen={downloadModalOpen}
         onClose={() => setDownloadModalOpen(false)}
-        title="Download Completed Successfully"
+        title="Export Completed"
         footer={
           <Button variant="primary" onClick={() => setDownloadModalOpen(false)} className="w-full">
             Done
