@@ -88,7 +88,12 @@ export default function PmDashboard() {
       return;
     }
     try {
-      await dispatch(updateTask({ id: task.id, data: { status: 'Completed', pmApproval: true } })).unwrap();
+      await dispatch(
+        updateTask({
+          id: task.id,
+          data: { status: 'Completed', ...(forceOverride ? { pmApproval: true } : {}) },
+        })
+      ).unwrap();
       setComplianceOverrideTask(null);
       showToast('success', `Task "${task.title}" approved and completed.`);
     } catch (err) {

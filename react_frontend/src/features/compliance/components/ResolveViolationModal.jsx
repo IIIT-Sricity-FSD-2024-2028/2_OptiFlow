@@ -1,46 +1,110 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/Button";
 import { apiClient } from "../../../services/api/client";
 import { useDispatch } from "react-redux";
 import { resolveComplianceViolation } from "../../../store/complianceViolations";
-import { ShieldCheck, AlertTriangle, Send, Bell } from "lucide-react";
+import { ShieldCheck, AlertTriangle, Bell } from "lucide-react";
 
 export function ResolveViolationModal({
   isOpen,
   onClose,
   violation,
   onResolved,
+  initialTab = "RESOLVE",
 }) {
-  const [activeTab, setActiveTab] = useState("RESOLVE"); // "RESOLVE" | "NOTIFY"
+  const [activeTab, setActiveTab] = useState(initialTab); // "RESOLVE" | "NOTIFY"
   const [resolutionMode, setResolutionMode] = useState("VERIFIED"); // "VERIFIED" | "WAIVER"
   const [waiverType, setWaiverType] = useState("PROVISIONAL_EXEMPTION");
   const [resolutionNotes, setResolutionNotes] = useState("");
+  const [sendNoticeOnResolve, setSendNoticeOnResolve] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [selectedTargetId, setSelectedTargetId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
   const dispatch = useDispatch();
 
+  const recipientOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    const pushTarget = (u, roleLabel) => {
+      if (!u?.id || seen.has(u.id)) return;
+      seen.add(u.id);
+      list.push({
+        id: u.id,
+        fullName: u.fullName || null,
+        email: u.email || null,
+        roleLabel,
+      });
+    };
+    (violation?.notificationTargets || []).forEach((t) =>
+      pushTarget(t, t.roleLabel || "Contact"),
+    );
+    pushTarget(violation?.teamLead, "Team Leader");
+    pushTarget(violation?.entityOwner, "Entity Owner");
+    return list;
+  }, [violation]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setActiveTab(initialTab || "RESOLVE");
+    setError(null);
+    setSuccessMsg(null);
+    setSendNoticeOnResolve(false);
+    const defaultTarget =
+      recipientOptions.find((t) => /team lead/i.test(t.roleLabel))?.id ||
+      recipientOptions[0]?.id ||
+      "";
+    setSelectedTargetId(defaultTarget);
+  }, [isOpen, initialTab, violation?.id, recipientOptions]);
+
+  const resolvedTargetUserIds = useMemo(() => {
+    if (selectedTargetId === "__ALL__") {
+      return recipientOptions.map((t) => t.id);
+    }
+    return selectedTargetId ? [selectedTargetId] : [];
+  }, [selectedTargetId, recipientOptions]);
+
+  const selectedTargetLabel = useMemo(() => {
+    if (selectedTargetId === "__ALL__") {
+      return recipientOptions
+        .map((t) => `${t.fullName || t.email} (${t.roleLabel})`)
+        .join(" & ");
+    }
+    const found = recipientOptions.find((t) => t.id === selectedTargetId);
+    if (found) {
+      return `${found.fullName || found.email} (${found.roleLabel})`;
+    }
+    return violation?.entityOwner?.fullName || violation?.entityOwner?.email || "Team Leader / Entity Owner";
+  }, [selectedTargetId, recipientOptions, violation]);
+
+  const isAlreadyResolved = violation?.status === "Resolved";
+
   const handleResolve = async () => {
     const minLen = resolutionMode === "WAIVER" ? 10 : 5;
-    if (!violation || resolutionNotes.trim().length < minLen) return;
+    if (!violation || isAlreadyResolved || resolutionNotes.trim().length < minLen) return;
 
     setIsSubmitting(true);
     setError(null);
     try {
       const violationId = violation.id || violation.rawViolation?.id;
       const remarksPrefix = resolutionMode === "VERIFIED" ? "[Verified Remediation] " : "";
+      const finalRemarks = remarksPrefix + resolutionNotes.trim();
       await dispatch(
         resolveComplianceViolation({
           id: violationId,
           waiverType: resolutionMode === "WAIVER" ? waiverType : "VERIFIED_REMEDIATION",
-          resolutionRemarks: remarksPrefix + resolutionNotes.trim(),
+          resolutionRemarks: finalRemarks,
+          notifyTeamLead: sendNoticeOnResolve,
+          notifyUserIds: sendNoticeOnResolve ? resolvedTargetUserIds : undefined,
+          notifyMessage: sendNoticeOnResolve ? resolutionNotes.trim() : undefined,
         }),
       ).unwrap();
 
       setResolutionNotes("");
+      setSendNoticeOnResolve(false);
       onResolved?.();
       onClose();
     } catch (err) {
@@ -58,17 +122,28 @@ export function ResolveViolationModal({
     try {
       const violationId = violation.id || violation.rawViolation?.id;
       const msg = noticeMessage.trim() || `Remediation required for compliance rule "${violation.rule?.name || 'Policy'}". Please update the entity or provide required evidence.`;
-      
-      await apiClient(`/api/compliance-violations/${violationId}/notify-owner`, {
+
+      const payload = { message: msg };
+      if (resolvedTargetUserIds.length > 0) {
+        payload.targetUserIds = resolvedTargetUserIds;
+      } else {
+        payload.targetRole = "team_lead";
+      }
+
+      const res = await apiClient(`/api/compliance-violations/${violationId}/notify-owner`, {
         method: "POST",
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify(payload),
       });
 
-      setSuccessMsg("Urgent compliance notice dispatched to entity owner successfully!");
+      const deliveredNames = Array.isArray(res?.recipients) && res.recipients.length > 0
+        ? res.recipients.map((r) => r.fullName || r.email).join(", ")
+        : selectedTargetLabel;
+      setSuccessMsg(`Compliance notice delivered to ${deliveredNames}!`);
+      setNoticeMessage("");
       setTimeout(() => {
         setSuccessMsg(null);
         onClose();
-      }, 1500);
+      }, 1400);
     } catch (err) {
       setError("Failed to send notice: " + (err.message || err));
     } finally {
@@ -87,7 +162,8 @@ export function ResolveViolationModal({
         setNoticeMessage("");
         setError(null);
         setSuccessMsg(null);
-        setActiveTab("RESOLVE");
+        setSendNoticeOnResolve(false);
+        setActiveTab(initialTab || "RESOLVE");
         onClose();
       }}
       title="Compliance Action & Remediation Hub"
@@ -100,7 +176,11 @@ export function ResolveViolationModal({
             <Button
               variant={resolutionMode === "WAIVER" ? "warning" : "primary"}
               onClick={handleResolve}
-              disabled={isSubmitting || resolutionNotes.trim().length < (resolutionMode === "WAIVER" ? 10 : 5)}
+              disabled={
+                isSubmitting ||
+                isAlreadyResolved ||
+                resolutionNotes.trim().length < (resolutionMode === "WAIVER" ? 10 : 5)
+              }
             >
               {isSubmitting
                 ? "Processing..."
@@ -255,13 +335,28 @@ export function ResolveViolationModal({
               Minimum {resolutionMode === "WAIVER" ? 10 : 5} characters required.
             </span>
           </div>
+
+          {recipientOptions.length > 0 && !isAlreadyResolved && (
+            <label className="flex items-start gap-2.5 p-3 rounded-lg bg-slate-50 border border-slate-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sendNoticeOnResolve}
+                onChange={(e) => setSendNoticeOnResolve(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+              />
+              <span className="text-xs text-slate-700 leading-snug">
+                Also send these remarks as a notification to{" "}
+                <strong className="text-slate-900">{selectedTargetLabel}</strong>
+              </span>
+            </label>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
             <div className="flex justify-between items-center text-xs">
               <span className="text-slate-500 font-medium">Violating Entity:</span>
-              <span className="font-semibold text-slate-900">{violation?.entityName || "Task"}</span>
+              <span className="font-semibold text-slate-900">{violation?.entityName || "Entity"}</span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-slate-500 font-medium">Entity Owner:</span>
@@ -275,19 +370,44 @@ export function ResolveViolationModal({
             </div>
           </div>
 
+          {recipientOptions.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-slate-700">
+                Notify Recipient *
+              </label>
+              <select
+                value={selectedTargetId}
+                onChange={(e) => setSelectedTargetId(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg p-2.5 text-xs bg-white focus:ring-2 focus:ring-blue-600 outline-none font-medium"
+              >
+                {recipientOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.roleLabel}: {opt.fullName || opt.email}{opt.email ? ` (${opt.email})` : ""}
+                  </option>
+                ))}
+                {recipientOptions.length > 1 && (
+                  <option value="__ALL__">
+                    All Listed Contacts ({recipientOptions.length})
+                  </option>
+                )}
+              </select>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-slate-700">
-              Remediation Instructions for Entity Owner *
+              Remediation Instructions / Message *
             </label>
             <textarea
               value={noticeMessage}
               onChange={(e) => setNoticeMessage(e.target.value)}
               className="w-full border border-slate-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-blue-600 outline-none transition-shadow"
               rows={4}
-              placeholder={`Notice to ${entityOwnerName}: Please resolve this violation by attaching the required sign-off deliverable or updating task details.`}
+              placeholder={`Notice to ${selectedTargetLabel}: Please resolve this violation by attaching the required sign-off deliverable or updating task details.`}
             />
             <p className="text-[11px] text-slate-500">
-              This will send an immediate high-priority <strong>Compliance Notification</strong> to {entityOwnerName}'s notification bell.
+              This will send an immediate high-priority <strong>Compliance Notification</strong> to{" "}
+              {selectedTargetLabel}&apos;s notification bell.
             </p>
           </div>
         </div>

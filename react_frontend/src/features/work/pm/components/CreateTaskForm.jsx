@@ -1,9 +1,12 @@
 // "Create Project Task" card used by the PM task page (pm/pages/Tasks.jsx).
 // Presentational only: the page owns the form state and the API call.
+import { useState } from 'react';
 import { Button } from '../../../../shared/components/Button';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
-import { AlertTriangle, Plus, X } from 'lucide-react';
+import { AlertTriangle, Plus, X, Clock } from 'lucide-react';
 import { todayInput } from '../../components/dateLimits';
+import { TeamCapacityModal } from '../../components/TeamCapacityModal';
+import { checkTaskTeamCapacity, DEFAULT_POLICY } from '../../utils/scheduling';
 
 export function CreateTaskForm({
   onClose,
@@ -17,7 +20,30 @@ export function CreateTaskForm({
   selectedProject,
   teamLeads,
   projectTeamLeadIds,
+  schedulingPolicy = DEFAULT_POLICY,
 }) {
+  const [capacityPopupOpen, setCapacityPopupOpen] = useState(false);
+  const policy = schedulingPolicy || DEFAULT_POLICY;
+  const startAnchor = selectedProject?.startDate && String(selectedProject.startDate).slice(0, 10) > todayInput()
+    ? String(selectedProject.startDate).slice(0, 10)
+    : todayInput();
+  const teamMemberCount = selectedProject?.team?.teamMembers?.length || 0;
+  const capacityCheck = checkTaskTeamCapacity({
+    dueDate: form.dueDate,
+    estimatedHours: form.estimatedHours,
+    teamMemberCount,
+    startDate: startAnchor,
+    policy,
+  });
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (capacityCheck.isImpossible) {
+      setCapacityPopupOpen(true);
+      return;
+    }
+    onSubmit(event);
+  };
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all duration-200 ring-1 ring-slate-900/5">
       {/* Card Header */}
@@ -44,7 +70,7 @@ export function CreateTaskForm({
       </div>
 
       {/* Form Content */}
-      <form onSubmit={onSubmit} className="p-6 space-y-5">
+      <form onSubmit={handleSubmit} className="p-6 space-y-5">
         {error && (
           <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 flex items-start gap-3 text-xs text-rose-800 font-medium">
             <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
@@ -115,8 +141,8 @@ export function CreateTaskForm({
             </FormField>
           </div>
 
-          {/* Priority, Due Date, Estimated Hours */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Priority, Due Date, Estimated Hours, Review Buffer */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <FormField label="Priority">
               <Select
                 value={form.priority}
@@ -145,7 +171,14 @@ export function CreateTaskForm({
               />
             </FormField>
 
-            <FormField label="Est. Hours (Optional)">
+            <FormField
+              label="Est. Hours (Optional)"
+              error={
+                capacityCheck.isImpossible
+                  ? `Exceeds team limit (max ${capacityCheck.maxTeamHours}h for ${capacityCheck.teamCount} member${capacityCheck.teamCount > 1 ? 's' : ''})`
+                  : undefined
+              }
+            >
               <Input
                 type="number"
                 min="1"
@@ -154,7 +187,70 @@ export function CreateTaskForm({
                 onChange={(event) => onFormChange((c) => ({ ...c, estimatedHours: event.target.value }))}
               />
             </FormField>
+
+            <FormField
+              label="Days Kept for Review"
+              hint={`Company default: ${policy.defaultReviewBufferDays ?? 1} work day(s)`}
+            >
+              <Input
+                type="number"
+                min="0"
+                max="30"
+                step="1"
+                placeholder={String(policy.defaultReviewBufferDays ?? 1)}
+                value={form.reviewBufferDays ?? ''}
+                onChange={(event) => onFormChange((c) => ({ ...c, reviewBufferDays: event.target.value }))}
+              />
+            </FormField>
           </div>
+
+          {!form.dueDate && capacityCheck.estHours > 0 && (
+            <p className="text-xs text-slate-500">
+              Select a Target Due Date to check whether your available team ({capacityCheck.teamCount} member{capacityCheck.teamCount > 1 ? 's' : ''}) can handle {capacityCheck.estHours}h.
+            </p>
+          )}
+
+          {form.dueDate && capacityCheck.estHours > 0 && (
+            <div
+              role={capacityCheck.isImpossible ? 'alert' : 'status'}
+              className={`rounded-xl border px-3.5 py-2.5 text-xs flex items-start justify-between gap-2.5 ${
+                capacityCheck.isImpossible
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
+                  : capacityCheck.needsParallel
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : 'bg-blue-50/70 border-blue-200 text-blue-900'
+              }`}
+            >
+              <div className="flex items-start gap-2.5">
+                {capacityCheck.isImpossible
+                  ? <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  : <Clock className="w-4 h-4 shrink-0 mt-0.5" />}
+                <div>
+                  <span className="font-semibold">
+                    {capacityCheck.isImpossible
+                      ? `Not possible with available team: ${capacityCheck.estHours}h requested vs ${capacityCheck.maxTeamHours}h team capacity.`
+                      : `Available Time: ${capacityCheck.workingDays} working day(s) = ${capacityCheck.perPersonHours}h per person (${policy.workHoursPerDay}h/day).`}
+                  </span>{' '}
+                  {capacityCheck.perPersonHours === 0
+                    ? 'No working days remain before the selected deadline.'
+                    : capacityCheck.isImpossible
+                    ? `Your squad of ${capacityCheck.teamCount} can handle at most ${capacityCheck.maxTeamHours}h total (${capacityCheck.perPersonHours}h each) — would need ~${capacityCheck.peopleNeeded} people.`
+                    : capacityCheck.needsParallel
+                    ? `${capacityCheck.estHours}h requires at least ${capacityCheck.peopleNeeded} of your ${capacityCheck.teamCount} team member(s) working at the same time.`
+                    : `Fits comfortably within one person's available hours.`}
+                </div>
+              </div>
+              {capacityCheck.isImpossible && (
+                <button
+                  type="button"
+                  onClick={() => setCapacityPopupOpen(true)}
+                  className="shrink-0 text-[11px] font-semibold underline hover:no-underline text-rose-800 cursor-pointer"
+                >
+                  Details
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Description / Objectives */}
           <FormField label="Scope & Acceptance Criteria (Optional)">
@@ -186,6 +282,13 @@ export function CreateTaskForm({
           </div>
         </div>
       </form>
+      <TeamCapacityModal
+        isOpen={capacityPopupOpen}
+        onClose={() => setCapacityPopupOpen(false)}
+        capacityCheck={capacityCheck}
+        dueDate={form.dueDate}
+        workHoursPerDay={policy.workHoursPerDay}
+      />
     </div>
   );
 }

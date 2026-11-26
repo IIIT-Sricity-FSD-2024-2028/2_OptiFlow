@@ -31,6 +31,7 @@ import { isPendingStatus } from '../../utils/storeStatus';
 import { ComplianceOverviewModal, CreateProjectTaskModal, TaskReviewDrawer } from '../components/ProjectDetailPanels';
 import { formatDate } from '../components/formatDate';
 import { todayInput } from '../../components/dateLimits';
+import * as schedulingApi from '../../../../services/api/scheduling';
 
 const STATUSES = ['Planning', 'Active', 'OnHold', 'Completed', 'Cancelled'];
 const TASK_PAGE_SIZE = 10;
@@ -65,6 +66,7 @@ export default function PmProjectDetail() {
   const [taskError, setTaskError] = useState('');
   const [complianceOverrideTask, setComplianceOverrideTask] = useState(null);
   const [overridingCompliance, setOverridingCompliance] = useState(false);
+  const [schedulingPolicy, setSchedulingPolicy] = useState(null);
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
@@ -81,6 +83,7 @@ export default function PmProjectDetail() {
 
   useEffect(() => {
     let active = true;
+    Promise.resolve(schedulingApi.getPolicy?.()).then((p) => { if (active && p) setSchedulingPolicy(p); }).catch(() => {});
     dispatch(fetchProjectById(id))
       .unwrap()
       .catch((loadError) => {
@@ -280,7 +283,12 @@ export default function PmProjectDetail() {
       return;
     }
     try {
-      await dispatch(updateTask({ id: task.id, data: { status: 'Completed', pmApproval: true } })).unwrap();
+      await dispatch(
+        updateTask({
+          id: task.id,
+          data: { status: 'Completed', ...(forceOverride ? { pmApproval: true } : {}) },
+        })
+      ).unwrap();
       await dispatch(fetchProjectById(id)).unwrap();
       setComplianceOverrideTask(null);
       setSelectedTask(null);
@@ -594,6 +602,8 @@ export default function PmProjectDetail() {
         onFormChange={setTaskForm}
         projectStartDate={project?.startDate}
         projectTargetDate={project?.targetDate}
+        teamMemberCount={project?.team?.teamMembers?.length || members.length}
+        schedulingPolicy={schedulingPolicy}
       />
 
       <TaskReviewDrawer

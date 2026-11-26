@@ -6,12 +6,17 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { makeStore } from '../../../store';
 import { StatusBadge } from './StatusBadge';
 import { TaskTable } from './TaskTable';
+import { SubtaskList } from './SubtaskList';
+import { ScheduleTimelinePanel } from './ScheduleTimelinePanel';
 import { Toast } from '../../../shared/components/Toast';
+import SchedulingPolicy from '../../executive/pages/SchedulingPolicy';
+import PmTasks from '../pm/pages/Tasks';
 import TeamLeadTasks from '../team-lead/pages/Tasks';
 import TeamLeadDashboard from '../team-lead/pages/Dashboard';
 import TeamLeadTaskDetail from '../team-lead/pages/TaskDetail';
 import ComplianceRules from '../../compliance/pages/Rules';
 import PmDashboard from '../pm/pages/Dashboard';
+import PmTaskDetail from '../pm/pages/TaskDetail';
 import MemberTasks from '../member/pages/Tasks';
 import * as tasksApi from '../../../services/api/tasks';
 import * as projectsApi from '../../../services/api/projects';
@@ -21,6 +26,7 @@ import * as evidenceApi from '../../../services/api/evidence';
 import * as teamsApi from '../../../services/api/teams';
 import * as subtasksApi from '../../../services/api/subtasks';
 import * as usersApi from '../../../services/api/users';
+import * as schedulingApi from '../../../services/api/scheduling';
 
 vi.mock('../../../services/api/tasks');
 vi.mock('../../../services/api/projects');
@@ -30,6 +36,7 @@ vi.mock('../../../services/api/evidence');
 vi.mock('../../../services/api/teams');
 vi.mock('../../../services/api/subtasks');
 vi.mock('../../../services/api/users');
+vi.mock('../../../services/api/scheduling');
 vi.mock('../../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u-1', fullName: 'Test User', role: 'team_lead' } }),
 }));
@@ -277,5 +284,243 @@ describe('Step 3 UI & Workflow Fixes', () => {
     expect(screen.queryByText('-- Category Default --')).toBeNull();
     expect(screen.getByText('Domain Compliance Officer')).toBeInTheDocument();
     expect(screen.getByText('Test User')).toBeInTheDocument();
+  });
+
+  it('PM TaskDetail displays subtask assignees and Approve / Send Back review bar for In_Review tasks', async () => {
+    const { apiClient } = await import('../../../services/api/client');
+    apiClient.mockResolvedValue([]);
+    tasksApi.get.mockResolvedValue({
+      id: 't-rev',
+      title: 'Implement OAuth Flow',
+      status: 'In_Review',
+      priority: 'High',
+      assignedTo: { id: 'tl-1', fullName: 'Charlie Davis' },
+      createdBy: { id: 'pm-1', fullName: 'Bob Miller' },
+      subtasks: [
+        {
+          id: 'st-rev',
+          title: 'Token Exchange',
+          status: 'Completed',
+          assignedTo: { id: 'tm-1', fullName: 'David Smith', email: 'employee@acme.com' },
+        },
+      ],
+      escalations: [],
+    });
+    tasksApi.update.mockResolvedValue({
+      id: 't-rev',
+      title: 'Implement OAuth Flow',
+      status: 'Completed',
+    });
+    complianceApi.getViolations.mockResolvedValue([]);
+    evidenceApi.getEvidenceList.mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter initialEntries={['/pm/tasks/t-rev']}>
+          <Routes>
+            <Route path="/pm/tasks/:id" element={<PmTaskDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </Provider>
+    );
+
+    expect(await screen.findByText('Ready for PM Final Review')).toBeInTheDocument();
+    expect(screen.getByText('David Smith')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve & Complete' }));
+    expect(tasksApi.update).toHaveBeenCalledWith('t-rev', { status: 'Completed' }, expect.anything());
+  });
+
+  it('TL CreateSubtaskModal tracks task estimated hours budget and blocks over-allocation', async () => {
+    const { apiClient } = await import('../../../services/api/client');
+    apiClient.mockResolvedValue([]);
+    tasksApi.get.mockResolvedValue({
+      id: 't-tl',
+      title: 'Auth Integration',
+      status: 'Active',
+      projectId: 'p1',
+      estimatedHours: 20,
+      subtasks: [
+        { id: 'st-1', title: 'Setup Client', status: 'Completed', estimatedHours: 12, assignedToId: 'u-2' },
+      ],
+    });
+    projectsApi.get.mockResolvedValue({
+      id: 'p1',
+      name: 'Alpha',
+      team: { teamMembers: [{ userId: 'u-2' }] },
+    });
+    usersApi.list.mockResolvedValue([
+      { id: 'u-2', fullName: 'David Smith', jobTitle: 'Engineer' },
+    ]);
+    subtasksApi.create.mockResolvedValue({
+      id: 'st-2',
+      title: 'Token Exchange',
+      estimatedHours: 8,
+    });
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter initialEntries={['/team-lead/tasks/t-tl']}>
+          <Routes>
+            <Route path="/team-lead/tasks/:id" element={<TeamLeadTaskDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: '+ Add Subtask' }));
+    expect(screen.getByText(/12h allocated \/ 20h total \(8h left\)/i)).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText(/Implement OAuth token exchange/i), 'Token Exchange');
+    const hoursInput = screen.getByPlaceholderText(/e\.g\. 8/i);
+    await user.type(hoursInput, '10');
+    expect(screen.getByText(/Exceeds remaining task budget \(8h\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assign Subtask' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /Use remaining \(8h\)/i }));
+    expect(screen.getByRole('button', { name: 'Assign Subtask' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Assign Subtask' }));
+    expect(subtasksApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 't-tl',
+        title: 'Token Exchange',
+        estimatedHours: 8,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('SubtaskList locks submission until prerequisite subtasks complete', () => {
+    const subtasks = [
+      { id: 'st-a', title: 'Schema Design', status: 'Active', assignedToId: 'u-2', estimatedHours: 4 },
+      {
+        id: 'st-b',
+        title: 'API Handlers',
+        status: 'Active',
+        assignedToId: 'u-1',
+        estimatedHours: 6,
+        dependencies: [
+          { dependsOnSubtaskId: 'st-a', dependsOnSubtask: { id: 'st-a', title: 'Schema Design', status: 'Active' } },
+        ],
+      },
+    ];
+    render(
+      <SubtaskList
+        subtasks={subtasks}
+        currentUserId="u-1"
+        onSubmitSubtask={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/Waiting on prerequisite: Schema Design/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Waiting on dep.' })).toBeDisabled();
+  });
+
+  it('ScheduleTimelinePanel displays capacity, critical path, warnings and triggers Auto-Schedule', async () => {
+    const onAutoSchedule = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ScheduleTimelinePanel
+        task={{ id: 't1', dueDate: '2099-05-10' }}
+        subtasks={[{ id: 'st-1', title: 'Setup', status: 'Active', startDate: '2099-05-01', dueDate: '2099-05-05', estimatedHours: 16 }]}
+        scheduleAnalysis={{
+          workHoursPerDay: 8,
+          workingDaysRemaining: 5,
+          availableWindowHours: 40,
+          reviewBufferDays: 1,
+          latestRecommendedSubtaskDue: '2099-05-09',
+          criticalPathHours: 16,
+          criticalPathSubtaskIds: ['st-1'],
+          warnings: [{ severity: 'warning', code: 'REVIEW_BUFFER_AT_RISK', message: '1 subtask finishes inside review buffer.' }],
+        }}
+        onAutoSchedule={onAutoSchedule}
+      />
+    );
+    expect(screen.getByText('Available Hours')).toBeInTheDocument();
+    expect(screen.getByText('Step-by-Step Chain')).toBeInTheDocument();
+    expect(screen.getByText('Time Kept for Review')).toBeInTheDocument();
+    expect(screen.getByText('Finish Subtasks By')).toBeInTheDocument();
+    expect(screen.getByText(/40h/i)).toBeInTheDocument();
+    expect(screen.getByText(/16h/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 subtask finishes inside review buffer/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Auto-Schedule Dates/i }));
+    expect(onAutoSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('SchedulingPolicy loads and saves company scheduling configuration', async () => {
+    schedulingApi.getPolicy.mockResolvedValue({
+      workHoursPerDay: 8,
+      workingDays: [1, 2, 3, 4, 5],
+      defaultReviewBufferDays: 1,
+      enforceCapacityBlock: false,
+      holidays: [{ id: 'h1', date: '2099-01-26', name: 'Republic Day' }],
+    });
+    schedulingApi.updatePolicy.mockResolvedValue({
+      workHoursPerDay: 7,
+      workingDays: [1, 2, 3, 4, 5],
+      defaultReviewBufferDays: 2,
+      enforceCapacityBlock: true,
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SchedulingPolicy />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText(/Republic Day/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Save Scheduling Policy/i }));
+    expect(schedulingApi.updatePolicy).toHaveBeenCalledTimes(1);
+  });
+
+  it('PM CreateTaskForm shows inline error and Team Cannot Handle These Hours popup for 1000h impossible deadline', async () => {
+    const nextWeek = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    tasksApi.list.mockResolvedValue([]);
+    tasksApi.create.mockResolvedValue({ id: 't-new' });
+    projectsApi.list.mockResolvedValue([
+      {
+        id: 'p-cap',
+        name: 'Capacity Project',
+        status: 'Active',
+        team: {
+          name: 'Alpha Squad',
+          teamMembers: [
+            { userId: 'tl-1', role: 'Lead', user: { id: 'tl-1', fullName: 'Lead One', email: 'lead@test.com' } },
+            { userId: 'm-1', role: 'Member', user: { id: 'm-1', fullName: 'Member One', email: 'm1@test.com' } },
+            { userId: 'm-2', role: 'Member', user: { id: 'm-2', fullName: 'Member Two', email: 'm2@test.com' } },
+          ],
+        },
+      },
+    ]);
+    usersApi.list.mockResolvedValue([]);
+    schedulingApi.getPolicy.mockResolvedValue({
+      workHoursPerDay: 8,
+      workingDays: [1, 2, 3, 4, 5],
+      defaultReviewBufferDays: 1,
+      enforceCapacityBlock: false,
+      holidays: [],
+    });
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter>
+          <PmTasks />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: /Create Task/i }));
+    await user.type(screen.getByPlaceholderText(/Implement OAuth token refresh/i), 'Giant Audit Task');
+    await user.selectOptions(screen.getByDisplayValue('Select project...'), 'p-cap');
+    const dateInput = document.querySelector('input[type="date"]');
+    await user.clear(dateInput);
+    await user.type(dateInput, nextWeek);
+    await user.type(screen.getByPlaceholderText('e.g. 40'), '1000');
+
+    expect(screen.getByText(/Not possible with available team/i)).toBeInTheDocument();
+    const createButtons = screen.getAllByRole('button', { name: /Create Task/i });
+    await user.click(createButtons[createButtons.length - 1]);
+    expect(await screen.findByText('Team Cannot Handle These Hours')).toBeInTheDocument();
+    expect(tasksApi.create).not.toHaveBeenCalled();
   });
 });

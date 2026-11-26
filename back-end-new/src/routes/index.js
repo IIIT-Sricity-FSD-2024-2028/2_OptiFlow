@@ -21,6 +21,7 @@ import processRoutes from './process.routes.js';
 import platformRoutes from './platform.routes.js';
 import executiveRoutes from './executive.routes.js';
 import attachmentsRoutes from './attachments.routes.js';
+import schedulingRoutes from './scheduling.routes.js';
 
 const router = Router();
 
@@ -63,5 +64,6 @@ router.use(processRoutes);
 router.use(platformRoutes);
 router.use(executiveRoutes);
 router.use(attachmentsRoutes);
+router.use(schedulingRoutes);
 
 export default router;

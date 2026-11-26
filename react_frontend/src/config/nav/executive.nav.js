@@ -52,6 +52,7 @@ const EXECUTIVE_ITEMS = [
     matchPaths: [PATHS.PROCESS_ADMIN.TEMPLATES],
   },
   { label: 'Audit Logs', path: PATHS.EXECUTIVE.AUDIT_LOGS, icon: 'FileText' },
+  { label: 'Scheduling Policy', path: PATHS.EXECUTIVE.SCHEDULING_POLICY, icon: 'CalendarClock', roles: OWNER_ADMIN },
   { label: 'Billing & Plan', path: PATHS.EXECUTIVE.BILLING, icon: 'CreditCard', roles: OWNER_ADMIN },
 ];
 

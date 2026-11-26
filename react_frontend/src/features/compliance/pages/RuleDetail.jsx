@@ -19,7 +19,7 @@ import {
 import { apiClient } from "../../../services/api/client";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
-import { ArrowLeft, Loader2, Power, PowerOff, Unlink } from "lucide-react";
+import { ArrowLeft, Loader2, Power, PowerOff, Unlink, Bell } from "lucide-react";
 import Table from "../../../shared/components/Table";
 import { CreateBindingModal } from "../components/CreateBindingModal";
 import { ResolveViolationModal } from "../components/ResolveViolationModal";
@@ -88,6 +88,11 @@ const RuleDetail = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [isBindingModalOpen, setIsBindingModalOpen] = useState(false);
   const [selectedViolation, setSelectedViolation] = useState(null);
+  const [modalInitialTab, setModalInitialTab] = useState("RESOLVE");
+  const openViolationModal = (row, tab = "RESOLVE") => {
+    setModalInitialTab(tab);
+    setSelectedViolation(row);
+  };
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
   const [bindingToUnbind, setBindingToUnbind] = useState(null);
@@ -328,14 +333,25 @@ const RuleDetail = () => {
                     header: "ACTIONS", 
                     accessor: "actions", 
                     render: (row) => (
-                      <Button 
-                        variant={row.status === 'Resolved' ? 'ghost' : 'warning'} 
-                        size="sm"
-                        onClick={() => setSelectedViolation(row)}
-                        disabled={row.status === 'Resolved'}
-                      >
-                        {row.status === 'Resolved' ? 'Resolved' : 'Manual Override'}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openViolationModal(row, "NOTIFY")}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <Bell size={13} />
+                          <span>Notify</span>
+                        </Button>
+                        <Button 
+                          variant={row.status === 'Resolved' ? 'ghost' : 'warning'} 
+                          size="sm"
+                          onClick={() => openViolationModal(row, "RESOLVE")}
+                          disabled={row.status === 'Resolved'}
+                        >
+                          {row.status === 'Resolved' ? 'Resolved' : 'Manual Override'}
+                        </Button>
+                      </div>
                     ) 
                   }
                 ]}
@@ -454,6 +470,7 @@ const RuleDetail = () => {
         isOpen={!!selectedViolation}
         onClose={() => setSelectedViolation(null)}
         violation={selectedViolation}
+        initialTab={modalInitialTab}
         onResolved={fetchRule}
       />
 

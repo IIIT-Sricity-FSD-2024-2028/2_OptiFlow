@@ -53,8 +53,30 @@ const VIOLATION_LIST_INCLUDE = {
   evidence: true,
 };
 
-/** Adds entityName and entityOwner to violations; shared by list, create and update. */
-async function hydrateViolations(violations) {
+const CONTACT_USER_SELECT = { id: true, fullName: true, email: true };
+
+function isTeamLeadMembership(member) {
+  return /team.?lead|^lead$/i.test(member?.role || "");
+}
+
+function findTeamLeadFromMembers(members) {
+  const lead = (members || []).find(isTeamLeadMembership);
+  return lead?.user || null;
+}
+
+function addNotificationTarget(list, seenIds, user, roleLabel) {
+  if (!user?.id || seenIds.has(user.id)) return;
+  seenIds.add(user.id);
+  list.push({
+    id: user.id,
+    fullName: user.fullName || null,
+    email: user.email || null,
+    roleLabel,
+  });
+}
+
+/** Adds entityName, entityOwner, teamLead and notificationTargets to violations. */
+export async function hydrateViolations(violations) {
     // O(N) Single-pass ID extraction
     const projectIds = new Set();
     const taskIds = new Set();
@@ -68,40 +90,189 @@ async function hydrateViolations(violations) {
       }
     }
 
-    const projects = await prisma.project.findMany({
-      where: { id: { in: Array.from(projectIds) } },
-      select: { id: true, name: true, createdById: true },
-    });
-    const tasks = await prisma.task.findMany({
-      where: { id: { in: Array.from(taskIds) } },
-      select: {
-        id: true,
-        title: true,
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        createdBy: { select: { id: true, fullName: true, email: true } },
-      },
-    });
-    const users = await prisma.user.findMany({
-      where: { id: { in: Array.from(userIds) } },
-      select: { id: true, fullName: true, email: true },
-    });
+    const [projects, tasks, users] = await Promise.all([
+      projectIds.size
+        ? prisma.project.findMany({
+            where: { id: { in: Array.from(projectIds) } },
+            select: {
+              id: true,
+              name: true,
+              createdById: true,
+              team: {
+                select: {
+                  id: true,
+                  name: true,
+                  teamMembers: {
+                    select: { role: true, user: { select: CONTACT_USER_SELECT } },
+                  },
+                },
+              },
+            },
+          })
+        : [],
+      taskIds.size
+        ? prisma.task.findMany({
+            where: { id: { in: Array.from(taskIds) } },
+            select: {
+              id: true,
+              title: true,
+              assignedTo: {
+                select: {
+                  ...CONTACT_USER_SELECT,
+                  manager: { select: CONTACT_USER_SELECT },
+                },
+              },
+              createdBy: { select: CONTACT_USER_SELECT },
+              project: {
+                select: {
+                  id: true,
+                  name: true,
+                  createdById: true,
+                  team: {
+                    select: {
+                      id: true,
+                      name: true,
+                      teamMembers: {
+                        select: { role: true, user: { select: CONTACT_USER_SELECT } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          })
+        : [],
+      userIds.size
+        ? prisma.user.findMany({
+            where: { id: { in: Array.from(userIds) } },
+            select: {
+              ...CONTACT_USER_SELECT,
+              manager: { select: CONTACT_USER_SELECT },
+              teamMembers: {
+                select: {
+                  team: {
+                    select: {
+                      id: true,
+                      teamMembers: {
+                        select: { role: true, user: { select: CONTACT_USER_SELECT } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          })
+        : [],
+    ]);
 
-    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, createdById: p.createdById }]));
-    const taskMap = new Map(tasks.map(t => [t.id, { title: t.title, owner: t.assignedTo || t.createdBy }]));
-    const userMap = new Map(users.map(u => [u.id, { name: u.fullName || u.email, owner: u }]));
+    const projectCreatorIds = new Set();
+    for (const p of projects) {
+      if (p.createdById) projectCreatorIds.add(p.createdById);
+    }
+    for (const t of tasks) {
+      if (t.project?.createdById) projectCreatorIds.add(t.project.createdById);
+    }
+    const projectCreators = projectCreatorIds.size
+      ? await prisma.user.findMany({
+          where: { id: { in: Array.from(projectCreatorIds) } },
+          select: CONTACT_USER_SELECT,
+        })
+      : [];
+    const creatorMap = new Map(projectCreators.map((u) => [u.id, u]));
+
+    const projectMap = new Map(
+      projects.map((p) => {
+        const teamLead = findTeamLeadFromMembers(p.team?.teamMembers);
+        const projectManager = p.createdById ? creatorMap.get(p.createdById) || null : null;
+        const targets = [];
+        const seen = new Set();
+        addNotificationTarget(targets, seen, teamLead, "Team Leader");
+        addNotificationTarget(targets, seen, projectManager, "Project Manager");
+        return [
+          p.id,
+          {
+            name: p.name,
+            teamLead,
+            owner: teamLead || projectManager || null,
+            notificationTargets: targets,
+          },
+        ];
+      }),
+    );
+
+    const taskMap = new Map(
+      tasks.map((t) => {
+        const projectTeamLead = findTeamLeadFromMembers(t.project?.team?.teamMembers);
+        const teamLead = projectTeamLead || t.assignedTo?.manager || null;
+        const projectCreator = t.project?.createdById ? creatorMap.get(t.project.createdById) || null : null;
+        const projectManager = projectCreator || t.createdBy || null;
+        const owner = t.assignedTo || t.createdBy || teamLead || null;
+        const targets = [];
+        const seen = new Set();
+        addNotificationTarget(targets, seen, teamLead, "Team Leader");
+        addNotificationTarget(targets, seen, t.assignedTo, "Task Assignee");
+        addNotificationTarget(targets, seen, projectManager, "Project Manager");
+        return [
+          t.id,
+          {
+            title: t.title,
+            teamLead,
+            owner,
+            notificationTargets: targets,
+          },
+        ];
+      }),
+    );
+
+    const userMap = new Map(
+      users.map((u) => {
+        const teamLead =
+          u.teamMembers
+            ?.map((tm) => findTeamLeadFromMembers(tm.team?.teamMembers))
+            .find((lead) => lead && lead.id !== u.id) ||
+          u.manager ||
+          null;
+        const owner = { id: u.id, fullName: u.fullName, email: u.email };
+        const targets = [];
+        const seen = new Set();
+        addNotificationTarget(targets, seen, teamLead, "Team Leader");
+        addNotificationTarget(targets, seen, owner, "User");
+        return [
+          u.id,
+          {
+            name: u.fullName || u.email,
+            teamLead,
+            owner,
+            notificationTargets: targets,
+          },
+        ];
+      }),
+    );
 
     return violations.map((v) => {
       let entityName = `${v.entityType || "General"} #${(v.entityId || "N/A").substring(0, 8)}`;
       let entityOwner = null;
+      let teamLead = null;
+      let notificationTargets = [];
 
       if (v.entityType === "Project" && projectMap.has(v.entityId)) {
-        entityName = projectMap.get(v.entityId).name;
+        const meta = projectMap.get(v.entityId);
+        entityName = meta.name;
+        entityOwner = meta.owner;
+        teamLead = meta.teamLead;
+        notificationTargets = meta.notificationTargets;
       } else if (v.entityType === "Task" && taskMap.has(v.entityId)) {
-        entityName = taskMap.get(v.entityId).title;
-        entityOwner = taskMap.get(v.entityId).owner;
+        const meta = taskMap.get(v.entityId);
+        entityName = meta.title;
+        entityOwner = meta.owner;
+        teamLead = meta.teamLead;
+        notificationTargets = meta.notificationTargets;
       } else if (v.entityType === "User" && userMap.has(v.entityId)) {
-        entityName = userMap.get(v.entityId).name;
-        entityOwner = userMap.get(v.entityId).owner;
+        const meta = userMap.get(v.entityId);
+        entityName = meta.name;
+        entityOwner = meta.owner;
+        teamLead = meta.teamLead;
+        notificationTargets = meta.notificationTargets;
       }
 
       const assignedOfficer = v.assignedOfficer || v.rule?.category?.owner || null;
@@ -148,6 +319,8 @@ async function hydrateViolations(violations) {
         ...v,
         entityName,
         entityOwner,
+        teamLead,
+        notificationTargets,
         assignedOfficer,
         dueDate: dueDate.toISOString(),
         slaStatus,
@@ -228,9 +401,11 @@ export async function getComplianceViolationById(req, res, next) {
       throw new NotFoundError(`Compliance violation with ID ${id} not found`);
     }
 
+    const hydrated = (await hydrateViolations([violation]))[0];
+
     res.status(200).json({
       success: true,
-      data: violation,
+      data: hydrated,
     });
   } catch (err) {
     next(err);
@@ -369,10 +544,36 @@ export async function updateComplianceViolation(req, res, next) {
       );
     }
 
+    const hydrated = (await hydrateViolations([updated]))[0];
+
+    if (body.notifyOwner || body.notifyTeamLead || (Array.isArray(body.notifyUserIds) && body.notifyUserIds.length > 0)) {
+      const candidateIds = resolveViolationTargetUserIds(hydrated, {
+        targetUserIds: body.notifyUserIds,
+        targetUserId: body.notifyUserId,
+        targetRole: body.notifyTeamLead ? "team_lead" : "owner",
+      });
+      if (candidateIds.length > 0) {
+        const noticeText =
+          (typeof body.notifyMessage === "string" && body.notifyMessage.trim()) ||
+          updateData.resolutionRemarks ||
+          `Compliance update for "${hydrated.entityName}" (${hydrated.rule?.name || "Policy"}).`;
+        await dispatchViolationNotifications({
+          companyId: req.user.companyId,
+          sender: req.user,
+          violation: hydrated,
+          title: `Compliance Notice: ${hydrated.rule?.name || hydrated.entityName}`,
+          message: noticeText,
+          targetUserIds: candidateIds,
+        }).catch((err) => {
+          console.warn("[Notification] Compliance resolve notification failed:", err.message);
+        });
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Compliance violation updated successfully",
-      data: (await hydrateViolations([updated]))[0],
+      data: hydrated,
     });
   } catch (err) {
     next(err);
@@ -404,9 +605,96 @@ export async function deleteComplianceViolation(req, res, next) {
   }
 }
 
+function resolveViolationTargetUserIds(hydratedViolation, options = {}) {
+  const { targetUserIds, targetUserId, targetRole } = options;
+  if (Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+    return Array.from(new Set(targetUserIds.filter(Boolean).map(String)));
+  }
+  if (targetUserId) {
+    return [String(targetUserId)];
+  }
+  const roleKey = typeof targetRole === "string" ? targetRole.trim().toLowerCase() : "";
+  if (roleKey === "team_lead") {
+    return hydratedViolation.teamLead?.id
+      ? [hydratedViolation.teamLead.id]
+      : hydratedViolation.entityOwner?.id
+        ? [hydratedViolation.entityOwner.id]
+        : [];
+  }
+  if (roleKey === "both") {
+    return Array.from(
+      new Set(
+        [hydratedViolation.teamLead?.id, hydratedViolation.entityOwner?.id].filter(Boolean),
+      ),
+    );
+  }
+  if (roleKey === "all") {
+    return (hydratedViolation.notificationTargets || []).map((t) => t.id).filter(Boolean);
+  }
+  if (hydratedViolation.entityType === "Project") {
+    const primary = hydratedViolation.teamLead?.id || hydratedViolation.entityOwner?.id;
+    return primary ? [primary] : [];
+  }
+  const primary = hydratedViolation.entityOwner?.id || hydratedViolation.teamLead?.id;
+  return primary ? [primary] : [];
+}
+
+async function dispatchViolationNotifications({
+  companyId,
+  sender,
+  violation,
+  title,
+  message,
+  targetUserIds,
+}) {
+  const uniqueIds = Array.from(new Set((targetUserIds || []).filter(Boolean).map(String)));
+  if (uniqueIds.length === 0) return { notifications: [], recipients: [] };
+
+  const recipients = await prisma.user.findMany({
+    where: { id: { in: uniqueIds }, companyId, isActive: true },
+    select: CONTACT_USER_SELECT,
+  });
+
+  if (recipients.length === 0) return { notifications: [], recipients: [] };
+
+  const notifications = await Promise.all(
+    recipients.map((recipient) =>
+      prisma.notification.create({
+        data: {
+          companyId,
+          userId: recipient.id,
+          title,
+          message,
+          type: "Compliance",
+        },
+      }),
+    ),
+  );
+
+  try {
+    await createComplianceAuditLog({
+      companyId,
+      violationId: violation.id,
+      ruleId: violation.ruleId || null,
+      action: AUDIT_ACTIONS.UPDATE,
+      performedById: sender?.id || null,
+      newValue: {
+        notificationSent: true,
+        recipients: recipients.map((r) => r.email || r.id),
+        title,
+        message,
+      },
+    });
+  } catch (auditErr) {
+    console.warn("[AuditLog] Notice: Audit logging for violation notification:", auditErr.message);
+  }
+
+  return { notifications, recipients };
+}
+
 /**
  * POST /api/compliance-violations/:id/notify-owner
- * Dispatches an urgent remediation notification to the owner of the violating entity.
+ * Dispatches an urgent remediation notification to the Team Leader and/or owner of the violating entity.
  */
 export async function notifyViolationOwner(req, res, next) {
   try {
@@ -414,61 +702,47 @@ export async function notifyViolationOwner(req, res, next) {
     const body = req.body || {};
     const violation = await prisma.complianceViolation.findFirst({
       where: { id, companyId: req.user.companyId },
-      include: {
-        rule: true,
-      },
+      include: VIOLATION_LIST_INCLUDE,
     });
     if (!violation) {
       throw new NotFoundError(`Compliance violation with ID ${id} not found`);
     }
 
-    let targetUserId = body.targetUserId || null;
-    if (!targetUserId && violation.entityType === 'Task') {
-      const task = await prisma.task.findUnique({
-        where: { id: violation.entityId },
-        select: { assignedToId: true, createdById: true },
-      });
-      targetUserId = task?.assignedToId || task?.createdById || null;
-    } else if (!targetUserId && violation.entityType === 'Project') {
-      const project = await prisma.project.findUnique({
-        where: { id: violation.entityId },
-        select: {
-          createdById: true,
-          team: {
-            select: {
-              teamMembers: {
-                select: { userId: true, role: true },
-              },
-            },
-          },
-        },
-      });
-      const teamLead = project?.team?.teamMembers?.find((m) => /lead/i.test(m.role || ''));
-      targetUserId = project?.createdById || teamLead?.userId || null;
-    } else if (!targetUserId && violation.entityType === 'User') {
-      targetUserId = violation.entityId;
-    }
-
-    if (!targetUserId) {
-      throw new BadRequestError('No owner found for this violating entity to notify');
-    }
-
-    const title = body.title?.trim() || `Compliance Remediation: ${violation.rule?.name || 'Action Required'}`;
-    const message = body.message?.trim() || `Compliance Officer ${req.user.fullName || req.user.email} requested remediation for policy "${violation.rule?.name}". Please complete the required deliverable.`;
-
-    await prisma.notification.create({
-      data: {
-        companyId: req.user.companyId,
-        userId: targetUserId,
-        title,
-        message,
-        type: 'Compliance',
-      },
+    const [hydrated] = await hydrateViolations([violation]);
+    const candidateIds = resolveViolationTargetUserIds(hydrated, {
+      targetUserIds: body.targetUserIds,
+      targetUserId: body.targetUserId,
+      targetRole: body.targetRole,
     });
 
+    if (candidateIds.length === 0) {
+      throw new BadRequestError("No owner or team leader found for this violating entity to notify");
+    }
+
+    const title = body.title?.trim() || `Compliance Remediation: ${hydrated.rule?.name || "Action Required"}`;
+    const message =
+      body.message?.trim() ||
+      `Compliance Officer ${req.user.fullName || req.user.email} requested remediation for policy "${hydrated.rule?.name}". Please complete the required deliverable.`;
+
+    const { notifications, recipients } = await dispatchViolationNotifications({
+      companyId: req.user.companyId,
+      sender: req.user,
+      violation: hydrated,
+      title,
+      message,
+      targetUserIds: candidateIds,
+    });
+
+    if (recipients.length === 0) {
+      throw new BadRequestError("No active recipient found in this company for the selected target");
+    }
+
+    const recipientSummary = recipients.map((r) => r.fullName || r.email).join(", ");
     res.status(200).json({
       success: true,
-      message: 'Remediation notice dispatched to entity owner successfully',
+      message: `Remediation notice dispatched to ${recipientSummary}`,
+      data: notifications,
+      recipients,
     });
   } catch (err) {
     next(err);

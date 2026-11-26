@@ -18,6 +18,12 @@ import {
 } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
 import { evaluateSubtaskSubmission, evaluateTaskTransition, recordViolationOnce } from '../services/compliance.service.js';
+import {
+  getCompanySchedulingPolicy,
+  evaluateTaskCapacity,
+  validateAndAnalyzeSubtaskProposal,
+  computeCriticalPath,
+} from '../services/scheduling.service.js';
 import { assertCanManageProject } from './projects.controller.js';
 
 
@@ -240,11 +246,66 @@ async function scopedSubtaskWhere(req, branchId) {
   });
 }
 
+async function attachSubtaskAssignees(tasksOrTask) {
+  const isArray = Array.isArray(tasksOrTask);
+  const items = isArray ? tasksOrTask : tasksOrTask ? [tasksOrTask] : [];
+  const assigneeIds = new Set();
+  for (const t of items) {
+    for (const s of t?.subtasks || []) {
+      if (s?.assignedToId) assigneeIds.add(s.assignedToId);
+    }
+  }
+  if (assigneeIds.size === 0) return tasksOrTask;
+  const users = await prisma.user.findMany({
+    where: { id: { in: Array.from(assigneeIds) } },
+    select: { id: true, fullName: true, email: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  const enrich = (t) =>
+    t && Array.isArray(t.subtasks)
+      ? {
+          ...t,
+          subtasks: t.subtasks.map((s) => ({
+            ...s,
+            assignedTo: s.assignedToId ? userMap.get(s.assignedToId) || null : null,
+          })),
+        }
+      : t;
+  return isArray ? items.map(enrich) : enrich(tasksOrTask);
+}
+
 function withSubtaskProgress(task) {
   if (!task || !Array.isArray(task.subtasks)) return task;
   const total = task.subtasks.length;
   const completed = task.subtasks.filter((st) => st.status === 'Completed').length;
-  return { ...task, subtaskProgress: { completed, total } };
+  const allocatedHours = task.subtasks.reduce(
+    (sum, st) => sum + (st?.estimatedHours != null ? Number(st.estimatedHours) : 0),
+    0
+  );
+  const { criticalPathHours } = computeCriticalPath(task.subtasks);
+  return { ...task, subtaskProgress: { completed, total, allocatedHours, criticalPathHours } };
+}
+
+async function assertSubtaskHoursWithinBudget(taskId, parentTask, estimatedHours, excludeSubtaskId = null) {
+  if (estimatedHours == null || parentTask?.estimatedHours == null) return;
+  const budget = Number(parentTask.estimatedHours);
+  if (!Number.isFinite(budget)) return;
+  const agg = await prisma.subtask.aggregate({
+    where: {
+      taskId,
+      deletedAt: null,
+      ...(excludeSubtaskId ? { id: { not: excludeSubtaskId } } : {}),
+    },
+    _sum: { estimatedHours: true },
+  });
+  const alreadyAllocated = Number(agg._sum?.estimatedHours || 0);
+  const nextTotal = alreadyAllocated + Number(estimatedHours);
+  if (nextTotal > budget + 1e-6) {
+    const remaining = Math.max(0, Number((budget - alreadyAllocated).toFixed(2)));
+    throw new BadRequestError(
+      `Allocated subtask hours (${Number(nextTotal.toFixed(2))}h) exceed task budget (${budget}h). ${remaining}h remaining.`
+    );
+  }
 }
 
 async function respondWithComplianceBlock({ req, res, taskId, taskRecord, targetStatus, failedRules }) {
@@ -375,6 +436,25 @@ async function resolveProjectTeamLead(project, companyId) {
   return teamLeads[0];
 }
 
+const SUBTASK_DEP_INCLUDE = {
+  dependencies: {
+    select: {
+      dependsOnSubtaskId: true,
+      dependsOnSubtask: {
+        select: { id: true, title: true, status: true, startDate: true, dueDate: true, estimatedHours: true },
+      },
+    },
+  },
+  dependents: {
+    select: {
+      subtaskId: true,
+      subtask: {
+        select: { id: true, title: true, status: true, startDate: true, dueDate: true, estimatedHours: true },
+      },
+    },
+  },
+};
+
 // One include for list, create and update so every task response has the same shape.
 const TASK_ITEM_INCLUDE = {
   project: {
@@ -388,11 +468,18 @@ const TASK_ITEM_INCLUDE = {
   },
   assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
   createdBy: { select: { id: true, fullName: true, email: true } },
-  subtasks: { where: { deletedAt: null } },
+  subtasks: {
+    where: { deletedAt: null },
+    include: SUBTASK_DEP_INCLUDE,
+    orderBy: { createdAt: 'asc' },
+  },
   escalations: { where: { status: 'Open' } },
 };
 
-const SUBTASK_LIST_INCLUDE = { task: { select: { id: true, title: true } } };
+const SUBTASK_LIST_INCLUDE = {
+  task: { select: { id: true, title: true } },
+  ...SUBTASK_DEP_INCLUDE,
+};
 
 const ESCALATION_LIST_INCLUDE = {
   task: { select: { id: true, title: true, status: true } },
@@ -416,13 +503,17 @@ export async function listTasks(req, res, next) {
 
     const tasks = await prisma.task.findMany({
       where,
-      include: { ...TASK_ITEM_INCLUDE, subtasks: { where: subtaskScope } },
+      include: {
+        ...TASK_ITEM_INCLUDE,
+        subtasks: { where: subtaskScope, include: SUBTASK_DEP_INCLUDE, orderBy: { createdAt: 'asc' } },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
+    const enrichedTasks = await attachSubtaskAssignees(tasks);
     res.status(200).json({
       success: true,
-      data: tasks.map(withSubtaskProgress),
+      data: enrichedTasks.map(withSubtaskProgress),
     });
   } catch (err) {
     next(err);
@@ -499,7 +590,7 @@ export async function getTaskById(req, res, next) {
         },
         assignedTo: { select: { id: true, fullName: true, email: true, jobTitle: true } },
         createdBy: { select: { id: true, fullName: true, email: true } },
-        subtasks: { where: subtaskScope },
+        subtasks: { where: subtaskScope, include: SUBTASK_DEP_INCLUDE, orderBy: { createdAt: 'asc' } },
         escalations: true,
       },
     });
@@ -515,9 +606,10 @@ export async function getTaskById(req, res, next) {
       }
     }
 
+    const enrichedTask = await attachSubtaskAssignees(task);
     res.status(200).json({
       success: true,
-      data: withSubtaskProgress(task),
+      data: withSubtaskProgress(enrichedTask),
     });
   } catch (err) {
     next(err);
@@ -539,6 +631,14 @@ export async function createTask(req, res, next) {
     const assignedToId = body.assignedToId || body.assigned_to_id || null;
     const dueDate = parseOptionalDate(body.dueDate || body.due_date, 'dueDate');
     const estimatedHours = parseOptionalHours(body.estimatedHours ?? body.estimated_hours, 'estimatedHours');
+    let reviewBufferDays = null;
+    if (body.reviewBufferDays !== undefined && body.reviewBufferDays !== null && body.reviewBufferDays !== '') {
+      const buf = Number(body.reviewBufferDays);
+      if (!Number.isInteger(buf) || buf < 0 || buf > 30) {
+        throw new BadRequestError('reviewBufferDays must be an integer between 0 and 30');
+      }
+      reviewBufferDays = buf;
+    }
 
     validateRequired({ title }, ['title']);
     validateEnum(status, ALLOWED_TASK_STATUSES, 'status');
@@ -558,7 +658,15 @@ export async function createTask(req, res, next) {
         deletedAt: null,
         team: { branch: { companyId: req.user.companyId } },
       },
-      include: { team: { select: { id: true, branchId: true } } },
+      include: {
+        team: {
+          select: {
+            id: true,
+            branchId: true,
+            _count: { select: { teamMembers: true } },
+          },
+        },
+      },
     });
 
     if (!project) {
@@ -576,6 +684,21 @@ export async function createTask(req, res, next) {
     }
     if (dueDate && project.startDate && dueDate < project.startDate) {
       throw new BadRequestError(`Task due date cannot be before the project start date (${formatDay(project.startDate)})`);
+    }
+
+    const policy = await getCompanySchedulingPolicy(prisma, req.user.companyId);
+    const taskSchedule = evaluateTaskCapacity({
+      task: { dueDate, estimatedHours, reviewBufferDays, project },
+      subtasks: [],
+      policy,
+      teamMemberCount: project.team?._count?.teamMembers || 0,
+    });
+    const allowOverride = !policy.enforceCapacityBlock && body.allowCapacityOverride === true;
+    const blockingCapacity = taskSchedule.warnings.find((w) =>
+      ['NO_WORKING_DAYS', 'EXCEEDS_TEAM_CAPACITY'].includes(w.code)
+    );
+    if (blockingCapacity && !allowOverride) {
+      throw new BadRequestError(blockingCapacity.message);
     }
 
     let targetAssigneeId = null;
@@ -598,6 +721,7 @@ export async function createTask(req, res, next) {
         assignedToId: targetAssigneeId,
         createdById: req.user.id,
         dueDate,
+        reviewBufferDays,
         estimatedHours,
       },
       include: TASK_ITEM_INCLUDE,
@@ -622,6 +746,7 @@ export async function createTask(req, res, next) {
       success: true,
       message: 'Task created successfully',
       data: withSubtaskProgress(newTask),
+      scheduleWarnings: taskSchedule.warnings,
     });
   } catch (err) {
     next(err);
@@ -678,7 +803,16 @@ export async function updateTask(req, res, next) {
 
     // Governance: Team members can submit work (In_Review) or report blockers (Blocked), but cannot tamper with parent task configurations or complete tasks directly
     if (isMember) {
-      if (body.title || body.description !== undefined || body.priority || body.dueDate !== undefined || body.due_date !== undefined) {
+      if (
+        body.title ||
+        body.description !== undefined ||
+        body.priority ||
+        body.dueDate !== undefined ||
+        body.due_date !== undefined ||
+        body.estimatedHours !== undefined ||
+        body.estimated_hours !== undefined ||
+        body.reviewBufferDays !== undefined
+      ) {
         throw new ForbiddenError('Team members cannot modify parent task configurations (title, priority, due date, description)');
       }
       if (body.status && !MEMBER_SETTABLE_STATUSES.includes(body.status)) {
@@ -792,6 +926,75 @@ export async function updateTask(req, res, next) {
     if (body.actualHours !== undefined || body.actual_hours !== undefined) {
       const hours = body.actualHours !== undefined ? body.actualHours : body.actual_hours;
       updateData.actualHours = parseOptionalHours(hours, 'actualHours');
+    }
+    if (body.estimatedHours !== undefined || body.estimated_hours !== undefined) {
+      const est = parseOptionalHours(
+        body.estimatedHours !== undefined ? body.estimatedHours : body.estimated_hours,
+        'estimatedHours'
+      );
+      if (est !== null) {
+        const agg = await prisma.subtask.aggregate({
+          where: { taskId: id, deletedAt: null },
+          _sum: { estimatedHours: true },
+        });
+        const allocated = Number(agg._sum?.estimatedHours || 0);
+        if (est < allocated - 1e-6) {
+          throw new BadRequestError(`estimatedHours (${est}h) cannot be less than already allocated subtask hours (${allocated}h)`);
+        }
+      }
+      updateData.estimatedHours = est;
+    }
+    if (body.reviewBufferDays !== undefined) {
+      if (body.reviewBufferDays === null || body.reviewBufferDays === '') {
+        updateData.reviewBufferDays = null;
+      } else {
+        const buf = Number(body.reviewBufferDays);
+        if (!Number.isInteger(buf) || buf < 0 || buf > 30) {
+          throw new BadRequestError('reviewBufferDays must be an integer between 0 and 30');
+        }
+        updateData.reviewBufferDays = buf;
+      }
+    }
+
+    let taskScheduleWarnings = [];
+    if (dueDateChanged || updateData.estimatedHours !== undefined || updateData.reviewBufferDays !== undefined) {
+      const [policy, existingSubtasks, teamCount] = await Promise.all([
+        getCompanySchedulingPolicy(prisma, req.user.companyId),
+        prisma.subtask.findMany({
+          where: { taskId: id, deletedAt: null },
+          include: { dependencies: { select: { dependsOnSubtaskId: true } } },
+        }),
+        existing.project?.teamId
+          ? prisma.teamMember.count({ where: { teamId: existing.project.teamId } })
+          : 0,
+      ]);
+      const schedEval = evaluateTaskCapacity({
+        task: {
+          ...existing,
+          dueDate: updateData.dueDate !== undefined ? updateData.dueDate : existing.dueDate,
+          estimatedHours: updateData.estimatedHours !== undefined ? updateData.estimatedHours : existing.estimatedHours,
+          reviewBufferDays: updateData.reviewBufferDays !== undefined ? updateData.reviewBufferDays : existing.reviewBufferDays,
+        },
+        subtasks: existingSubtasks,
+        policy,
+        teamMemberCount: teamCount,
+      });
+      taskScheduleWarnings = schedEval.warnings;
+      const allowOverride = !policy.enforceCapacityBlock && body.allowCapacityOverride === true;
+      const alwaysBlocking = taskScheduleWarnings.find((w) =>
+        ['NO_WORKING_DAYS', 'EXCEEDS_TEAM_CAPACITY'].includes(w.code)
+      );
+      if (alwaysBlocking && !allowOverride) {
+        throw new BadRequestError(alwaysBlocking.message);
+      }
+      if (policy.enforceCapacityBlock && !body.allowCapacityOverride) {
+        const blocking = taskScheduleWarnings.find((w) =>
+          w.code === 'CRITICAL_PATH_EXCEEDS_DEADLINE'
+        );
+        if (blocking) {
+          throw new BadRequestError(`${blocking.message} (Strict capacity enforcement is enabled in company policy.)`);
+        }
+      }
     }
 
     // 🔴 THE INTERCEPTOR: Evaluate Compliance Before Saving
@@ -947,6 +1150,7 @@ export async function updateTask(req, res, next) {
         ...withSubtaskProgress(updated),
         ...(revisionNote ? { revisionNote } : {}),
       },
+      ...(taskScheduleWarnings.length > 0 ? { scheduleWarnings: taskScheduleWarnings } : {}),
     });
   } catch (err) {
     next(err);
@@ -1078,6 +1282,7 @@ export async function listSubtasksByTask(req, res, next) {
         taskId,
         companyId: req.user.companyId,
       },
+      include: SUBTASK_DEP_INCLUDE,
       orderBy: { createdAt: 'asc' },
     });
 
@@ -1104,7 +1309,7 @@ export async function getSubtaskById(req, res, next) {
         id,
         companyId: req.user.companyId,
       },
-      include: { task: true },
+      include: { task: true, ...SUBTASK_DEP_INCLUDE },
     });
 
     if (!subtask) {
@@ -1131,7 +1336,16 @@ export async function createSubtask(req, res, next) {
     const title = (body.title || '').trim();
     const description = body.description || null;
     const status = body.status || 'Draft';
+    const startDate = parseOptionalDate(body.startDate || body.start_date, 'startDate');
     const dueDate = parseOptionalDate(body.dueDate || body.due_date, 'dueDate');
+    const estimatedHours = parseOptionalHours(
+      body.estimatedHours ?? body.estimated_hours,
+      'estimatedHours'
+    );
+    const rawDepIds = body.dependsOnIds ?? body.dependsOnSubtaskIds ?? body.depends_on_ids;
+    if (rawDepIds !== undefined && !Array.isArray(rawDepIds)) {
+      throw new BadRequestError('dependsOnIds must be an array of subtask IDs');
+    }
 
     validateRequired({ taskId, title }, ['taskId', 'title']);
     validateEnum(status, ALLOWED_TASK_STATUSES, 'status');
@@ -1143,7 +1357,13 @@ export async function createSubtask(req, res, next) {
         id: taskId,
         companyId: req.user.companyId,
       },
-      include: { project: { select: { teamId: true } } },
+      include: {
+        project: { select: { teamId: true, startDate: true } },
+        subtasks: {
+          where: { deletedAt: null },
+          include: { dependencies: { select: { dependsOnSubtaskId: true } } },
+        },
+      },
     });
 
     if (!parentTask) {
@@ -1156,6 +1376,7 @@ export async function createSubtask(req, res, next) {
 
     assertNotPast(dueDate, 'dueDate');
     assertWithinParentDeadline(dueDate, parentTask.dueDate);
+    await assertSubtaskHoursWithinBudget(taskId, parentTask, estimatedHours);
 
     const assignedToId = body.assignedToId || body.assigned_to_id || body.assignedTo || null;
 
@@ -1195,18 +1416,48 @@ export async function createSubtask(req, res, next) {
       }
     }
 
-    const subtask = await prisma.subtask.create({
-      data: {
-        companyId: req.user.companyId,
-        taskId,
-        title,
-        description,
-        status,
-        assignedToId,
-        createdById: req.user.id,
-        dueDate,
-        completedAt: status === 'Completed' ? new Date() : null,
-      },
+    const policy = await getCompanySchedulingPolicy(prisma, req.user.companyId);
+    const scheduleProposal = await validateAndAnalyzeSubtaskProposal({
+      prisma,
+      companyId: req.user.companyId,
+      parentTask,
+      existingSubtasks: parentTask.subtasks || [],
+      startDate,
+      dueDate,
+      estimatedHours,
+      assignedToId,
+      dependsOnIds: rawDepIds || [],
+      allowCapacityOverride: Boolean(body.allowCapacityOverride),
+      policy,
+    });
+
+    const subtask = await prisma.$transaction(async (tx) => {
+      const created = await tx.subtask.create({
+        data: {
+          companyId: req.user.companyId,
+          taskId,
+          title,
+          description,
+          status,
+          assignedToId,
+          createdById: req.user.id,
+          startDate,
+          dueDate,
+          estimatedHours,
+          completedAt: status === 'Completed' ? new Date() : null,
+        },
+      });
+      if (scheduleProposal.effectiveDepIds.length > 0) {
+        await tx.subtaskDependency.createMany({
+          data: scheduleProposal.effectiveDepIds.map((depId) => ({
+            companyId: req.user.companyId,
+            subtaskId: created.id,
+            dependsOnSubtaskId: depId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+      return created;
     });
 
     if (assignedToId && assignedToId !== req.user.id) {
@@ -1217,6 +1468,7 @@ export async function createSubtask(req, res, next) {
       success: true,
       message: 'Subtask created successfully',
       data: await prisma.subtask.findUnique({ where: { id: subtask.id }, include: SUBTASK_LIST_INCLUDE }),
+      scheduleWarnings: scheduleProposal.warnings,
     });
   } catch (err) {
     next(err);
@@ -1238,6 +1490,11 @@ export async function updateSubtask(req, res, next) {
         id,
         companyId: req.user.companyId,
       },
+      include: {
+        dependencies: {
+          include: { dependsOnSubtask: { select: { id: true, title: true, status: true, deletedAt: true } } },
+        },
+      },
     });
 
     if (!existing) {
@@ -1246,7 +1503,19 @@ export async function updateSubtask(req, res, next) {
 
     // D-S5: members move their own subtask to In_Review; the Team Lead or PM completes it.
     if (isMemberRole(req.user)) {
-      if (body.title || body.description !== undefined || body.dueDate !== undefined || body.due_date !== undefined) {
+      if (
+        body.title ||
+        body.description !== undefined ||
+        body.startDate !== undefined ||
+        body.start_date !== undefined ||
+        body.dueDate !== undefined ||
+        body.due_date !== undefined ||
+        body.estimatedHours !== undefined ||
+        body.estimated_hours !== undefined ||
+        body.dependsOnIds !== undefined ||
+        body.dependsOnSubtaskIds !== undefined ||
+        body.depends_on_ids !== undefined
+      ) {
         throw new ForbiddenError('Team members cannot edit subtask details');
       }
       if (body.status && !MEMBER_SETTABLE_STATUSES.includes(body.status)) {
@@ -1260,6 +1529,12 @@ export async function updateSubtask(req, res, next) {
     const updateData = {};
     if (body.title) updateData.title = String(body.title).trim();
     if (body.description !== undefined) updateData.description = body.description;
+    if (body.startDate !== undefined || body.start_date !== undefined) {
+      updateData.startDate = parseOptionalDate(
+        body.startDate !== undefined ? body.startDate : body.start_date,
+        'startDate'
+      );
+    }
     if (body.dueDate !== undefined || body.due_date !== undefined) {
       const due = parseOptionalDate(body.dueDate !== undefined ? body.dueDate : body.due_date, 'dueDate');
       if ((due?.getTime() ?? null) !== (existing.dueDate?.getTime() ?? null)) {
@@ -1269,8 +1544,80 @@ export async function updateSubtask(req, res, next) {
       }
       updateData.dueDate = due;
     }
+    if (body.estimatedHours !== undefined || body.estimated_hours !== undefined) {
+      const hrs = parseOptionalHours(
+        body.estimatedHours !== undefined ? body.estimatedHours : body.estimated_hours,
+        'estimatedHours'
+      );
+      if (hrs !== null) {
+        const parent = await prisma.task.findUnique({
+          where: { id: existing.taskId },
+          select: { estimatedHours: true },
+        });
+        await assertSubtaskHoursWithinBudget(existing.taskId, parent, hrs, id);
+      }
+      updateData.estimatedHours = hrs;
+    }
+
+    const rawDepIds = body.dependsOnIds ?? body.dependsOnSubtaskIds ?? body.depends_on_ids;
+    if (rawDepIds !== undefined && !Array.isArray(rawDepIds)) {
+      throw new BadRequestError('dependsOnIds must be an array of subtask IDs');
+    }
+
+    let updateScheduleWarnings = [];
+    const needsScheduleValidation =
+      updateData.startDate !== undefined ||
+      updateData.dueDate !== undefined ||
+      updateData.estimatedHours !== undefined ||
+      rawDepIds !== undefined;
+
+    if (needsScheduleValidation) {
+      const [parentWithSubtasks, policy] = await Promise.all([
+        prisma.task.findUnique({
+          where: { id: existing.taskId },
+          include: {
+            project: { select: { startDate: true } },
+            subtasks: {
+              where: { deletedAt: null },
+              include: { dependencies: { select: { dependsOnSubtaskId: true } } },
+            },
+          },
+        }),
+        getCompanySchedulingPolicy(prisma, req.user.companyId),
+      ]);
+
+      const checkResult = await validateAndAnalyzeSubtaskProposal({
+        prisma,
+        companyId: req.user.companyId,
+        parentTask: parentWithSubtasks,
+        existingSubtasks: parentWithSubtasks?.subtasks || [],
+        subtaskId: id,
+        startDate: updateData.startDate !== undefined ? updateData.startDate : existing.startDate,
+        dueDate: updateData.dueDate !== undefined ? updateData.dueDate : existing.dueDate,
+        estimatedHours: updateData.estimatedHours !== undefined ? updateData.estimatedHours : existing.estimatedHours,
+        assignedToId: existing.assignedToId,
+        dependsOnIds: rawDepIds !== undefined ? rawDepIds : null,
+        allowCapacityOverride: Boolean(body.allowCapacityOverride),
+        policy,
+      });
+      updateScheduleWarnings = checkResult.warnings;
+    }
+
     if (body.status) {
       validateEnum(body.status, ALLOWED_TASK_STATUSES, 'status');
+      if (
+        (body.status === 'In_Review' || body.status === 'Completed') &&
+        body.status !== existing.status
+      ) {
+        const incompleteDeps = (existing.dependencies || [])
+          .map((d) => d.dependsOnSubtask)
+          .filter((dep) => dep && !dep.deletedAt && dep.status !== 'Completed');
+        if (incompleteDeps.length > 0) {
+          throw new BadRequestError(
+            `Cannot ${body.status === 'Completed' ? 'complete' : 'submit'} "${existing.title}" until prerequisite subtask(s) finish: ${incompleteDeps.map((d) => d.title).join(', ')}`
+          );
+        }
+      }
       updateData.status = body.status;
       if (body.status === 'Completed') {
         updateData.completedAt = new Date();
@@ -1331,9 +1678,26 @@ export async function updateSubtask(req, res, next) {
       }
     }
 
-    const updated = await prisma.subtask.update({
-      where: { id },
-      data: updateData,
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.subtask.update({
+        where: { id },
+        data: updateData,
+      });
+      if (rawDepIds !== undefined) {
+        await tx.subtaskDependency.deleteMany({ where: { subtaskId: id } });
+        const uniqueDeps = Array.from(new Set(rawDepIds.filter(Boolean).map(String)));
+        if (uniqueDeps.length > 0) {
+          await tx.subtaskDependency.createMany({
+            data: uniqueDeps.map((depId) => ({
+              companyId: req.user.companyId,
+              subtaskId: id,
+              dependsOnSubtaskId: depId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+      return row;
     });
 
     if (updateData.status === 'In_Review' && existing.status !== 'In_Review' && parentTaskForReview?.assignedToId && parentTaskForReview.assignedToId !== req.user.id) {
@@ -1354,10 +1718,43 @@ export async function updateSubtask(req, res, next) {
       }
     }
 
+    // Auto-unlock notifications for downstream dependents whose prerequisites are now all Completed
+    if (updateData.status === 'Completed' && existing.status !== 'Completed') {
+      const dependents = await prisma.subtaskDependency.findMany({
+        where: { dependsOnSubtaskId: id },
+        include: {
+          subtask: {
+            include: {
+              dependencies: {
+                include: { dependsOnSubtask: { select: { id: true, status: true, deletedAt: true } } },
+              },
+            },
+          },
+        },
+      });
+      for (const link of dependents) {
+        const depTask = link.subtask;
+        if (!depTask || depTask.deletedAt || depTask.status === 'Completed' || !depTask.assignedToId) continue;
+        const stillBlocked = depTask.dependencies.some(
+          (d) => d.dependsOnSubtask && !d.dependsOnSubtask.deletedAt && d.dependsOnSubtask.status !== 'Completed'
+        );
+        if (!stillBlocked && depTask.assignedToId !== req.user.id) {
+          notify(
+            req.user.companyId,
+            depTask.assignedToId,
+            'Prerequisite completed — subtask unlocked',
+            `"${updated.title}" was completed, unlocking your subtask "${depTask.title}".`,
+            'Task'
+          );
+        }
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: 'Subtask updated successfully',
       data: await prisma.subtask.findUnique({ where: { id: updated.id }, include: SUBTASK_LIST_INCLUDE }),
+      ...(updateScheduleWarnings.length > 0 ? { scheduleWarnings: updateScheduleWarnings } : {}),
     });
   } catch (err) {
     next(err);

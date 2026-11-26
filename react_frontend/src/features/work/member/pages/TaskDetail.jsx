@@ -27,6 +27,7 @@ import { selectAllEscalations } from '../../../../store/escalations';
 import { selectAllEvidence, deleteEvidence } from '../../../../store/evidence';
 import { selectAllComplianceBindings } from '../../../../store/complianceBindings';
 import { selectAllComplianceViolations, fetchComplianceViolations } from '../../../../store/complianceViolations';
+import { getIncompletePrerequisites } from '../../utils/scheduling';
 import { AlertTriangle, FileText, ShieldAlert } from 'lucide-react';
 
 const reads = [memberReads.users, memberReads.projects, memberReads.escalations, memberReads.evidence, memberReads.complianceBindings, memberReads.complianceViolations];
@@ -168,7 +169,12 @@ export default function MemberTaskDetail() {
   const subtaskStatus = (st) => String(st.status || '').toLowerCase();
   const mySubtasks = subtasks.filter((st) => String(st.assignedToId || st.assignedTo?.id || '') === String(user?.id || ''));
   const myOpenSubtaskIds = mySubtasks
-    .filter((st) => !subtaskStatus(st).includes('complete') && !subtaskStatus(st).includes('review') && subtaskStatus(st) !== 'cancelled')
+    .filter((st) =>
+      !subtaskStatus(st).includes('complete')
+      && !subtaskStatus(st).includes('review')
+      && subtaskStatus(st) !== 'cancelled'
+      && getIncompletePrerequisites(st, subtasks).length === 0
+    )
     .map((st) => st.id || st.subtaskId);
   const myWorkInReview = mySubtasks.length > 0 && myOpenSubtaskIds.length === 0
     && mySubtasks.some((st) => subtaskStatus(st).includes('review'));
@@ -182,7 +188,12 @@ export default function MemberTaskDetail() {
     return false;
   });
 
-  const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && (e.rejectionReason || e.notes));
+  const hasActiveOrApprovedEvidence = evidenceList.some((e) =>
+    ['Pending', 'Under_Review', 'Approved'].includes(e.status)
+  );
+  const latestRejectedEvidence = hasActiveOrApprovedEvidence
+    ? null
+    : evidenceList.find((e) => e.status === 'Rejected' && (e.rejectionReason || e.notes));
 
   const stages = [
     { label: 'Assigned', done: true },

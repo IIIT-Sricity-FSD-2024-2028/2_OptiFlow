@@ -33,6 +33,7 @@ import {
 } from '../../../../store/complianceViolations';
 import { fetchUsers, selectAllUsers, selectUsersStatus } from '../../../../store/users';
 import { isPendingStatus } from '../../utils/storeStatus';
+import * as schedulingApi from '../../../../services/api/scheduling';
 import { CreateTaskForm } from '../components/CreateTaskForm';
 import { todayInput } from '../../components/dateLimits';
 
@@ -83,14 +84,17 @@ export default function PmTasks() {
     assignedToId: '',
     dueDate: '',
     estimatedHours: '',
+    reviewBufferDays: '',
     priority: 'Medium',
   });
+  const [schedulingPolicy, setSchedulingPolicy] = useState(null);
 
   useEffect(() => {
     dispatch(fetchTasks());
     dispatch(fetchProjects());
     dispatch(fetchUsers());
     dispatch(fetchComplianceViolations());
+    Promise.resolve(schedulingApi.getPolicy?.()).then((p) => { if (p) setSchedulingPolicy(p); }).catch(() => {});
   }, [dispatch]);
 
   const loadError = tasksError || projectsError;
@@ -191,6 +195,7 @@ export default function PmTasks() {
         assignedToId: form.assignedToId || undefined,
         dueDate: form.dueDate || undefined,
         estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : undefined,
+        reviewBufferDays: form.reviewBufferDays !== '' ? Number(form.reviewBufferDays) : undefined,
         priority: form.priority,
         status: 'Active',
       })).unwrap();
@@ -201,6 +206,7 @@ export default function PmTasks() {
         assignedToId: '',
         dueDate: '',
         estimatedHours: '',
+        reviewBufferDays: '',
         priority: 'Medium',
       });
       setShowAssignForm(false);
@@ -318,9 +324,9 @@ export default function PmTasks() {
       {/* Header with Title and Professional Action Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Task Command Center</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Monitor delivery health, triage compliance blockers, and create team tasks.
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tasks</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Assign tasks to Team Leads, track subtask progress, and review finished work.
           </p>
         </div>
         <button
@@ -377,8 +383,53 @@ export default function PmTasks() {
           selectedProject={selectedProjectForForm}
           teamLeads={availableTeamLeads}
           projectTeamLeadIds={projectTeamLeadIds}
+          schedulingPolicy={schedulingPolicy}
         />
       )}
+
+      {/* Summary Strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Active Delivery</p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5">{counts.active}</p>
+          </div>
+          <span className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <Clock size={18} />
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => handleTabChange('in_review')}
+          className="text-left rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-50 transition-colors px-4 py-3.5 shadow-2xs flex items-center justify-between cursor-pointer"
+        >
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-700">Ready for PM Review</p>
+            <p className="text-xl font-bold text-[#0B1F4D] mt-0.5">{counts.in_review}</p>
+          </div>
+          <span className="w-9 h-9 rounded-lg bg-blue-100 text-[#204991] flex items-center justify-center">
+            <ListFilter size={18} />
+          </span>
+        </button>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Compliance Blocked</p>
+            <p className="text-xl font-bold text-amber-700 mt-0.5">{counts.compliance_blocked}</p>
+          </div>
+          <span className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <ShieldAlert size={18} />
+          </span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Completed</p>
+            <p className="text-xl font-bold text-emerald-700 mt-0.5">{counts.completed}</p>
+          </div>
+          <span className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <CheckCircle2 size={18} />
+          </span>
+        </div>
+      </div>
 
       {/* Unified Professional Filter Pills (No Carnival Saturated Colors) */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
@@ -523,7 +574,8 @@ export default function PmTasks() {
         <div className="space-y-4">
           <TaskTable
             tasks={paginatedTasks}
-            visibleColumns={['title', 'assignee', 'priority', 'status', 'dueDate']}
+            visibleColumns={['title', 'project', 'assignee', 'progress', 'priority', 'status', 'dueDate', 'actions']}
+            assigneeHeader="Team Lead"
             sortConfig={sortConfig}
             onSort={handleSort}
             onRowClick={(task) => navigate(PATHS.PM.TASK_DETAIL.replace(':id', task.id))}

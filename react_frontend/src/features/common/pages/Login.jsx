@@ -3,11 +3,22 @@ import { useAuth } from "../../../context/AuthContext";
 import { PATHS } from "../../../app/paths";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../../../shared/components/Toast";
+import {
+  Building2,
+  ShieldCheck,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [platformMode, setPlatformMode] = useState(false);
   const { login, platformLogin } = useAuth();
@@ -22,204 +33,268 @@ export default function Login() {
   };
   const notice = NOTICES[searchParams.get("reason")] || "";
 
+  const switchMode = (toPlatform) => {
+    setPlatformMode(toPlatform);
+    setError("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     setError("");
+    setSubmitting(true);
     try {
       // SEC-M2-13: platform administrators use their own endpoint; company users use /auth/login.
       if (platformMode) await platformLogin({ email, password });
       else await login({ email, password });
       navigate("/");
-    } catch (error) {
-      setError("Login Failed : " + error.message);
+    } catch (err) {
+      setError(err.message || "Invalid email or password.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f0f4ff] flex flex-col font-sans">
-      {/* Auth Header */}
-      <header className="flex justify-between items-center px-8 py-6">
-        <div className="text-xl font-bold text-gray-800">OfficeSync</div>
-        <nav className="space-x-6">
-          <Link
-            to="/"
-            className="text-gray-800 font-medium hover:text-blue-600"
-          >
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans text-slate-900 antialiased">
+      {/* Header */}
+      <header className="w-full max-w-5xl mx-auto flex justify-between items-center px-6 py-5">
+        <Link to="/" className="inline-flex items-center">
+          <img
+            src="/assets/images/logo.svg"
+            alt="OfficeSync"
+            className="h-7 w-auto"
+          />
+        </Link>
+        <nav className="flex items-center gap-6 text-sm font-medium text-slate-600">
+          <Link to="/" className="hover:text-slate-900 transition-colors">
             Home
           </Link>
-          <Link
-            to="/contact"
-            className="text-gray-800 font-medium hover:text-blue-600"
-          >
+          <Link to="/contact" className="hover:text-slate-900 transition-colors">
             Contact
           </Link>
         </nav>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex justify-center items-center p-8">
-        <div className="bg-white p-10 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.05)] w-full max-w-[480px]">
-          <div className="text-center mb-8">
-            <p className="uppercase text-xs text-blue-600 font-bold tracking-wider mb-2">
-              Welcome Back
-            </p>
-            <h1 className="text-2xl text-gray-900 font-bold">
-              {platformMode ? "Platform administrator sign in" : "Sign in to your account"}
-            </h1>
+      {/* Main Centered Card */}
+      <main className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-[440px] bg-white border border-slate-200 rounded-xl shadow-sm p-7 sm:p-9">
+          {/* High-Contrast Mode Tabs */}
+          <div
+            className="grid grid-cols-2 p-1 rounded-lg bg-slate-100 border border-slate-200 mb-6"
+            role="tablist"
+            aria-label="Account type"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!platformMode}
+              onClick={() => switchMode(false)}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                !platformMode
+                  ? "bg-white text-slate-900 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Building2 size={15} className={!platformMode ? "text-blue-600" : "text-slate-400"} />
+              <span>Workspace</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={platformMode}
+              onClick={() => switchMode(true)}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                platformMode
+                  ? "bg-white text-slate-900 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <ShieldCheck size={15} className={platformMode ? "text-slate-900" : "text-slate-400"} />
+              <span>Platform Admin</span>
+            </button>
           </div>
+
+          {/* Heading */}
+          <div className="mb-6">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+              {platformMode ? "Platform admin sign in" : "Sign in to OfficeSync"}
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              {platformMode
+                ? "Use your OfficeSync administrator credentials."
+                : "Welcome back. Enter your email and password."}
+            </p>
+          </div>
+
           {notice && !error && (
-            <div className="mb-6 p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded text-sm text-center font-medium">
-              {notice}
+            <div className="mb-5 p-3 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-medium flex items-center gap-2">
+              <AlertCircle size={15} className="text-amber-600 shrink-0" />
+              <span>{notice}</span>
             </div>
           )}
+
           {error && (
-            <div className="mb-6 p-3 bg-red-50 text-red-700 border border-red-200 rounded text-sm text-center font-medium">
-              {error}
+            <div
+              role="alert"
+              className="mb-5 p-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-medium flex items-center gap-2"
+            >
+              <AlertCircle size={15} className="text-rose-500 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            {/* Email Field */}
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {/* Email */}
             <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Work Email
+              <label
+                htmlFor="login-email"
+                className="block text-xs font-semibold text-slate-700 mb-1.5"
+              >
+                {platformMode ? "Admin Email" : "Email"}
               </label>
-              <input
-                type="email"
-                placeholder="name@company.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-              />
+              <div className="relative">
+                <Mail
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  id="login-email"
+                  type="email"
+                  placeholder={platformMode ? "admin@officesync.com" : "name@company.com"}
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 transition-colors"
+                />
+              </div>
             </div>
 
-            {/* Password Field */}
+            {/* Password */}
             <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
+              <label
+                htmlFor="login-password"
+                className="block text-xs font-semibold text-slate-700 mb-1.5"
+              >
                 Password
               </label>
-              {/* relative wrapper is key for absolute positioning inside it */}
               <div className="relative">
+                <Lock
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Password"
+                  placeholder="Enter your password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  // pr-10 adds padding to the right so text doesn't hide under the eye icon
-                  className="w-full p-3 pr-10 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                  className="w-full h-10 pl-9 pr-10 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 transition-colors"
                 />
-
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748b] hover:text-gray-900 focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded transition-colors cursor-pointer"
                 >
-                  {showPassword ? (
-                    // Eye Slash Icon (Visible -> hide)
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                      <line x1="1" y1="1" x2="23" y2="23"></line>
-                    </svg>
-                  ) : (
-                    // Eye Icon (Hidden -> show)
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  )}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            {/* Keep me signed in */}
-            <div className="flex items-center justify-between text-sm mt-2">
-              <label className="flex items-center cursor-pointer">
-                <input type="checkbox" className="mr-2" />
-                <span className="text-gray-600">Keep me signed in</span>
-              </label>
-              <Link
-                to={PATHS.PUBLIC.FORGOT_PASSWORD}
-                className="text-blue-600 font-medium hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
+            {!platformMode && (
+              <div className="flex items-center justify-between text-xs pt-0.5">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                  />
+                  <span>Keep me signed in</span>
+                </label>
+                <Link
+                  to={PATHS.PUBLIC.FORGOT_PASSWORD}
+                  className="text-blue-600 font-medium hover:text-blue-700 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
-            {/* Submit Button */}
             <button
               type="submit"
-              className="w-full p-3.5 mt-4 bg-blue-600 text-white rounded-md text-base font-semibold hover:bg-blue-700 transition-colors"
+              disabled={submitting}
+              className={`w-full h-10 rounded-lg text-sm font-semibold text-white inline-flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60 ${
+                platformMode
+                  ? "bg-slate-900 hover:bg-slate-800"
+                  : "bg-[#2563EB] hover:bg-[#1D4ED8]"
+              }`}
             >
-              Sign In
+              {submitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Signing in…</span>
+                </>
+              ) : (
+                <span>{platformMode ? "Sign in as Admin" : "Sign In"}</span>
+              )}
             </button>
 
-            <div className="relative flex items-center justify-center my-6 text-sm text-gray-500">
-              <div className="absolute w-[40%] h-px bg-gray-200 left-0"></div>
-              <span className="bg-white px-2">OR</span>
-              <div className="absolute w-[40%] h-px bg-gray-200 right-0"></div>
-            </div>
+            {!platformMode && (
+              <>
+                <div className="relative flex items-center justify-center my-4 text-xs text-slate-400">
+                  <div className="w-full h-px bg-slate-200"></div>
+                  <span className="bg-white px-3 shrink-0">or</span>
+                  <div className="w-full h-px bg-slate-200"></div>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => toast.info("Enterprise SSO (SAML/Okta) integration is coming soon! Contact Sales to upgrade your plan.")}
-              className="w-full p-3.5 bg-white text-gray-900 border border-gray-300 rounded-md font-semibold flex justify-center items-center gap-2 hover:bg-gray-50 transition-colors"
-            >
-              Sign in with Organization SSO
-            </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    toast.info(
+                      "Enterprise SSO (SAML/Okta) integration is coming soon! Contact Sales to upgrade your plan.",
+                    )
+                  }
+                  className="w-full h-10 bg-white text-slate-700 border border-slate-300 rounded-lg text-sm font-medium flex justify-center items-center hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Sign in with SSO
+                </button>
+              </>
+            )}
           </form>
 
-          <div className="text-center mt-6 text-sm text-gray-500">
-            <button
-              type="button"
-              onClick={() => { setPlatformMode((m) => !m); setError(""); }}
-              className="text-gray-600 font-medium hover:underline"
-            >
-              {platformMode ? "Back to company sign in" : "Platform administrator? Sign in here"}
-            </button>
-          </div>
-
-          <div className="text-center mt-3 text-sm text-gray-500">
-            New organization?{" "}
-            <Link
-              to={PATHS.PUBLIC.REGISTER}
-              className="text-blue-600 font-semibold hover:underline"
-            >
-              Register your company
-            </Link>
+          <div className="text-center mt-6 text-xs text-slate-500">
+            {platformMode ? (
+              <button
+                type="button"
+                onClick={() => switchMode(false)}
+                className="text-blue-600 font-medium hover:text-blue-700 hover:underline cursor-pointer"
+              >
+                Back to workspace sign in
+              </button>
+            ) : (
+              <>
+                New organization?{" "}
+                <Link
+                  to={PATHS.PUBLIC.REGISTER}
+                  className="text-blue-600 font-semibold hover:text-blue-700 hover:underline"
+                >
+                  Register your company
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="flex justify-between px-8 py-6 text-xs text-gray-500">
-        <div>© 2026 OfficeSync Inc. All rights reserved.</div>
+      <footer className="w-full max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2 px-6 py-5 text-xs text-slate-400">
+        <div>© 2026 OfficeSync. All rights reserved.</div>
         <div className="space-x-4">
-          <Link to="#" className="hover:text-gray-700">
+          <Link to="#" className="hover:text-slate-600">
             Privacy Policy
           </Link>
-          <Link to="#" className="hover:text-gray-700">
+          <Link to="#" className="hover:text-slate-600">
             Terms of Service
           </Link>
         </div>
