@@ -13,12 +13,12 @@ import { EscalationForm } from '../../components/EscalationForm';
 import { SubtaskList } from '../../components/SubtaskList';
 import { ReviewQueue } from '../components/ReviewQueue';
 import { EscalationWatch } from '../components/EscalationWatch';
-import { DashboardSubtaskModal, SendBackSubtaskModal, RejectExtensionModal } from '../components/DashboardModals';
+import { DashboardSubtaskModal, RejectExtensionModal } from '../components/DashboardModals';
 import { getBadgeStatus, formatStatus } from '../components/statusDisplay';
 
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTasks, isReportableError, selectAllTasks, selectTasksLoading } from '../../../../store/tasks';
-import { createSubtask, updateSubtask } from '../../../../store/subtasks';
+import { createSubtask } from '../../../../store/subtasks';
 import {
   createEscalation,
   fetchEscalations,
@@ -77,10 +77,6 @@ export default function TeamLeadDashboard() {
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [reviewTab, setReviewTab] = useState('tasks'); // 'tasks' | 'subtasks' | 'extensions'
   const [hasPickedReviewTab, setHasPickedReviewTab] = useState(false);
-  const [sendBackSubtask, setSendBackSubtask] = useState(null);
-  const [sendBackReason, setSendBackReason] = useState('');
-  const [sendBackError, setSendBackError] = useState('');
-  const [sendingBack, setSendingBack] = useState(false);
 
 
 
@@ -285,48 +281,6 @@ export default function TeamLeadDashboard() {
       setSubtaskError(error?.message || 'Failed to create subtask.');
     } finally {
       setSavingSubtask(false);
-    }
-  };
-
-  const handleApproveSubtask = async (subtask) => {
-    try {
-      await dispatch(updateSubtask({ id: subtask.id || subtask.subtaskId, data: { status: 'Completed' } })).unwrap();
-      showToast('success', `Subtask "${subtask.title}" approved.`);
-    } catch (err) {
-      showToast('error', err?.message || 'Failed to approve subtask.');
-    }
-  };
-
-  const openSendBack = (subtask) => {
-    setSendBackSubtask(subtask);
-    setSendBackReason('');
-    setSendBackError('');
-  };
-
-  const closeSendBack = () => {
-    if (!sendingBack) setSendBackSubtask(null);
-  };
-
-  const handleRejectSubtask = async () => {
-    const subtask = sendBackSubtask;
-    const reason = sendBackReason.trim();
-    if (!subtask) return;
-    if (!reason) {
-      setSendBackError('Tell the team member why the subtask is being sent back.');
-      return;
-    }
-    setSendingBack(true);
-    try {
-      await dispatch(updateSubtask({
-        id: subtask.id || subtask.subtaskId,
-        data: { status: 'Active', reviewComment: reason },
-      })).unwrap();
-      setSendBackSubtask(null);
-      showToast('success', 'Subtask sent back with your comment.');
-    } catch (err) {
-      setSendBackError(err.message || 'Failed to send the subtask back.');
-    } finally {
-      setSendingBack(false);
     }
   };
 
@@ -758,8 +712,6 @@ export default function TeamLeadDashboard() {
         subtasks={reviewQueueSubtasks}
         extensionRequests={extensionRequests}
         onBreakDown={openSubtaskModal}
-        onApproveSubtask={handleApproveSubtask}
-        onSendBackSubtask={openSendBack}
         onExtensionDecision={handleExtensionDecision}
         onRejectExtension={openRejectExtension}
       />
@@ -801,18 +753,6 @@ export default function TeamLeadDashboard() {
         deadline={subtaskDeadline}
         onDeadlineChange={setSubtaskDeadline}
         parentDueDate={tasks.find((task) => String(task.id) === String(selectedParentTaskId))?.dueDate}
-      />
-
-      {/* Send back subtask modal */}
-
-      <SendBackSubtaskModal
-        subtask={sendBackSubtask}
-        onClose={closeSendBack}
-        onConfirm={handleRejectSubtask}
-        sending={sendingBack}
-        error={sendBackError}
-        reason={sendBackReason}
-        onReasonChange={setSendBackReason}
       />
 
       {/* Reject extension modal */}

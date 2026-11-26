@@ -172,7 +172,7 @@ describe('Step 3 UI & Workflow Fixes', () => {
     expect(await screen.findByText('Report Blocker / Escalation')).toBeInTheDocument();
   });
 
-  it('TL Dashboard focuses Subtasks tab when member subtasks are In_Review and shows Approve/Send Back on TL TaskDetail', async () => {
+  it('TL Dashboard Subtasks tab links to TaskDetail via View instead of blind Approve/Send Back buttons', async () => {
     const parentTask = {
       id: 't-oauth',
       title: 'Implement OAuth Flow',
@@ -202,8 +202,10 @@ describe('Step 3 UI & Workflow Fixes', () => {
     );
 
     expect(await screen.findByText('Build Callback')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send Back' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send Back' })).toBeNull();
+    const viewBtn = screen.getByRole('button', { name: 'View' });
+    expect(viewBtn.closest('a')).toHaveAttribute('href', '/team-lead/tasks/t-oauth');
     unmount();
 
     const user = userEvent.setup();
