@@ -10,6 +10,7 @@ import { Table } from '../../../../shared/components/Table';
 import { Toast } from '../../../../shared/components/Toast';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
+import { SendBackTaskModal } from '../components/PmReviewModals';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTaskById, selectTaskById, updateTask as updateTaskThunk } from '../../../../store/tasks';
 import { fetchComplianceViolations, selectAllComplianceViolations } from '../../../../store/complianceViolations';
@@ -32,6 +33,9 @@ export default function PmTaskDetail() {
   const [extensionOpen, setExtensionOpen] = useState(false);
   const [extensionDate, setExtensionDate] = useState('');
   const [extensionReason, setExtensionReason] = useState('');
+  const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [sendBackReason, setSendBackReason] = useState('');
+  const [sendBackError, setSendBackError] = useState('');
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
@@ -115,6 +119,28 @@ export default function PmTaskDetail() {
   // the open violations it has recorded for this task.
   const complianceBlocked = activeTaskViolations.length > 0;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Completed';
+  const isTaskInReview = task.status === 'In_Review' || task.status === 'Pending_TL_Review';
+  const completedSubtaskCount = subtasks.filter((s) => s.status === 'Completed').length;
+
+  const handleConfirmSendBack = async () => {
+    const reason = sendBackReason.trim();
+    if (!reason) {
+      setSendBackError('Give a reason before sending this task back.');
+      return;
+    }
+    setSendBackError('');
+    setSaving(true);
+    try {
+      await dispatch(updateTaskThunk({ id, data: { status: 'Active', notes: reason } })).unwrap();
+      setSendBackOpen(false);
+      setSendBackReason('');
+      showToast('success', 'Task returned to Team Lead for revision.');
+    } catch (error) {
+      setSendBackError(error.message || 'Failed to send task back.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const grantExtension = async () => {
     const reason = extensionReason.trim();
@@ -154,6 +180,48 @@ export default function PmTaskDetail() {
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <Link to={PATHS.PM.TASKS} className="text-sm font-medium text-blue-600 hover:text-blue-700">← All Tasks</Link>
+
+      {/* PM Final Review Bar for Team-Lead-Submitted Tasks */}
+      {isTaskInReview && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/90 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold text-blue-950">
+              Ready for PM Final Review
+            </p>
+            <p className="text-xs text-blue-800 mt-0.5">
+              Review all {subtasks.length} subtask{subtasks.length === 1 ? '' : 's'} ({completedSubtaskCount}/{subtasks.length} completed) and {currentTaskEvidence.length} compliance evidence item{currentTaskEvidence.length === 1 ? '' : 's'} below before approving.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={saving}
+              onClick={() => {
+                if (complianceBlocked) {
+                  setOverrideOpen(true);
+                } else {
+                  updateTask({ status: 'Completed' });
+                }
+              }}
+            >
+              Approve & Complete
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={saving}
+              onClick={() => {
+                setSendBackReason('');
+                setSendBackError('');
+                setSendBackOpen(true);
+              }}
+            >
+              Send Back
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Compliance Blocker Resolution Banner */}
       {complianceBlocked && (
@@ -258,9 +326,10 @@ export default function PmTaskDetail() {
           <Table
             columns={[
               { key: 'title', header: 'Title', accessor: 'title' },
-              { key: 'assignee', header: 'Assignee', render: (subtask) => subtask.assignedTo?.fullName || '—' },
+              { key: 'assignee', header: 'Assignee', render: (subtask) => subtask.assignedTo?.fullName || subtask.assignedTo?.email || '—' },
               { key: 'status', header: 'Status', render: (subtask) => <Badge status={subtask.status === 'Completed' ? 'success' : 'info'}>{String(subtask.status || 'Draft').replace(/_/g, ' ')}</Badge> },
               { key: 'dueDate', header: 'Due date', render: (subtask) => formatDate(subtask.dueDate) },
+              { key: 'completedAt', header: 'Completed', render: (subtask) => formatDate(subtask.completedAt) },
             ]}
             data={subtasks}
           />
@@ -425,6 +494,17 @@ export default function PmTaskDetail() {
           ))}
         </section>
       )}
+
+      <SendBackTaskModal
+        task={task}
+        isOpen={sendBackOpen}
+        onClose={() => setSendBackOpen(false)}
+        onConfirm={handleConfirmSendBack}
+        sending={saving}
+        error={sendBackError}
+        reason={sendBackReason}
+        onReasonChange={setSendBackReason}
+      />
 
       <Toast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast((current) => ({ ...current, visible: false }))} />
     </div>

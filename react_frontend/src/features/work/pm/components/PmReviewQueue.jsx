@@ -1,4 +1,6 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { PATHS } from '../../../../app/paths';
 import { Button } from '../../../../shared/components/Button';
 import { Badge } from '../../../../shared/components/Badge';
 import { EmptyState } from '../../../../shared/components/EmptyState';
@@ -72,10 +74,18 @@ export function PmReviewQueue({
                   className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-slate-900 text-sm truncate">{task.title}</p>
+                    <Link
+                      to={PATHS.PM.TASK_DETAIL.replace(':id', task.id)}
+                      className="font-semibold text-slate-900 hover:text-blue-600 text-sm truncate block"
+                    >
+                      {task.title}
+                    </Link>
                     <p className="text-xs text-slate-500 mt-0.5">
                       Lead: <strong>{task.assigneeName || task.assignedTo?.fullName || task.assignedTo?.email || 'Team Lead'}</strong>
                       {task.project?.name && <> · Project: <strong>{task.project.name}</strong></>}
+                      {Array.isArray(task.subtasks) && task.subtasks.length > 0 && (
+                        <> · <span>{task.subtasks.length} subtask{task.subtasks.length === 1 ? '' : 's'}</span></>
+                      )}
                     </p>
                     {task.notes && (
                       <p className="text-xs text-slate-600 mt-1 bg-slate-50 border border-slate-200/60 rounded px-2 py-1 max-w-lg">
@@ -89,6 +99,12 @@ export function PmReviewQueue({
                       <Badge status="danger">⚠ Blocked by Compliance</Badge>
                     )}
                     <Badge status="info">In Review</Badge>
+                    <Link
+                      to={PATHS.PM.TASK_DETAIL.replace(':id', task.id)}
+                      className="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors"
+                    >
+                      View
+                    </Link>
                     <Button variant="primary" size="sm" onClick={() => onApproveTask(task)}>
                       Approve & Complete
                     </Button>

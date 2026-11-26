@@ -12,6 +12,7 @@ import TeamLeadDashboard from '../team-lead/pages/Dashboard';
 import TeamLeadTaskDetail from '../team-lead/pages/TaskDetail';
 import ComplianceRules from '../../compliance/pages/Rules';
 import PmDashboard from '../pm/pages/Dashboard';
+import PmTaskDetail from '../pm/pages/TaskDetail';
 import MemberTasks from '../member/pages/Tasks';
 import * as tasksApi from '../../../services/api/tasks';
 import * as projectsApi from '../../../services/api/projects';
@@ -277,5 +278,50 @@ describe('Step 3 UI & Workflow Fixes', () => {
     expect(screen.queryByText('-- Category Default --')).toBeNull();
     expect(screen.getByText('Domain Compliance Officer')).toBeInTheDocument();
     expect(screen.getByText('Test User')).toBeInTheDocument();
+  });
+
+  it('PM TaskDetail displays subtask assignees and Approve / Send Back review bar for In_Review tasks', async () => {
+    const { apiClient } = await import('../../../services/api/client');
+    apiClient.mockResolvedValue([]);
+    tasksApi.get.mockResolvedValue({
+      id: 't-rev',
+      title: 'Implement OAuth Flow',
+      status: 'In_Review',
+      priority: 'High',
+      assignedTo: { id: 'tl-1', fullName: 'Charlie Davis' },
+      createdBy: { id: 'pm-1', fullName: 'Bob Miller' },
+      subtasks: [
+        {
+          id: 'st-rev',
+          title: 'Token Exchange',
+          status: 'Completed',
+          assignedTo: { id: 'tm-1', fullName: 'David Smith', email: 'employee@acme.com' },
+        },
+      ],
+      escalations: [],
+    });
+    tasksApi.update.mockResolvedValue({
+      id: 't-rev',
+      title: 'Implement OAuth Flow',
+      status: 'Completed',
+    });
+    complianceApi.getViolations.mockResolvedValue([]);
+    evidenceApi.getEvidenceList.mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter initialEntries={['/pm/tasks/t-rev']}>
+          <Routes>
+            <Route path="/pm/tasks/:id" element={<PmTaskDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </Provider>
+    );
+
+    expect(await screen.findByText('Ready for PM Final Review')).toBeInTheDocument();
+    expect(screen.getByText('David Smith')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve & Complete' }));
+    expect(tasksApi.update).toHaveBeenCalledWith('t-rev', { status: 'Completed' }, expect.anything());
   });
 });

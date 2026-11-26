@@ -240,6 +240,34 @@ async function scopedSubtaskWhere(req, branchId) {
   });
 }
 
+async function attachSubtaskAssignees(tasksOrTask) {
+  const isArray = Array.isArray(tasksOrTask);
+  const items = isArray ? tasksOrTask : tasksOrTask ? [tasksOrTask] : [];
+  const assigneeIds = new Set();
+  for (const t of items) {
+    for (const s of t?.subtasks || []) {
+      if (s?.assignedToId) assigneeIds.add(s.assignedToId);
+    }
+  }
+  if (assigneeIds.size === 0) return tasksOrTask;
+  const users = await prisma.user.findMany({
+    where: { id: { in: Array.from(assigneeIds) } },
+    select: { id: true, fullName: true, email: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  const enrich = (t) =>
+    t && Array.isArray(t.subtasks)
+      ? {
+          ...t,
+          subtasks: t.subtasks.map((s) => ({
+            ...s,
+            assignedTo: s.assignedToId ? userMap.get(s.assignedToId) || null : null,
+          })),
+        }
+      : t;
+  return isArray ? items.map(enrich) : enrich(tasksOrTask);
+}
+
 function withSubtaskProgress(task) {
   if (!task || !Array.isArray(task.subtasks)) return task;
   const total = task.subtasks.length;
@@ -420,9 +448,10 @@ export async function listTasks(req, res, next) {
       orderBy: { createdAt: 'desc' },
     });
 
+    const enrichedTasks = await attachSubtaskAssignees(tasks);
     res.status(200).json({
       success: true,
-      data: tasks.map(withSubtaskProgress),
+      data: enrichedTasks.map(withSubtaskProgress),
     });
   } catch (err) {
     next(err);
@@ -515,9 +544,10 @@ export async function getTaskById(req, res, next) {
       }
     }
 
+    const enrichedTask = await attachSubtaskAssignees(task);
     res.status(200).json({
       success: true,
-      data: withSubtaskProgress(task),
+      data: withSubtaskProgress(enrichedTask),
     });
   } catch (err) {
     next(err);

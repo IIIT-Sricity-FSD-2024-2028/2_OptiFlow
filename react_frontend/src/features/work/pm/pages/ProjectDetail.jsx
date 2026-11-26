@@ -280,7 +280,12 @@ export default function PmProjectDetail() {
       return;
     }
     try {
-      await dispatch(updateTask({ id: task.id, data: { status: 'Completed', pmApproval: true } })).unwrap();
+      await dispatch(
+        updateTask({
+          id: task.id,
+          data: { status: 'Completed', ...(forceOverride ? { pmApproval: true } : {}) },
+        })
+      ).unwrap();
       await dispatch(fetchProjectById(id)).unwrap();
       setComplianceOverrideTask(null);
       setSelectedTask(null);
