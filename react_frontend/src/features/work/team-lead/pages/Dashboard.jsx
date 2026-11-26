@@ -76,6 +76,7 @@ export default function TeamLeadDashboard() {
   const [subtaskError, setSubtaskError] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [reviewTab, setReviewTab] = useState('tasks'); // 'tasks' | 'subtasks' | 'extensions'
+  const [hasPickedReviewTab, setHasPickedReviewTab] = useState(false);
   const [sendBackSubtask, setSendBackSubtask] = useState(null);
   const [sendBackReason, setSendBackReason] = useState('');
   const [sendBackError, setSendBackError] = useState('');
@@ -130,7 +131,7 @@ export default function TeamLeadDashboard() {
       try {
         await Promise.all([
           dispatch(fetchUsers()).unwrap().catch(rethrow),
-          dispatch(fetchTasks()).unwrap().catch(rethrow),
+          dispatch(fetchTasks({ force: true })).unwrap().catch(rethrow),
           dispatch(fetchEscalations()).unwrap().catch(rethrow),
           dispatch(fetchProjects()).unwrap().catch(rethrow),
         ]);
@@ -167,6 +168,12 @@ export default function TeamLeadDashboard() {
       (st) => st.status === 'In_Review'
     ).map((st) => ({ ...st, _parentTask: task }))
   );
+
+  useEffect(() => {
+    if (!hasPickedReviewTab && reviewTab === 'tasks' && reviewQueueTasks.length === 0 && reviewQueueSubtasks.length > 0) {
+      setReviewTab('subtasks');
+    }
+  }, [hasPickedReviewTab, reviewTab, reviewQueueTasks.length, reviewQueueSubtasks.length]);
 
   const inProgressCount = teamOverviewTasks.filter((task) =>
     [
@@ -273,8 +280,8 @@ export default function TeamLeadDashboard() {
     try {
       await dispatch(updateSubtask({ id: subtask.id || subtask.subtaskId, data: { status: 'Completed' } })).unwrap();
       showToast('success', `Subtask "${subtask.title}" approved.`);
-    } catch {
-      showToast('error', 'Failed to approve subtask.');
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to approve subtask.');
     }
   };
 
@@ -737,7 +744,10 @@ export default function TeamLeadDashboard() {
 
       <ReviewQueue
         activeTab={reviewTab}
-        onTabChange={setReviewTab}
+        onTabChange={(nextTab) => {
+          setHasPickedReviewTab(true);
+          setReviewTab(nextTab);
+        }}
         tasks={reviewQueueTasks}
         subtasks={reviewQueueSubtasks}
         extensionRequests={extensionRequests}

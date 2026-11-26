@@ -12,6 +12,7 @@ import {
   ExtensionRequestModal,
   CreateSubtaskModal,
 } from '../components/TaskDetailModals';
+import { SendBackSubtaskModal } from '../components/DashboardModals';
 import { BLOCKER_TYPES } from '../components/taskOptions';
 import { UploadEvidenceModal } from '../../member/components/modals/UploadEvidenceModal';
 import { useAuth } from '../../../../context/AuthContext';
@@ -29,6 +30,7 @@ import {
   uploadEvidenceFile,
 } from '../../../../store/evidence';
 import { fetchComplianceViolations, selectAllComplianceViolations } from '../../../../store/complianceViolations';
+import { fetchComplianceBindings, selectAllComplianceBindings } from '../../../../store/complianceBindings';
 const STAGES = ['Data Collection', 'Work In Progress', 'Team Leader Review', 'Compliance Audit'];
 const STAGE_MAP = { Active: 1, In_Review: 2, Pending_TL_Review: 2, Completed: 3 };
 
@@ -50,6 +52,7 @@ export default function TeamLeadTaskDetail() {
   const project = useSelector((state) => (projectId ? selectProjectById(state, projectId) : null));
   const allEvidence = useSelector(selectAllEvidence);
   const violations = useSelector(selectAllComplianceViolations);
+  const bindings = useSelector(selectAllComplianceBindings);
 
   // Assignable: direct reports plus members of the project's team.
   const members = useMemo(() => {
@@ -66,20 +69,31 @@ export default function TeamLeadTaskDetail() {
     String(item.taskId || item.task_id || item.task?.id) === String(taskId)
   )), [allEvidence, taskId]);
 
-  // Compliance state comes from the server: open violations recorded for this
-  // task (the backend decides what blocks a transition).
+  // Compliance state combines open violations AND bound EVIDENCE_REQUIRED policies without Approved evidence.
   const compliance = useMemo(() => {
     const open = violations.filter((violation) => (
       ['Open', 'Under_Review'].includes(violation.status)
       && violation.entityType === 'Task'
       && String(violation.entityId) === String(taskId)
     ));
+    const hasEvidenceRule = bindings.some(({ rule, scopeType, scopeId }) => {
+      if (!task || !rule?.isActive || rule.criteria?.requirement?.type !== 'EVIDENCE_REQUIRED') return false;
+      const scopes = {
+        Company: task.companyId || user?.companyId,
+        Project: task.projectId || project?.id,
+        Team: project?.teamId || project?.team?.id,
+        Branch: project?.team?.branchId,
+      };
+      return scopes[scopeType] != null && String(scopes[scopeType]) === String(scopeId);
+    });
+    const hasApprovedEvidence = taskEvidence.some((ev) => ev.status === 'Approved');
+    const evidenceBlocked = open.length > 0 || (hasEvidenceRule && !hasApprovedEvidence);
     return {
-      hasRules: open.length > 0,
-      evidenceBlocked: open.length > 0,
+      hasRules: open.length > 0 || hasEvidenceRule,
+      evidenceBlocked,
       primaryViolationId: open[0]?.id || null,
     };
-  }, [violations, taskId]);
+  }, [violations, bindings, task, project, user?.companyId, taskEvidence, taskId]);
   // Every user (main's allUsers): resolves subtask assignee names beyond the assignable members.
   const allUsers = users;
   const [loading, setLoading] = useState(true);
@@ -114,6 +128,10 @@ export default function TeamLeadTaskDetail() {
   const [stForm, setStForm] = useState({ title: '', assignee: '', due: '' });
   const [savingSt, setSavingSt] = useState(false);
   const [subtaskError, setSubtaskError] = useState('');
+  const [sendBackSubtask, setSendBackSubtask] = useState(null);
+  const [sendBackReason, setSendBackReason] = useState('');
+  const [sendBackError, setSendBackError] = useState('');
+  const [sendingBack, setSendingBack] = useState(false);
 
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
   const toastTimer = useRef(null);
@@ -150,8 +168,9 @@ export default function TeamLeadTaskDetail() {
     const force = complianceReload > 0;
     Promise.all([
       dispatch(fetchComplianceViolations(force ? { force: true } : undefined)),
+      dispatch(fetchComplianceBindings(force ? { force: true } : undefined)),
       dispatch(fetchEvidence(force ? { force: true } : undefined)),
-    ]).then(([violationsAction, evidenceAction]) => {
+    ]).then(([violationsAction, , evidenceAction]) => {
       if (!active) return;
       if (fetchComplianceViolations.rejected.match(violationsAction) || fetchEvidence.rejected.match(evidenceAction)) {
         showToast('error', 'Some compliance details could not be loaded.');
@@ -301,7 +320,51 @@ export default function TeamLeadTaskDetail() {
       await dispatch(updateSubtask({ id: subtaskId, data: { status: newStatus } })).unwrap();
       showToast('success', markComplete ? 'Subtask marked complete.' : 'Subtask reopened.');
     } catch (err) {
+      if (err?.code === 'COMPLIANCE_BLOCK') {
+        dispatch(fetchComplianceViolations({ force: true }));
+      }
       showToast('error', err.message || 'Failed to update subtask.');
+    }
+  };
+
+  const handleApproveSubtask = async (subtask) => {
+    const subId = subtask.id || subtask.subtaskId;
+    try {
+      await dispatch(updateSubtask({ id: subId, data: { status: 'Completed' } })).unwrap();
+      showToast('success', `Subtask "${subtask.title}" approved.`);
+    } catch (err) {
+      if (err?.code === 'COMPLIANCE_BLOCK') {
+        dispatch(fetchComplianceViolations({ force: true }));
+      }
+      showToast('error', err.message || 'Failed to approve subtask.');
+    }
+  };
+
+  const openSendBackSubtask = (subtask) => {
+    setSendBackSubtask(subtask);
+    setSendBackReason('');
+    setSendBackError('');
+  };
+
+  const handleConfirmSendBackSubtask = async () => {
+    if (!sendBackSubtask) return;
+    const reason = sendBackReason.trim();
+    if (!reason) {
+      setSendBackError('Tell the team member why the subtask is being sent back.');
+      return;
+    }
+    setSendingBack(true);
+    try {
+      await dispatch(updateSubtask({
+        id: sendBackSubtask.id || sendBackSubtask.subtaskId,
+        data: { status: 'Active', reviewComment: reason },
+      })).unwrap();
+      setSendBackSubtask(null);
+      showToast('success', 'Subtask sent back with your feedback.');
+    } catch (err) {
+      setSendBackError(err.message || 'Failed to send the subtask back.');
+    } finally {
+      setSendingBack(false);
     }
   };
 
@@ -362,6 +425,8 @@ export default function TeamLeadTaskDetail() {
               members={allUsers.length > 0 ? allUsers : members}
               readOnly={false}
               currentUserId={user.id}
+              onApproveSubtask={handleApproveSubtask}
+              onSendBackSubtask={openSendBackSubtask}
               onStatusToggle={(subId, markComplete) =>
                 handleToggleSubtask(subId, markComplete)
               }
@@ -519,6 +584,16 @@ export default function TeamLeadTaskDetail() {
           // The new row is already in the evidence slice. Evidence starts Pending; re-read compliance instead of unblocking locally.
           setComplianceReload((n) => n + 1);
         }}
+      />
+
+      <SendBackSubtaskModal
+        subtask={sendBackSubtask}
+        onClose={() => !sendingBack && setSendBackSubtask(null)}
+        onConfirm={handleConfirmSendBackSubtask}
+        sending={sendingBack}
+        error={sendBackError}
+        reason={sendBackReason}
+        onReasonChange={setSendBackReason}
       />
 
       <Toast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast(t => ({ ...t, visible: false }))} />

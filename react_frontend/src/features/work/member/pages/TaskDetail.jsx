@@ -42,7 +42,15 @@ export default function MemberTaskDetail() {
   const task = useSelector(state => selectTaskById(state, taskId));
   const detailStatus = useSelector(state => selectTaskMutation(state, 'getById').status);
   const detailError = useSelector(state => selectTaskMutation(state, 'getById').error);
-  const loading = lists.loading || detailStatus === 'idle' || detailStatus === 'loading';
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const stillInitialLoading = lists.loading || detailStatus === 'idle' || detailStatus === 'loading';
+  useEffect(() => {
+    if (!stillInitialLoading) setHasLoadedOnce(true);
+  }, [stillInitialLoading]);
+  useEffect(() => {
+    setHasLoadedOnce(false);
+  }, [taskId]);
+  const loading = !hasLoadedOnce && stillInitialLoading;
   const error = lists.error;
   const project = useSelector(state => selectProjectById(state, task?.projectId || task?.project?.id)) || task?.project;
   const leadId = (task?.assignedToId && String(task.assignedToId) !== String(user?.id) ? task.assignedToId : null)

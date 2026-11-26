@@ -127,10 +127,13 @@ export default function TeamLeadTasks() {
 
   // Counts for triage tabs
   const counts = useMemo(() => {
+    const hasReviewableWork = (t) =>
+      ['In_Review', 'Pending_TL_Review'].includes(t.status) ||
+      (t.subtasks || []).some((st) => ['In_Review', 'Pending_TL_Review'].includes(st.status));
     return {
       all: taskRows.length,
       compliance_blocked: taskRows.filter((t) => t.complianceBlocked).length,
-      review: taskRows.filter((t) => ['In_Review', 'Pending_TL_Review'].includes(t.status)).length,
+      review: taskRows.filter(hasReviewableWork).length,
       overdue: taskRows.filter((t) => t.isOverdue).length,
       active: taskRows.filter((t) => ['Active', 'In_Progress'].includes(t.status)).length,
       completed: taskRows.filter((t) => t.status === 'Completed').length,
@@ -142,7 +145,13 @@ export default function TeamLeadTasks() {
     return taskRows.filter((task) => {
       // 1. Triage Tab filter
       if (activeFilter === 'compliance_blocked' && !task.complianceBlocked) return false;
-      if (activeFilter === 'review' && !['In_Review', 'Pending_TL_Review'].includes(task.status)) return false;
+      if (
+        activeFilter === 'review' &&
+        !['In_Review', 'Pending_TL_Review'].includes(task.status) &&
+        !(task.subtasks || []).some((st) => ['In_Review', 'Pending_TL_Review'].includes(st.status))
+      ) {
+        return false;
+      }
       if (activeFilter === 'overdue' && !task.isOverdue) return false;
       if (activeFilter === 'active' && !['Active', 'In_Progress'].includes(task.status)) return false;
       if (activeFilter === 'completed' && task.status !== 'Completed') return false;

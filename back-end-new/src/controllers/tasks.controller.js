@@ -17,7 +17,7 @@ import {
   getBranchScopeId,
 } from '../utils/tenantScope.js';
 import { createSystemAuditLog, createProcessAuditLog, createComplianceAuditLog, AUDIT_ACTIONS } from '../utils/audit.js';
-import { evaluateTaskTransition, recordViolationOnce } from '../services/compliance.service.js';
+import { evaluateSubtaskSubmission, evaluateTaskTransition, recordViolationOnce } from '../services/compliance.service.js';
 import { assertCanManageProject } from './projects.controller.js';
 
 
@@ -245,6 +245,61 @@ function withSubtaskProgress(task) {
   const total = task.subtasks.length;
   const completed = task.subtasks.filter((st) => st.status === 'Completed').length;
   return { ...task, subtaskProgress: { completed, total } };
+}
+
+async function respondWithComplianceBlock({ req, res, taskId, taskRecord, targetStatus, failedRules }) {
+  for (const rule of failedRules) {
+    await recordViolationOnce(prisma, {
+      companyId: req.user.companyId,
+      ruleId: rule.id,
+      entityType: 'Task',
+      entityId: taskId,
+      severity: rule.severity || 'Medium',
+    });
+
+    const existingEscalation = await prisma.escalation.findFirst({
+      where: {
+        taskId,
+        companyId: req.user.companyId,
+        status: 'Open',
+        blockerType: 'Compliance Blocker'
+      }
+    });
+
+    if (!existingEscalation) {
+      try {
+        await prisma.escalation.create({
+          data: {
+            companyId: req.user.companyId,
+            taskId,
+            projectId: taskRecord.projectId || null,
+            reportedById: req.user.id,
+            title: `Compliance Blocker: ${taskRecord.title} (${rule.name})`,
+            description: `Task status transition to "${targetStatus}" was blocked by compliance rule "${rule.name}". Approved compliance evidence is required.`,
+            blockerType: 'Compliance Blocker',
+            priority: ['Critical', 'High'].includes(rule.severity) ? 'Critical' : 'High',
+            status: 'Open'
+          }
+        });
+      } catch (escErr) {
+        console.warn('[Escalation] Notice: Auto-escalation for compliance block:', escErr.message);
+      }
+    }
+  }
+
+  if (taskRecord.createdById && taskRecord.createdById !== req.user.id) {
+    notify(req.user.companyId, taskRecord.createdById, 'Compliance block',
+      `"${taskRecord.title}" could not move to ${targetStatus}: compliance evidence is required.`, 'Compliance');
+  }
+
+  return res.status(403).json({
+    success: false,
+    error: "COMPLIANCE_BLOCK",
+    code: "COMPLIANCE_BLOCK",
+    message: "This transition is blocked by active compliance rules.",
+    violations: failedRules,
+    details: failedRules
+  });
 }
 
 // Server-side notifications (D-S12). Never blocks or fails the request.
@@ -754,63 +809,13 @@ export async function updateTask(req, res, next) {
       const evaluation = await evaluateTaskTransition(id, existing, updateData);
 
       if (!evaluation.allowed) {
-        // 1. Auto-generate Violations in the Database
-        const violationObjects = [];
-        for (const rule of evaluation.failedRules) {
-          // One active violation per rule and task (also enforced by a unique index).
-          const { violation } = await recordViolationOnce(prisma, {
-            companyId: req.user.companyId,
-            ruleId: rule.id,
-            entityType: 'Task',
-            entityId: id,
-            severity: rule.severity || 'Medium',
-          });
-          violationObjects.push(violation);
-
-          // 2. Cross-Module Escalation: Ensure an active Escalation exists for PM visibility
-          const existingEscalation = await prisma.escalation.findFirst({
-            where: {
-              taskId: id,
-              companyId: req.user.companyId,
-              status: 'Open',
-              blockerType: 'Compliance Blocker'
-            }
-          });
-
-          if (!existingEscalation) {
-            try {
-              await prisma.escalation.create({
-                data: {
-                  companyId: req.user.companyId,
-                  taskId: id,
-                  projectId: existing.projectId || null,
-                  reportedById: req.user.id,
-                  title: `Compliance Blocker: ${existing.title} (${rule.name})`,
-                  description: `Task status transition to "${updateData.status}" was blocked by compliance rule "${rule.name}". Approved compliance evidence is required.`,
-                  blockerType: 'Compliance Blocker',
-                  priority: ['Critical', 'High'].includes(rule.severity) ? 'Critical' : 'High',
-                  status: 'Open'
-                }
-              });
-            } catch (escErr) {
-              console.warn('[Escalation] Notice: Auto-escalation for compliance block:', escErr.message);
-            }
-          }
-        }
-
-        if (existing.createdById !== req.user.id) {
-          notify(req.user.companyId, existing.createdById, 'Compliance block',
-            `"${existing.title}" could not move to ${updateData.status}: compliance evidence is required.`, 'Compliance');
-        }
-
-        // 3. Block the transition and return 403 Forbidden to the Frontend
-        return res.status(403).json({
-          success: false,
-          error: "COMPLIANCE_BLOCK",
-          code: "COMPLIANCE_BLOCK",
-          message: "This transition is blocked by active compliance rules.",
-          violations: evaluation.failedRules,
-          details: evaluation.failedRules
+        return respondWithComplianceBlock({
+          req,
+          res,
+          taskId: id,
+          taskRecord: existing,
+          targetStatus: updateData.status,
+          failedRules: evaluation.failedRules,
         });
       }
     }
@@ -1290,10 +1295,56 @@ export async function updateSubtask(req, res, next) {
       updateData.reviewComment = reason;
     }
 
+    let parentTaskForReview = null;
+    if (updateData.status && updateData.status !== existing.status) {
+      parentTaskForReview = await prisma.task.findUnique({
+        where: { id: existing.taskId },
+        include: { project: { include: { team: true } } },
+      });
+
+      if (parentTaskForReview) {
+        if (updateData.status === 'In_Review') {
+          const submissionCheck = await evaluateSubtaskSubmission(existing.taskId, parentTaskForReview);
+          if (!submissionCheck.allowed) {
+            return respondWithComplianceBlock({
+              req,
+              res,
+              taskId: existing.taskId,
+              taskRecord: parentTaskForReview,
+              targetStatus: 'In_Review',
+              failedRules: submissionCheck.failedRules,
+            });
+          }
+        } else if (updateData.status === 'Completed') {
+          const completionCheck = await evaluateTaskTransition(existing.taskId, parentTaskForReview, { status: 'Completed' });
+          if (!completionCheck.allowed) {
+            return respondWithComplianceBlock({
+              req,
+              res,
+              taskId: existing.taskId,
+              taskRecord: parentTaskForReview,
+              targetStatus: 'Completed',
+              failedRules: completionCheck.failedRules,
+            });
+          }
+        }
+      }
+    }
+
     const updated = await prisma.subtask.update({
       where: { id },
       data: updateData,
     });
+
+    if (updateData.status === 'In_Review' && existing.status !== 'In_Review' && parentTaskForReview?.assignedToId && parentTaskForReview.assignedToId !== req.user.id) {
+      notify(
+        req.user.companyId,
+        parentTaskForReview.assignedToId,
+        'Subtask submitted for review',
+        `"${updated.title}" under "${parentTaskForReview.title}" was submitted for your review.`,
+        'Task'
+      );
+    }
 
     if (existing.assignedToId && existing.assignedToId !== req.user.id && updateData.status && updateData.status !== existing.status) {
       if (updateData.status === 'Completed') {

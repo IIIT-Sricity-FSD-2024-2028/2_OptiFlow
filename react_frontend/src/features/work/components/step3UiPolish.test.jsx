@@ -8,6 +8,8 @@ import { StatusBadge } from './StatusBadge';
 import { TaskTable } from './TaskTable';
 import { Toast } from '../../../shared/components/Toast';
 import TeamLeadTasks from '../team-lead/pages/Tasks';
+import TeamLeadDashboard from '../team-lead/pages/Dashboard';
+import TeamLeadTaskDetail from '../team-lead/pages/TaskDetail';
 import PmDashboard from '../pm/pages/Dashboard';
 import MemberTasks from '../member/pages/Tasks';
 import * as tasksApi from '../../../services/api/tasks';
@@ -17,6 +19,7 @@ import * as complianceApi from '../../../services/api/compliance';
 import * as evidenceApi from '../../../services/api/evidence';
 import * as teamsApi from '../../../services/api/teams';
 import * as subtasksApi from '../../../services/api/subtasks';
+import * as usersApi from '../../../services/api/users';
 
 vi.mock('../../../services/api/tasks');
 vi.mock('../../../services/api/projects');
@@ -25,6 +28,7 @@ vi.mock('../../../services/api/compliance');
 vi.mock('../../../services/api/evidence');
 vi.mock('../../../services/api/teams');
 vi.mock('../../../services/api/subtasks');
+vi.mock('../../../services/api/users');
 vi.mock('../../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u-1', fullName: 'Test User', role: 'team_lead' } }),
 }));
@@ -165,5 +169,56 @@ describe('Step 3 UI & Workflow Fixes', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Report Blocker' }));
     expect(await screen.findByText('Report Blocker / Escalation')).toBeInTheDocument();
+  });
+
+  it('TL Dashboard focuses Subtasks tab when member subtasks are In_Review and shows Approve/Send Back on TL TaskDetail', async () => {
+    const parentTask = {
+      id: 't-oauth',
+      title: 'Implement OAuth Flow',
+      status: 'Active',
+      projectId: 'p1',
+      subtasks: [
+        { id: 'st-1', taskId: 't-oauth', title: 'Build Callback', status: 'In_Review', assignedToId: 'u-mem' },
+      ],
+    };
+    projectsApi.list.mockResolvedValue([{ id: 'p1', name: 'Audit Test Project', status: 'Active' }]);
+    projectsApi.get.mockResolvedValue({ id: 'p1', name: 'Audit Test Project', team: { teamMembers: [] } });
+    tasksApi.list.mockResolvedValue([parentTask]);
+    tasksApi.get.mockResolvedValue(parentTask);
+    escalationsApi.list.mockResolvedValue([]);
+    complianceApi.getViolations.mockResolvedValue([]);
+    complianceApi.getBindings.mockResolvedValue([]);
+    evidenceApi.getEvidenceList.mockResolvedValue([]);
+    usersApi.list.mockResolvedValue([]);
+    subtasksApi.update.mockResolvedValue({ id: 'st-1', taskId: 't-oauth', title: 'Build Callback', status: 'Completed' });
+
+    const { unmount } = render(
+      <Provider store={makeStore()}>
+        <MemoryRouter>
+          <TeamLeadDashboard />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    expect(await screen.findByText('Build Callback')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send Back' })).toBeInTheDocument();
+    unmount();
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter initialEntries={['/tl/tasks/t-oauth']}>
+          <Routes>
+            <Route path="/tl/tasks/:id" element={<TeamLeadTaskDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </Provider>
+    );
+
+    expect(await screen.findByText('Build Callback')).toBeInTheDocument();
+    const approveBtn = await screen.findByRole('button', { name: 'Approve' });
+    await user.click(approveBtn);
+    expect(subtasksApi.update).toHaveBeenCalledWith('st-1', { status: 'Completed' }, expect.anything());
   });
 });
