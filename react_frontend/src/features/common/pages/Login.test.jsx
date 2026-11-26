@@ -29,7 +29,7 @@ describe("Login", () => {
     mockPlatformLogin.mockResolvedValue({});
   });
 
-  it("signs in a workspace user in Organization User mode and switches cleanly to Platform Admin mode", async () => {
+  it("signs in a workspace user and switches cleanly to Platform Admin mode", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -37,10 +37,10 @@ describe("Login", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Sign in to your account")).toBeInTheDocument();
-    expect(screen.getByText("Sign in with Organization SSO")).toBeInTheDocument();
+    expect(screen.getByText("Sign in to OfficeSync")).toBeInTheDocument();
+    expect(screen.getByText("Sign in with SSO")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Work Email"), "pm@acme.com");
+    await user.type(screen.getByLabelText("Email"), "pm@acme.com");
     await user.type(screen.getByLabelText("Password"), "password123");
     await user.click(screen.getByRole("button", { name: "Sign In" }));
 
@@ -50,12 +50,12 @@ describe("Login", () => {
     expect(mockPlatformLogin).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("tab", { name: /Platform Admin/i }));
-    expect(screen.getByText("Platform administrator sign in")).toBeInTheDocument();
-    expect(screen.queryByText("Sign in with Organization SSO")).not.toBeInTheDocument();
+    expect(screen.getByText("Platform admin sign in")).toBeInTheDocument();
+    expect(screen.queryByText("Sign in with SSO")).not.toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText("Work Email"));
-    await user.type(screen.getByLabelText("Work Email"), "root@optiflow.io");
-    await user.click(screen.getByRole("button", { name: "Sign In" }));
+    await user.clear(screen.getByLabelText("Admin Email"));
+    await user.type(screen.getByLabelText("Admin Email"), "root@optiflow.io");
+    await user.click(screen.getByRole("button", { name: "Sign in as Admin" }));
 
     await waitFor(() =>
       expect(mockPlatformLogin).toHaveBeenCalledWith({

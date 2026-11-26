@@ -225,7 +225,7 @@ export default function PmTaskDetail() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500">
-              Team Lead controls subtask reviews; Project Manager reviews and signs off the parent task as a whole.
+              Subtasks are reviewed by the Team Lead. The PM reviews and approves the overall task.
             </p>
           </div>
 
@@ -322,10 +322,10 @@ export default function PmTaskDetail() {
               <div>
                 <div className="flex items-center gap-2">
                   <Layers size={16} className="text-blue-600" />
-                  <h2 className="text-sm font-bold text-slate-900">Subtasks Rollup</h2>
+                  <h2 className="text-sm font-bold text-slate-900">Subtask Progress</h2>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Reviewed by Team Lead before whole-task submission
+                  Reviewed by the Team Lead before task submission
                 </p>
               </div>
               <div className="flex items-center gap-3">

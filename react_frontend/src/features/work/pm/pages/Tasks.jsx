@@ -318,9 +318,9 @@ export default function PmTasks() {
       {/* Header with Title and Professional Action Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Task Command Center</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tasks</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Assign tasks to Team Leads, track subtask completion rollups, and approve whole-task deliverables.
+            Assign tasks to Team Leads, track subtask progress, and review finished work.
           </p>
         </div>
         <button
