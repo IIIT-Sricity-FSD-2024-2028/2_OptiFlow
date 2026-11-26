@@ -394,13 +394,13 @@ export default function PmTasks() {
         <button
           type="button"
           onClick={() => handleTabChange('in_review')}
-          className="text-left rounded-xl border border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50/80 transition-colors px-4 py-3.5 shadow-2xs flex items-center justify-between cursor-pointer"
+          className="text-left rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-50 transition-colors px-4 py-3.5 shadow-2xs flex items-center justify-between cursor-pointer"
         >
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">Ready for PM Review</p>
-            <p className="text-xl font-bold text-indigo-950 mt-0.5">{counts.in_review}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-700">Ready for PM Review</p>
+            <p className="text-xl font-bold text-[#0B1F4D] mt-0.5">{counts.in_review}</p>
           </div>
-          <span className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+          <span className="w-9 h-9 rounded-lg bg-blue-100 text-[#204991] flex items-center justify-center">
             <ListFilter size={18} />
           </span>
         </button>

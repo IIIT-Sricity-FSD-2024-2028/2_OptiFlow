@@ -58,125 +58,106 @@ export default function Login() {
   };
 
   return (
-    <div
-      className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
-        platformMode
-          ? "bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-slate-100"
-          : "bg-gradient-to-br from-slate-50 via-blue-50/60 to-indigo-50/70 text-slate-900"
-      }`}
-    >
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans text-[#0F172A] antialiased">
       {/* Top Bar */}
       <header className="w-full max-w-6xl mx-auto flex justify-between items-center px-6 sm:px-8 py-5">
-        <Link to="/" className="flex items-center gap-2.5 group">
-          <span
-            className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-xs transition-colors ${
-              platformMode
-                ? "bg-emerald-500 text-slate-950"
-                : "bg-indigo-600 text-white"
-            }`}
-          >
-            O
-          </span>
-          <span className="text-lg font-bold tracking-tight">OfficeSync</span>
+        <Link to="/" className="inline-flex items-center">
+          <img
+            src="/assets/images/logo.svg"
+            alt="OfficeSync"
+            className="h-6 w-auto"
+          />
         </Link>
-        <nav className="flex items-center gap-6 text-sm font-medium">
-          <Link
-            to="/"
-            className={`transition-colors ${
-              platformMode ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-indigo-600"
-            }`}
-          >
+        <nav className="flex items-center gap-6 text-xs sm:text-sm font-medium text-[#475569]">
+          <Link to="/" className="hover:text-[#0B1F4D] transition-colors">
             Home
           </Link>
-          <Link
-            to="/contact"
-            className={`transition-colors ${
-              platformMode ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-indigo-600"
-            }`}
-          >
+          <Link to="/contact" className="hover:text-[#0B1F4D] transition-colors">
             Contact
           </Link>
         </nav>
       </header>
 
       {/* Main Split Card */}
-      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-6">
-        <div
-          className={`w-full max-w-4xl rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 transition-all duration-300 ${
-            platformMode
-              ? "bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black/40"
-              : "bg-white border border-slate-200/80 shadow-xl shadow-slate-900/5"
-          }`}
-        >
-          {/* Left Context Brand Panel */}
-          <div
-            className={`md:col-span-5 p-8 flex flex-col justify-between transition-colors duration-300 ${
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-4">
+        <div className="w-full max-w-[860px] bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 shadow-[0_4px_24px_rgba(11,31,77,0.06)]">
+          {/* Left Brand Panel */}
+          <aside
+            className={`md:col-span-5 p-8 flex flex-col justify-between text-white transition-colors duration-200 select-none ${
               platformMode
-                ? "bg-gradient-to-br from-slate-800 via-slate-900 to-emerald-950/60 text-white border-b md:border-b-0 md:border-r border-slate-700/70"
-                : "bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 text-white"
+                ? "bg-[#0F172A] border-b md:border-b-0 md:border-r border-[#1E293B]"
+                : "bg-[#0B1F4D] border-b md:border-b-0 md:border-r border-[#162F72]"
             }`}
           >
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase bg-white/15 backdrop-blur-xs text-white/95">
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <img
+                  src="/assets/images/logo.svg"
+                  alt="OfficeSync"
+                  className="h-6 w-auto brightness-0 invert"
+                />
+              </div>
+
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide uppercase ${
+                  platformMode
+                    ? "bg-[#1E293B] text-blue-200 border border-[#334155]"
+                    : "bg-[#162F72] text-blue-100 border border-[#204991]"
+                }`}
+              >
                 {platformMode ? (
                   <>
-                    <ShieldCheck size={13} className="text-emerald-300" />
+                    <ShieldCheck size={13} className="text-blue-300" />
                     <span>Platform Control Plane</span>
                   </>
                 ) : (
                   <>
                     <Building2 size={13} className="text-blue-200" />
-                    <span>Workspace Portal</span>
+                    <span>Organization Workspace</span>
                   </>
                 )}
               </div>
 
-              <h2 className="text-2xl font-bold leading-snug tracking-tight">
-                {platformMode
-                  ? "Multi-Tenant Platform Governance"
-                  : "Aligned Delivery & Compliance Governance"}
-              </h2>
-
-              <p className="text-xs leading-relaxed text-white/80">
-                {platformMode
-                  ? "Sign in with elevated platform credentials to provision tenants, audit company subscriptions, and inspect system telemetry."
-                  : "One workspace for Project Managers, Team Leads, Team Members, and Compliance Officers to ship audited deliverables."}
-              </p>
+              <div className="space-y-2">
+                <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-white leading-snug">
+                  {platformMode
+                    ? "Platform administration & tenant governance."
+                    : "Operational tracking & verified compliance."}
+                </h2>
+                <p className="text-xs leading-relaxed text-blue-100/80">
+                  {platformMode
+                    ? "Sign in with platform administrator credentials to manage tenant provisioning, subscriptions, and system audit logs."
+                    : "Unify project execution, Team Lead reviews, and compliance attestations in one workspace."}
+                </p>
+              </div>
             </div>
 
-            <div className="mt-8 space-y-2.5 text-xs text-white/90">
+            <div className="mt-8 pt-6 border-t border-white/10 space-y-2.5 text-xs text-blue-100/90">
               {(platformMode
                 ? [
-                    "Dedicated platform administrator authentication",
-                    "Tenant subscription & quota provisioning",
+                    "Dedicated platform admin session scope",
+                    "Tenant quota & plan governance",
                     "Audited support access controls",
                   ]
                 : [
-                    "Subtask execution & evidence verification",
-                    "Two-tier Team Lead & PM signoff workflow",
-                    "Automated policy & SLA compliance tracking",
+                    "Subtask delivery & evidence tracking",
+                    "Two-tier Team Lead & PM signoff",
+                    "Automated policy & SLA enforcement",
                   ]
               ).map((item) => (
                 <div key={item} className="flex items-start gap-2">
-                  <CheckCircle2
-                    size={14}
-                    className={`shrink-0 mt-0.5 ${platformMode ? "text-emerald-300" : "text-blue-200"}`}
-                  />
+                  <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-blue-300" />
                   <span>{item}</span>
                 </div>
               ))}
             </div>
-          </div>
+          </aside>
 
           {/* Right Form Panel */}
-          <div className="md:col-span-7 p-7 sm:p-9 flex flex-col justify-center">
+          <div className="md:col-span-7 p-7 sm:p-9 flex flex-col justify-center bg-white">
             {/* Portal Mode Switcher */}
             <div
-              className={`grid grid-cols-2 p-1 rounded-xl mb-6 border ${
-                platformMode
-                  ? "bg-slate-800/80 border-slate-700"
-                  : "bg-slate-100 border-slate-200/80"
-              }`}
+              className="grid grid-cols-2 p-1 rounded-lg bg-[#F1F5F9] border border-[#E2E8F0] mb-6"
               role="tablist"
               aria-label="Sign in portal mode"
             >
@@ -185,10 +166,10 @@ export default function Login() {
                 role="tab"
                 aria-selected={!platformMode}
                 onClick={() => switchMode(false)}
-                className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                   !platformMode
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-white text-[#0B1F4D] shadow-xs"
+                    : "text-[#64748B] hover:text-[#0F172A]"
                 }`}
               >
                 <Building2 size={14} />
@@ -199,10 +180,10 @@ export default function Login() {
                 role="tab"
                 aria-selected={platformMode}
                 onClick={() => switchMode(true)}
-                className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                   platformMode
-                    ? "bg-emerald-500 text-slate-950 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-[#0F172A] text-white shadow-xs"
+                    : "text-[#64748B] hover:text-[#0F172A]"
                 }`}
               >
                 <ShieldCheck size={14} />
@@ -210,27 +191,19 @@ export default function Login() {
               </button>
             </div>
 
-            <div className="mb-6">
-              <h1
-                className={`text-xl font-bold tracking-tight ${
-                  platformMode ? "text-white" : "text-slate-900"
-                }`}
-              >
+            <div className="mb-5">
+              <h1 className="text-xl font-bold tracking-tight text-[#0F172A]">
                 {platformMode ? "Platform administrator sign in" : "Sign in to your account"}
               </h1>
-              <p
-                className={`text-xs mt-1 ${
-                  platformMode ? "text-slate-400" : "text-slate-500"
-                }`}
-              >
+              <p className="text-xs text-[#64748B] mt-1">
                 {platformMode
-                  ? "Enter your administrator credentials to access the platform console."
-                  : "Enter your organization email and password to continue."}
+                  ? "Enter your administrator credentials to open the platform console."
+                  : "Enter your work email and password to access your workspace."}
               </p>
             </div>
 
             {notice && !error && (
-              <div className="mb-5 p-3 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-medium flex items-center gap-2">
+              <div className="mb-4 p-3 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-medium flex items-center gap-2">
                 <AlertCircle size={15} className="text-amber-600 shrink-0" />
                 <span>{notice}</span>
               </div>
@@ -239,13 +212,9 @@ export default function Login() {
             {error && (
               <div
                 role="alert"
-                className={`mb-5 p-3 rounded-xl text-xs font-medium flex items-center gap-2 border ${
-                  platformMode
-                    ? "bg-rose-950/70 text-rose-200 border-rose-800/80"
-                    : "bg-rose-50 text-rose-700 border-rose-200"
-                }`}
+                className="mb-4 p-3 bg-[#FEF2F2] text-[#991B1B] border border-[#FCA5A5] rounded-lg text-xs font-medium flex items-center gap-2"
               >
-                <AlertCircle size={15} className="text-rose-500 shrink-0" />
+                <AlertCircle size={15} className="text-[#EF4444] shrink-0" />
                 <span>{error}</span>
               </div>
             )}
@@ -255,18 +224,14 @@ export default function Login() {
               <div>
                 <label
                   htmlFor="login-email"
-                  className={`block text-xs font-semibold mb-1.5 ${
-                    platformMode ? "text-slate-200" : "text-slate-700"
-                  }`}
+                  className="block text-xs font-semibold text-[#334155] mb-1.5"
                 >
                   Work Email
                 </label>
                 <div className="relative">
                   <Mail
                     size={15}
-                    className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${
-                      platformMode ? "text-slate-400" : "text-slate-400"
-                    }`}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]"
                   />
                   <input
                     id="login-email"
@@ -275,11 +240,7 @@ export default function Login() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`w-full h-11 pl-10 pr-3.5 rounded-xl text-sm border transition-all focus:outline-none focus:ring-2 ${
-                      platformMode
-                        ? "bg-slate-800/90 border-slate-700 text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-emerald-500/25"
-                        : "bg-slate-50/70 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500/20"
-                    }`}
+                    className="w-full h-10 pl-9 pr-3 bg-white border border-[#CBD5E1] rounded-lg text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#204991] focus:ring-2 focus:ring-[#204991]/15 transition-all"
                   />
                 </div>
               </div>
@@ -288,16 +249,14 @@ export default function Login() {
               <div>
                 <label
                   htmlFor="login-password"
-                  className={`block text-xs font-semibold mb-1.5 ${
-                    platformMode ? "text-slate-200" : "text-slate-700"
-                  }`}
+                  className="block text-xs font-semibold text-[#334155] mb-1.5"
                 >
                   Password
                 </label>
                 <div className="relative">
                   <Lock
                     size={15}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]"
                   />
                   <input
                     id="login-password"
@@ -306,21 +265,13 @@ export default function Login() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className={`w-full h-11 pl-10 pr-10 rounded-xl text-sm border transition-all focus:outline-none focus:ring-2 ${
-                      platformMode
-                        ? "bg-slate-800/90 border-slate-700 text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-emerald-500/25"
-                        : "bg-slate-50/70 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500/20"
-                    }`}
+                    className="w-full h-10 pl-9 pr-10 bg-white border border-[#CBD5E1] rounded-lg text-sm text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#204991] focus:ring-2 focus:ring-[#204991]/15 transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors cursor-pointer ${
-                      platformMode
-                        ? "text-slate-400 hover:text-slate-200"
-                        : "text-slate-400 hover:text-slate-700"
-                    }`}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#64748B] hover:text-[#0F172A] rounded transition-colors cursor-pointer"
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -330,16 +281,16 @@ export default function Login() {
               {/* Keep me signed in + Forgot */}
               {!platformMode && (
                 <div className="flex items-center justify-between text-xs pt-0.5">
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+                  <label className="flex items-center gap-2 cursor-pointer text-[#475569]">
                     <input
                       type="checkbox"
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      className="rounded border-[#CBD5E1] text-[#204991] focus:ring-[#204991]"
                     />
                     <span>Keep me signed in</span>
                   </label>
                   <Link
                     to={PATHS.PUBLIC.FORGOT_PASSWORD}
-                    className="text-indigo-600 font-semibold hover:underline"
+                    className="text-[#204991] font-semibold hover:text-[#0B1F4D] hover:underline"
                   >
                     Forgot password?
                   </Link>
@@ -350,31 +301,31 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={submitting}
-                className={`w-full h-11 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer disabled:opacity-60 ${
+                className={`w-full h-10 rounded-lg text-sm font-semibold text-white inline-flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer disabled:opacity-60 ${
                   platformMode
-                    ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950"
-                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                    ? "bg-[#0F172A] hover:bg-[#1E293B]"
+                    : "bg-[#0B1F4D] hover:bg-[#162F72]"
                 }`}
               >
                 {submitting ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" />
+                    <Loader2 size={15} className="animate-spin" />
                     <span>Signing in…</span>
                   </>
                 ) : (
                   <>
                     <span>Sign In</span>
-                    <ArrowRight size={16} />
+                    <ArrowRight size={15} />
                   </>
                 )}
               </button>
 
               {!platformMode && (
                 <>
-                  <div className="relative flex items-center justify-center my-4 text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-                    <div className="w-full h-px bg-slate-200"></div>
+                  <div className="relative flex items-center justify-center my-4 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">
+                    <div className="w-full h-px bg-[#E2E8F0]"></div>
                     <span className="bg-white px-3 shrink-0">OR</span>
-                    <div className="w-full h-px bg-slate-200"></div>
+                    <div className="w-full h-px bg-[#E2E8F0]"></div>
                   </div>
 
                   <button
@@ -384,7 +335,7 @@ export default function Login() {
                         "Enterprise SSO (SAML/Okta) integration is coming soon! Contact Sales to upgrade your plan.",
                       )
                     }
-                    className="w-full h-10 bg-white text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex justify-center items-center gap-2 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer"
+                    className="w-full h-10 bg-white text-[#0F172A] border border-[#CBD5E1] rounded-lg text-xs font-semibold flex justify-center items-center gap-2 hover:bg-[#F8FAFC] transition-colors cursor-pointer"
                   >
                     Sign in with Organization SSO
                   </button>
@@ -392,16 +343,12 @@ export default function Login() {
               )}
             </form>
 
-            <div
-              className={`text-center mt-5 text-xs ${
-                platformMode ? "text-slate-400" : "text-slate-500"
-              }`}
-            >
+            <div className="text-center mt-5 text-xs text-[#64748B]">
               {platformMode ? (
                 <button
                   type="button"
                   onClick={() => switchMode(false)}
-                  className="text-emerald-400 font-semibold hover:underline cursor-pointer"
+                  className="text-[#204991] font-semibold hover:text-[#0B1F4D] hover:underline cursor-pointer"
                 >
                   Back to company sign in
                 </button>
@@ -410,7 +357,7 @@ export default function Login() {
                   New organization?{" "}
                   <Link
                     to={PATHS.PUBLIC.REGISTER}
-                    className="text-indigo-600 font-semibold hover:underline"
+                    className="text-[#204991] font-semibold hover:text-[#0B1F4D] hover:underline"
                   >
                     Register your company
                   </Link>
@@ -422,17 +369,13 @@ export default function Login() {
       </main>
 
       {/* Footer */}
-      <footer
-        className={`w-full max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2 px-6 sm:px-8 py-5 text-xs ${
-          platformMode ? "text-slate-500" : "text-slate-500"
-        }`}
-      >
+      <footer className="w-full max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2 px-6 sm:px-8 py-5 text-xs text-[#94A3B8]">
         <div>© 2026 OfficeSync Inc. All rights reserved.</div>
         <div className="space-x-4">
-          <Link to="#" className="hover:underline">
+          <Link to="#" className="hover:text-[#64748B]">
             Privacy Policy
           </Link>
-          <Link to="#" className="hover:underline">
+          <Link to="#" className="hover:text-[#64748B]">
             Terms of Service
           </Link>
         </div>
