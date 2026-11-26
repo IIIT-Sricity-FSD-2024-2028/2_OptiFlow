@@ -53,8 +53,16 @@ function notify(companyId, userId, title, message, type = 'Review') {
 /** Include shared by list, get, create, update and upload so every response has the same shape. */
 const EVIDENCE_LIST_INCLUDE = {
   user: { select: { id: true, fullName: true, email: true } },
-  task: { select: { id: true, title: true } },
-  violation: { include: { rule: true } },
+  task: { select: { id: true, title: true, projectId: true } },
+  violation: {
+    include: {
+      rule: {
+        include: {
+          category: { select: { id: true, name: true, ownerId: true } },
+        },
+      },
+    },
+  },
   reviewedBy: { select: { id: true, fullName: true, email: true } },
 };
 
