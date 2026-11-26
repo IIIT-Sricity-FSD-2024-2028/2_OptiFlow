@@ -150,7 +150,7 @@ export default function SchedulingPolicy() {
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">Scheduling & Capacity Policy</h1>
             <p className="text-sm text-slate-500">
-              Configure working hours, review buffers, capacity enforcement, and company holidays used across all tasks.
+              Set standard work hours, days kept clear for final review, strict vs. advisory deadline checks, and company holidays.
             </p>
           </div>
         </div>
@@ -160,7 +160,7 @@ export default function SchedulingPolicy() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <FormField
             label="Work Hours Per Day"
-            hint="Used to convert calendar days into available person-hours (1–24h)"
+            hint="Used to calculate how many hours of work fit before a deadline (1–24h)"
           >
             <div className="relative">
               <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -177,8 +177,8 @@ export default function SchedulingPolicy() {
           </FormField>
 
           <FormField
-            label="Default Pre-Deadline Review Buffer (Working Days)"
-            hint="Days reserved before task due date for Team Lead, Compliance, and PM review"
+            label="Days Kept for Final Review (Before Deadline)"
+            hint="Working days kept clear before a task due date so Team Lead, Compliance, and PM reviews finish on time"
           >
             <Input
               type="number"

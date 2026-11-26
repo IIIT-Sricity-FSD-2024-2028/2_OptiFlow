@@ -200,8 +200,11 @@ export function SubtaskList({
                         </span>
                       )}
                       {isCriticalPath && (
-                        <span className="inline-flex items-center gap-0.5 font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
-                          <GitBranch className="w-2.5 h-2.5" /> Critical path
+                        <span
+                          className="inline-flex items-center gap-0.5 font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded"
+                          title="Part of the longest step-by-step chain of dependent subtasks"
+                        >
+                          <GitBranch className="w-2.5 h-2.5" /> Key chain
                         </span>
                       )}
                       {subtask.startDate && (subtask.dueDate || subtask.deadline) ? (

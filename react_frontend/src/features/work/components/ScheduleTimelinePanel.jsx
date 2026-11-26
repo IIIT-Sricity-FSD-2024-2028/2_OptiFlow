@@ -42,10 +42,10 @@ export function ScheduleTimelinePanel({
         <div>
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-blue-600" />
-            <span>Schedule, Dependencies & Capacity</span>
+            <span>Task Timeline &amp; Workload</span>
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Converts calendar days via company work hours ({scheduleAnalysis.workHoursPerDay}h/day) minus review buffer.
+            Based on {scheduleAnalysis.workHoursPerDay}h workdays, company holidays, and time kept for final review.
           </p>
         </div>
         {canAutoSchedule && (
@@ -55,6 +55,7 @@ export function ScheduleTimelinePanel({
             size="sm"
             disabled={autoScheduling}
             onClick={onAutoSchedule}
+            title="Automatically space out subtask start and due dates while respecting dependencies"
           >
             <Sparkles className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
             {autoScheduling ? 'Scheduling...' : 'Auto-Schedule Dates'}
@@ -64,30 +65,46 @@ export function ScheduleTimelinePanel({
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5">
-          <p className="text-[11px] font-medium text-slate-500">Window Capacity</p>
-          <p className="font-bold text-slate-900 mt-0.5">
+        <div
+          className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5"
+          title="Working hours 1 team member has before the due date (excludes weekends & holidays)"
+        >
+          <p className="text-[11px] font-semibold text-slate-700">Available Hours</p>
+          <p className="font-bold text-slate-900 mt-0.5 text-sm">
             {availableWindowHours != null ? `${availableWindowHours}h` : 'No due date'}
             {workingDaysRemaining != null && (
-              <span className="font-normal text-slate-500"> ({workingDaysRemaining}d)</span>
+              <span className="font-normal text-xs text-slate-500"> ({workingDaysRemaining}d)</span>
             )}
           </p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Per person before due date</p>
         </div>
-        <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5">
-          <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1">
-            <GitBranch className="w-3 h-3 text-slate-400" /> Critical Path
+        <div
+          className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5"
+          title="Longest chain of subtasks waiting on each other one after another"
+        >
+          <p className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+            <GitBranch className="w-3 h-3 text-slate-400" /> Step-by-Step Chain
           </p>
-          <p className="font-bold text-slate-900 mt-0.5">{criticalPathHours ?? 0}h</p>
+          <p className="font-bold text-slate-900 mt-0.5 text-sm">{criticalPathHours ?? 0}h</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Longest back-to-back chain</p>
         </div>
-        <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5">
-          <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1">
-            <Clock className="w-3 h-3 text-slate-400" /> Review Buffer
+        <div
+          className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5"
+          title="Working days kept clear before the deadline so reviews don't run late"
+        >
+          <p className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-slate-400" /> Time Kept for Review
           </p>
-          <p className="font-bold text-slate-900 mt-0.5">{reviewBufferDays ?? 0} work day(s)</p>
+          <p className="font-bold text-slate-900 mt-0.5 text-sm">{reviewBufferDays ?? 0} work day(s)</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Reserved before deadline</p>
         </div>
-        <div className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5">
-          <p className="text-[11px] font-medium text-slate-500">Target Subtask Finish</p>
-          <p className="font-bold text-slate-900 mt-0.5">{latestRecommendedSubtaskDue || '—'}</p>
+        <div
+          className="rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-2.5"
+          title="Recommended date for all subtasks to wrap up so review starts on time"
+        >
+          <p className="text-[11px] font-semibold text-slate-700">Finish Subtasks By</p>
+          <p className="font-bold text-slate-900 mt-0.5 text-sm">{latestRecommendedSubtaskDue || '—'}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Leaves time for sign-off</p>
         </div>
       </div>
 
@@ -122,7 +139,7 @@ export function ScheduleTimelinePanel({
           <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
             <span>Today ({isoDay(anchorStart)})</span>
             {latestRecommendedSubtaskDue && (
-              <span className="text-amber-700">Review Buffer Starts: {latestRecommendedSubtaskDue}</span>
+              <span className="text-amber-700">Review Window Starts: {latestRecommendedSubtaskDue}</span>
             )}
             <span>Task Due ({isoDay(taskDue)})</span>
           </div>
@@ -146,8 +163,11 @@ export function ScheduleTimelinePanel({
                       {st.title}
                     </span>
                     {isCrit && (
-                      <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-blue-100 text-blue-700">
-                        CP
+                      <span
+                        className="shrink-0 text-[10px] font-semibold px-1.5 py-0.2 rounded bg-blue-100 text-blue-700"
+                        title="Part of the longest step-by-step chain of dependent subtasks"
+                      >
+                        Key chain
                       </span>
                     )}
                     {deps.length > 0 && (

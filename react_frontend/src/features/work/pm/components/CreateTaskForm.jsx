@@ -168,8 +168,8 @@ export function CreateTaskForm({
             </FormField>
 
             <FormField
-              label="Review Buffer (Days)"
-              hint={`Company default: ${policy.defaultReviewBufferDays ?? 1}d`}
+              label="Days Kept for Review"
+              hint={`Company default: ${policy.defaultReviewBufferDays ?? 1} work day(s)`}
             >
               <Input
                 type="number"
@@ -196,13 +196,13 @@ export function CreateTaskForm({
               <Clock className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
                 <span className="font-semibold">
-                  Deadline Capacity: {workingDays} working day(s) = {windowHours}h single-person capacity ({policy.workHoursPerDay}h/day).
+                  Available Time: {workingDays} working day(s) = {windowHours}h per person ({policy.workHoursPerDay}h/day).
                 </span>{' '}
                 {windowHours === 0
                   ? 'No working days remain before the selected deadline.'
                   : parallelNeeded > 1
-                  ? `${estHours}h requires at least ${parallelNeeded} team members working in parallel${teamMemberCount > 0 ? ` (project squad has ${teamMemberCount})` : ''}.`
-                  : `Fits comfortably within a single assignee's window before review buffer.`}
+                  ? `${estHours}h requires at least ${parallelNeeded} people working at the same time${teamMemberCount > 0 ? ` (squad has ${teamMemberCount})` : ''}.`
+                  : `Fits comfortably within one person's available hours.`}
               </div>
             </div>
           )}

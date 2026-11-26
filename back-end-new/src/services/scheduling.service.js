@@ -411,7 +411,7 @@ export function evaluateTaskCapacity({
         warnings.push({
           severity: 'error',
           code: 'CRITICAL_PATH_EXCEEDS_DEADLINE',
-          message: `Sequential dependency chain requires ${criticalPathHours}h, exceeding the ${availableWindowHours}h calendar capacity before ${isoDay(taskDue)}.`,
+          message: `Step-by-step dependent subtasks total ${criticalPathHours}h, exceeding the ${availableWindowHours}h available before ${isoDay(taskDue)}. Adding more people won't speed up chained steps.`,
         });
       } else if (
         criticalPathHours > 0 &&
@@ -422,12 +422,12 @@ export function evaluateTaskCapacity({
         warnings.push({
           severity: 'warning',
           code: 'CRITICAL_PATH_EATS_REVIEW_BUFFER',
-          message: `Sequential chain (${criticalPathHours}h) leaves less than the ${reviewBufferDays}-day review buffer before ${isoDay(taskDue)}.`,
+          message: `Step-by-step chain (${criticalPathHours}h) leaves fewer than ${reviewBufferDays} work day(s) for final review before ${isoDay(taskDue)}.`,
         });
       }
     }
 
-    // Check subtasks finishing inside review buffer
+    // Check subtasks finishing inside review window
     if (reviewBufferDays > 0 && latestRecommendedSubtaskDue) {
       const lateSubtasks = activeSubtasks.filter((st) => {
         if (st.status === 'Completed') return false;
@@ -438,7 +438,7 @@ export function evaluateTaskCapacity({
         warnings.push({
           severity: 'warning',
           code: 'REVIEW_BUFFER_AT_RISK',
-          message: `${lateSubtasks.length} subtask(s) finish after ${isoDay(latestRecommendedSubtaskDue)}, eating into the ${reviewBufferDays}-day review buffer before ${isoDay(taskDue)}.`,
+          message: `${lateSubtasks.length} subtask(s) finish after ${isoDay(latestRecommendedSubtaskDue)}, leaving fewer than ${reviewBufferDays} work day(s) for review before ${isoDay(taskDue)}.`,
         });
       }
     }
@@ -610,7 +610,7 @@ export async function validateAndAnalyzeSubtaskProposal({
           warnings.push({
             severity: 'warning',
             code: 'ASSIGNEE_OVERLOADED',
-            message: `Assignee's projected load across all tasks in this window is ${projectedHours}h vs ${memberCap.windowCapacityHours}h capacity.`,
+            message: `Assignee's total workload across all tasks in these dates reaches ${projectedHours}h (above ${memberCap.windowCapacityHours}h available).`,
           });
         }
       }

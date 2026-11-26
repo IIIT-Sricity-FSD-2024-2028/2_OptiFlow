@@ -416,18 +416,18 @@ export function CreateSubtaskModal({
             )}
             {exceedsWindowCapacity && (
               <p className={`rounded-lg border px-3 py-2 font-medium ${strictBlockTriggered ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-                Effort ({inputHours}h) exceeds available working hours ({windowCapacityHours}h at {policy.workHoursPerDay}h/day) in [{effectiveStart} → {form.due}].
+                This subtask needs {inputHours}h, which is more than the {windowCapacityHours}h available ({policy.workHoursPerDay}h/day) between {effectiveStart} and {form.due}.
               </p>
             )}
             {insideReviewBuffer && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 font-medium">
-                Deadline falls inside the pre-deadline review buffer (recommended finish by {latestRecommendedDue}).
+                Deadline leaves too little time for final review — finish by {latestRecommendedDue} to keep the review window safe.
               </p>
             )}
           </div>
         )}
 
-        <FormField label="Assign To" hint="Balanced by cross-task workload and current task allocation">
+        <FormField label="Assign To" hint="Shows each member's current workload across all tasks">
           <Select value={form.assignee} onChange={e => onFormChange(f => ({ ...f, assignee: e.target.value }))}>
             <option value="">— Unassigned —</option>
             <option value={user.id}>{user.fullName || 'Me'} (Team Lead)</option>
@@ -435,8 +435,8 @@ export function CreateSubtaskModal({
           </Select>
           {selectedMemberCap && (
             <p className="mt-1 text-[11px] text-slate-500">
-              Cross-task load: <span className="font-semibold text-slate-700">{selectedMemberCap.windowHours}h</span> booked across {selectedMemberCap.activeSubtasksCount} active subtask(s)
-              {selectedMemberCap.windowCapacityHours != null ? ` (window capacity: ${selectedMemberCap.windowCapacityHours}h)` : ''}.
+              Member workload: <span className="font-semibold text-slate-700">{selectedMemberCap.windowHours}h</span> already booked across {selectedMemberCap.activeSubtasksCount} active subtask(s)
+              {selectedMemberCap.windowCapacityHours != null ? ` (max ${selectedMemberCap.windowCapacityHours}h available)` : ''}.
             </p>
           )}
         </FormField>

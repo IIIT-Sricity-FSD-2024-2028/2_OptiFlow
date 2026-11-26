@@ -435,6 +435,10 @@ describe('Step 3 UI & Workflow Fixes', () => {
         onAutoSchedule={onAutoSchedule}
       />
     );
+    expect(screen.getByText('Available Hours')).toBeInTheDocument();
+    expect(screen.getByText('Step-by-Step Chain')).toBeInTheDocument();
+    expect(screen.getByText('Time Kept for Review')).toBeInTheDocument();
+    expect(screen.getByText('Finish Subtasks By')).toBeInTheDocument();
     expect(screen.getByText(/40h/i)).toBeInTheDocument();
     expect(screen.getByText(/16h/i)).toBeInTheDocument();
     expect(screen.getByText(/1 subtask finishes inside review buffer/i)).toBeInTheDocument();
