@@ -102,16 +102,13 @@ export default function TaskComplianceCard({
         </div>
       </div>
 
-      {/* Rejection Alert Banner if officer rejected previous upload */}
+      {/* Rejection Alert Banner if latest upload was rejected and no replacement uploaded yet */}
       {latestRejectedEvidence && (
         <div className="mt-4 p-3.5 bg-rose-100 border border-rose-300 rounded-xl text-xs text-rose-900 flex items-start gap-2.5">
           <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold">Prior Submission Rejected by Compliance Officer: </span>
-            <span>"{latestRejectedEvidence.rejectionReason || latestRejectedEvidence.notes}"</span>
-            <p className="mt-1 text-[11px] text-rose-700">
-              Please resolve the feedback above and submit revised documentation.
-            </p>
+            <span className="font-bold">Prior submission rejected: </span>
+            <span>Review the Officer Feedback under Deliverables below and upload revised documentation.</span>
           </div>
         </div>
       )}

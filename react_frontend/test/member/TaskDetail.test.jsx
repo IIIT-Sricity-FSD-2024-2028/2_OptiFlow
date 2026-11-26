@@ -82,3 +82,22 @@ it('keeps the subtask open and explains a compliance rejection', async () => {
   await screen.findByText(/Submission blocked: Compliance rule/);
   expect(screen.getByRole('button', { name: 'Confirm Submission' })).toBeEnabled();
 });
+
+it('displays rejected evidence feedback only once on TaskDetail', async () => {
+  renderMember(TaskDetail, {
+    'GET /api/evidence': [
+      {
+        id: 'e-rej',
+        taskId: 't1',
+        userId: 'member',
+        title: 'demo evidence',
+        evidenceType: 'Image',
+        status: 'Rejected',
+        notes: 'pls provide valid image',
+        submittedAt: '2026-11-26T18:11:52.806Z',
+      },
+    ],
+  });
+  await screen.findByText('demo evidence');
+  expect(screen.getAllByText(/pls provide valid image/)).toHaveLength(1);
+});

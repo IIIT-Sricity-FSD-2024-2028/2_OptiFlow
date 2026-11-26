@@ -182,7 +182,12 @@ export default function MemberTaskDetail() {
     return false;
   });
 
-  const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && (e.rejectionReason || e.notes));
+  const hasActiveOrApprovedEvidence = evidenceList.some((e) =>
+    ['Pending', 'Under_Review', 'Approved'].includes(e.status)
+  );
+  const latestRejectedEvidence = hasActiveOrApprovedEvidence
+    ? null
+    : evidenceList.find((e) => e.status === 'Rejected' && (e.rejectionReason || e.notes));
 
   const stages = [
     { label: 'Assigned', done: true },
