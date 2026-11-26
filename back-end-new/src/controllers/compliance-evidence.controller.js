@@ -367,8 +367,9 @@ export async function updateEvidence(req, res, next) {
         }
       }
 
-      // Even if violationId was set, also check the parent task to clear remaining evidence violations,
-      // resolve cross-module Compliance Blocker escalations, and complete In_Review subtasks.
+      // Even if violationId was set, also check the parent task to clear remaining evidence violations
+      // and resolve cross-module Compliance Blocker escalations. Do NOT auto-complete subtasks here:
+      // Team Leader work review and PM final approval must remain separate manual steps.
       if (existing.taskId) {
         // Auto-resolve open/under-review violations for this task that require evidence
         const taskViolations = await prisma.complianceViolation.findMany({
@@ -455,39 +456,37 @@ export async function updateEvidence(req, res, next) {
           console.warn('[Escalation] Notice: Auto-resolving compliance escalation:', escErr.message);
         }
 
-        // Also auto-complete any In_Review subtasks for this task submitted by this user
+        // Keep In_Review subtasks pending Team Leader review; notify the Task's Team Leader so they
+        // know the compliance gate is cleared and can inspect & approve the subtask work.
         try {
-          const inReviewSubtasks = await prisma.subtask.findMany({
-            where: {
-              taskId: existing.taskId,
-              status: 'In_Review',
-              OR: [
-                { assignedToId: existing.userId },
-                { assignedToId: null },
-              ],
-            },
-          });
-          if (inReviewSubtasks.length > 0) {
-            await prisma.subtask.updateMany({
+          const [parentTask, pendingReviewCount] = await Promise.all([
+            prisma.task.findUnique({
+              where: { id: existing.taskId },
+              select: { id: true, title: true, assignedToId: true },
+            }),
+            prisma.subtask.count({
               where: {
-                id: { in: inReviewSubtasks.map((s) => s.id) },
+                taskId: existing.taskId,
+                status: 'In_Review',
+                deletedAt: null,
               },
-              data: {
-                status: 'Completed',
-              },
-            });
-            for (const st of inReviewSubtasks) {
-              notify(
-                req.user.companyId,
-                existing.userId,
-                'Subtask approved',
-                `Your subtask "${st.title}" was approved.`,
-                'Task'
-              );
-            }
+            }),
+          ]);
+          if (
+            pendingReviewCount > 0 &&
+            parentTask?.assignedToId &&
+            parentTask.assignedToId !== req.user.id
+          ) {
+            notify(
+              req.user.companyId,
+              parentTask.assignedToId,
+              'Evidence Approved — Ready for Subtask Review',
+              `Compliance evidence "${existing.title}" for "${parentTask.title}" was approved. Pending subtask work is cleared for your review.`,
+              'Review'
+            );
           }
         } catch (stErr) {
-          console.warn('[Subtask] Notice: Auto-completing subtask for approved evidence:', stErr.message);
+          console.warn('[Subtask] Notice: Notifying Team Lead after evidence approval:', stErr.message);
         }
       }
     }
