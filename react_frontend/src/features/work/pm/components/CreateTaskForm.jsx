@@ -2,8 +2,9 @@
 // Presentational only: the page owns the form state and the API call.
 import { Button } from '../../../../shared/components/Button';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
-import { AlertTriangle, Plus, X } from 'lucide-react';
+import { AlertTriangle, Plus, X, Clock } from 'lucide-react';
 import { todayInput } from '../../components/dateLimits';
+import { availableWorkingHours, countWorkingDays, DEFAULT_POLICY } from '../../utils/scheduling';
 
 export function CreateTaskForm({
   onClose,
@@ -17,7 +18,18 @@ export function CreateTaskForm({
   selectedProject,
   teamLeads,
   projectTeamLeadIds,
+  schedulingPolicy = DEFAULT_POLICY,
 }) {
+  const policy = schedulingPolicy || DEFAULT_POLICY;
+  const startAnchor = selectedProject?.startDate && String(selectedProject.startDate).slice(0, 10) > todayInput()
+    ? String(selectedProject.startDate).slice(0, 10)
+    : todayInput();
+  const workingDays = form.dueDate ? countWorkingDays(startAnchor, form.dueDate, policy) : null;
+  const windowHours = form.dueDate ? availableWorkingHours(startAnchor, form.dueDate, policy) : null;
+  const estHours = form.estimatedHours !== '' && form.estimatedHours != null ? Number(form.estimatedHours) : null;
+  const teamMemberCount = selectedProject?.team?.teamMembers?.length || 0;
+  const parallelNeeded = windowHours > 0 && estHours > windowHours ? Math.ceil(estHours / windowHours) : 1;
+  const exceedsTeamCapacity = Boolean(form.dueDate && estHours > 0 && (windowHours === 0 || (teamMemberCount > 0 && parallelNeeded > teamMemberCount)));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all duration-200 ring-1 ring-slate-900/5">
       {/* Card Header */}
@@ -115,8 +127,8 @@ export function CreateTaskForm({
             </FormField>
           </div>
 
-          {/* Priority, Due Date, Estimated Hours */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Priority, Due Date, Estimated Hours, Review Buffer */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <FormField label="Priority">
               <Select
                 value={form.priority}
@@ -154,7 +166,46 @@ export function CreateTaskForm({
                 onChange={(event) => onFormChange((c) => ({ ...c, estimatedHours: event.target.value }))}
               />
             </FormField>
+
+            <FormField
+              label="Review Buffer (Days)"
+              hint={`Company default: ${policy.defaultReviewBufferDays ?? 1}d`}
+            >
+              <Input
+                type="number"
+                min="0"
+                max="30"
+                step="1"
+                placeholder={String(policy.defaultReviewBufferDays ?? 1)}
+                value={form.reviewBufferDays ?? ''}
+                onChange={(event) => onFormChange((c) => ({ ...c, reviewBufferDays: event.target.value }))}
+              />
+            </FormField>
           </div>
+
+          {form.dueDate && estHours > 0 && (
+            <div
+              className={`rounded-xl border px-3.5 py-2.5 text-xs flex items-start gap-2.5 ${
+                exceedsTeamCapacity
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
+                  : parallelNeeded > 1
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : 'bg-blue-50/70 border-blue-200 text-blue-900'
+              }`}
+            >
+              <Clock className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold">
+                  Deadline Capacity: {workingDays} working day(s) = {windowHours}h single-person capacity ({policy.workHoursPerDay}h/day).
+                </span>{' '}
+                {windowHours === 0
+                  ? 'No working days remain before the selected deadline.'
+                  : parallelNeeded > 1
+                  ? `${estHours}h requires at least ${parallelNeeded} team members working in parallel${teamMemberCount > 0 ? ` (project squad has ${teamMemberCount})` : ''}.`
+                  : `Fits comfortably within a single assignee's window before review buffer.`}
+              </div>
+            </div>
+          )}
 
           {/* Description / Objectives */}
           <FormField label="Scope & Acceptance Criteria (Optional)">

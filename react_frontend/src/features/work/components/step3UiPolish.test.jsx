@@ -6,7 +6,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { makeStore } from '../../../store';
 import { StatusBadge } from './StatusBadge';
 import { TaskTable } from './TaskTable';
+import { SubtaskList } from './SubtaskList';
+import { ScheduleTimelinePanel } from './ScheduleTimelinePanel';
 import { Toast } from '../../../shared/components/Toast';
+import SchedulingPolicy from '../../executive/pages/SchedulingPolicy';
 import TeamLeadTasks from '../team-lead/pages/Tasks';
 import TeamLeadDashboard from '../team-lead/pages/Dashboard';
 import TeamLeadTaskDetail from '../team-lead/pages/TaskDetail';
@@ -22,6 +25,7 @@ import * as evidenceApi from '../../../services/api/evidence';
 import * as teamsApi from '../../../services/api/teams';
 import * as subtasksApi from '../../../services/api/subtasks';
 import * as usersApi from '../../../services/api/users';
+import * as schedulingApi from '../../../services/api/scheduling';
 
 vi.mock('../../../services/api/tasks');
 vi.mock('../../../services/api/projects');
@@ -31,6 +35,7 @@ vi.mock('../../../services/api/evidence');
 vi.mock('../../../services/api/teams');
 vi.mock('../../../services/api/subtasks');
 vi.mock('../../../services/api/users');
+vi.mock('../../../services/api/scheduling');
 vi.mock('../../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u-1', fullName: 'Test User', role: 'team_lead' } }),
 }));
@@ -383,5 +388,82 @@ describe('Step 3 UI & Workflow Fixes', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('SubtaskList locks submission until prerequisite subtasks complete', () => {
+    const subtasks = [
+      { id: 'st-a', title: 'Schema Design', status: 'Active', assignedToId: 'u-2', estimatedHours: 4 },
+      {
+        id: 'st-b',
+        title: 'API Handlers',
+        status: 'Active',
+        assignedToId: 'u-1',
+        estimatedHours: 6,
+        dependencies: [
+          { dependsOnSubtaskId: 'st-a', dependsOnSubtask: { id: 'st-a', title: 'Schema Design', status: 'Active' } },
+        ],
+      },
+    ];
+    render(
+      <SubtaskList
+        subtasks={subtasks}
+        currentUserId="u-1"
+        onSubmitSubtask={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/Waiting on prerequisite: Schema Design/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Waiting on dep.' })).toBeDisabled();
+  });
+
+  it('ScheduleTimelinePanel displays capacity, critical path, warnings and triggers Auto-Schedule', async () => {
+    const onAutoSchedule = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ScheduleTimelinePanel
+        task={{ id: 't1', dueDate: '2099-05-10' }}
+        subtasks={[{ id: 'st-1', title: 'Setup', status: 'Active', startDate: '2099-05-01', dueDate: '2099-05-05', estimatedHours: 16 }]}
+        scheduleAnalysis={{
+          workHoursPerDay: 8,
+          workingDaysRemaining: 5,
+          availableWindowHours: 40,
+          reviewBufferDays: 1,
+          latestRecommendedSubtaskDue: '2099-05-09',
+          criticalPathHours: 16,
+          criticalPathSubtaskIds: ['st-1'],
+          warnings: [{ severity: 'warning', code: 'REVIEW_BUFFER_AT_RISK', message: '1 subtask finishes inside review buffer.' }],
+        }}
+        onAutoSchedule={onAutoSchedule}
+      />
+    );
+    expect(screen.getByText(/40h/i)).toBeInTheDocument();
+    expect(screen.getByText(/16h/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 subtask finishes inside review buffer/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Auto-Schedule Dates/i }));
+    expect(onAutoSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it('SchedulingPolicy loads and saves company scheduling configuration', async () => {
+    schedulingApi.getPolicy.mockResolvedValue({
+      workHoursPerDay: 8,
+      workingDays: [1, 2, 3, 4, 5],
+      defaultReviewBufferDays: 1,
+      enforceCapacityBlock: false,
+      holidays: [{ id: 'h1', date: '2099-01-26', name: 'Republic Day' }],
+    });
+    schedulingApi.updatePolicy.mockResolvedValue({
+      workHoursPerDay: 7,
+      workingDays: [1, 2, 3, 4, 5],
+      defaultReviewBufferDays: 2,
+      enforceCapacityBlock: true,
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SchedulingPolicy />
+      </MemoryRouter>
+    );
+    expect(await screen.findByText(/Republic Day/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Save Scheduling Policy/i }));
+    expect(schedulingApi.updatePolicy).toHaveBeenCalledTimes(1);
   });
 });

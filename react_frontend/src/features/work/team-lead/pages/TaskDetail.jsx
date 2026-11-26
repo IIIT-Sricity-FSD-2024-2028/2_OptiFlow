@@ -4,8 +4,9 @@ import { Button } from '../../../../shared/components/Button';
 import { Loader } from '../../../../shared/components/Loader';
 import { EmptyState } from '../../../../shared/components/EmptyState';
 import { Toast } from '../../../../shared/components/Toast';
-import { TaskDetailPanel, SubtaskList, EvidenceUploadCard } from '../../components';
+import { TaskDetailPanel, SubtaskList, ScheduleTimelinePanel, EvidenceUploadCard } from '../../components';
 import { minExtensionDateInput } from '../../components/dateLimits';
+import * as schedulingApi from '../../../../services/api/scheduling';
 import {
   SubmitToPmModal,
   ReportBlockerModal,
@@ -125,9 +126,11 @@ export default function TeamLeadTaskDetail() {
   const [extReason, setExtReason] = useState('');
 
   const [subtaskOpen, setSubtaskOpen] = useState(false);
-  const [stForm, setStForm] = useState({ title: '', description: '', estimatedHours: '', assignee: '', due: '' });
+  const [stForm, setStForm] = useState({ title: '', description: '', estimatedHours: '', startDate: '', assignee: '', due: '', dependsOnIds: [] });
   const [savingSt, setSavingSt] = useState(false);
   const [subtaskError, setSubtaskError] = useState('');
+  const [scheduleAnalysis, setScheduleAnalysis] = useState(null);
+  const [autoScheduling, setAutoScheduling] = useState(false);
   const [sendBackSubtask, setSendBackSubtask] = useState(null);
   const [sendBackReason, setSendBackReason] = useState('');
   const [sendBackError, setSendBackError] = useState('');
@@ -142,9 +145,17 @@ export default function TeamLeadTaskDetail() {
   };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  const refreshScheduleAnalysis = () => {
+    if (!taskId) return;
+    Promise.resolve(schedulingApi.getTaskScheduleAnalysis?.(taskId)).then((res) => {
+      if (res) setScheduleAnalysis(res);
+    }).catch(() => {});
+  };
+
   useEffect(() => {
     if (!taskId) return;
     let active = true;
+    refreshScheduleAnalysis();
     Promise.all([
       dispatch(fetchTaskById(taskId)).unwrap().catch(() => null),
       // Never rejects when dispatched: a failed user load leaves the assignee list empty.
@@ -296,15 +307,18 @@ export default function TeamLeadTaskDetail() {
         title: stForm.title.trim(),
         description: stForm.description?.trim() || undefined,
         estimatedHours: stForm.estimatedHours !== '' ? Number(stForm.estimatedHours) : undefined,
+        startDate: stForm.startDate || undefined,
         assignedToId: stForm.assignee || undefined,
         dueDate: stForm.due || undefined,
+        dependsOnIds: stForm.dependsOnIds?.length ? stForm.dependsOnIds : undefined,
         status: 'Active'
       })).unwrap();
       if (!created?.id) throw new Error('Subtask was not saved. Please reload and try again.');
       // Reload the task so the new subtask comes back with its assignee details.
       dispatch(fetchTaskById(taskId));
+      refreshScheduleAnalysis();
       showToast('success', 'Subtask created.');
-      setSubtaskOpen(false); setSubtaskError(''); setStForm({ title: '', description: '', estimatedHours: '', assignee: '', due: '' });
+      setSubtaskOpen(false); setSubtaskError(''); setStForm({ title: '', description: '', estimatedHours: '', startDate: '', assignee: '', due: '', dependsOnIds: [] });
     } catch (error) {
       setSubtaskError(error?.message || 'Failed to create subtask.');
     }
@@ -333,12 +347,27 @@ export default function TeamLeadTaskDetail() {
     const subId = subtask.id || subtask.subtaskId;
     try {
       await dispatch(updateSubtask({ id: subId, data: { status: 'Completed' } })).unwrap();
+      refreshScheduleAnalysis();
       showToast('success', `Subtask "${subtask.title}" approved.`);
     } catch (err) {
       if (err?.code === 'COMPLIANCE_BLOCK') {
         dispatch(fetchComplianceViolations({ force: true }));
       }
       showToast('error', err.message || 'Failed to approve subtask.');
+    }
+  };
+
+  const handleAutoSchedule = async () => {
+    setAutoScheduling(true);
+    try {
+      await schedulingApi.autoScheduleTask(taskId, { apply: true });
+      await dispatch(fetchTaskById(taskId)).unwrap().catch(() => null);
+      refreshScheduleAnalysis();
+      showToast('success', 'Subtask start and due dates staggered along the dependency graph.');
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to auto-schedule subtasks.');
+    } finally {
+      setAutoScheduling(false);
     }
   };
 
@@ -419,9 +448,17 @@ export default function TeamLeadTaskDetail() {
             task={task}
             onClose={() => window.history.back()}
           >
+            <ScheduleTimelinePanel
+              task={task}
+              subtasks={subtasks}
+              scheduleAnalysis={scheduleAnalysis}
+              onAutoSchedule={task.status !== 'Completed' ? handleAutoSchedule : null}
+              autoScheduling={autoScheduling}
+            />
             <SubtaskList
               subtasks={subtasks}
               taskEstimatedHours={task.estimatedHours}
+              criticalPathIds={new Set((scheduleAnalysis?.criticalPathSubtaskIds || []).map(String))}
               members={allUsers.length > 0 ? allUsers : members}
               readOnly={false}
               currentUserId={user.id}
@@ -582,6 +619,7 @@ export default function TeamLeadTaskDetail() {
         taskDueDate={task.dueDate}
         taskEstimatedHours={task.estimatedHours}
         subtasks={subtasks}
+        scheduleAnalysis={scheduleAnalysis}
       />
 
       <UploadEvidenceModal

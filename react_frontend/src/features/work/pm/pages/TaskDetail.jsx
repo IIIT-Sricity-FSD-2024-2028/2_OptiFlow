@@ -17,6 +17,8 @@ import { fetchTaskById, selectTaskById, updateTask as updateTaskThunk } from '..
 import { fetchComplianceViolations, selectAllComplianceViolations } from '../../../../store/complianceViolations';
 import { fetchEvidence, selectAllEvidence } from '../../../../store/evidence';
 import { tomorrowInput } from '../../components/dateLimits';
+import { ScheduleTimelinePanel } from '../../components/ScheduleTimelinePanel';
+import * as schedulingApi from '../../../../services/api/scheduling';
 
 const STATUSES = ['Draft', 'Active', 'In_Review', 'Blocked', 'Completed', 'Cancelled'];
 const formatDate = (value) => value ? new Date(value).toLocaleDateString() : '—';
@@ -37,6 +39,7 @@ export default function PmTaskDetail() {
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [sendBackReason, setSendBackReason] = useState('');
   const [sendBackError, setSendBackError] = useState('');
+  const [scheduleAnalysis, setScheduleAnalysis] = useState(null);
   const [toast, setToast] = useState({ visible: false, type: 'success', message: '' });
 
   const showToast = (type, message) => {
@@ -46,6 +49,9 @@ export default function PmTaskDetail() {
 
   useEffect(() => {
     let active = true;
+    Promise.resolve(schedulingApi.getTaskScheduleAnalysis?.(id)).then((res) => {
+      if (active && res) setScheduleAnalysis(res);
+    }).catch(() => {});
     Promise.all([
       dispatch(fetchTaskById(id)).unwrap(),
       // These two never reject when dispatched: a failure stays in their slice.
@@ -321,6 +327,12 @@ export default function PmTaskDetail() {
               </div>
             )}
           </section>
+
+          <ScheduleTimelinePanel
+            task={task}
+            subtasks={subtasks}
+            scheduleAnalysis={scheduleAnalysis}
+          />
 
           {/* Read-Only Subtasks Rollup (Verified by Team Lead) */}
           <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">

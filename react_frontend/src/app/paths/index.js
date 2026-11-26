@@ -34,6 +34,7 @@ export const PATHS = {
     EMPLOYEES: "/executive/employees",
     AUDIT_LOGS: "/executive/audit-logs",
     BILLING: "/executive/billing",
+    SCHEDULING_POLICY: "/executive/scheduling-policy",
   },
   COMPLIANCE: {
     DASHBOARD: "/compliance/dashboard",

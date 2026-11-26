@@ -33,6 +33,7 @@ import {
 } from '../../../../store/complianceViolations';
 import { fetchUsers, selectAllUsers, selectUsersStatus } from '../../../../store/users';
 import { isPendingStatus } from '../../utils/storeStatus';
+import * as schedulingApi from '../../../../services/api/scheduling';
 import { CreateTaskForm } from '../components/CreateTaskForm';
 import { todayInput } from '../../components/dateLimits';
 
@@ -83,14 +84,17 @@ export default function PmTasks() {
     assignedToId: '',
     dueDate: '',
     estimatedHours: '',
+    reviewBufferDays: '',
     priority: 'Medium',
   });
+  const [schedulingPolicy, setSchedulingPolicy] = useState(null);
 
   useEffect(() => {
     dispatch(fetchTasks());
     dispatch(fetchProjects());
     dispatch(fetchUsers());
     dispatch(fetchComplianceViolations());
+    Promise.resolve(schedulingApi.getPolicy?.()).then((p) => { if (p) setSchedulingPolicy(p); }).catch(() => {});
   }, [dispatch]);
 
   const loadError = tasksError || projectsError;
@@ -191,6 +195,7 @@ export default function PmTasks() {
         assignedToId: form.assignedToId || undefined,
         dueDate: form.dueDate || undefined,
         estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : undefined,
+        reviewBufferDays: form.reviewBufferDays !== '' ? Number(form.reviewBufferDays) : undefined,
         priority: form.priority,
         status: 'Active',
       })).unwrap();
@@ -201,6 +206,7 @@ export default function PmTasks() {
         assignedToId: '',
         dueDate: '',
         estimatedHours: '',
+        reviewBufferDays: '',
         priority: 'Medium',
       });
       setShowAssignForm(false);
@@ -377,6 +383,7 @@ export default function PmTasks() {
           selectedProject={selectedProjectForForm}
           teamLeads={availableTeamLeads}
           projectTeamLeadIds={projectTeamLeadIds}
+          schedulingPolicy={schedulingPolicy}
         />
       )}
 

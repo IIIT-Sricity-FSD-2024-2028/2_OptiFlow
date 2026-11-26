@@ -126,6 +126,8 @@ model Company {
   escalations          Escalation[]
   complianceEvidence   ComplianceEvidence[]
   platformAuditLogs    PlatformAuditLog[]
+  schedulingPolicy     CompanySchedulingPolicy?
+  holidays             CompanyHoliday[]
 
   updatedAt DateTime @updatedAt
 
@@ -420,6 +422,7 @@ model Task {
   createdById           String
   createdBy             User         @relation("TaskCreatedBy", fields: [createdById], references: [id])
   dueDate               DateTime?
+  reviewBufferDays      Int?
   completedAt           DateTime?
   estimatedHours        Decimal?
   actualHours           Decimal?     @default(0)
@@ -464,18 +467,65 @@ model Subtask {
   description  String?
   status       TaskStatus @default(Draft)
   assignedToId  String?
-  createdById   String
-  dueDate       DateTime?
+  createdById    String
+  startDate      DateTime?
+  dueDate        DateTime?
   estimatedHours Decimal?
-  completedAt   DateTime?
+  completedAt    DateTime?
   // Reviewer's reason when a submitted subtask is sent back; cleared on approval.
-  reviewComment String?
-  deletedAt    DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  reviewComment  String?
+  deletedAt      DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  dependencies SubtaskDependency[] @relation("SubtaskBlockedBy")
+  dependents   SubtaskDependency[] @relation("SubtaskBlocking")
 
   @@index([taskId])
   @@map("subtasks")
+}
+
+model SubtaskDependency {
+  id                 String   @id @default(uuid())
+  companyId          String
+  subtaskId          String
+  subtask            Subtask  @relation("SubtaskBlockedBy", fields: [subtaskId], references: [id], onDelete: Cascade)
+  dependsOnSubtaskId String
+  dependsOnSubtask   Subtask  @relation("SubtaskBlocking", fields: [dependsOnSubtaskId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+
+  @@unique([subtaskId, dependsOnSubtaskId])
+  @@index([companyId])
+  @@index([subtaskId])
+  @@index([dependsOnSubtaskId])
+  @@map("subtask_dependencies")
+}
+
+model CompanySchedulingPolicy {
+  id                     String   @id @default(uuid())
+  companyId              String   @unique
+  company                Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workHoursPerDay        Decimal  @default(8)
+  workingDays            Int[]    @default([1, 2, 3, 4, 5])
+  defaultReviewBufferDays Int     @default(1)
+  enforceCapacityBlock   Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("company_scheduling_policies")
+}
+
+model CompanyHoliday {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  date      DateTime
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, date])
+  @@index([companyId, date])
+  @@map("company_holidays")
 }
 
 // ---------------------------------------------------------------------------
