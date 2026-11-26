@@ -18,6 +18,7 @@ import {
   selectAllComplianceRules,
   selectComplianceRulesStatus,
 } from "../../../store/complianceRules";
+import { fetchComplianceBindings } from "../../../store/complianceBindings";
 import {
   fetchComplianceCategories,
   selectAllComplianceCategories,
@@ -85,10 +86,10 @@ export default function ComplianceRules() {
     scopeType: "Company",
   });
 
-  const fetchData = async () => {
+  const fetchData = async (force = false) => {
     // 1. Dispatch Redux thunks (they handle their own caching and status)
-    dispatch(fetchComplianceRules());
-    dispatch(fetchComplianceCategories());
+    dispatch(fetchComplianceRules(force ? { force: true } : undefined));
+    dispatch(fetchComplianceCategories(force ? { force: true } : undefined));
 
     // 2. Fetch auxiliary users and projects for dropdowns
     try {
@@ -126,15 +127,20 @@ export default function ComplianceRules() {
     return categories;
   }, [categories, scopeFilter, user?.id]);
 
-  // If activeCategoryId is not in dynamicCategories, reset to ALL
+  // If activeCategoryId belongs to another domain while in "MyRules", switch to "All" rather than dropping the filter
   useEffect(() => {
-    if (activeCategoryId !== "ALL") {
-      const exists = dynamicCategories.some((c) => c.id === activeCategoryId);
-      if (!exists) {
-        setSearchParams({});
+    if (activeCategoryId !== "ALL" && categories.length > 0) {
+      const existsInDynamic = dynamicCategories.some((c) => c.id === activeCategoryId);
+      if (!existsInDynamic) {
+        const existsAnywhere = categories.some((c) => c.id === activeCategoryId);
+        if (existsAnywhere && scopeFilter === "MyRules") {
+          setScopeFilter("All");
+        } else if (!existsAnywhere) {
+          setSearchParams({});
+        }
       }
     }
-  }, [dynamicCategories, activeCategoryId, setSearchParams]);
+  }, [categories, dynamicCategories, activeCategoryId, scopeFilter, setSearchParams]);
 
   // Project map for resolving scope IDs to readable names
   const projectMap = useMemo(() => {
@@ -250,6 +256,8 @@ export default function ComplianceRules() {
               scopeType: formData.scopeType,
             }),
           }).catch((err) => console.error("Failed to bind rule:", err));
+          dispatch(fetchComplianceBindings({ force: true }));
+          dispatch(fetchComplianceRules({ force: true }));
         }
         toast.success(`Rule "${formData.name}" registered successfully.`);
       }
@@ -657,7 +665,7 @@ export default function ComplianceRules() {
         isOpen={Boolean(selectedRuleForScopes)}
         onClose={() => setSelectedRuleForScopes(null)}
         rule={selectedRuleForScopes}
-        onUpdated={fetchData}
+        onUpdated={() => fetchData(true)}
       />
 
       {/* Create / Edit Rule Modal */}

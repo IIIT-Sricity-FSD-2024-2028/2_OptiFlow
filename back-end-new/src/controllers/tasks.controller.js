@@ -110,6 +110,35 @@ function isExtensionRequest(escalation) {
   return escalation?.blockerType === EXTENSION_BLOCKER_TYPE;
 }
 
+function isSubtaskExtension({ title, description, subtaskId } = {}) {
+  if (subtaskId) return true;
+  if (/^Subtask Extension Request:/i.test(String(title || '').trim())) return true;
+  if (/Subtask:\s*"([^"]+)"/i.test(String(description || ''))) return true;
+  return false;
+}
+
+function extractSubtaskTitle({ title, description } = {}) {
+  const descMatch = String(description || '').match(/Subtask:\s*"([^"]+)"/i);
+  if (descMatch) return descMatch[1].trim();
+  const titleMatch = String(title || '').match(/^Subtask Extension Request:\s*(.+)$/i);
+  return titleMatch ? titleMatch[1].trim() : null;
+}
+
+async function findSubtaskForExtension(client, taskId, { title, description, subtaskId } = {}) {
+  if (!taskId) return null;
+  if (subtaskId) {
+    const byId = await client.subtask.findFirst({
+      where: { id: String(subtaskId), taskId, deletedAt: null },
+    });
+    if (byId) return byId;
+  }
+  const subTitle = extractSubtaskTitle({ title, description });
+  if (!subTitle) return null;
+  return client.subtask.findFirst({
+    where: { taskId, title: { equals: subTitle, mode: 'insensitive' }, deletedAt: null },
+  });
+}
+
 // Both request forms write "Requested deadline: YYYY-MM-DD" (or "Requested new deadline: ...").
 function parseRequestedDeadline(description) {
   const match = String(description || '').match(/Requested (?:new )?deadline:\s*(\d{4}-\d{2}-\d{2})/i);
@@ -578,8 +607,17 @@ export async function updateTask(req, res, next) {
     const isAssignee = existing.assignedToId === req.user.id;
     const canApprove = canApproveTasks(req.user);
 
-    // Only the task's assignee, or a leader / manager, may change a parent task.
-    if (!canApprove && !isAssignee) {
+    let isSubtaskAssignee = false;
+    if (isMember && !isAssignee && body.status === 'Blocked') {
+      const assignedSubtask = await prisma.subtask.findFirst({
+        where: { taskId: id, assignedToId: req.user.id, deletedAt: null },
+        select: { id: true },
+      });
+      isSubtaskAssignee = Boolean(assignedSubtask);
+    }
+
+    // Only the task's assignee (or a member with an assigned subtask reporting Blocked), or a leader / manager, may change a parent task.
+    if (!canApprove && !isAssignee && !isSubtaskAssignee) {
       throw new ForbiddenError('Only the task assignee, its Team Lead or a manager can update this task');
     }
 
@@ -590,6 +628,9 @@ export async function updateTask(req, res, next) {
       }
       if (body.status && !MEMBER_SETTABLE_STATUSES.includes(body.status)) {
         throw new ForbiddenError('Team members can only submit work for review or report blockers; only Team Leads or Managers can approve or complete tasks');
+      }
+      if (!isAssignee && body.status !== 'Blocked') {
+        throw new ForbiddenError('Subtask assignees can only mark a parent task Blocked when reporting a blocker');
       }
     }
 
@@ -776,13 +817,17 @@ export async function updateTask(req, res, next) {
 
     // 🟢 IF ALLOWED: Proceed with normal Prisma update
     const include = TASK_ITEM_INCLUDE;
-    // Optional handover summary sent with a submission for review (Task has no notes column).
+    // Optional handover summary sent with a submission for review or revision notes when sent back.
     const submissionNote = updateData.status === 'In_Review' && body.submissionNote
       ? String(body.submissionNote).trim().slice(0, 2000)
+      : '';
+    const revisionNote = body.notes !== undefined && body.notes !== null
+      ? String(body.notes).trim().slice(0, 2000)
       : '';
     const auditNewValue = {
       ...updateData,
       ...(submissionNote ? { submissionNote } : {}),
+      ...(revisionNote ? { revisionNote } : {}),
       ...(dueDateReason ? { dueDateReason } : {}),
       ...(isPmApproval ? { pmApprovalComplianceBypass: true } : {}),
     };
@@ -830,6 +875,9 @@ export async function updateTask(req, res, next) {
     }
     if (updateData.status === 'In_Review' && existing.status !== 'In_Review' && existing.createdById !== req.user.id) {
       notify(req.user.companyId, existing.createdById, 'Task ready for review', `"${updated.title}" was submitted for your review.${submissionNote ? ` Notes: ${submissionNote}` : ''}`, 'Task');
+    }
+    if (updateData.status === 'Active' && existing.status === 'In_Review' && existing.assignedToId && existing.assignedToId !== req.user.id) {
+      notify(req.user.companyId, existing.assignedToId, 'Task returned for revision', `"${updated.title}" was sent back for revision.${revisionNote ? ` Feedback: ${revisionNote}` : ''}`, 'Task');
     }
     if (updateData.status === 'Completed' && existing.status !== 'Completed' && existing.assignedToId && existing.assignedToId !== req.user.id) {
       notify(req.user.companyId, existing.assignedToId, 'Task approved', `"${updated.title}" was approved and marked Completed.`, 'Task');
@@ -890,7 +938,10 @@ export async function updateTask(req, res, next) {
     res.status(200).json({
       success: true,
       message: 'Task updated successfully',
-      data: withSubtaskProgress(updated),
+      data: {
+        ...withSubtaskProgress(updated),
+        ...(revisionNote ? { revisionNote } : {}),
+      },
     });
   } catch (err) {
     next(err);
@@ -1439,13 +1490,27 @@ export async function createEscalation(req, res, next) {
       }
     }
 
-    // A deadline extension always goes to the project's PM (only a PM can grant one),
-    // whatever target the client sent, and must ask for a valid later date.
+    // A parent task deadline extension goes to the project's PM; a subtask extension goes to
+    // the task's Team Lead and must fit within the parent task's deadline.
     let extensionApproverId = null;
     if (blockerType === EXTENSION_BLOCKER_TYPE) {
       if (!task) throw new BadRequestError('An extension request must name its task (taskId)');
-      assertValidExtensionDate(parseRequestedDeadline(description), task.dueDate);
-      extensionApproverId = task.project?.createdById || task.createdById || null;
+      const requested = parseRequestedDeadline(description);
+      if (isSubtaskExtension({ title, description, subtaskId: body.subtaskId || body.subtask_id })) {
+        const sub = await findSubtaskForExtension(prisma, task.id, {
+          title,
+          description,
+          subtaskId: body.subtaskId || body.subtask_id,
+        });
+        assertValidExtensionDate(requested, sub?.dueDate || null);
+        if (task.dueDate && requested > task.dueDate) {
+          throw new BadRequestError('Subtask deadline cannot exceed parent task deadline');
+        }
+        extensionApproverId = task.assignedToId || task.project?.createdById || task.createdById || null;
+      } else {
+        assertValidExtensionDate(requested, task.dueDate);
+        extensionApproverId = task.project?.createdById || task.createdById || null;
+      }
     }
 
     if (projectId) {
@@ -1560,25 +1625,59 @@ export async function updateEscalation(req, res, next) {
       updateData.description = body.description;
     }
 
-    // Approving an extension moves the task deadline. Only a Project Manager may do that,
-    // with the same checks as PATCH /tasks/:id, and in the same transaction as the approval.
+    // Approving an extension moves either the subtask deadline (Team Lead or PM) or
+    // the parent task deadline (Project Manager only), inside the same transaction.
     let extension = null;
+    let subtaskExtension = null;
     if (isExt && updateData.status === 'Resolved' && existing.status !== 'Resolved' && existing.taskId) {
-      if (!isProjectManagerRole(req.user)) {
-        throw new ForbiddenError('Only Project Managers can approve deadline extensions');
-      }
       const task = await prisma.task.findFirst({
         where: { id: existing.taskId, companyId: req.user.companyId, deletedAt: null },
-        select: { id: true, projectId: true, dueDate: true },
+        select: { id: true, projectId: true, assignedToId: true, dueDate: true },
       });
       if (!task) throw new NotFoundError(`Task ${existing.taskId} not found in this company`);
       const requested = parseRequestedDeadline(existing.description);
-      assertValidExtensionDate(requested, task.dueDate);
-      extension = { task, requested, reason: extensionReasonOf(existing.description) || 'Extension request approved' };
+      const reason = extensionReasonOf(existing.description) || 'Extension request approved';
+
+      if (isSubtaskExtension(existing)) {
+        const isAssignedLead = isTeamLeadRole(req.user) && task.assignedToId === req.user.id;
+        if (!isProjectManagerRole(req.user) && !canManageEscalations(req.user) && !isAssignedLead && existing.targetManagerId !== req.user.id) {
+          throw new ForbiddenError('Only the task Team Lead or Project Manager can approve subtask deadline extensions');
+        }
+        const sub = await findSubtaskForExtension(prisma, task.id, existing);
+        if (!sub) {
+          throw new NotFoundError('Matching subtask not found for this extension request');
+        }
+        assertValidExtensionDate(requested, sub.dueDate || null);
+        if (task.dueDate && requested > task.dueDate) {
+          throw new BadRequestError('Subtask deadline cannot exceed parent task deadline');
+        }
+        subtaskExtension = { task, sub, requested, reason };
+      } else {
+        if (!isProjectManagerRole(req.user)) {
+          throw new ForbiddenError('Only Project Managers can approve deadline extensions');
+        }
+        assertValidExtensionDate(requested, task.dueDate);
+        extension = { task, requested, reason };
+      }
     }
 
     const updated = await prisma.$transaction(async (transaction) => {
       const row = await transaction.escalation.update({ where: { id }, data: updateData });
+      if (subtaskExtension) {
+        const { task, sub, requested, reason } = subtaskExtension;
+        await transaction.subtask.update({ where: { id: sub.id }, data: { dueDate: requested } });
+        await transaction.processAuditLog.create({
+          data: {
+            companyId: req.user.companyId,
+            projectId: task.projectId,
+            taskId: task.id,
+            action: AUDIT_ACTIONS.UPDATE,
+            performedById: req.user.id,
+            oldValue: { subtaskId: sub.id, dueDate: sub.dueDate?.toISOString() || null },
+            newValue: { subtaskId: sub.id, dueDate: requested.toISOString(), deadlineExtensionReason: reason, escalationId: id },
+          },
+        });
+      }
       if (extension) {
         const { task, requested, reason } = extension;
         await transaction.task.update({ where: { id: task.id }, data: { dueDate: requested } });
@@ -1597,50 +1696,6 @@ export async function updateEscalation(req, res, next) {
       }
       return row;
     });
-
-    // Auto-update subtask or task deadline if this is an extension resolved by lead or manager
-    if (body.status === 'Resolved' && existing.taskId) {
-      const subtaskDateMatch = existing.description?.match(/Requested new deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-      const subtaskMatch = existing.description?.match(/Subtask:\s*"([^"]+)"/i) || existing.title?.match(/Subtask Extension Request:\s*(.+)$/i);
-      if (subtaskDateMatch && subtaskMatch) {
-        const newDeadline = new Date(subtaskDateMatch[1]);
-        const subTitle = subtaskMatch[1].trim();
-        try {
-          const matchingSubtask = await prisma.subtask.findFirst({
-            where: {
-              taskId: existing.taskId,
-              title: { equals: subTitle, mode: 'insensitive' },
-              deletedAt: null,
-            },
-          });
-          if (matchingSubtask && !isNaN(newDeadline.getTime())) {
-            await prisma.subtask.update({
-              where: { id: matchingSubtask.id },
-              data: { dueDate: newDeadline },
-            });
-          }
-        } catch (subErr) {
-          console.warn('[Escalation] Notice: auto-updating subtask deadline:', subErr.message);
-        }
-      } else {
-        // Parent task extension
-        const taskDateMatch = existing.description?.match(/Requested deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i) ||
-                              existing.description?.match(/new deadline:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
-        if (taskDateMatch) {
-          const newDeadline = new Date(taskDateMatch[1]);
-          if (!isNaN(newDeadline.getTime())) {
-            try {
-              await prisma.task.update({
-                where: { id: existing.taskId },
-                data: { dueDate: newDeadline },
-              });
-            } catch (taskErr) {
-              console.warn('[Escalation] Notice: auto-updating task deadline:', taskErr.message);
-            }
-          }
-        }
-      }
-    }
 
     if (updateData.status && updateData.status !== existing.status && existing.reportedById !== req.user.id) {
       const action = updateData.status === 'Resolved' ? 'approved' : updateData.status === 'Closed' ? 'rejected' : updateData.status.toLowerCase();

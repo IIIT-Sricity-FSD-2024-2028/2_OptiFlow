@@ -98,7 +98,7 @@ export const evidenceSlice = createSlice({
 
       // 6. Upload Evidence File
       .addCase(uploadEvidenceFile.fulfilled, (state, action) => {
-        const updated = action.payload;
+        const updated = action.payload?.evidence || action.payload;
         if (!updated?.id) return;
         const index = state.items.findIndex((item) => item.id === updated.id);
         if (index !== -1) {

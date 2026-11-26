@@ -27,7 +27,7 @@ export function ReviewEvidenceModal({ isOpen, onClose, evidence, onReviewed }) {
     if (evidence) {
       if (evidence.status === "Rejected") {
         setDecision("reject");
-        setRejectionReason(evidence.rejectionReason || "");
+        setRejectionReason(evidence.rejectionReason || evidence.notes || "");
       } else {
         setDecision("approve");
         setRejectionReason("");

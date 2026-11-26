@@ -86,6 +86,7 @@ export const reviewEvidence = createAsyncThunk(
       const payload = { status };
       if (rejectionReason !== undefined) {
         payload.rejectionReason = rejectionReason;
+        payload.notes = rejectionReason;
       }
       const res = await apiClient(`/api/evidence/${id}`, {
         method: "PATCH",

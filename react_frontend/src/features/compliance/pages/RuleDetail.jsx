@@ -12,6 +12,10 @@ import {
   fetchComplianceCategories,
   selectAllComplianceCategories,
 } from "../../../store/complianceCategories";
+import {
+  deleteComplianceBinding,
+  fetchComplianceBindings,
+} from "../../../store/complianceBindings";
 import { apiClient } from "../../../services/api/client";
 import { Badge } from "../../../shared/components/Badge";
 import { Button } from "../../../shared/components/Button";
@@ -107,6 +111,8 @@ const RuleDetail = () => {
 
   const fetchRule = () => {
     dispatch(fetchComplianceRuleById(id));
+    dispatch(fetchComplianceRules({ force: true }));
+    dispatch(fetchComplianceBindings({ force: true }));
   };
 
   const handleToggleActive = async () => {
@@ -137,9 +143,7 @@ const RuleDetail = () => {
     if (!bindingToUnbind) return;
     try {
       setIsUnbinding(true);
-      await apiClient(`/compliance-bindings/${bindingToUnbind.id}`, {
-        method: "DELETE",
-      });
+      await dispatch(deleteComplianceBinding(bindingToUnbind.id)).unwrap();
       toast.success("Scope unbound successfully");
       setBindingToUnbind(null);
       fetchRule();

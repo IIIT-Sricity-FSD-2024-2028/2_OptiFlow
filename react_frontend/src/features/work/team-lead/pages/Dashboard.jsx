@@ -186,7 +186,12 @@ export default function TeamLeadDashboard() {
 
   // Split escalations: extension requests vs regular blockers
   // Use blockerType === 'Extension Request' only — no title text-matching.
-  const extensionRequests = escalations.filter((e) => e.blockerType === 'Extension Request');
+  // Exclude the Team Lead's own PM-bound extension requests from their review queue.
+  const extensionRequests = escalations.filter((e) => {
+    if (e.blockerType !== 'Extension Request') return false;
+    if (user?.id && String(e.reportedById || e.reportedBy?.id) === String(user.id)) return false;
+    return true;
+  });
   const regularEscalations = escalations.filter((e) => e.blockerType !== 'Extension Request');
 
   // ---------------------------------------------------------------------------
@@ -349,8 +354,8 @@ export default function TeamLeadDashboard() {
       // `force`: refetch even though the list is fresh, so the task rows match the server.
       dispatch(fetchTasks({ force: true }));
       showToast('success', 'Extension approved & member notified.');
-    } catch {
-      showToast('error', 'Failed to update extension request.');
+    } catch (err) {
+      showToast('error', err?.message || 'Failed to update extension request.');
     }
   };
 

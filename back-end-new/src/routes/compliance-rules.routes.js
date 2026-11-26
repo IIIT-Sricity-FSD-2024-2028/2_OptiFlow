@@ -43,5 +43,10 @@ router.delete(
 
 
 
-router.post(["/compliance-rules/run-engine", "/api/compliance-rules/run-engine"], authenticate, requireRoles(ROLES.COMPANY_OWNER, ROLES.COMPLIANCE_OFFICER), triggerComplianceEngine);
+router.post(
+  ["/compliance-rules/run-engine", "/api/compliance-rules/run-engine"],
+  authenticate,
+  requireRoles(ROLES.COMPANY_OWNER, ROLES.SYSTEM_ADMIN, ROLES.COMPLIANCE_OFFICER, ROLES.BRANCH_MANAGER, 'compliance_officer', 'branch_manager', 'system_admin'),
+  triggerComplianceEngine
+);
 export default router;

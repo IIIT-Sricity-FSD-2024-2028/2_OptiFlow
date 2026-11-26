@@ -61,6 +61,7 @@ export const FileUpload = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    if (onFileSelect) onFileSelect(null);
   };
 
   return (

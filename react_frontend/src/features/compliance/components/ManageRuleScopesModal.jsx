@@ -80,12 +80,13 @@ export function ManageRuleScopesModal({ isOpen, onClose, rule, onUpdated }) {
         } else if (scopeType === "Team") {
           const res = await apiClient("/teams");
           setTargetOptions(Array.isArray(res) ? res : res?.data || []);
-        } else if (scopeType === "User") {
-          const res = await apiClient("/users");
+        } else if (scopeType === "Branch") {
+          const res = await apiClient("/branches");
           setTargetOptions(Array.isArray(res) ? res : res?.data || []);
         }
       } catch (err) {
         console.error(`Failed to load ${scopeType} targets:`, err);
+        toast.error(`Failed to load ${scopeType.toLowerCase()} targets.`);
       } finally {
         setLoadingTargets(false);
       }
@@ -293,9 +294,9 @@ export function ManageRuleScopesModal({ isOpen, onClose, rule, onUpdated }) {
                   className="w-full text-xs bg-white border border-slate-300 rounded-lg p-2 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="Company">Company-wide (All Projects)</option>
-                  <option value="Project">Specific Project</option>
+                  <option value="Branch">Specific Branch</option>
                   <option value="Team">Specific Team</option>
-                  <option value="User">Specific User</option>
+                  <option value="Project">Specific Project</option>
                 </select>
               </div>
 

@@ -173,7 +173,7 @@ export default function MemberTaskDetail() {
     return false;
   });
 
-  const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && e.rejectionReason);
+  const latestRejectedEvidence = evidenceList.find((e) => e.status === 'Rejected' && (e.rejectionReason || e.notes));
 
   const stages = [
     { label: 'Assigned', done: true },
@@ -359,6 +359,7 @@ export default function MemberTaskDetail() {
         isOpen={isEvidenceModalOpen}
         onClose={() => setIsEvidenceModalOpen(false)}
         taskId={taskId}
+        violationId={primaryViolation?.id}
         onSuccess={() => dispatch(fetchComplianceViolations({ force: true }))}
       />
     </div>

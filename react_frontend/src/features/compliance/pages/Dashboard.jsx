@@ -68,13 +68,13 @@ export default function ComplianceDashboard() {
   const [scopeFilter, setScopeFilter] = useState("MyDomain"); // "MyDomain" | "All"
   const [selectedProjectId, setSelectedProjectId] = useState("all");
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (force = false) => {
     try {
       setLoading(true);
       const [, , , projectsResponse, tasksResponse] = await Promise.all([
-        dispatch(fetchComplianceRules()),
-        dispatch(fetchComplianceViolations()),
-        dispatch(fetchEvidence()),
+        dispatch(fetchComplianceRules(force ? { force: true } : undefined)),
+        dispatch(fetchComplianceViolations(force ? { force: true } : undefined)),
+        dispatch(fetchEvidence(force ? { force: true } : undefined)),
         apiClient("/projects").catch(() => []),
         apiClient("/tasks").catch(() => []),
       ]);
@@ -295,7 +295,7 @@ export default function ComplianceDashboard() {
       await dispatch(runComplianceEngine()).unwrap();
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastScanTime(nowStr);
-      await fetchDashboardData();
+      await fetchDashboardData(true);
       toast.success("Automated compliance engine scan completed successfully.");
     } catch (error) {
       toast.error("Compliance scan failed: " + (error.message || "Network error"));

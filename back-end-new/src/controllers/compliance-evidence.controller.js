@@ -318,7 +318,8 @@ export async function updateEvidence(req, res, next) {
     if (body.title) updateData.title = String(body.title).trim();
     if (body.evidenceType) updateData.evidenceType = body.evidenceType;
     if (body.fileUrl) updateData.fileUrl = body.fileUrl;
-    if (body.notes !== undefined) updateData.notes = body.notes;
+    const effectiveNotes = body.notes !== undefined ? body.notes : body.rejectionReason;
+    if (effectiveNotes !== undefined) updateData.notes = effectiveNotes;
     if (body.status) {
       validateEnum(body.status, ALLOWED_EVIDENCE_STATUSES, 'status');
       updateData.status = body.status;
@@ -497,7 +498,7 @@ export async function updateEvidence(req, res, next) {
         req.user.companyId,
         existing.userId,
         'Evidence Returned for Revision',
-        `Your evidence "${existing.title}" was returned for revision.${body.notes ? ` Feedback: ${body.notes}` : ''}`,
+        `Your evidence "${existing.title}" was returned for revision.${effectiveNotes ? ` Feedback: ${effectiveNotes}` : ''}`,
         'Review'
       );
     }

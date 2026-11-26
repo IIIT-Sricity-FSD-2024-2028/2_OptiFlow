@@ -423,13 +423,28 @@ export async function notifyViolationOwner(req, res, next) {
     }
 
     let targetUserId = body.targetUserId || null;
-    let targetName = 'Entity Owner';
     if (!targetUserId && violation.entityType === 'Task') {
       const task = await prisma.task.findUnique({
         where: { id: violation.entityId },
         select: { assignedToId: true, createdById: true },
       });
       targetUserId = task?.assignedToId || task?.createdById || null;
+    } else if (!targetUserId && violation.entityType === 'Project') {
+      const project = await prisma.project.findUnique({
+        where: { id: violation.entityId },
+        select: {
+          createdById: true,
+          team: {
+            select: {
+              teamMembers: {
+                select: { userId: true, role: true },
+              },
+            },
+          },
+        },
+      });
+      const teamLead = project?.team?.teamMembers?.find((m) => /lead/i.test(m.role || ''));
+      targetUserId = project?.createdById || teamLead?.userId || null;
     } else if (!targetUserId && violation.entityType === 'User') {
       targetUserId = violation.entityId;
     }
