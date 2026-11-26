@@ -46,17 +46,34 @@ export const fetchComplianceViolationById = createAsyncThunk(
 export const resolveComplianceViolation = createAsyncThunk(
   "complianceViolations/resolve",
   async (
-    { id, waiverType = "PROVISIONAL_EXEMPTION", resolutionRemarks },
+    {
+      id,
+      waiverType = "PROVISIONAL_EXEMPTION",
+      resolutionRemarks,
+      notifyTeamLead = false,
+      notifyUserIds,
+      notifyMessage,
+    },
     { rejectWithValue },
   ) => {
     try {
+      const payload = {
+        status: "Resolved",
+        waiverType,
+        resolutionRemarks,
+      };
+      if (notifyTeamLead) {
+        payload.notifyTeamLead = true;
+      }
+      if (Array.isArray(notifyUserIds) && notifyUserIds.length > 0) {
+        payload.notifyUserIds = notifyUserIds;
+      }
+      if (notifyMessage) {
+        payload.notifyMessage = notifyMessage;
+      }
       const res = await apiClient(`/api/compliance-violations/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          status: "Resolved",
-          waiverType,
-          resolutionRemarks,
-        }),
+        body: JSON.stringify(payload),
       });
       return res?.data || res;
     } catch (err) {

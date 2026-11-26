@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
 import * as notificationsApi from "../../services/api/notifications";
@@ -39,5 +39,24 @@ describe("Topbar notifications", () => {
     setup({ id: "u1", role: "owner", isPlatform: false });
     await waitFor(() => expect(list).toHaveBeenCalled());
     expect(screen.getByLabelText("View notifications")).toBeInTheDocument();
+  });
+
+  it("highlights Compliance notifications delivered with type 'Compliance'", async () => {
+    vi.spyOn(notificationsApi, "list").mockResolvedValue([
+      {
+        id: "n-1",
+        userId: "tl-1",
+        title: "Compliance Remediation: Policy",
+        message: "Please submit evidence",
+        type: "Compliance",
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    setup({ id: "tl-1", role: "team_leader", isPlatform: false });
+    const bell = await screen.findByLabelText("View notifications");
+    fireEvent.click(bell);
+    expect(await screen.findByText("Compliance Remediation: Policy")).toBeInTheDocument();
+    expect(screen.getByText("Compliance")).toBeInTheDocument();
   });
 });

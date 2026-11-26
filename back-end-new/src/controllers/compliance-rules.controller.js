@@ -14,6 +14,7 @@ import { validateRequired, validateEnum } from "../utils/validation.js";
 import { ROLES, normalizeRole } from "../utils/roles.js";
 import { createComplianceAuditLog, AUDIT_ACTIONS } from "../utils/audit.js";
 import { assertWithinPlanLimit } from "../utils/planLimits.js";
+import { hydrateViolations } from "./compliance-violations.controller.js";
 
 const ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -144,13 +145,11 @@ export async function getComplianceRuleById(req, res, next) {
       return { ...b, scopeName };
     });
 
-    rule.violations = rule.violations.map(v => {
-      let entityName = `${v.entityType} #${(v.entityId || "N/A").substring(0, 8)}`;
-      if (v.entityType === 'Project' && projectMap.has(v.entityId)) entityName = projectMap.get(v.entityId);
-      if (v.entityType === 'User' && userMap.has(v.entityId)) entityName = userMap.get(v.entityId);
-      if (v.entityType === 'Task' && taskMap.has(v.entityId)) entityName = taskMap.get(v.entityId);
-      return { ...v, entityName };
-    });
+    const violationsWithRule = rule.violations.map((v) => ({
+      ...v,
+      rule: { id: rule.id, name: rule.name, category: rule.category },
+    }));
+    rule.violations = await hydrateViolations(violationsWithRule);
 
     res.status(200).json({
       success: true,

@@ -27,6 +27,7 @@ import {
   Lock,
   Download,
   RefreshCw,
+  Bell,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -52,7 +53,13 @@ export default function ComplianceViolations() {
   const [projectFilter, setProjectFilter] = useState(initialProjectId);
   const [queueFilter, setQueueFilter] = useState(initialQueue);
   const [selectedViolation, setSelectedViolation] = useState(null);
+  const [modalInitialTab, setModalInitialTab] = useState("RESOLVE");
   const [currentPage, setCurrentPage] = useState(1);
+
+  const openViolationModal = (row, tab = "RESOLVE") => {
+    setModalInitialTab(tab);
+    setSelectedViolation(row);
+  };
   const [isCheckingSla, setIsCheckingSla] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -251,6 +258,9 @@ export default function ComplianceViolations() {
           <span className="text-xs text-slate-500">
             {row.entityType || "Entity"}
             {row.entityOwner ? ` • Owner: ${row.entityOwner.fullName || row.entityOwner.email}` : ''}
+            {row.teamLead && row.teamLead.id !== row.entityOwner?.id
+              ? ` • Lead: ${row.teamLead.fullName || row.teamLead.email}`
+              : ''}
           </span>
         </div>
       ),
@@ -414,14 +424,26 @@ export default function ComplianceViolations() {
       header: "ACTION",
       accessor: "action",
       render: (row) => (
-        <Button
-          variant={row.status === "Resolved" ? "ghost" : "secondary"}
-          size="sm"
-          disabled={row.status === "Resolved"}
-          onClick={() => setSelectedViolation(row)}
-        >
-          {row.status === "Resolved" ? "Resolved" : "Review & Remediate"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openViolationModal(row, "NOTIFY")}
+            title="Send compliance notification to Team Leader or Owner"
+            className="inline-flex items-center gap-1"
+          >
+            <Bell size={13} />
+            <span>Notify</span>
+          </Button>
+          <Button
+            variant={row.status === "Resolved" ? "ghost" : "secondary"}
+            size="sm"
+            disabled={row.status === "Resolved"}
+            onClick={() => openViolationModal(row, "RESOLVE")}
+          >
+            {row.status === "Resolved" ? "Resolved" : "Review & Remediate"}
+          </Button>
+        </div>
       ),
     },
   ];
@@ -695,6 +717,7 @@ export default function ComplianceViolations() {
         isOpen={!!selectedViolation}
         onClose={() => setSelectedViolation(null)}
         violation={selectedViolation}
+        initialTab={modalInitialTab}
         onResolved={fetchViolations}
       />
     </div>

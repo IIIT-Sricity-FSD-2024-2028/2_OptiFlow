@@ -210,8 +210,8 @@ export const Topbar = ({ title }) => {
                   </div>
                 ) : (
                   notifications.slice(0, 10).map((n) => {
-                    const isUrgent = n.priority === 'URGENT';
-                    const isCompliance = n.category === 'COMPLIANCE';
+                    const isUrgent = n.type === 'Escalation' || n.priority === 'URGENT';
+                    const isCompliance = n.type === 'Compliance' || n.category === 'COMPLIANCE';
 
                     return (
                       <div
@@ -255,6 +255,17 @@ export const Topbar = ({ title }) => {
 
                           {/* Attribution Footer */}
                           <div className="mt-1.5 flex items-center gap-2">
+                            {n.type && (
+                              <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                isCompliance
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : isUrgent
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {n.type}
+                              </span>
+                            )}
                             {n.senderName && (
                               <span className="text-[10px] text-slate-400 font-medium truncate">
                                 By {n.senderName}
