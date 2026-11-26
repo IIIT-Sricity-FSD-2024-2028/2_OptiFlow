@@ -11,6 +11,7 @@ import { Toast } from '../../../../shared/components/Toast';
 import { Button } from '../../../../shared/components/Button';
 import { Modal } from '../../../../shared/components/Modal';
 import { SendBackTaskModal } from '../components/PmReviewModals';
+import { CheckCircle2, Clock, ShieldAlert, ArrowUpRight, Layers, FileCheck } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTaskById, selectTaskById, updateTask as updateTaskThunk } from '../../../../store/tasks';
 import { fetchComplianceViolations, selectAllComplianceViolations } from '../../../../store/complianceViolations';
@@ -177,256 +178,346 @@ export default function PmTaskDetail() {
     }
   };
 
+  const subtaskPct = subtasks.length > 0 ? Math.round((completedSubtaskCount / subtasks.length) * 100) : 0;
+  const openEscalationCount = escalations.filter((item) => !['Resolved', 'Closed'].includes(item.status)).length;
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <Link to={PATHS.PM.TASKS} className="text-sm font-medium text-blue-600 hover:text-blue-700">← All Tasks</Link>
-
-      {/* PM Final Review Bar for Team-Lead-Submitted Tasks */}
-      {isTaskInReview && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50/90 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold text-blue-950">
-              Ready for PM Final Review
-            </p>
-            <p className="text-xs text-blue-800 mt-0.5">
-              Review all {subtasks.length} subtask{subtasks.length === 1 ? '' : 's'} ({completedSubtaskCount}/{subtasks.length} completed) and {currentTaskEvidence.length} compliance evidence item{currentTaskEvidence.length === 1 ? '' : 's'} below before approving.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={saving}
-              onClick={() => {
-                if (complianceBlocked) {
-                  setOverrideOpen(true);
-                } else {
-                  updateTask({ status: 'Completed' });
-                }
-              }}
-            >
-              Approve & Complete
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={saving}
-              onClick={() => {
-                setSendBackReason('');
-                setSendBackError('');
-                setSendBackOpen(true);
-              }}
-            >
-              Send Back
-            </Button>
-          </div>
-        </div>
-      )}
+      <div className="flex items-center justify-between gap-4">
+        <Link to={PATHS.PM.TASKS} className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1">
+          ← All Tasks
+        </Link>
+        {projectLink && (
+          <Link to={projectLink} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
+            {task.project.name} <ArrowUpRight size={13} />
+          </Link>
+        )}
+      </div>
 
       {/* Compliance Blocker Resolution Banner */}
       {complianceBlocked && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="rounded-xl border border-rose-200 bg-rose-50/90 px-4 py-3.5 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-lg">
-              🛡️
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
+              <ShieldAlert size={18} />
             </span>
             <div>
-              <p className="text-sm font-bold text-rose-900">
-                This task has open compliance violations
+              <p className="text-sm font-bold text-rose-950">
+                Open Compliance Violations ({activeTaskViolations.length})
               </p>
               <p className="text-xs text-rose-700 mt-0.5">
-                {`Active violations: ${activeTaskViolations.map((v) => v.rule?.name || 'Compliance Policy').join(', ')}`}
+                {`Active policies: ${activeTaskViolations.map((v) => v.rule?.name || 'Compliance Policy').join(', ')}`}
               </p>
             </div>
           </div>
-
+          <Badge status="danger">⚠ Blocked by Compliance</Badge>
         </div>
       )}
 
-      <header className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-5">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">{task.title}</h1>
-              <Badge status={task.status === 'Completed' ? 'success' : task.status === 'Blocked' ? 'danger' : task.status === 'Active' ? 'info' : 'default'}>
+      {/* Executive Task Header */}
+      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{task.title}</h1>
+              <Badge status={task.status === 'Completed' ? 'success' : task.status === 'Blocked' ? 'danger' : task.status === 'In_Review' ? 'info' : task.status === 'Active' ? 'info' : 'default'}>
                 {String(task.status || 'Draft').replace(/_/g, ' ')}
               </Badge>
-              {complianceBlocked && <Badge status="danger">⚠ Blocked by Compliance</Badge>}
             </div>
-            {projectLink ? (
-              <Link to={projectLink} className="mt-2 inline-block text-sm text-blue-600 hover:text-blue-700">{task.project.name}</Link>
-            ) : <p className="mt-2 text-sm text-gray-500">No linked project</p>}
+            <p className="text-xs text-slate-500">
+              Team Lead controls subtask reviews; Project Manager reviews and signs off the parent task as a whole.
+            </p>
           </div>
-          <div className="grid w-full gap-4 sm:w-auto sm:grid-cols-2">
-            <FormField label="Task status">
-              <Select
-                value={task.status || 'Draft'}
-                onChange={(event) => updateTask({ status: event.target.value })}
-                disabled={saving}
-              >
-                {STATUSES.map((status) => (
-                  <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
-                ))}
-              </Select>
-            </FormField>
-            <div>
-              <p className="text-xs font-semibold uppercase text-gray-500">Assigned to</p>
-              <p className="mt-1 text-sm text-gray-900">
-                {task.assignedTo?.fullName || task.assignedTo?.email || 'Unassigned'}
-              </p>
-            </div>
-          </div>
-        </div>
-        {saving && <p className="mt-3 text-xs text-gray-500">Saving changes…</p>}
-      </header>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-lg border border-gray-200 bg-white p-5 space-y-5">
-          <div>
-            <h2 className="font-semibold text-gray-900">Description</h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-600">{task.description || 'No description provided.'}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-4">
-            <div><p className="text-xs font-semibold uppercase text-gray-500">Priority</p><p className="mt-1 text-sm text-gray-900">{task.priority || 'Medium'}</p></div>
-            <div><p className="text-xs font-semibold uppercase text-gray-500">Due date</p><p className="mt-1 text-sm text-gray-900">{formatDate(task.dueDate)}</p></div>
-            <div><p className="text-xs font-semibold uppercase text-gray-500">Created by</p><p className="mt-1 text-sm text-gray-900">{task.createdBy?.fullName || '—'}</p></div>
-            <div><p className="text-xs font-semibold uppercase text-gray-500">Completed</p><p className="mt-1 text-sm text-gray-900">{formatDate(task.completedAt)}</p></div>
-          </div>
-          {(isOverdue || complianceBlocked) && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-              <div>
-                <p className="text-sm font-semibold text-amber-900">
-                  {isOverdue ? 'This task is overdue.' : 'Compliance governance blocker active.'}
-                </p>
-                <p className="text-xs text-amber-700">
-                  Extending the deadline will synchronize the compliance remediation window and unfreeze governance lockouts.
-                </p>
-              </div>
-              <Button variant="warning" onClick={() => setExtensionOpen(true)}>
-                Grant deadline extension
+          {isTaskInReview && (
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={saving}
+                onClick={() => {
+                  if (complianceBlocked) {
+                    setOverrideOpen(true);
+                  } else {
+                    updateTask({ status: 'Completed' });
+                  }
+                }}
+              >
+                Approve & Complete
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={saving}
+                onClick={() => {
+                  setSendBackReason('');
+                  setSendBackError('');
+                  setSendBackOpen(true);
+                }}
+              >
+                Send Back
               </Button>
             </div>
           )}
         </div>
 
-        <aside className="rounded-lg border border-gray-200 bg-white p-5 space-y-4">
-          <h2 className="font-semibold text-gray-900">Work summary</h2>
-          <div><p className="text-xs font-semibold uppercase text-gray-500">Subtasks</p><p className="mt-1 text-2xl font-bold text-gray-900">{subtasks.length}</p></div>
-          <div><p className="text-xs font-semibold uppercase text-gray-500">Open escalations</p><p className="mt-1 text-2xl font-bold text-gray-900">{escalations.filter((item) => !['Resolved', 'Closed'].includes(item.status)).length}</p></div>
-          {projectLink && <Link to={projectLink} className="inline-block text-sm font-medium text-blue-600 hover:text-blue-700">View project →</Link>}
-          <Link to={PATHS.PM.ESCALATIONS} className="inline-block text-sm font-medium text-blue-600 hover:text-blue-700">Escalation inbox →</Link>
-        </aside>
-      </section>
-
-      <section className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <div className="border-b border-gray-200 px-5 py-4">
-          <h2 className="font-semibold text-gray-900">Subtasks</h2>
-        </div>
-        {subtasks.length ? (
-          <Table
-            columns={[
-              { key: 'title', header: 'Title', accessor: 'title' },
-              { key: 'assignee', header: 'Assignee', render: (subtask) => subtask.assignedTo?.fullName || subtask.assignedTo?.email || '—' },
-              { key: 'status', header: 'Status', render: (subtask) => <Badge status={subtask.status === 'Completed' ? 'success' : 'info'}>{String(subtask.status || 'Draft').replace(/_/g, ' ')}</Badge> },
-              { key: 'dueDate', header: 'Due date', render: (subtask) => formatDate(subtask.dueDate) },
-              { key: 'completedAt', header: 'Completed', render: (subtask) => formatDate(subtask.completedAt) },
-            ]}
-            data={subtasks}
-          />
-        ) : <div className="p-5"><EmptyState title="No subtasks" description="This task has no subtasks yet." /></div>}
-      </section>
-
-      {/* Compliance & Deliverable Evidence */}
-      <section className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <div className="border-b border-gray-200 px-5 py-4 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Compliance & Deliverable Evidence</h2>
-          <span className="text-xs text-gray-500 font-medium">{currentTaskEvidence.length} item(s)</span>
-        </div>
-        {currentTaskEvidence.length ? (
-          <Table
-            columns={[
-              {
-                key: 'title',
-                header: 'Artifact Title',
-                render: (ev) => (
-                  <span className="font-medium text-gray-900">
-                    {ev.title || ev.notes || `Evidence #${ev.id}`}
-                  </span>
-                ),
-              },
-              {
-                key: 'type',
-                header: 'Type',
-                render: (ev) => (
-                  <span className="text-xs text-gray-600">{ev.evidenceType || 'Document'}</span>
-                ),
-              },
-              {
-                key: 'submittedBy',
-                header: 'Submitted By',
-                render: (ev) => ev.user?.fullName || ev.submittedBy?.fullName || ev.user?.email || ev.submittedBy?.email || '—',
-              },
-              {
-                key: 'status',
-                header: 'Status & Feedback',
-                render: (ev) => {
-                  const st = String(ev.status || '').toLowerCase();
-                  const badgeStatus = st === 'approved' ? 'success' : st === 'rejected' ? 'danger' : 'warning';
-                  return (
-                    <div className="flex flex-col gap-1">
-                      <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>
-                      {st === 'rejected' && (ev.rejectionReason || ev.notes) && (
-                        <span className="text-[11px] text-rose-700 italic max-w-xs">
-                          Feedback: "{ev.rejectionReason || ev.notes}"
-                        </span>
-                      )}
-                    </div>
-                  );
-                },
-              },
-              {
-                key: 'file',
-                header: 'Document',
-                render: (ev) => {
-                  const fileUrl = ev.fileUrl || ev.url || ev.attachments?.[0]?.filePath || ev.attachment?.filePath;
-                  if (!fileUrl) return <span className="text-xs text-gray-400">No file</span>;
-                  const isExternal = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
-                  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
-                  if (!isExternal && ev.id) {
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => openEvidenceFile(ev.id)}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        View File ↗
-                      </button>
-                    );
-                  }
-                  return (
-                    <a
-                      href={isExternal ? fileUrl : `${apiBase}${fileUrl}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-                    >
-                      View File ↗
-                    </a>
-                  );
-                },
-              },
-            ]}
-            data={currentTaskEvidence}
-          />
-        ) : (
-          <div className="p-5">
-            <EmptyState
-              title="No evidence submitted"
-              description="No compliance artifacts or deliverables have been uploaded for this task yet."
-            />
+        {/* Metadata Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 border-t border-slate-100 pt-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Team Lead</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900 truncate">
+              {task.assignedTo?.fullName || task.assignedTo?.email || 'Unassigned'}
+            </p>
           </div>
-        )}
-      </section>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Priority</p>
+            <p className="mt-1 text-sm font-medium text-slate-800">{task.priority || 'Medium'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Due Date</p>
+            <p className={`mt-1 text-sm font-medium ${isOverdue ? 'text-rose-600 font-semibold' : 'text-slate-800'}`}>
+              {formatDate(task.dueDate)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Created By</p>
+            <p className="mt-1 text-sm font-medium text-slate-800 truncate">{task.createdBy?.fullName || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Completed</p>
+            <p className="mt-1 text-sm font-medium text-slate-800">{formatDate(task.completedAt)}</p>
+          </div>
+        </div>
+      </header>
+
+      {/* Main 2-Column Executive Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Task Deliverable Brief */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+            <h2 className="text-sm font-bold text-slate-900">Task Brief & Scope</h2>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+              {task.description || 'No description provided for this parent deliverable.'}
+            </p>
+            {(isOverdue || complianceBlocked) && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                <div>
+                  <p className="text-xs font-semibold text-amber-900">
+                    {isOverdue ? 'This task is overdue.' : 'Compliance governance blocker active.'}
+                  </p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    Extending the deadline synchronizes the remediation window and clears overdue locks.
+                  </p>
+                </div>
+                <Button variant="warning" size="sm" onClick={() => setExtensionOpen(true)}>
+                  Grant deadline extension
+                </Button>
+              </div>
+            )}
+          </section>
+
+          {/* Read-Only Subtasks Rollup (Verified by Team Lead) */}
+          <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+            <div className="border-b border-slate-100 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Layers size={16} className="text-blue-600" />
+                  <h2 className="text-sm font-bold text-slate-900">Subtasks Rollup</h2>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Reviewed by Team Lead before whole-task submission
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-28 h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${subtaskPct === 100 && subtasks.length > 0 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                    style={{ width: `${subtaskPct}%` }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                  {completedSubtaskCount}/{subtasks.length} Done
+                </span>
+              </div>
+            </div>
+            {subtasks.length ? (
+              <Table
+                columns={[
+                  { key: 'title', header: 'Subtask', accessor: 'title' },
+                  { key: 'assignee', header: 'Member', render: (subtask) => subtask.assignedTo?.fullName || subtask.assignedTo?.email || '—' },
+                  { key: 'status', header: 'TL Review Status', render: (subtask) => <Badge status={subtask.status === 'Completed' ? 'success' : subtask.status === 'In_Review' ? 'warning' : 'info'}>{String(subtask.status || 'Draft').replace(/_/g, ' ')}</Badge> },
+                  { key: 'dueDate', header: 'Due Date', render: (subtask) => formatDate(subtask.dueDate) },
+                  { key: 'completedAt', header: 'Completed', render: (subtask) => formatDate(subtask.completedAt) },
+                ]}
+                data={subtasks}
+              />
+            ) : <div className="p-5"><EmptyState title="No subtasks" description="This parent task has no subtasks." /></div>}
+          </section>
+
+          {/* Compliance & Deliverable Evidence */}
+          <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+            <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileCheck size={16} className="text-emerald-600" />
+                <h2 className="text-sm font-bold text-slate-900">Compliance & Deliverable Evidence</h2>
+              </div>
+              <span className="text-xs text-slate-500 font-semibold">{currentTaskEvidence.length} item(s)</span>
+            </div>
+            {currentTaskEvidence.length ? (
+              <Table
+                columns={[
+                  {
+                    key: 'title',
+                    header: 'Artifact Title',
+                    render: (ev) => (
+                      <span className="font-medium text-slate-900">
+                        {ev.title || ev.notes || `Evidence #${ev.id}`}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'type',
+                    header: 'Type',
+                    render: (ev) => (
+                      <span className="text-xs text-slate-600">{ev.evidenceType || 'Document'}</span>
+                    ),
+                  },
+                  {
+                    key: 'submittedBy',
+                    header: 'Submitted By',
+                    render: (ev) => ev.user?.fullName || ev.submittedBy?.fullName || ev.user?.email || ev.submittedBy?.email || '—',
+                  },
+                  {
+                    key: 'status',
+                    header: 'Status & Feedback',
+                    render: (ev) => {
+                      const st = String(ev.status || '').toLowerCase();
+                      const badgeStatus = st === 'approved' ? 'success' : st === 'rejected' ? 'danger' : 'warning';
+                      return (
+                        <div className="flex flex-col gap-1">
+                          <Badge status={badgeStatus}>{ev.status || 'Pending'}</Badge>
+                          {st === 'rejected' && (ev.rejectionReason || ev.notes) && (
+                            <span className="text-[11px] text-rose-700 italic max-w-xs">
+                              Feedback: &quot;{ev.rejectionReason || ev.notes}&quot;
+                            </span>
+                          )}
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    key: 'file',
+                    header: 'Document',
+                    render: (ev) => {
+                      const fileUrl = ev.fileUrl || ev.url || ev.attachments?.[0]?.filePath || ev.attachment?.filePath;
+                      if (!fileUrl) return <span className="text-xs text-slate-400">No file</span>;
+                      const isExternal = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
+                      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5500';
+                      if (!isExternal && ev.id) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => openEvidenceFile(ev.id)}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            View File ↗
+                          </button>
+                        );
+                      }
+                      return (
+                        <a
+                          href={isExternal ? fileUrl : `${apiBase}${fileUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                        >
+                          View File ↗
+                        </a>
+                      );
+                    },
+                  },
+                ]}
+                data={currentTaskEvidence}
+              />
+            ) : (
+              <div className="p-5">
+                <EmptyState
+                  title="No evidence submitted"
+                  description="No compliance artifacts or deliverables have been uploaded for this task yet."
+                />
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* Right PM Review & Governance Sidebar */}
+        <aside className="space-y-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+            <h2 className="text-sm font-bold text-slate-900">PM Final Review</h2>
+
+            {isTaskInReview ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-3.5 space-y-2">
+                <p className="text-xs font-bold text-blue-950">Ready for PM Final Review</p>
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  Team Lead has signed off {completedSubtaskCount}/{subtasks.length} subtask(s). Verify deliverables and either approve or send back.
+                </p>
+              </div>
+            ) : task.status === 'Completed' ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 flex items-center gap-2 text-emerald-900 text-xs font-semibold">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                <span>Approved & Completed</span>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex items-start gap-2.5 text-slate-600 text-xs">
+                <Clock size={15} className="text-slate-400 shrink-0 mt-0.5" />
+                <span>
+                  Awaiting Team Lead subtask completion and whole-task submission ({completedSubtaskCount}/{subtasks.length} subtasks complete).
+                </span>
+              </div>
+            )}
+
+            <div className="border-t border-slate-100 pt-4">
+              <FormField label="Task status">
+                <Select
+                  value={task.status || 'Draft'}
+                  onChange={(event) => updateTask({ status: event.target.value })}
+                  disabled={saving}
+                >
+                  {STATUSES.map((status) => (
+                    <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
+                  ))}
+                </Select>
+              </FormField>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs space-y-3">
+            <h2 className="text-sm font-bold text-slate-900">Governance Summary</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Subtasks Done</p>
+                <p className="mt-1 text-lg font-bold text-slate-900">{completedSubtaskCount}/{subtasks.length}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Escalations</p>
+                <p className="mt-1 text-lg font-bold text-slate-900">{openEscalationCount}</p>
+              </div>
+            </div>
+            <div className="pt-2 flex flex-col gap-2">
+              {projectLink && (
+                <Link to={projectLink} className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 transition-colors">
+                  <span>View Parent Project</span>
+                  <ArrowUpRight size={14} />
+                </Link>
+              )}
+              <Link to={PATHS.PM.ESCALATIONS} className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 transition-colors">
+                <span>Escalation Inbox</span>
+                <ArrowUpRight size={14} />
+              </Link>
+            </div>
+          </div>
+        </aside>
+      </div>
 
       <Modal
         isOpen={extensionOpen}

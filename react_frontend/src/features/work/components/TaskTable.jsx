@@ -51,6 +51,7 @@ export function TaskTable({
   tasks = [],
   isLoading = false,
   visibleColumns = ['id', 'title', 'project', 'status', 'priority', 'dueDate'],
+  assigneeHeader = 'Assignee',
   onRowClick,
   sortConfig,
   onSort,
@@ -118,8 +119,11 @@ export function TaskTable({
             )}
             {visibleColumns.includes('assignee') && (
               <th scope="col" className={sortHeaderClass} onClick={() => handleHeaderClick('assignee')}>
-                Assignee{renderSortIcon('assignee')}
+                {assigneeHeader}{renderSortIcon('assignee')}
               </th>
+            )}
+            {visibleColumns.includes('progress') && (
+              <th scope="col" className="py-3.5 px-5">Subtasks</th>
             )}
             {visibleColumns.includes('assigner') && (
               <th scope="col" className="py-3.5 px-5">Assigner / Lead</th>
@@ -207,6 +211,31 @@ export function TaskTable({
                     {assigneeName}
                   </td>
                 )}
+                {visibleColumns.includes('progress') && (() => {
+                  const list = Array.isArray(task.subtasks) ? task.subtasks : [];
+                  const total = task.subtaskProgress?.total ?? list.length;
+                  const done = task.subtaskProgress?.completed ?? list.filter((s) => s.status === 'Completed').length;
+                  const pct = total > 0 ? Math.round((done / total) * 100) : null;
+                  return (
+                    <td className="py-3.5 px-5 whitespace-nowrap">
+                      {total > 0 ? (
+                        <div className="flex items-center gap-2 min-w-[96px]">
+                          <div className="w-14 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-semibold text-slate-600">
+                            {done}/{total}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">No subtasks</span>
+                      )}
+                    </td>
+                  );
+                })()}
                 {visibleColumns.includes('assigner') && (
                   <td className="py-3.5 px-5 whitespace-nowrap text-slate-500">
                     {assignerName}
