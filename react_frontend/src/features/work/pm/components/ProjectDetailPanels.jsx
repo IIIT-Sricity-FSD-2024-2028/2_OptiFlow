@@ -1,5 +1,6 @@
 // Modals and the task review drawer used by the PM project page
 // (pm/pages/ProjectDetail.jsx). Presentational only: the page owns state and API calls.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '../../../../app/paths';
 import { Badge } from '../../../../shared/components/Badge';
@@ -7,6 +8,8 @@ import { Button } from '../../../../shared/components/Button';
 import { FormField, Input, Select, Textarea } from '../../../../shared/components/FormField';
 import { Modal } from '../../../../shared/components/Modal';
 import { todayInput } from '../../components/dateLimits';
+import { TeamCapacityModal } from '../../components/TeamCapacityModal';
+import { checkTaskTeamCapacity, DEFAULT_POLICY } from '../../utils/scheduling';
 import { formatDate } from './formatDate';
 
 export function ComplianceOverviewModal({ isOpen, onClose, projectName, activeTab, onTabChange, rules, violations }) {
@@ -135,59 +138,117 @@ export function CreateProjectTaskModal({
   onFormChange,
   projectStartDate,
   projectTargetDate,
+  teamMemberCount = 0,
+  schedulingPolicy = DEFAULT_POLICY,
 }) {
+  const [capacityPopupOpen, setCapacityPopupOpen] = useState(false);
+  const policy = schedulingPolicy || DEFAULT_POLICY;
+  const startAnchor = projectStartDate && String(projectStartDate).slice(0, 10) > todayInput()
+    ? String(projectStartDate).slice(0, 10)
+    : todayInput();
+  const capacityCheck = checkTaskTeamCapacity({
+    dueDate: form.dueDate,
+    estimatedHours: form.estimatedHours,
+    teamMemberCount,
+    startDate: startAnchor,
+    policy,
+  });
+
+  const handleSubmit = (event) => {
+    event?.preventDefault?.();
+    if (capacityCheck.isImpossible) {
+      setCapacityPopupOpen(true);
+      return;
+    }
+    onSubmit(event);
+  };
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="+ Create Task"
-      footer={(
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={onSubmit} disabled={saving}>{saving ? 'Creating…' : 'Add Task'}</Button>
-        </>
-      )}
-    >
-      <form onSubmit={onSubmit} className="space-y-4">
-        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-        <FormField label="Task name" required>
-          <Input value={form.title} onChange={(event) => onFormChange({ ...form, title: event.target.value })} disabled={saving} />
-        </FormField>
-        <FormField label="Description">
-          <Textarea value={form.description} onChange={(event) => onFormChange({ ...form, description: event.target.value })} disabled={saving} />
-        </FormField>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 sm:col-span-2">
-            This task will be assigned to the project Team Lead automatically.
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="+ Create Task"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSubmit} disabled={saving}>{saving ? 'Creating…' : 'Add Task'}</Button>
+          </>
+        )}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+          <FormField label="Task name" required>
+            <Input value={form.title} onChange={(event) => onFormChange({ ...form, title: event.target.value })} disabled={saving} />
+          </FormField>
+          <FormField label="Description">
+            <Textarea value={form.description} onChange={(event) => onFormChange({ ...form, description: event.target.value })} disabled={saving} />
+          </FormField>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 sm:col-span-2">
+              This task will be assigned to the project Team Lead automatically.
+            </div>
+            <FormField label="Priority">
+              <Select value={form.priority} onChange={(event) => onFormChange({ ...form, priority: event.target.value })} disabled={saving}>
+                {['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+              </Select>
+            </FormField>
+            <FormField
+              label="Estimated hours"
+              error={
+                capacityCheck.isImpossible
+                  ? `Exceeds team limit (max ${capacityCheck.maxTeamHours}h for ${capacityCheck.teamCount} member${capacityCheck.teamCount > 1 ? 's' : ''})`
+                  : undefined
+              }
+            >
+              <Input type="number" min="0" step="0.5" value={form.estimatedHours} onChange={(event) => onFormChange({ ...form, estimatedHours: event.target.value })} disabled={saving} />
+            </FormField>
+            <FormField
+              label="Deadline"
+              hint={
+                projectTargetDate
+                  ? `Must be on or before ${String(projectTargetDate).slice(0, 10)}`
+                  : undefined
+              }
+            >
+              <Input
+                type="date"
+                min={projectStartDate && String(projectStartDate).slice(0, 10) > todayInput() ? String(projectStartDate).slice(0, 10) : todayInput()}
+                max={projectTargetDate ? String(projectTargetDate).slice(0, 10) : undefined}
+                value={form.dueDate}
+                onChange={(event) => onFormChange({ ...form, dueDate: event.target.value })}
+                disabled={saving}
+              />
+            </FormField>
           </div>
-          <FormField label="Priority">
-            <Select value={form.priority} onChange={(event) => onFormChange({ ...form, priority: event.target.value })} disabled={saving}>
-              {['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-            </Select>
-          </FormField>
-          <FormField label="Estimated hours">
-            <Input type="number" min="0" step="0.5" value={form.estimatedHours} onChange={(event) => onFormChange({ ...form, estimatedHours: event.target.value })} disabled={saving} />
-          </FormField>
-          <FormField
-            label="Deadline"
-            hint={
-              projectTargetDate
-                ? `Must be on or before ${String(projectTargetDate).slice(0, 10)}`
-                : undefined
-            }
-          >
-            <Input
-              type="date"
-              min={projectStartDate && String(projectStartDate).slice(0, 10) > todayInput() ? String(projectStartDate).slice(0, 10) : todayInput()}
-              max={projectTargetDate ? String(projectTargetDate).slice(0, 10) : undefined}
-              value={form.dueDate}
-              onChange={(event) => onFormChange({ ...form, dueDate: event.target.value })}
-              disabled={saving}
-            />
-          </FormField>
-        </div>
-      </form>
-    </Modal>
+          {form.dueDate && capacityCheck.estHours > 0 && (
+            <div
+              role={capacityCheck.isImpossible ? 'alert' : 'status'}
+              className={`rounded-lg border px-3 py-2 text-xs ${
+                capacityCheck.isImpossible
+                  ? 'border-rose-200 bg-rose-50 text-rose-800'
+                  : capacityCheck.needsParallel
+                  ? 'border-amber-200 bg-amber-50 text-amber-900'
+                  : 'border-blue-200 bg-blue-50 text-blue-900'
+              }`}
+            >
+              {capacityCheck.isImpossible
+                ? `Not achievable: ${capacityCheck.estHours}h exceeds your team's limit (${capacityCheck.maxTeamHours}h across ${capacityCheck.teamCount} member(s) over ${capacityCheck.workingDays} working day(s)).`
+                : capacityCheck.needsParallel
+                ? `Needs at least ${capacityCheck.peopleNeeded} of your ${capacityCheck.teamCount} team member(s) working together (${capacityCheck.perPersonHours}h each).`
+                : `Fits comfortably within one person's available hours (${capacityCheck.perPersonHours}h).`}
+            </div>
+          )}
+        </form>
+      </Modal>
+      <TeamCapacityModal
+        isOpen={capacityPopupOpen}
+        onClose={() => setCapacityPopupOpen(false)}
+        capacityCheck={capacityCheck}
+        dueDate={form.dueDate}
+        workHoursPerDay={policy.workHoursPerDay}
+      />
+    </>
   );
 }
 

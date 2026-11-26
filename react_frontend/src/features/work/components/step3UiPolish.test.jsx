@@ -10,6 +10,7 @@ import { SubtaskList } from './SubtaskList';
 import { ScheduleTimelinePanel } from './ScheduleTimelinePanel';
 import { Toast } from '../../../shared/components/Toast';
 import SchedulingPolicy from '../../executive/pages/SchedulingPolicy';
+import PmTasks from '../pm/pages/Tasks';
 import TeamLeadTasks from '../team-lead/pages/Tasks';
 import TeamLeadDashboard from '../team-lead/pages/Dashboard';
 import TeamLeadTaskDetail from '../team-lead/pages/TaskDetail';
@@ -469,5 +470,57 @@ describe('Step 3 UI & Workflow Fixes', () => {
     expect(await screen.findByText(/Republic Day/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Save Scheduling Policy/i }));
     expect(schedulingApi.updatePolicy).toHaveBeenCalledTimes(1);
+  });
+
+  it('PM CreateTaskForm shows inline error and Team Cannot Handle These Hours popup for 1000h impossible deadline', async () => {
+    const nextWeek = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    tasksApi.list.mockResolvedValue([]);
+    tasksApi.create.mockResolvedValue({ id: 't-new' });
+    projectsApi.list.mockResolvedValue([
+      {
+        id: 'p-cap',
+        name: 'Capacity Project',
+        status: 'Active',
+        team: {
+          name: 'Alpha Squad',
+          teamMembers: [
+            { userId: 'tl-1', role: 'Lead', user: { id: 'tl-1', fullName: 'Lead One', email: 'lead@test.com' } },
+            { userId: 'm-1', role: 'Member', user: { id: 'm-1', fullName: 'Member One', email: 'm1@test.com' } },
+            { userId: 'm-2', role: 'Member', user: { id: 'm-2', fullName: 'Member Two', email: 'm2@test.com' } },
+          ],
+        },
+      },
+    ]);
+    usersApi.list.mockResolvedValue([]);
+    schedulingApi.getPolicy.mockResolvedValue({
+      workHoursPerDay: 8,
+      workingDays: [1, 2, 3, 4, 5],
+      defaultReviewBufferDays: 1,
+      enforceCapacityBlock: false,
+      holidays: [],
+    });
+
+    const user = userEvent.setup();
+    render(
+      <Provider store={makeStore()}>
+        <MemoryRouter>
+          <PmTasks />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: /Create Task/i }));
+    await user.type(screen.getByPlaceholderText(/Implement OAuth token refresh/i), 'Giant Audit Task');
+    await user.selectOptions(screen.getByDisplayValue('Select project...'), 'p-cap');
+    const dateInput = document.querySelector('input[type="date"]');
+    await user.clear(dateInput);
+    await user.type(dateInput, nextWeek);
+    await user.type(screen.getByPlaceholderText('e.g. 40'), '1000');
+
+    expect(screen.getByText(/Not possible with available team/i)).toBeInTheDocument();
+    const createButtons = screen.getAllByRole('button', { name: /Create Task/i });
+    await user.click(createButtons[createButtons.length - 1]);
+    expect(await screen.findByText('Team Cannot Handle These Hours')).toBeInTheDocument();
+    expect(tasksApi.create).not.toHaveBeenCalled();
   });
 });

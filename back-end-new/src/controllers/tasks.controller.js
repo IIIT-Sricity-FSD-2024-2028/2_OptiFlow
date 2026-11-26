@@ -693,11 +693,12 @@ export async function createTask(req, res, next) {
       policy,
       teamMemberCount: project.team?._count?.teamMembers || 0,
     });
-    if (policy.enforceCapacityBlock && !body.allowCapacityOverride) {
-      const blocking = taskSchedule.warnings.find((w) => ['NO_WORKING_DAYS', 'EXCEEDS_TEAM_CAPACITY'].includes(w.code));
-      if (blocking) {
-        throw new BadRequestError(`${blocking.message} (Strict capacity enforcement is enabled in company policy.)`);
-      }
+    const allowOverride = !policy.enforceCapacityBlock && body.allowCapacityOverride === true;
+    const blockingCapacity = taskSchedule.warnings.find((w) =>
+      ['NO_WORKING_DAYS', 'EXCEEDS_TEAM_CAPACITY'].includes(w.code)
+    );
+    if (blockingCapacity && !allowOverride) {
+      throw new BadRequestError(blockingCapacity.message);
     }
 
     let targetAssigneeId = null;
@@ -979,9 +980,16 @@ export async function updateTask(req, res, next) {
         teamMemberCount: teamCount,
       });
       taskScheduleWarnings = schedEval.warnings;
+      const allowOverride = !policy.enforceCapacityBlock && body.allowCapacityOverride === true;
+      const alwaysBlocking = taskScheduleWarnings.find((w) =>
+        ['NO_WORKING_DAYS', 'EXCEEDS_TEAM_CAPACITY'].includes(w.code)
+      );
+      if (alwaysBlocking && !allowOverride) {
+        throw new BadRequestError(alwaysBlocking.message);
+      }
       if (policy.enforceCapacityBlock && !body.allowCapacityOverride) {
         const blocking = taskScheduleWarnings.find((w) =>
-          ['NO_WORKING_DAYS', 'CRITICAL_PATH_EXCEEDS_DEADLINE', 'EXCEEDS_TEAM_CAPACITY'].includes(w.code)
+          w.code === 'CRITICAL_PATH_EXCEEDS_DEADLINE'
         );
         if (blocking) {
           throw new BadRequestError(`${blocking.message} (Strict capacity enforcement is enabled in company policy.)`);

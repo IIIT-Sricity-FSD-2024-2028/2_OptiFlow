@@ -68,3 +68,59 @@ export function getIncompletePrerequisites(subtask, allSubtasks = []) {
     .map((id) => subtaskMap.get(id))
     .filter((p) => p && String(p.status || '') !== 'Completed');
 }
+
+/**
+ * Evaluates whether the available team can realistically complete `estimatedHours`
+ * before `dueDate` under the company's working-hour policy.
+ */
+export function checkTaskTeamCapacity({
+  dueDate,
+  estimatedHours,
+  teamMemberCount = 0,
+  startDate = null,
+  policy = DEFAULT_POLICY,
+}) {
+  const pol = policy || DEFAULT_POLICY;
+  const est = estimatedHours !== '' && estimatedHours != null ? Number(estimatedHours) : 0;
+  const teamCount = teamMemberCount > 0 ? teamMemberCount : 1;
+  const hasDueDate = Boolean(dueDate);
+  const start = startDate || new Date().toISOString().slice(0, 10);
+
+  if (!hasDueDate || !Number.isFinite(est) || est <= 0) {
+    return {
+      hasDueDate,
+      estHours: Number.isFinite(est) ? est : 0,
+      workingDays: hasDueDate ? countWorkingDays(start, dueDate, pol) : null,
+      perPersonHours: hasDueDate ? availableWorkingHours(start, dueDate, pol) : null,
+      teamCount,
+      maxTeamHours: hasDueDate
+        ? Number((availableWorkingHours(start, dueDate, pol) * teamCount).toFixed(2))
+        : null,
+      peopleNeeded: 0,
+      shortfallHours: 0,
+      isImpossible: false,
+      needsParallel: false,
+    };
+  }
+
+  const workingDays = countWorkingDays(start, dueDate, pol);
+  const perPersonHours = availableWorkingHours(start, dueDate, pol);
+  const maxTeamHours = Number((perPersonHours * teamCount).toFixed(2));
+  const peopleNeeded = perPersonHours > 0 ? Math.ceil(est / perPersonHours) : Infinity;
+  const shortfallHours = Number(Math.max(0, est - maxTeamHours).toFixed(2));
+  const isImpossible = perPersonHours === 0 || est > maxTeamHours;
+  const needsParallel = !isImpossible && est > perPersonHours;
+
+  return {
+    hasDueDate,
+    estHours: est,
+    workingDays,
+    perPersonHours,
+    teamCount,
+    maxTeamHours,
+    peopleNeeded,
+    shortfallHours,
+    isImpossible,
+    needsParallel,
+  };
+}

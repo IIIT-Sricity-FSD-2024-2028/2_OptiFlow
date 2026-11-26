@@ -382,6 +382,11 @@ export function evaluateTaskCapacity({
     });
   }
 
+  const effectiveTeamSize = teamMemberCount > 0 ? teamMemberCount : 1;
+  const maxTeamHours = availableWindowHours != null
+    ? Number((availableWindowHours * effectiveTeamSize).toFixed(2))
+    : null;
+
   if (taskDue) {
     if (workingDaysRemaining === 0 && ((taskEstimated && taskEstimated > 0) || allocatedHours > 0)) {
       warnings.push({
@@ -392,17 +397,17 @@ export function evaluateTaskCapacity({
     } else {
       if (taskEstimated != null && taskEstimated > 0 && availableWindowHours != null && taskEstimated > availableWindowHours) {
         const minParallelPeople = Math.ceil(taskEstimated / Math.max(availableWindowHours, 1));
-        if (teamMemberCount > 0 && minParallelPeople > teamMemberCount) {
+        if (maxTeamHours != null && taskEstimated > maxTeamHours) {
           warnings.push({
             severity: 'error',
             code: 'EXCEEDS_TEAM_CAPACITY',
-            message: `${taskEstimated}h estimated exceeds the ${availableWindowHours}h single-person window before ${isoDay(taskDue)} and would require ~${minParallelPeople} parallel assignees (team has ${teamMemberCount}).`,
+            message: `Not possible with your available team: ${taskEstimated}h exceeds the maximum ${maxTeamHours}h your team of ${effectiveTeamSize} can handle (${availableWindowHours}h per person over ${workingDaysRemaining} working day(s) before ${isoDay(taskDue)}). Would need at least ${minParallelPeople} people working full-time.`,
           });
         } else {
           warnings.push({
             severity: 'warning',
             code: 'REQUIRES_PARALLEL_EXECUTION',
-            message: `${taskEstimated}h estimated exceeds a single person's ${availableWindowHours}h window (${workingDaysRemaining} working days). Assign at least ${minParallelPeople} parallel team members.`,
+            message: `${taskEstimated}h exceeds one person's ${availableWindowHours}h capacity (${workingDaysRemaining} working day(s)). Needs at least ${minParallelPeople} team members working in parallel.`,
           });
         }
       }
